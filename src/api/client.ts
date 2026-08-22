@@ -72,6 +72,8 @@ export class ApiError extends Error {
 export interface RequestConfig {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Cabecera Accept. Util para pedir binarios en lugar de JSON. */
+  accept?: string;
 }
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -276,8 +278,12 @@ async function send(
   body: unknown,
   config: RequestConfig,
 ): Promise<Response> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData lleva su propio Content-Type con el delimitador que genera el
+  // navegador. Fijarlo a mano romperia la peticion.
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+
+  const headers: Record<string, string> = { Accept: config.accept ?? "application/json" };
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
   if (isMutating(method)) headers[CSRF_HEADER] = await ensureCsrfToken();
 
   const { signal, cleanup } = createSignal(config);
@@ -288,7 +294,7 @@ async function send(
     headers,
     signal,
   };
-  if (body !== undefined) init.body = JSON.stringify(body);
+  if (body !== undefined) init.body = isForm ? (body as FormData) : JSON.stringify(body);
 
   try {
     return await fetch(buildUrl(path), init);
@@ -299,19 +305,22 @@ async function send(
   }
 }
 
-async function request<T>(
+/**
+ * Ejecuta la peticion aplicando los reintentos controlados y devuelve la
+ * respuesta cruda.
+ *
+ * Vive separado del parseo para que JSON y binario compartan exactamente la
+ * misma logica de CSRF y de renovacion de sesion.
+ */
+async function execute(
   method: HttpMethod,
   path: string,
   body: unknown,
   config: RequestConfig,
   attempt: Attempt = { csrfRetried: false, authRetried: false },
-): Promise<T> {
+): Promise<Response> {
   const response = await send(method, path, body, config);
-
-  if (response.ok) {
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
-  }
+  if (response.ok) return response;
 
   const error = await readErrorBody(response);
 
@@ -319,18 +328,29 @@ async function request<T>(
   // Un unico reintento con token fresco evita fallos espurios.
   if (response.status === 403 && isCsrfFailure(error.code) && !attempt.csrfRetried) {
     await ensureCsrfToken(true);
-    return request<T>(method, path, body, config, { ...attempt, csrfRetried: true });
+    return execute(method, path, body, config, { ...attempt, csrfRetried: true });
   }
 
   // Como maximo un refresh automatico por peticion.
   if (response.status === 401 && allowsRefresh(path) && !attempt.authRetried) {
     const renewed = await refreshSession();
     if (renewed) {
-      return request<T>(method, path, body, config, { ...attempt, authRetried: true });
+      return execute(method, path, body, config, { ...attempt, authRetried: true });
     }
   }
 
   throw error;
+}
+
+async function request<T>(
+  method: HttpMethod,
+  path: string,
+  body: unknown,
+  config: RequestConfig,
+): Promise<T> {
+  const response = await execute(method, path, body, config);
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
 }
 
 export const apiClient = {
@@ -343,4 +363,23 @@ export const apiClient = {
     request<T>("PATCH", path, body, config),
   delete: <T>(path: string, config: RequestConfig = {}) =>
     request<T>("DELETE", path, undefined, config),
+
+  /**
+   * Envia un archivo. El navegador construye el Content-Type con su
+   * delimitador; el cliente solo anade la cookie de sesion y el token CSRF.
+   */
+  postForm: <T>(path: string, form: FormData, config: RequestConfig = {}) =>
+    request<T>("POST", path, form, config),
+
+  /**
+   * Descarga un binario a traves del backend.
+   *
+   * Se usa para el logo: una etiqueta `img` apuntando al backend no enviaria
+   * las cookies en un contexto cross-site, asi que el binario se pide por aqui
+   * y se muestra desde un object URL.
+   */
+  getBlob: async (path: string, config: RequestConfig = {}): Promise<Blob> => {
+    const response = await execute("GET", path, undefined, { ...config, accept: "*/*" });
+    return response.blob();
+  },
 };
