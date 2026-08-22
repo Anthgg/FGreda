@@ -1,0 +1,20 @@
+# Secretos: jamas deben entrar en la imagen.
+.env
+.env.*
+*.pem
+*.key
+
+.git
+.github
+.gitignore
+.gitattributes
+
+node_modules
+dist
+coverage
+
+.vscode
+.idea
+Dockerfile
+.dockerignore
+README.md
