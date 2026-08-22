@@ -1,20 +1,21 @@
 import { useMemo } from "react";
 import type { FormEvent } from "react";
 
-import { FormSection, TextAreaField, TextField } from "@/components/form";
+import { FormSection, SelectField, TextAreaField, TextField } from "@/components/form";
 import { toCommercialInput } from "@/features/settings/mappers";
 import { SaveBar } from "@/features/settings/SaveBar";
 import { useEditableForm } from "@/features/settings/useEditableForm";
-import { useCommercialSettings, useUpdateCommercial } from "@/features/settings/useSettings";
+import {
+  useCommercialSettings,
+  useReferenceData,
+  useUpdateCommercial,
+} from "@/features/settings/useSettings";
 import type { CommercialSettingsInput } from "@/types/settings";
 
 /** Validacion de experiencia de usuario. El backend la repite entera. */
 function validate(draft: CommercialSettingsInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
 
-  if (draft.currency_code && !/^[A-Za-z]{3}$/.test(draft.currency_code)) {
-    errors.currency_code = "Codigo ISO de tres letras, por ejemplo PEN.";
-  }
   if (draft.tax_percent !== null && draft.tax_percent !== "") {
     const value = Number(draft.tax_percent);
     if (Number.isNaN(value) || value < 0 || value > 100) {
@@ -36,6 +37,7 @@ function validate(draft: CommercialSettingsInput): Partial<Record<string, string
 
 export function CommercialSection({ canEdit }: { canEdit: boolean }) {
   const query = useCommercialSettings();
+  const reference = useReferenceData();
   const update = useUpdateCommercial();
   const inicial = useMemo(
     () => (query.data ? toCommercialInput(query.data) : undefined),
@@ -45,7 +47,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
     inicial,
   );
 
-  if (!draft) return null;
+  if (!draft || !reference.data) return null;
 
   const errors = validate(draft);
   const hasErrors = Object.keys(errors).length > 0;
@@ -85,6 +87,26 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
 
   const disabled = !canEdit || update.isPending;
   const bank = draft.bank_account;
+  const currencyOptions = [
+    { value: "", label: "Sin moneda seleccionada" },
+    ...reference.data.currencies.map((currency) => ({
+      value: currency.code,
+      label: `${currency.code} — ${currency.name} (${currency.symbol})`,
+    })),
+  ];
+
+  const selectCurrency = (code: string) => {
+    const selected = reference.data.currencies.find((currency) => currency.code === code);
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            currency_code: selected?.code ?? null,
+            currency_symbol: selected?.symbol ?? null,
+          }
+        : current,
+    );
+  };
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -93,25 +115,26 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
           title="Moneda e impuestos"
           description="Valores por defecto de las cotizaciones. El backend es quien los aplica."
         >
-          <TextField
+          <SelectField
             label="Moneda (ISO 4217)"
-            value={draft.currency_code}
-            onChange={(value) => setField("currency_code", value.toUpperCase())}
+            requirement="optional"
+            value={draft.currency_code ?? ""}
+            options={currencyOptions}
+            onChange={selectCurrency}
             disabled={disabled}
-            maxLength={3}
-            placeholder="PEN"
-            error={errors.currency_code}
           />
           <TextField
             label="Simbolo"
+            requirement="automatic"
             value={draft.currency_symbol}
-            onChange={(value) => setField("currency_symbol", value)}
+            onChange={() => {}}
             disabled={disabled}
-            maxLength={8}
-            placeholder="S/"
+            readOnly
+            hint="Se asigna desde la moneda seleccionada."
           />
           <TextField
             label="IGV (%)"
+            requirement="optional"
             value={draft.tax_percent === null ? null : String(draft.tax_percent)}
             onChange={(value) => setField("tax_percent", value === "" ? null : value)}
             disabled={disabled}
@@ -122,6 +145,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
           />
           <TextField
             label="Vigencia de cotizacion (dias)"
+            requirement="optional"
             value={draft.quote_validity_days === null ? null : String(draft.quote_validity_days)}
             onChange={(value) =>
               setField("quote_validity_days", value === "" ? null : Number(value))
@@ -138,24 +162,28 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
         >
           <TextField
             label="Banco"
+            requirement="optional"
             value={bank?.bank_name ?? null}
             onChange={(value) => setBankField("bank_name", value)}
             disabled={disabled}
           />
           <TextField
             label="Titular"
+            requirement="optional"
             value={bank?.account_holder ?? null}
             onChange={(value) => setBankField("account_holder", value)}
             disabled={disabled}
           />
           <TextField
             label="Numero de cuenta"
+            requirement="optional"
             value={bank?.account_number ?? null}
             onChange={(value) => setBankField("account_number", value)}
             disabled={disabled}
           />
           <TextField
             label="CCI"
+            requirement="optional"
             value={bank?.cci ?? null}
             onChange={(value) => setBankField("cci", value)}
             disabled={disabled}
@@ -165,6 +193,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
           />
           <TextAreaField
             label="Instrucciones de pago"
+            requirement="optional"
             value={bank?.notes ?? null}
             onChange={(value) => setBankField("notes", value)}
             disabled={disabled}

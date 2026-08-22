@@ -7,6 +7,7 @@ import {
   COMMERCIAL_FILLED,
   COMPANY_EMPTY,
   COMPANY_FILLED,
+  REFERENCE_DATA,
   SEQUENCES,
 } from "@/test/settingsFixtures";
 import {
@@ -27,6 +28,7 @@ interface Overrides {
   company?: unknown;
   commercial?: unknown;
   sequences?: unknown;
+  reference?: unknown;
   onRequest?: (url: string, init: RequestInit) => Response | undefined;
 }
 
@@ -38,6 +40,12 @@ function mockSettings(overrides: Overrides = {}) {
 
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return sessionResponse(overrides.user ?? TEST_USER);
+    if (url.includes("/settings/reference-data"))
+      return jsonResponse(200, overrides.reference ?? REFERENCE_DATA);
+    if (url.includes("/settings/sequence-patterns")) {
+      const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return jsonResponse(201, { id: 10, is_system: false, ...enviado });
+    }
     if (url.includes("/settings/company/logo")) return new Response(null, { status: 404 });
     if (url.includes("/settings/company")) {
       // El backend devuelve el estado resultante con la version incrementada.
@@ -93,7 +101,12 @@ describe("pantalla de configuracion", () => {
       if (url.includes("/auth/me")) return sessionResponse();
       if (url.includes("/auth/csrf")) return csrfResponse();
       await retenida;
-      return jsonResponse(200, COMPANY_FILLED);
+      if (url.includes("/settings/reference-data")) return jsonResponse(200, REFERENCE_DATA);
+      if (url.includes("/settings/company")) return jsonResponse(200, COMPANY_FILLED);
+      if (url.includes("/settings/commercial")) return jsonResponse(200, COMMERCIAL_FILLED);
+      if (url.includes("/settings/sequences"))
+        return jsonResponse(200, { sequences: SEQUENCES });
+      return jsonResponse(200, {});
     });
     renderApp(["/configuracion"]);
 
@@ -116,6 +129,14 @@ describe("pantalla de configuracion", () => {
 
     const razonSocial = await screen.findByLabelText(/razon social/i);
     expect(razonSocial).toHaveValue("");
+  });
+
+  it("identifica visualmente los campos opcionales", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razon social/i);
+    expect(screen.getAllByText("Opcional").length).toBeGreaterThan(5);
   });
 
   it("informa cuando el backend no responde", async () => {
@@ -179,6 +200,30 @@ describe("edicion como ADMIN", () => {
       expect(cuerpo.trade_name).toBe("Greda Editado");
       // La version viaja siempre: es el control de concurrencia.
       expect(cuerpo.version).toBe(COMPANY_FILLED.version);
+    });
+  });
+
+  it("selecciona departamento, provincia y distrito por ubigeo", async () => {
+    const fetchSpy = mockSettings({ company: COMPANY_EMPTY });
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    await user.selectOptions(await screen.findByLabelText(/departamento/i), "15");
+    await user.selectOptions(screen.getByLabelText(/provincia/i), "1501");
+    await user.selectOptions(screen.getByLabelText(/distrito/i), "150122");
+
+    expect(screen.getByLabelText(/pais/i)).toHaveValue("Peru");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/company") && init?.method === "PUT",
+      );
+      const body = JSON.parse(String(put?.[1]?.body)) as Record<string, unknown>;
+      expect(body.ubigeo_code).toBe("150122");
+      expect(body.department).toBe("LIMA");
+      expect(body.province).toBe("LIMA");
+      expect(body.district).toBe("MIRAFLORES");
     });
   });
 
@@ -282,7 +327,7 @@ describe("permisos de OPERATOR", () => {
     await screen.findByLabelText(/razon social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByDisplayValue("PEN")).toBeInTheDocument();
+    expect(await screen.findByLabelText(/moneda/i)).toHaveValue("PEN");
     expect(screen.getByDisplayValue("18")).toBeInTheDocument();
   });
 });
@@ -295,7 +340,7 @@ describe("seccion comercial", () => {
     await screen.findByLabelText(/razon social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByDisplayValue("PEN")).toBeInTheDocument();
+    expect(await screen.findByLabelText(/moneda/i)).toHaveValue("PEN");
     expect(screen.getByDisplayValue("18")).toBeInTheDocument();
     expect(screen.getByDisplayValue("15")).toBeInTheDocument();
     expect(screen.getByDisplayValue("00219300123456789015")).toBeInTheDocument();
@@ -318,6 +363,31 @@ describe("seccion comercial", () => {
     expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
   });
 
+  it("solo permite monedas del catalogo y completa el simbolo", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razon social/i);
+    await abrirPestana(/comercial/i);
+
+    const user = userEvent.setup();
+    const moneda = await screen.findByLabelText(/moneda/i);
+    expect(moneda).toHaveValue("PEN");
+    expect(within(moneda).queryByRole("option", { name: /ABC/ })).not.toBeInTheDocument();
+    await user.selectOptions(moneda, "USD");
+    expect(screen.getByLabelText(/simbolo/i)).toHaveValue("USD");
+
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/commercial") && init?.method === "PUT",
+      );
+      const body = JSON.parse(String(put?.[1]?.body)) as Record<string, unknown>;
+      expect(body.currency_code).toBe("USD");
+      expect(body.currency_symbol).toBe("USD");
+    });
+  });
+
   it("rechaza un CCI que no tenga veinte digitos", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
@@ -326,7 +396,7 @@ describe("seccion comercial", () => {
     await abrirPestana(/comercial/i);
 
     const user = userEvent.setup();
-    const cci = await screen.findByLabelText(/^cci$/i);
+    const cci = await screen.findByLabelText(/^cci/i);
     await user.clear(cci);
     await user.type(cci, "123");
 
@@ -359,6 +429,16 @@ describe("seccion de numeracion", () => {
 
     expect(await screen.findAllByText(/vista previa/i)).not.toHaveLength(0);
     expect(screen.getAllByText(/no reserva ni consume/i).length).toBeGreaterThan(0);
+  });
+
+  it("marca como obligatorios los datos de numeracion", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razon social/i);
+    await abrirPestana(/numeracion/i);
+
+    expect((await screen.findAllByText("* Obligatorio")).length).toBeGreaterThan(4);
   });
 
   it("la vista previa se recalcula en el navegador y no llama al backend", async () => {
@@ -416,6 +496,32 @@ describe("seccion de numeracion", () => {
       const cuerpo = JSON.parse(String(put![1]?.body));
       expect(cuerpo.prefix).toBe("GRE");
       expect(cuerpo.version).toBe(1);
+    });
+  });
+
+  it("permite crear un formato nuevo en el catalogo y usarlo", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razon social/i);
+    await abrirPestana(/numeracion/i);
+
+    const prefijo = await screen.findByDisplayValue("CTZ");
+    const tarjeta = prefijo.closest("form")!;
+    const user = userEvent.setup();
+    await user.selectOptions(within(tarjeta).getByLabelText(/formato/i), "__create_pattern__");
+    await user.type(within(tarjeta).getByLabelText(/nombre del nuevo formato/i), "Serie mensual");
+    await user.click(within(tarjeta).getByRole("button", { name: /crear y usar/i }));
+
+    await waitFor(() => {
+      const post = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/settings/sequence-patterns") && init?.method === "POST",
+      );
+      expect(post).toBeDefined();
+      const body = JSON.parse(String(post?.[1]?.body)) as Record<string, unknown>;
+      expect(body.name).toBe("Serie mensual");
+      expect(body.pattern).toBe("{PREFIX}-{YYYY}-{NUMBER}");
     });
   });
 });

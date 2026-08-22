@@ -19,6 +19,7 @@ export interface CompanySettings {
 
   address_line1: string | null;
   address_line2: string | null;
+  ubigeo_code: string | null;
   district: string | null;
   province: string | null;
   department: string | null;
@@ -113,6 +114,41 @@ export interface SequenceConfigInput {
 
 export interface SequenceList {
   sequences: SequenceConfig[];
+}
+
+export interface CurrencyOption {
+  code: string;
+  numeric_code: string;
+  name: string;
+  symbol: string;
+  minor_units: number | null;
+}
+
+export interface UbigeoOption {
+  code: string;
+  department_code: string;
+  department_name: string;
+  province_code: string;
+  province_name: string;
+  district_name: string;
+}
+
+export interface SequencePatternPreset {
+  id: number;
+  name: string;
+  pattern: string;
+  is_system: boolean;
+}
+
+export interface SequencePatternPresetInput {
+  name: string;
+  pattern: string;
+}
+
+export interface ReferenceData {
+  currencies: CurrencyOption[];
+  districts: UbigeoOption[];
+  sequence_patterns: SequencePatternPreset[];
 }
 
 export interface AuditEvent {

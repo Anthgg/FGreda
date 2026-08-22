@@ -48,6 +48,7 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
       >
         <TextAreaField
           label="Condiciones generales"
+          requirement="optional"
           value={draft.general_conditions}
           onChange={(value) => setField("general_conditions", value)}
           disabled={disabled}
@@ -56,6 +57,7 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
         />
         <TextAreaField
           label="Notas de pago"
+          requirement="optional"
           value={draft.payment_notes}
           onChange={(value) => setField("payment_notes", value)}
           disabled={disabled}
@@ -64,6 +66,7 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
         />
         <TextAreaField
           label="Pie de documento"
+          requirement="optional"
           value={draft.document_footer}
           onChange={(value) => setField("document_footer", value)}
           disabled={disabled}

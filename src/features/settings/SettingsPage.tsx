@@ -12,6 +12,7 @@ import { SequencesSection } from "@/features/settings/SequencesSection";
 import {
   useCommercialSettings,
   useCompanySettings,
+  useReferenceData,
   useSequences,
 } from "@/features/settings/useSettings";
 
@@ -36,9 +37,11 @@ export function SettingsPage() {
   const company = useCompanySettings();
   const commercial = useCommercialSettings();
   const sequences = useSequences();
+  const reference = useReferenceData();
 
-  const loading = company.isPending || commercial.isPending || sequences.isPending;
-  const failure = company.error ?? commercial.error ?? sequences.error;
+  const loading =
+    company.isPending || commercial.isPending || sequences.isPending || reference.isPending;
+  const failure = company.error ?? commercial.error ?? sequences.error ?? reference.error;
 
   const visibleTabs = TABS.filter((item) => !item.adminOnly || isAdmin);
 
@@ -93,6 +96,7 @@ export function SettingsPage() {
                 void company.refetch();
                 void commercial.refetch();
                 void sequences.refetch();
+                void reference.refetch();
               }}
               className="mt-1.5 text-xs font-medium underline underline-offset-2"
             >

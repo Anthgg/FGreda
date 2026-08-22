@@ -17,18 +17,44 @@ const CONTROL =
 
 interface FieldProps {
   label: string;
+  requirement?: "required" | "optional" | "automatic" | undefined;
   hint?: string | undefined;
   error?: string | undefined;
   children: (id: string) => ReactNode;
   className?: string | undefined;
 }
 
-export function Field({ label, hint, error, children, className = "" }: FieldProps) {
+export function Field({
+  label,
+  requirement,
+  hint,
+  error,
+  children,
+  className = "",
+}: FieldProps) {
   const id = useId();
   return (
     <div className={className}>
-      <label htmlFor={id} className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-        {label}
+      <label
+        htmlFor={id}
+        className="flex items-baseline justify-between gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300"
+      >
+        <span>{label}</span>
+        {requirement ? (
+          <span
+            className={
+              requirement === "required"
+                ? "text-clay-700 dark:text-clay-300"
+                : "font-normal text-zinc-400 dark:text-zinc-500"
+            }
+          >
+            {requirement === "required"
+              ? "* Obligatorio"
+              : requirement === "optional"
+                ? "Opcional"
+                : "Automatico"}
+          </span>
+        ) : null}
       </label>
       <div className="mt-1">{children(id)}</div>
       {error ? (
@@ -42,9 +68,11 @@ export function Field({ label, hint, error, children, className = "" }: FieldPro
 
 interface TextFieldProps {
   label: string;
+  requirement?: "required" | "optional" | "automatic" | undefined;
   value: string | null;
   onChange: (value: string) => void;
   disabled?: boolean | undefined;
+  readOnly?: boolean | undefined;
   type?: "text" | "email" | "url" | "tel" | "number" | undefined;
   placeholder?: string | undefined;
   hint?: string | undefined;
@@ -56,9 +84,11 @@ interface TextFieldProps {
 
 export function TextField({
   label,
+  requirement,
   value,
   onChange,
   disabled = false,
+  readOnly = false,
   type = "text",
   placeholder,
   hint,
@@ -68,7 +98,13 @@ export function TextField({
   className,
 }: TextFieldProps) {
   return (
-    <Field label={label} hint={hint} error={error} className={className}>
+    <Field
+      label={label}
+      requirement={requirement}
+      hint={hint}
+      error={error}
+      className={className}
+    >
       {(id) => (
         <input
           id={id}
@@ -76,6 +112,8 @@ export function TextField({
           value={value ?? ""}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
+          readOnly={readOnly}
+          required={requirement === "required"}
           placeholder={placeholder}
           maxLength={maxLength}
           inputMode={inputMode}
@@ -89,6 +127,7 @@ export function TextField({
 
 interface TextAreaFieldProps {
   label: string;
+  requirement?: "required" | "optional" | undefined;
   value: string | null;
   onChange: (value: string) => void;
   disabled?: boolean | undefined;
@@ -100,6 +139,7 @@ interface TextAreaFieldProps {
 
 export function TextAreaField({
   label,
+  requirement,
   value,
   onChange,
   disabled = false,
@@ -109,13 +149,20 @@ export function TextAreaField({
   className,
 }: TextAreaFieldProps) {
   return (
-    <Field label={label} hint={hint} error={error} className={className}>
+    <Field
+      label={label}
+      requirement={requirement}
+      hint={hint}
+      error={error}
+      className={className}
+    >
       {(id) => (
         <textarea
           id={id}
           value={value ?? ""}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
+          required={requirement === "required"}
           rows={rows}
           aria-invalid={error ? true : undefined}
           className={`${CONTROL} resize-y`}
@@ -127,31 +174,43 @@ export function TextAreaField({
 
 interface SelectFieldProps<T extends string> {
   label: string;
+  requirement?: "required" | "optional" | "automatic" | undefined;
   value: T;
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
   disabled?: boolean | undefined;
   hint?: string | undefined;
+  error?: string | undefined;
   className?: string | undefined;
 }
 
 export function SelectField<T extends string>({
   label,
+  requirement,
   value,
   options,
   onChange,
   disabled = false,
   hint,
+  error,
   className,
 }: SelectFieldProps<T>) {
   return (
-    <Field label={label} hint={hint} className={className}>
+    <Field
+      label={label}
+      requirement={requirement}
+      hint={hint}
+      error={error}
+      className={className}
+    >
       {(id) => (
         <select
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value as T)}
           disabled={disabled}
+          required={requirement === "required"}
+          aria-invalid={error ? true : undefined}
           className={CONTROL}
         >
           {options.map((option) => (

@@ -12,9 +12,12 @@ import type {
   CommercialSettingsInput,
   CompanySettings,
   CompanySettingsInput,
+  ReferenceData,
   SequenceConfig,
   SequenceConfigInput,
   SequenceList,
+  SequencePatternPreset,
+  SequencePatternPresetInput,
   SequenceType,
 } from "@/types/settings";
 
@@ -22,6 +25,8 @@ const COMPANY = "/settings/company";
 const LOGO = "/settings/company/logo";
 const COMMERCIAL = "/settings/commercial";
 const SEQUENCES = "/settings/sequences";
+const REFERENCE_DATA = "/settings/reference-data";
+const SEQUENCE_PATTERNS = "/settings/sequence-patterns";
 const AUDIT = "/settings/audit";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +53,19 @@ export function uploadLogo(file: File): Promise<CompanySettings> {
 
 export function deleteLogo(): Promise<CompanySettings> {
   return apiClient.delete<CompanySettings>(LOGO);
+}
+
+// ---------------------------------------------------------------------------
+// Catalogos controlados
+// ---------------------------------------------------------------------------
+export function fetchReferenceData(): Promise<ReferenceData> {
+  return apiClient.get<ReferenceData>(REFERENCE_DATA);
+}
+
+export function createSequencePattern(
+  payload: SequencePatternPresetInput,
+): Promise<SequencePatternPreset> {
+  return apiClient.post<SequencePatternPreset>(SEQUENCE_PATTERNS, payload);
 }
 
 // ---------------------------------------------------------------------------

@@ -4,8 +4,18 @@ import type { FormEvent } from "react";
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError, isConflict } from "@/features/settings/messages";
-import { useSequences, useUpdateSequence } from "@/features/settings/useSettings";
-import type { ResetPolicy, SequenceConfig, SequenceConfigInput } from "@/types/settings";
+import {
+  useCreateSequencePattern,
+  useReferenceData,
+  useSequences,
+  useUpdateSequence,
+} from "@/features/settings/useSettings";
+import type {
+  ResetPolicy,
+  SequenceConfig,
+  SequenceConfigInput,
+  SequencePatternPreset,
+} from "@/types/settings";
 
 const TITULOS: Record<string, string> = {
   QUOTE: "Cotizaciones",
@@ -19,6 +29,9 @@ const POLITICAS: readonly { value: ResetPolicy; label: string }[] = [
   { value: "NEVER", label: "Nunca" },
 ];
 
+const CUSTOM_PATTERN = "__create_pattern__";
+const CURRENT_PATTERN = "__current_pattern__";
+
 function toInput(sequence: SequenceConfig): SequenceConfigInput {
   return {
     prefix: sequence.prefix,
@@ -30,12 +43,7 @@ function toInput(sequence: SequenceConfig): SequenceConfigInput {
   };
 }
 
-/**
- * Calcula el ejemplo mostrado mientras se edita.
- *
- * Es puramente visual y no llama a ningun endpoint: el correlativo oficial lo
- * asigna el backend al crear un documento.
- */
+/** La vista previa local nunca reserva ni consume un correlativo. */
 function previewOf(draft: SequenceConfigInput, sequence: SequenceConfig): string {
   const hoy = new Date();
   const siguiente = sequence.current_value + 1;
@@ -50,9 +58,6 @@ function previewOf(draft: SequenceConfigInput, sequence: SequenceConfig): string
 
 function validate(draft: SequenceConfigInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
-  // Se comprueba la presencia antes que el contenido: una respuesta
-  // inesperada del servidor debe mostrar un error, no dejar la pantalla en
-  // blanco.
   if (!/^[A-Za-z0-9]{1,10}$/.test(draft.prefix ?? "")) {
     errors.prefix = "Entre 1 y 10 letras o digitos, sin separadores.";
   }
@@ -65,16 +70,69 @@ function validate(draft: SequenceConfigInput): Partial<Record<string, string>> {
   return errors;
 }
 
-function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit: boolean }) {
+function SequenceCard({
+  sequence,
+  canEdit,
+  patterns,
+}: {
+  sequence: SequenceConfig;
+  canEdit: boolean;
+  patterns: SequencePatternPreset[];
+}) {
   const update = useUpdateSequence();
+  const createPattern = useCreateSequencePattern();
   const [draft, setDraft] = useState<SequenceConfigInput>(() => toInput(sequence));
+  const [creatingPattern, setCreatingPattern] = useState(false);
+  const [patternName, setPatternName] = useState("");
+  const [newPattern, setNewPattern] = useState(sequence.pattern);
 
   const errors = validate(draft);
   const hasErrors = Object.keys(errors).length > 0;
   const isDirty = JSON.stringify(draft) !== JSON.stringify(toInput(sequence));
+  const patternIsPreset = patterns.some((item) => item.pattern === draft.pattern);
+  const selectedPattern = creatingPattern
+    ? CUSTOM_PATTERN
+    : patternIsPreset
+      ? draft.pattern
+      : CURRENT_PATTERN;
+  const patternOptions = [
+    ...patterns.map((item) => ({ value: item.pattern, label: `${item.name} — ${item.pattern}` })),
+    ...(patternIsPreset
+      ? []
+      : [{ value: CURRENT_PATTERN, label: `Formato actual — ${draft.pattern}` }]),
+    { value: CUSTOM_PATTERN, label: "Crear un nuevo formato..." },
+  ];
 
   const set = <K extends keyof SequenceConfigInput>(field: K, value: SequenceConfigInput[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const selectPattern = (value: string) => {
+    if (value === CUSTOM_PATTERN) {
+      setCreatingPattern(true);
+      setNewPattern(draft.pattern);
+      return;
+    }
+    if (value === CURRENT_PATTERN) {
+      setCreatingPattern(false);
+      return;
+    }
+    setCreatingPattern(false);
+    set("pattern", value);
+  };
+
+  const handleCreatePattern = () => {
+    if (patternName.trim().length < 2 || !newPattern.includes("{NUMBER}")) return;
+    createPattern.mutate(
+      { name: patternName.trim(), pattern: newPattern },
+      {
+        onSuccess: (created) => {
+          set("pattern", created.pattern);
+          setPatternName("");
+          setCreatingPattern(false);
+        },
+      },
+    );
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -86,6 +144,12 @@ function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit
     );
   };
 
+  const reset = () => {
+    setDraft(toInput(sequence));
+    setCreatingPattern(false);
+    setPatternName("");
+    setNewPattern(sequence.pattern);
+  };
   const disabled = !canEdit || update.isPending;
 
   return (
@@ -108,22 +172,26 @@ function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <TextField
           label="Prefijo"
+          requirement="required"
           value={draft.prefix}
           onChange={(value) => set("prefix", value.toUpperCase())}
           disabled={disabled}
           maxLength={10}
           error={errors.prefix}
         />
-        <TextField
+        <SelectField
           label="Formato"
-          value={draft.pattern}
-          onChange={(value) => set("pattern", value)}
+          requirement="required"
+          value={selectedPattern}
+          options={patternOptions}
+          onChange={selectPattern}
           disabled={disabled}
           error={errors.pattern}
           className="lg:col-span-2"
         />
         <TextField
           label="Digitos"
+          requirement="required"
           value={String(draft.padding)}
           onChange={(value) => set("padding", Number(value) || 0)}
           disabled={disabled}
@@ -132,6 +200,7 @@ function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit
         />
         <SelectField
           label="Reinicio del contador"
+          requirement="required"
           value={draft.reset_policy}
           options={POLITICAS}
           onChange={(value) => set("reset_policy", value)}
@@ -147,9 +216,52 @@ function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit
               className="size-3.5 rounded border-zinc-300 text-clay-700 focus:ring-clay-600 dark:border-zinc-700"
             />
             Activa
+            <span className="text-xs text-clay-700 dark:text-clay-300">* Obligatorio</span>
           </label>
         </div>
       </div>
+
+      {creatingPattern ? (
+        <div className="mt-3 grid gap-3 rounded-md border border-clay-200 bg-clay-50/60 p-3 sm:grid-cols-2 dark:border-clay-900 dark:bg-clay-950/20">
+          <TextField
+            label="Nombre del nuevo formato"
+            requirement="required"
+            value={patternName}
+            onChange={setPatternName}
+            disabled={disabled || createPattern.isPending}
+            error={patternName.length > 0 && patternName.trim().length < 2 ? "Use al menos 2 caracteres." : undefined}
+          />
+          <TextField
+            label="Patron"
+            requirement="required"
+            value={newPattern}
+            onChange={setNewPattern}
+            disabled={disabled || createPattern.isPending}
+            error={!newPattern.includes("{NUMBER}") ? "Debe incluir {NUMBER}." : undefined}
+          />
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <PrimaryButton
+              type="button"
+              disabled={
+                patternName.trim().length < 2 ||
+                !newPattern.includes("{NUMBER}") ||
+                createPattern.isPending
+              }
+              onClick={handleCreatePattern}
+            >
+              {createPattern.isPending ? "Creando..." : "Crear y usar"}
+            </PrimaryButton>
+            <SecondaryButton disabled={createPattern.isPending} onClick={() => setCreatingPattern(false)}>
+              Volver a formatos
+            </SecondaryButton>
+          </div>
+          {createPattern.error ? (
+            <p role="alert" className="text-sm text-red-700 sm:col-span-2 dark:text-red-300">
+              {describeError(createPattern.error)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -182,13 +294,10 @@ function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit
 
       {canEdit ? (
         <div className="mt-3 flex items-center gap-2">
-          <PrimaryButton disabled={!isDirty || hasErrors || update.isPending}>
+          <PrimaryButton disabled={!isDirty || hasErrors || update.isPending || creatingPattern}>
             {update.isPending ? <Spinner className="size-3.5" label="Guardando..." /> : "Guardar"}
           </PrimaryButton>
-          <SecondaryButton
-            disabled={!isDirty || update.isPending}
-            onClick={() => setDraft(toInput(sequence))}
-          >
+          <SecondaryButton disabled={!isDirty || update.isPending} onClick={reset}>
             Cancelar
           </SecondaryButton>
           {isDirty ? (
@@ -202,13 +311,19 @@ function SequenceCard({ sequence, canEdit }: { sequence: SequenceConfig; canEdit
 
 export function SequencesSection({ canEdit }: { canEdit: boolean }) {
   const query = useSequences();
+  const reference = useReferenceData();
 
-  if (!query.data) return null;
+  if (!query.data || !reference.data) return null;
 
   return (
     <div className="space-y-5">
       {query.data.map((sequence) => (
-        <SequenceCard key={sequence.sequence_type} sequence={sequence} canEdit={canEdit} />
+        <SequenceCard
+          key={sequence.sequence_type}
+          sequence={sequence}
+          canEdit={canEdit}
+          patterns={reference.data.sequence_patterns}
+        />
       ))}
       {!canEdit ? (
         <p className="border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">

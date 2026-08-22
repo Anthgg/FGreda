@@ -1,16 +1,38 @@
 import { useMemo } from "react";
 import type { FormEvent } from "react";
 
-import { FormSection, TextField } from "@/components/form";
+import { FormSection, SelectField, TextField } from "@/components/form";
 import { LogoField } from "@/features/settings/LogoField";
 import { SaveBar } from "@/features/settings/SaveBar";
 import { useEditableForm } from "@/features/settings/useEditableForm";
-import { useCompanySettings, useUpdateCompany } from "@/features/settings/useSettings";
-import type { CompanySettings, CompanySettingsInput } from "@/types/settings";
+import {
+  useCompanySettings,
+  useReferenceData,
+  useUpdateCompany,
+} from "@/features/settings/useSettings";
+import type { CompanySettings, CompanySettingsInput, UbigeoOption } from "@/types/settings";
 
 function toInput(settings: CompanySettings): CompanySettingsInput {
   const { version, updated_at: _updatedAt, logo: _logo, ...rest } = settings;
   return { ...rest, version };
+}
+
+function titleCase(value: string): string {
+  return value
+    .toLocaleLowerCase("es-PE")
+    .replace(/(^|\s)(\p{L})/gu, (_match, space: string, letter: string) =>
+      `${space}${letter.toLocaleUpperCase("es-PE")}`,
+    );
+}
+
+function uniqueOptions(
+  rows: UbigeoOption[],
+  codeField: "department_code" | "province_code",
+  nameField: "department_name" | "province_name",
+) {
+  return Array.from(new Map(rows.map((row) => [row[codeField], row[nameField]])).entries()).map(
+    ([value, name]) => ({ value, label: titleCase(name) }),
+  );
 }
 
 /** Validacion de experiencia de usuario. El backend la repite entera. */
@@ -25,34 +47,106 @@ function validate(draft: CompanySettingsInput): Partial<Record<string, string>> 
   if (draft.website && !/^https?:\/\//.test(draft.website)) {
     errors.website = "Debe empezar por http:// o https://";
   }
+  if (draft.department && !draft.province) {
+    errors.province = "Seleccione una provincia del departamento.";
+  }
+  if ((draft.department || draft.province || draft.district || draft.country) && !draft.ubigeo_code) {
+    errors.district = "Complete la ubicacion seleccionando un distrito INEI.";
+  }
   return errors;
 }
 
 export function CompanySection({ canEdit }: { canEdit: boolean }) {
   const query = useCompanySettings();
+  const reference = useReferenceData();
   const update = useUpdateCompany();
   const inicial = useMemo(
     () => (query.data ? toInput(query.data) : undefined),
     [query.data],
   );
-  const { draft, setField, reset, commit, isDirty } = useEditableForm<CompanySettingsInput>(
-    inicial,
-  );
+  const { draft, setField, setDraft, reset, commit, isDirty } =
+    useEditableForm<CompanySettingsInput>(inicial);
 
-  if (!draft) return null;
+  if (!draft || !reference.data) return null;
 
   const errors = validate(draft);
   const hasErrors = Object.keys(errors).length > 0;
+  const allDistricts = reference.data.districts;
+  const departmentCode =
+    draft.ubigeo_code?.slice(0, 2) ??
+    allDistricts.find((item) => item.department_name === draft.department)?.department_code ??
+    "";
+  const provinceRows = allDistricts.filter((item) => item.department_code === departmentCode);
+  const provinceCode =
+    draft.ubigeo_code?.slice(0, 4) ??
+    provinceRows.find((item) => item.province_name === draft.province)?.province_code ??
+    "";
+  const districtRows = provinceRows.filter((item) => item.province_code === provinceCode);
+
+  const departmentOptions = [
+    { value: "", label: "Seleccionar departamento" },
+    ...uniqueOptions(allDistricts, "department_code", "department_name"),
+  ];
+  const provinceOptions = [
+    { value: "", label: departmentCode ? "Seleccionar provincia" : "Primero el departamento" },
+    ...uniqueOptions(provinceRows, "province_code", "province_name"),
+  ];
+  const districtOptions = [
+    { value: "", label: provinceCode ? "Seleccionar distrito" : "Primero la provincia" },
+    ...districtRows.map((item) => ({ value: item.code, label: titleCase(item.district_name) })),
+  ];
+
+  const selectDepartment = (code: string) => {
+    const selected = allDistricts.find((item) => item.department_code === code);
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            ubigeo_code: null,
+            department: selected?.department_name ?? null,
+            province: null,
+            district: null,
+            country: selected ? "Peru" : null,
+          }
+        : current,
+    );
+  };
+
+  const selectProvince = (code: string) => {
+    const selected = provinceRows.find((item) => item.province_code === code);
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            ubigeo_code: null,
+            province: selected?.province_name ?? null,
+            district: null,
+          }
+        : current,
+    );
+  };
+
+  const selectDistrict = (code: string) => {
+    const selected = districtRows.find((item) => item.code === code);
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            ubigeo_code: selected?.code ?? null,
+            department: selected?.department_name ?? current.department,
+            province: selected?.province_name ?? current.province,
+            district: selected?.district_name ?? null,
+            country: selected ? "Peru" : current.country,
+          }
+        : current,
+    );
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isDirty || hasErrors || update.isPending) return;
-    // Se envia la version que el servidor confirmo por ultima vez, no la que
-    // se capturo al abrir el formulario.
     update.mutate(
       { ...draft, version: query.data?.version ?? draft.version },
-      // Se adopta la respuesta del servidor: deja el formulario limpio y
-      // la siguiente escritura parte de la version ya confirmada.
       { onSuccess: (data) => commit(toInput(data)) },
     );
   };
@@ -65,18 +159,21 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
         <FormSection title="Identificacion">
           <TextField
             label="Razon social"
+            requirement="optional"
             value={draft.legal_name}
             onChange={(value) => setField("legal_name", value)}
             disabled={disabled}
           />
           <TextField
             label="Nombre comercial"
+            requirement="optional"
             value={draft.trade_name}
             onChange={(value) => setField("trade_name", value)}
             disabled={disabled}
           />
           <TextField
             label="RUC"
+            requirement="optional"
             value={draft.tax_id}
             onChange={(value) => setField("tax_id", value)}
             disabled={disabled}
@@ -87,9 +184,13 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
         </FormSection>
 
-        <FormSection title="Domicilio">
+        <FormSection
+          title="Domicilio"
+          description="Ubicacion validada con el catalogo oficial de distritos INEI."
+        >
           <TextField
             label="Direccion"
+            requirement="optional"
             value={draft.address_line1}
             onChange={(value) => setField("address_line1", value)}
             disabled={disabled}
@@ -97,37 +198,50 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
           <TextField
             label="Referencia"
+            requirement="optional"
             value={draft.address_line2}
             onChange={(value) => setField("address_line2", value)}
             disabled={disabled}
             className="sm:col-span-2"
           />
-          <TextField
-            label="Distrito"
-            value={draft.district}
-            onChange={(value) => setField("district", value)}
-            disabled={disabled}
-          />
-          <TextField
-            label="Provincia"
-            value={draft.province}
-            onChange={(value) => setField("province", value)}
-            disabled={disabled}
-          />
-          <TextField
+          <SelectField
             label="Departamento"
-            value={draft.department}
-            onChange={(value) => setField("department", value)}
+            requirement="optional"
+            value={departmentCode}
+            options={departmentOptions}
+            onChange={selectDepartment}
             disabled={disabled}
+          />
+          <SelectField
+            label="Provincia"
+            requirement={departmentCode ? "required" : "optional"}
+            value={provinceCode}
+            options={provinceOptions}
+            onChange={selectProvince}
+            disabled={disabled || !departmentCode}
+            error={errors.province}
+          />
+          <SelectField
+            label="Distrito"
+            requirement={provinceCode ? "required" : "optional"}
+            value={draft.ubigeo_code ?? ""}
+            options={districtOptions}
+            onChange={selectDistrict}
+            disabled={disabled || !provinceCode}
+            error={errors.district}
           />
           <TextField
             label="Pais"
-            value={draft.country}
-            onChange={(value) => setField("country", value)}
+            requirement="automatic"
+            value={draft.country ? "Peru" : null}
+            onChange={() => {}}
             disabled={disabled}
+            readOnly
+            hint="Se completa al seleccionar el distrito."
           />
           <TextField
             label="Codigo postal"
+            requirement="optional"
             value={draft.postal_code}
             onChange={(value) => setField("postal_code", value)}
             disabled={disabled}
@@ -137,6 +251,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
         <FormSection title="Contacto">
           <TextField
             label="Telefono"
+            requirement="optional"
             value={draft.phone}
             onChange={(value) => setField("phone", value)}
             disabled={disabled}
@@ -144,6 +259,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
           <TextField
             label="Celular"
+            requirement="optional"
             value={draft.mobile}
             onChange={(value) => setField("mobile", value)}
             disabled={disabled}
@@ -151,6 +267,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
           <TextField
             label="Correo electronico"
+            requirement="optional"
             value={draft.email}
             onChange={(value) => setField("email", value)}
             disabled={disabled}
@@ -159,6 +276,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
           <TextField
             label="Sitio web"
+            requirement="optional"
             value={draft.website}
             onChange={(value) => setField("website", value)}
             disabled={disabled}
@@ -168,12 +286,14 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
           <TextField
             label="Persona de contacto"
+            requirement="optional"
             value={draft.contact_name}
             onChange={(value) => setField("contact_name", value)}
             disabled={disabled}
           />
           <TextField
             label="Cargo"
+            requirement="optional"
             value={draft.contact_role}
             onChange={(value) => setField("contact_role", value)}
             disabled={disabled}

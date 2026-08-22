@@ -8,10 +8,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  createSequencePattern,
   deleteLogo,
   fetchAuditEvents,
   fetchCommercialSettings,
   fetchCompanySettings,
+  fetchReferenceData,
   fetchSequences,
   updateCommercialSettings,
   updateCompanySettings,
@@ -21,6 +23,7 @@ import {
 import type {
   CommercialSettingsInput,
   CompanySettingsInput,
+  SequencePatternPresetInput,
   SequenceConfigInput,
   SequenceType,
 } from "@/types/settings";
@@ -29,12 +32,17 @@ export const COMPANY_KEY = ["settings", "company"] as const;
 export const COMMERCIAL_KEY = ["settings", "commercial"] as const;
 export const SEQUENCES_KEY = ["settings", "sequences"] as const;
 export const AUDIT_KEY = ["settings", "audit"] as const;
+export const REFERENCE_DATA_KEY = ["settings", "reference-data"] as const;
 
 // ---------------------------------------------------------------------------
 // Consultas
 // ---------------------------------------------------------------------------
 export function useCompanySettings() {
   return useQuery({ queryKey: COMPANY_KEY, queryFn: fetchCompanySettings });
+}
+
+export function useReferenceData() {
+  return useQuery({ queryKey: REFERENCE_DATA_KEY, queryFn: fetchReferenceData });
 }
 
 export function useCommercialSettings() {
@@ -91,6 +99,18 @@ export function useUpdateSequence() {
     }) => updateSequence(sequenceType, payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: SEQUENCES_KEY });
+      void queryClient.invalidateQueries({ queryKey: AUDIT_KEY });
+    },
+  });
+}
+
+export function useCreateSequencePattern() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: SequencePatternPresetInput) => createSequencePattern(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: REFERENCE_DATA_KEY });
       void queryClient.invalidateQueries({ queryKey: AUDIT_KEY });
     },
   });

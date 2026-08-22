@@ -4,6 +4,7 @@ import type {
   AuditPage,
   CommercialSettings,
   CompanySettings,
+  ReferenceData,
   SequenceConfig,
 } from "@/types/settings";
 
@@ -13,6 +14,7 @@ export const COMPANY_EMPTY: CompanySettings = {
   tax_id: null,
   address_line1: null,
   address_line2: null,
+  ubigeo_code: null,
   district: null,
   province: null,
   department: null,
@@ -34,7 +36,11 @@ export const COMPANY_FILLED: CompanySettings = {
   legal_name: "Taller Greda SAC",
   trade_name: "Greda",
   tax_id: "20123456789",
-  district: "Miraflores",
+  ubigeo_code: "150122",
+  district: "MIRAFLORES",
+  province: "LIMA",
+  department: "LIMA",
+  country: "Peru",
   email: "contacto@greda.pe",
   version: 3,
 };
@@ -100,6 +106,60 @@ export const SEQUENCES: SequenceConfig[] = [
     updated_at: "2026-08-22T00:00:00Z",
   },
 ];
+
+export const REFERENCE_DATA: ReferenceData = {
+  currencies: [
+    { code: "EUR", numeric_code: "978", name: "euro", symbol: "EUR", minor_units: 2 },
+    { code: "PEN", numeric_code: "604", name: "sol peruano", symbol: "S/", minor_units: 2 },
+    {
+      code: "USD",
+      numeric_code: "840",
+      name: "dolar estadounidense",
+      symbol: "USD",
+      minor_units: 2,
+    },
+  ],
+  districts: [
+    {
+      code: "080101",
+      department_code: "08",
+      department_name: "CUSCO",
+      province_code: "0801",
+      province_name: "CUSCO",
+      district_name: "CUSCO",
+    },
+    {
+      code: "150101",
+      department_code: "15",
+      department_name: "LIMA",
+      province_code: "1501",
+      province_name: "LIMA",
+      district_name: "LIMA",
+    },
+    {
+      code: "150122",
+      department_code: "15",
+      department_name: "LIMA",
+      province_code: "1501",
+      province_name: "LIMA",
+      district_name: "MIRAFLORES",
+    },
+  ],
+  sequence_patterns: [
+    {
+      id: 1,
+      name: "Prefijo - ano - numero",
+      pattern: "{PREFIX}-{YYYY}-{NUMBER}",
+      is_system: true,
+    },
+    {
+      id: 2,
+      name: "Prefijo - numero",
+      pattern: "{PREFIX}-{NUMBER}",
+      is_system: true,
+    },
+  ],
+};
 
 export const AUDIT_PAGE: AuditPage = {
   items: [

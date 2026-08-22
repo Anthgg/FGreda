@@ -76,9 +76,10 @@ export function LogoField({ logo, canEdit }: LogoFieldProps) {
 
   return (
     <section className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        Logo
-      </h3>
+        <h3 className="flex items-baseline justify-between gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <span>Logo</span>
+          <span className="font-normal normal-case text-zinc-400 dark:text-zinc-500">Opcional</span>
+        </h3>
 
       <div className="mt-3 flex flex-wrap items-start gap-4">
         <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
