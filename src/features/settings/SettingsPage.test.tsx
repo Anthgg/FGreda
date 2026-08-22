@@ -39,7 +39,18 @@ function mockSettings(overrides: Overrides = {}) {
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return sessionResponse(overrides.user ?? TEST_USER);
     if (url.includes("/settings/company/logo")) return new Response(null, { status: 404 });
-    if (url.includes("/settings/company")) return jsonResponse(200, overrides.company ?? COMPANY_FILLED);
+    if (url.includes("/settings/company")) {
+      // El backend devuelve el estado resultante con la version incrementada.
+      if (init.method === "PUT") {
+        const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return jsonResponse(200, {
+          ...COMPANY_FILLED,
+          ...enviado,
+          version: Number(enviado.version) + 1,
+        });
+      }
+      return jsonResponse(200, overrides.company ?? COMPANY_FILLED);
+    }
     if (url.includes("/settings/commercial"))
       return jsonResponse(200, overrides.commercial ?? COMMERCIAL_FILLED);
     if (url.includes("/settings/sequences"))
@@ -161,6 +172,22 @@ describe("edicion como ADMIN", () => {
       // La version viaja siempre: es el control de concurrencia.
       expect(cuerpo.version).toBe(COMPANY_FILLED.version);
     });
+  });
+
+  it("tras guardar el formulario queda limpio", async () => {
+    // Regresion: la version cambia al guardar, y si entrase en la comparacion
+    // de cambios el formulario quedaria marcado como modificado para siempre.
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/nombre comercial/i), " Editado");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    expect(await screen.findByText(/cambios guardados/i)).toBeInTheDocument();
+    expect(screen.queryByText(/cambios sin guardar/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/nombre comercial/i)).toHaveValue("Greda Editado");
+    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
   });
 
   it("un RUC invalido bloquea el guardado sin llamar al backend", async () => {

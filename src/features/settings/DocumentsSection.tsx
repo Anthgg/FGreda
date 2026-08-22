@@ -21,7 +21,7 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
     () => (query.data ? toCommercialInput(query.data) : undefined),
     [query.data],
   );
-  const { draft, setField, reset, isDirty } = useEditableForm<CommercialSettingsInput>(
+  const { draft, setField, reset, commit, isDirty } = useEditableForm<CommercialSettingsInput>(
     inicial,
   );
 
@@ -30,7 +30,12 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isDirty || update.isPending) return;
-    update.mutate({ ...draft, version: query.data?.version ?? draft.version });
+    update.mutate(
+      { ...draft, version: query.data?.version ?? draft.version },
+      // Se adopta la respuesta del servidor: deja el formulario limpio y
+      // la siguiente escritura parte de la version ya confirmada.
+      { onSuccess: (data) => commit(toCommercialInput(data)) },
+    );
   };
 
   const disabled = !canEdit || update.isPending;

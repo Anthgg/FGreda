@@ -35,7 +35,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
     () => (query.data ? toInput(query.data) : undefined),
     [query.data],
   );
-  const { draft, setField, reset, isDirty } = useEditableForm<CompanySettingsInput>(
+  const { draft, setField, reset, commit, isDirty } = useEditableForm<CompanySettingsInput>(
     inicial,
   );
 
@@ -49,7 +49,12 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
     if (!isDirty || hasErrors || update.isPending) return;
     // Se envia la version que el servidor confirmo por ultima vez, no la que
     // se capturo al abrir el formulario.
-    update.mutate({ ...draft, version: query.data?.version ?? draft.version });
+    update.mutate(
+      { ...draft, version: query.data?.version ?? draft.version },
+      // Se adopta la respuesta del servidor: deja el formulario limpio y
+      // la siguiente escritura parte de la version ya confirmada.
+      { onSuccess: (data) => commit(toInput(data)) },
+    );
   };
 
   const disabled = !canEdit || update.isPending;
