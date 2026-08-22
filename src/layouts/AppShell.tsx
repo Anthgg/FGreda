@@ -16,6 +16,8 @@ import {
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SettingsIcon,
+  UploadIcon,
+  UsersIcon,
 } from "@/components/icons";
 import { Spinner } from "@/components/Spinner";
 import { useLogout, useSession } from "@/features/auth/useSession";
@@ -30,6 +32,10 @@ function renderNavigationIcon(icon: NavigationIconKey, className = "size-5 shrin
   switch (icon) {
     case "home":
       return <HomeIcon className={className} />;
+    case "users":
+      return <UsersIcon className={className} />;
+    case "upload":
+      return <UploadIcon className={className} />;
     case "package":
       return <PackageIcon className={className} />;
     case "boxes":

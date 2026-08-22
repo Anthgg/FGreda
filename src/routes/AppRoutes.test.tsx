@@ -72,11 +72,32 @@ describe("rutas protegidas y Dashboard", () => {
     renderApp(["/"]);
 
     await screen.findByRole("heading", { name: /inicio/i });
-    for (const modulo of ["Productos", "Inventario", "Recetas", "Quemas", "Cotizaciones"]) {
+    // Fase 3 habilita maestros, inventario e importaciones; el resto sigue
+    // visible y deshabilitado hasta que llegue su fase.
+    for (const modulo of ["Recetas", "Quemas", "Cotizaciones"]) {
       const entradas = screen.getAllByText(modulo);
       expect(entradas.length).toBeGreaterThan(0);
       const disabledParent = entradas[0]?.closest("[aria-disabled='true']");
       expect(disabledParent).toBeInTheDocument();
+    }
+  });
+
+  it("los modulos de Fase 3 son navegables desde el menu", async () => {
+    mockFetch(() => sessionResponse());
+
+    renderApp(["/"]);
+
+    await screen.findByRole("heading", { name: /inicio/i });
+    for (const [modulo, ruta] of [
+      ["Productos", "/productos"],
+      ["Terceros", "/terceros"],
+      ["Inventario", "/inventario"],
+      ["Importaciones", "/importaciones"],
+    ] as const) {
+      const enlaces = screen
+        .getAllByRole("link", { name: new RegExp(modulo, "i") })
+        .map((item) => item.getAttribute("href"));
+      expect(enlaces).toContain(ruta);
     }
   });
 

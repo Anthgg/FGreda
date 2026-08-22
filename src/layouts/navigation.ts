@@ -1,13 +1,16 @@
 /**
  * Menu principal previsto para todo el producto Cotizador GREDA.
  *
- * `Inicio` y `Configuracion` estan operativos. El resto queda visible y
+ * `Inicio`, `Productos`, `Terceros`, `Inventario`, `Importaciones` y
+ * `Configuracion` estan operativos. El resto queda visible y
  * deshabilitado para fijar la estructura de navegacion: su logica de negocio
  * corresponde a fases posteriores y no se adelanta aqui.
  */
 
 export type NavigationIconKey =
   | "home"
+  | "users"
+  | "upload"
   | "package"
   | "boxes"
   | "flask"
@@ -43,15 +46,31 @@ export const NAVIGATION: readonly NavigationItem[] = [
   },
   {
     label: "Productos",
-    enabled: false,
+    to: "/productos",
+    enabled: true,
     icon: "package",
     description: "Catálogo de productos e insumos del taller.",
   },
   {
+    label: "Terceros",
+    to: "/terceros",
+    enabled: true,
+    icon: "users",
+    description: "Clientes y proveedores en un único maestro.",
+  },
+  {
     label: "Inventario",
-    enabled: false,
+    to: "/inventario",
+    enabled: true,
     icon: "boxes",
     description: "Control de stock, materias primas y movimientos.",
+  },
+  {
+    label: "Importaciones",
+    to: "/importaciones",
+    enabled: true,
+    icon: "upload",
+    description: "Carga controlada de maestros desde Excel.",
   },
   {
     label: "Recetas",
