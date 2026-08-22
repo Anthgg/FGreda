@@ -6,9 +6,8 @@
 
 import { useState } from "react";
 
-import { Field, PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
+import { Field, PrimaryButton, SecondaryButton, ProductSelectField } from "@/components/form";
 import { describeError } from "@/features/settings/messages";
-import { useProducts } from "@/features/masters/useMasters";
 import { useCreateRecipe } from "@/features/recipes/useRecipes";
 import { RecipeVersionForm } from "@/features/recipes/RecipeVersionForm";
 import type { RecipeCreate, RecipeVersionIn } from "@/types/recipes";
@@ -24,15 +23,6 @@ export function RecipeCreateModal({ onClose }: Props) {
   const [headerError, setHeaderError] = useState<string | null>(null);
 
   const createRecipe = useCreateRecipe();
-
-  // Productos de tipo PREPARED_MATERIAL
-  const products = useProducts({ product_type: "PREPARED_MATERIAL", limit: 200 });
-  const prepProducts = products.data?.items ?? [];
-
-  const productOptions = prepProducts.map((p) => ({
-    value: String(p.id),
-    label: `${p.internal_reference} · ${p.name}`,
-  }));
 
   const handleHeaderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,14 +76,16 @@ export function RecipeCreateModal({ onClose }: Props) {
         <h2 className="mb-4 text-lg font-semibold text-zinc-900">Nueva receta</h2>
 
         <form onSubmit={handleHeaderSubmit} className="space-y-4">
-          <SelectField
+          <ProductSelectField
             label="Producto (material preparado)"
             requirement="required"
             value={productId}
-            options={productOptions}
-            onChange={setProductId}
-            searchable={true}
-            searchPlaceholder="Buscar material preparado..."
+            productType="PREPARED_MATERIAL"
+            onChange={(val, prod) => {
+              setProductId(val);
+              if (!name && prod) setName(prod.name);
+            }}
+            searchPlaceholder="Buscar material preparado (ej. LAB70...)"
             placeholder="Seleccionar material preparado..."
           />
 

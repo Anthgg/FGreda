@@ -8,9 +8,8 @@
 
 import { useState } from "react";
 
-import { Field, PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
+import { Field, PrimaryButton, SecondaryButton, SelectField, ProductSelectField } from "@/components/form";
 import { describeError } from "@/features/settings/messages";
-import { useProducts } from "@/features/masters/useMasters";
 import { formatDecimal, sumDecimalStrings } from "@/features/recipes/formatDecimal";
 import type { RecipeComponentType, RecipeLineIn, RecipeVersionIn } from "@/types/recipes";
 
@@ -37,20 +36,11 @@ function emptyLine(): DraftLine {
   return { component_product_id: "", component_type: "BASE", percentage: "" };
 }
 
-export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
+export function RecipeVersionForm({ recipeId, onClose, onSubmit, isPending }: Props) {
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [notes, setNotes] = useState("");
   const [activateNow, setActivateNow] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // Insumos y materias primas disponibles
-  const products = useProducts({ limit: 300 });
-  const rawProducts = products.data?.items ?? [];
-
-  const productOptions = rawProducts.map((p) => ({
-    value: String(p.id),
-    label: `${p.internal_reference} · ${p.name}`,
-  }));
 
   // Suma de componentes base calculada con strings (cero float)
   const basePercentages = lines
@@ -141,15 +131,14 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
 
                 {/* Producto */}
                 <div className="flex-1 min-w-[200px]">
-                  <SelectField
+                  <ProductSelectField
                     label="Componente"
                     requirement="required"
                     value={line.component_product_id}
-                    options={productOptions}
                     onChange={(val) => handleLineChange(i, "component_product_id", val)}
-                    searchable={true}
-                    searchPlaceholder="Buscar componente..."
-                    placeholder="Seleccionar..."
+                    excludeIds={recipeId ? [recipeId] : []}
+                    searchPlaceholder="Buscar por nombre o referencia (ej. LAB70...)"
+                    placeholder="Seleccionar componente..."
                   />
                 </div>
 
