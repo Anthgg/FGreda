@@ -41,6 +41,34 @@ export function describeError(error: unknown): string {
       return "El almacenamiento de archivos no esta configurado en el servidor.";
     case "VALIDATION_ERROR":
       return describeValidation(error);
+
+    // El backend responde este codigo cuando la ruta no existe. Visto desde la
+    // pantalla parece que el modulo esta roto, cuando casi siempre significa
+    // que la aplicacion apunta a un backend que no tiene esa version de la API.
+    case "NOT_FOUND":
+      return (
+        "El servidor no reconoce esta ruta. Verifique que la aplicacion apunte " +
+        "al backend correcto."
+      );
+
+    case "MASTER_NOT_FOUND":
+      return "El registro ya no existe. Actualice la lista.";
+    case "MASTER_VALUE_EXISTS":
+      return "Ya existe un registro con esa clave.";
+    case "MASTER_INVALID_REFERENCE":
+      return "Alguna referencia enviada no existe en los catalogos.";
+    case "NEGATIVE_STOCK_NOT_ALLOWED":
+      return "El movimiento dejaria existencia negativa.";
+    case "PRODUCT_WITHOUT_UOM":
+      return "El producto no tiene unidad de medida y no puede llevar existencia.";
+    case "IMPORT_FILE_INVALID":
+      return "El archivo no se pudo leer como Excel.";
+    case "IMPORT_BATCH_NOT_FOUND":
+      return "La importacion ya no existe.";
+    case "IMPORT_INVALID_STATE":
+      return "La importacion no admite esta operacion en su estado actual.";
+    case "IMPORT_ROWS_PENDING":
+      return error.message;
     default:
       return error.message;
   }
