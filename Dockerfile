@@ -29,6 +29,8 @@ ENV PORT=8080
 
 # El entrypoint de la imagen aplica envsubst sobre los ficheros de templates.
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# El snippet no lleva variables: se copia tal cual, fuera de templates.
+COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 8080

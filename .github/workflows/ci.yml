@@ -87,6 +87,23 @@ jobs:
           echo "HTTP $codigo"
           test "$codigo" = "200"
 
+      - name: Comprobar las cabeceras de seguridad
+        # nginx descarta los add_header heredados en cualquier location que
+        # declare los suyos, asi que se verifican en las tres rutas posibles:
+        # index.html, un asset con hash y el fallback de React Router.
+        run: |
+          for ruta in / /assets/ /una/ruta/profunda; do
+            cabeceras=$(curl -sI "http://localhost:8080${ruta}")
+            for esperada in "x-content-type-options: nosniff" "x-frame-options: DENY" "referrer-policy: same-origin"; do
+              if ! echo "$cabeceras" | tr 'A-Z' 'a-z' | grep -q "$(echo "$esperada" | tr 'A-Z' 'a-z')"; then
+                echo "Falta '$esperada' en $ruta"
+                echo "$cabeceras"
+                exit 1
+              fi
+            done
+            echo "$ruta: cabeceras de seguridad presentes"
+          done
+
       - name: Comprobar que el proceso no corre como root
         run: |
           uid=$(docker exec fgreda-ci id -u)
