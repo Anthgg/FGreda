@@ -157,14 +157,14 @@ export function AppShell() {
       {/* BARRA SUPERIOR MÓVIL (visible solo en < lg)                               */}
       {/* ========================================================================= */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md lg:hidden">
-        <div className="flex items-center gap-2.5">
+        <div className="size-9" aria-hidden="true" />
+        <div className="flex items-center justify-center">
           <img
             src={gredaLogo}
             alt="Logo de Greda"
-            className="size-7 select-none object-contain"
+            className="size-8 select-none object-contain"
             draggable={false}
           />
-          <span className="text-base font-bold tracking-tight text-zinc-900">Cotizador Greda</span>
         </div>
         <button
           type="button"
@@ -197,23 +197,18 @@ export function AppShell() {
           {/* Panel deslizante */}
           <div className="fixed inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col justify-between glass-sidebar p-5 shadow-2xl transition-transform duration-200">
             <div>
-              <div className="flex items-center justify-between pb-6 border-b border-zinc-200/80">
-                <div className="flex items-center gap-2.5">
-                  <img
-                    src={gredaLogo}
-                    alt="Logo de Greda"
-                    className="size-7 select-none object-contain"
-                    draggable={false}
-                  />
-                  <span className="text-base font-bold tracking-tight text-zinc-900">
-                    Cotizador Greda
-                  </span>
-                </div>
+              <div className="relative flex items-center justify-center pb-6 border-b border-zinc-200/80">
+                <img
+                  src={gredaLogo}
+                  alt="Logo de Greda"
+                  className="size-8 select-none object-contain"
+                  draggable={false}
+                />
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
                   aria-label="Cerrar menú"
-                  className="flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  className="absolute right-0 flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                 >
                   <CloseIcon className="size-5" />
                 </button>
@@ -272,23 +267,16 @@ export function AppShell() {
           {/* Logo y Botón de Colapso */}
           <div
             className={[
-              "flex items-center pb-6 border-b border-zinc-200/60",
-              collapsed ? "justify-center" : "justify-between",
+              "relative flex items-center pb-6 border-b border-zinc-200/60",
+              collapsed ? "flex-col justify-center" : "justify-center",
             ].join(" ")}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <img
-                src={gredaLogo}
-                alt="Logo de Greda"
-                className="size-7 shrink-0 select-none object-contain transition-transform duration-200 hover:scale-105"
-                draggable={false}
-              />
-              {!collapsed ? (
-                <span className="truncate text-base font-bold tracking-tight text-zinc-900">
-                  Cotizador Greda
-                </span>
-              ) : null}
-            </div>
+            <img
+              src={gredaLogo}
+              alt="Logo de Greda"
+              className="size-8 shrink-0 select-none object-contain transition-transform duration-200 hover:scale-105"
+              draggable={false}
+            />
 
             <button
               type="button"
@@ -297,7 +285,7 @@ export function AppShell() {
               aria-label={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
               className={[
                 "flex size-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors",
-                collapsed ? "mt-2" : "",
+                collapsed ? "mt-3" : "absolute right-0",
               ].join(" ")}
             >
               {collapsed ? (
