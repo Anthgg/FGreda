@@ -92,6 +92,17 @@ export function resetClientState(): void {
   refreshRequest = null;
 }
 
+/**
+ * Descarta solo el token CSRF cacheado.
+ *
+ * El backend rota el token al iniciar sesion, de modo que el que quedo en
+ * memoria deja de ser valido. Invalidarlo aqui evita un 403 y su reintento en
+ * la primera operacion mutadora posterior al login.
+ */
+export function invalidateCsrfToken(): void {
+  csrfToken = null;
+}
+
 // ---------------------------------------------------------------------------
 // Utilidades internas
 // ---------------------------------------------------------------------------

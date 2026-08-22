@@ -5,7 +5,7 @@
  * HttpOnly que este codigo no puede leer ni necesita.
  */
 
-import { ApiError, apiClient, resetClientState } from "@/api/client";
+import { ApiError, apiClient, invalidateCsrfToken, resetClientState } from "@/api/client";
 import type { LoginPayload, SessionResponse, SessionUser } from "@/types/auth";
 
 /**
@@ -28,6 +28,8 @@ export async function fetchSession(): Promise<SessionUser | null> {
 
 export async function login(payload: LoginPayload): Promise<SessionUser> {
   const response = await apiClient.post<SessionResponse>("/auth/login", payload);
+  // El backend rota el token CSRF al abrir sesion: el cacheado ya no sirve.
+  invalidateCsrfToken();
   return response.user;
 }
 
