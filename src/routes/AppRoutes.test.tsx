@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -13,7 +13,7 @@ import {
   TEST_USER,
 } from "@/test/utils";
 
-describe("rutas protegidas", () => {
+describe("rutas protegidas y Dashboard", () => {
   it("consulta al backend antes de decidir si hay sesion", async () => {
     const fetchSpy = mockFetch(() => sessionResponse());
 
@@ -38,8 +38,8 @@ describe("rutas protegidas", () => {
     renderApp(["/"]);
 
     expect(await screen.findByRole("heading", { name: /inicio/i })).toBeInTheDocument();
-    // El nombre aparece en la barra lateral y en el detalle de sesion.
-    expect(screen.getAllByText(TEST_USER.display_name).length).toBeGreaterThan(0);
+    // El nombre aparece en la barra lateral y en el detalle de bienvenida.
+    expect(screen.getAllByText(new RegExp(TEST_USER.display_name, "i")).length).toBeGreaterThan(0);
     expect(screen.getAllByText(TEST_USER.email).length).toBeGreaterThan(0);
   });
 
@@ -66,16 +66,55 @@ describe("rutas protegidas", () => {
     expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
   });
 
-  it("muestra los modulos futuros deshabilitados", async () => {
+  it("muestra los modulos futuros deshabilitados en el menu y en accesos", async () => {
     mockFetch(() => sessionResponse());
 
     renderApp(["/"]);
 
     await screen.findByRole("heading", { name: /inicio/i });
     for (const modulo of ["Productos", "Inventario", "Recetas", "Quemas", "Cotizaciones"]) {
-      const entrada = screen.getAllByText(modulo)[0]!;
-      expect(entrada).toHaveAttribute("aria-disabled", "true");
+      const entradas = screen.getAllByText(modulo);
+      expect(entradas.length).toBeGreaterThan(0);
+      const disabledParent = entradas[0]?.closest("[aria-disabled='true']");
+      expect(disabledParent).toBeInTheDocument();
     }
+  });
+
+  it("permite colapsar y expandir la barra lateral en desktop", async () => {
+    const user = userEvent.setup();
+    mockFetch(() => sessionResponse());
+
+    renderApp(["/"]);
+    await screen.findByRole("heading", { name: /inicio/i });
+
+    const toggleBtn = screen.getByRole("button", { name: /colapsar barra lateral/i });
+    expect(toggleBtn).toBeInTheDocument();
+
+    await user.click(toggleBtn);
+    expect(screen.getByRole("button", { name: /expandir barra lateral/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /expandir barra lateral/i }));
+    expect(screen.getByRole("button", { name: /colapsar barra lateral/i })).toBeInTheDocument();
+  });
+
+  it("abre y cierra el drawer movil con boton y tecla Escape", async () => {
+    const user = userEvent.setup();
+    mockFetch(() => sessionResponse());
+
+    renderApp(["/"]);
+    await screen.findByRole("heading", { name: /inicio/i });
+
+    const openMenuBtn = screen.getByRole("button", { name: /abrir menú principal/i });
+    await user.click(openMenuBtn);
+
+    const dialog = screen.getByRole("dialog", { name: /menú principal/i });
+    expect(dialog).toBeInTheDocument();
+
+    // Cerrar con Escape
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /menú principal/i })).not.toBeInTheDocument();
+    });
   });
 
   it("cierra la sesion llamando al backend y vuelve al login", async () => {
@@ -95,12 +134,24 @@ describe("rutas protegidas", () => {
     renderApp(["/"]);
     await screen.findByRole("heading", { name: /inicio/i });
 
-    await userEvent.setup().click(screen.getByRole("button", { name: /cerrar sesion/i }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /cerrar sesión/i }));
 
     await waitFor(() =>
       expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/auth/logout"))).toBe(true),
     );
     expect(await screen.findByRole("button", { name: /iniciar sesión/i })).toBeInTheDocument();
+  });
+
+  it("no contiene enlaces invalidos href='#'", async () => {
+    mockFetch(() => sessionResponse());
+
+    renderApp(["/"]);
+    await screen.findByRole("heading", { name: /inicio/i });
+
+    const links = document.querySelectorAll("a");
+    links.forEach((link) => {
+      expect(link.getAttribute("href")).not.toBe("#");
+    });
   });
 
   it("no permite volver al login con una sesion activa", async () => {

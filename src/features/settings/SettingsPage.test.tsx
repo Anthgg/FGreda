@@ -85,7 +85,9 @@ describe("pantalla de configuracion", () => {
     mockSettings();
     renderApp(["/"]);
 
-    await userEvent.setup().click(await screen.findByRole("link", { name: /configuracion/i }));
+    await userEvent.setup().click(
+      await screen.findByRole("link", { name: /^configuracion$/i }),
+    );
 
     expect(await screen.findByRole("heading", { name: /^configuracion$/i })).toBeInTheDocument();
   });
