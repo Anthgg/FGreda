@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
+import gredaLogo from "@/assets/greda-frame-1.png";
 import { Spinner } from "@/components/Spinner";
 import { useLogout, useSession } from "@/features/auth/useSession";
 import { NAVIGATION } from "@/layouts/navigation";
@@ -68,7 +69,10 @@ export function AppShell() {
     <div className="min-h-dvh lg:grid lg:grid-cols-[13rem_1fr]">
       {/* Barra superior, solo en pantallas pequenas */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 lg:hidden dark:border-zinc-800">
-        <span className="text-sm font-semibold tracking-tight">Cotizador Greda</span>
+        <div className="flex items-center gap-2">
+          <img src={gredaLogo} alt="Logo de Greda" className="h-6 w-auto object-contain" />
+          <span className="text-sm font-semibold tracking-tight">Cotizador Greda</span>
+        </div>
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
@@ -89,7 +93,10 @@ export function AppShell() {
       >
         <div>
           <div className="mb-4 hidden px-2.5 lg:block">
-            <span className="text-sm font-semibold tracking-tight">Cotizador Greda</span>
+            <div className="flex items-center gap-2">
+              <img src={gredaLogo} alt="Logo de Greda" className="h-7 w-auto object-contain" />
+              <span className="text-sm font-semibold tracking-tight">Cotizador Greda</span>
+            </div>
           </div>
           <NavigationList onNavigate={() => setMenuOpen(false)} />
         </div>
