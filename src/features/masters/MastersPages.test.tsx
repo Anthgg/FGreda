@@ -359,6 +359,69 @@ describe("Modulo de importaciones", () => {
     expect(screen.getByText("Quedan 1 filas por resolver.")).toBeInTheDocument();
   });
 
+  it("clasificar un rol no aplica solo la correccion del documento", async () => {
+    // El cero inicial que Excel se comio se propone, pero corregir un documento
+    // real es una decision aparte de clasificar el rol.
+    const spy = mockMasters({
+      onRequest: (url, init) => {
+        if (url.includes("/imports/master/upload") && init.method === "POST") {
+          return jsonResponse(201, IMPORT_BATCH);
+        }
+        if (url.includes("/imports/1/resolve")) return jsonResponse(200, IMPORT_BATCH);
+        return undefined;
+      },
+    });
+    renderApp(["/importaciones"]);
+    await userEvent.upload(
+      await screen.findByLabelText("Archivo de maestros"),
+      new File(["x"], "maestros.xlsx"),
+    );
+
+    await userEvent.click(await screen.findByRole("combobox", { name: /Clasificar/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Cliente" }));
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+
+    await waitFor(() => {
+      const call = spy.mock.calls.find(([url]) => String(url).includes("/imports/1/resolve"));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+        resolutions: [{ row_id: 11, partner_role: "CLIENT" }],
+      });
+    });
+  });
+
+  it("la correccion del documento solo viaja si se marca a proposito", async () => {
+    const spy = mockMasters({
+      onRequest: (url, init) => {
+        if (url.includes("/imports/master/upload") && init.method === "POST") {
+          return jsonResponse(201, IMPORT_BATCH);
+        }
+        if (url.includes("/imports/1/resolve")) return jsonResponse(200, IMPORT_BATCH);
+        return undefined;
+      },
+    });
+    renderApp(["/importaciones"]);
+    await userEvent.upload(
+      await screen.findByLabelText("Archivo de maestros"),
+      new File(["x"], "maestros.xlsx"),
+    );
+
+    const checkbox = await screen.findByLabelText(/Aplicar 01234567/);
+    expect(checkbox).not.toBeChecked();
+    await userEvent.click(checkbox);
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Clasificar/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Cliente" }));
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+
+    await waitFor(() => {
+      const call = spy.mock.calls.find(([url]) => String(url).includes("/imports/1/resolve"));
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+        resolutions: [{ row_id: 11, partner_role: "CLIENT", accept_suggestion: true }],
+      });
+    });
+  });
+
   it("clasificar un tercero envia la resolucion elegida", async () => {
     const spy = mockMasters({
       onRequest: (url, init) => {
@@ -383,7 +446,7 @@ describe("Modulo de importaciones", () => {
       const call = spy.mock.calls.find(([url]) => String(url).includes("/imports/1/resolve"));
       expect(call).toBeDefined();
       expect(JSON.parse(String(call?.[1]?.body))).toEqual({
-        resolutions: [{ row_id: 11, partner_role: "SUPPLIER", accept_suggestion: true }],
+        resolutions: [{ row_id: 11, partner_role: "SUPPLIER" }],
       });
     });
   });

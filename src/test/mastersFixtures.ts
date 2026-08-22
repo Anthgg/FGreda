@@ -229,7 +229,12 @@ export const PARTNER_ROW: ImportRow = {
   sheet_name: "Proveedores y clientes",
   source_row: 2,
   raw: { name: "Proveedor de prueba S.A." },
-  normalized: { name: "Proveedor de prueba S.A.", role: "PENDING_CLASSIFICATION" },
+  normalized: {
+    name: "Proveedor de prueba S.A.",
+    role: "PENDING_CLASSIFICATION",
+    document_number: "1234567",
+    document_suggestion: "01234567",
+  },
   action: "CREATE",
   status: "REVIEW_REQUIRED",
   errors: [],
@@ -237,6 +242,13 @@ export const PARTNER_ROW: ImportRow = {
     {
       code: "PARTNER_ROLE_NOT_CLASSIFIED",
       message: "Falta clasificar el tercero como CLIENT, SUPPLIER o BOTH",
+    },
+    {
+      code: "DOCUMENT_FORMAT_LOST",
+      message: "Excel guardo el documento como numero y pudo perder formato",
+      source: "1234567.0",
+      suggested: "01234567",
+      stored: "1234567",
     },
   ],
   candidates: [],

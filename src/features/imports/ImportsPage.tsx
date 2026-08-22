@@ -104,12 +104,15 @@ function RowResolver({
   disabled: boolean;
 }) {
   const [choice, setChoice] = useState("");
+  const [applySuggestion, setApplySuggestion] = useState(false);
 
   if (row.status !== "REVIEW_REQUIRED" && row.status !== "BLOCKED") {
     return <span className="text-xs text-zinc-400">—</span>;
   }
 
   if (row.entity === "PARTNER") {
+    const suggestion = row.normalized["document_suggestion"];
+    const source = row.normalized["document_number"];
     return (
       <div className="flex flex-wrap items-center gap-2">
         <SelectField
@@ -125,13 +128,28 @@ function RowResolver({
           disabled={disabled}
           className="w-52"
         />
+        {typeof suggestion === "string" ? (
+          // Corregir un documento real es una decision aparte de clasificar el
+          // rol: se marca a proposito o el numero del archivo se respeta.
+          <label className="flex items-center gap-1.5 text-xs text-zinc-700">
+            <input
+              type="checkbox"
+              checked={applySuggestion}
+              onChange={(event) => setApplySuggestion(event.target.checked)}
+              disabled={disabled}
+              className="h-4 w-4 rounded border-zinc-300"
+            />
+            Aplicar {suggestion}
+            <span className="text-zinc-400">(el archivo trae {String(source)})</span>
+          </label>
+        ) : null}
         <SecondaryButton
           disabled={disabled || choice === ""}
           onClick={() =>
             onResolve({
               row_id: row.id,
               partner_role: choice as PartnerRole,
-              accept_suggestion: true,
+              ...(applySuggestion ? { accept_suggestion: true } : {}),
             })
           }
         >
