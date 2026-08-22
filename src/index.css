@@ -44,3 +44,80 @@ body {
 :focus-visible {
   @apply outline-2 outline-offset-2 outline-clay-600;
 }
+
+.login-experience {
+  background-color: #ffffff;
+}
+
+@keyframes login-card-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink-caret {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes gentle-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-4px);
+  }
+  40%, 80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes scale-check {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.login-card-enter {
+  animation: login-card-fade-in 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.login-caret-blink {
+  animation: blink-caret 650ms infinite ease-in-out;
+}
+
+.login-shake {
+  animation: gentle-shake 380ms ease-in-out;
+}
+
+.login-check-pop {
+  animation: scale-check 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card-enter,
+  .login-caret-blink,
+  .login-shake,
+  .login-check-pop,
+  .login-experience .animate-spin {
+    animation: none !important;
+  }
+}
