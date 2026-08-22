@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/*
+ * Lenguaje visual: sobrio y compacto, pensado para uso prolongado al 100 % de
+ * zoom. Tipografia moderada, superficies planas, bordes finos. El acento es un
+ * terracota apagado, en linea con el nombre del producto.
+ */
+@theme {
+  --color-clay-50: oklch(0.971 0.013 45);
+  --color-clay-100: oklch(0.936 0.032 45);
+  --color-clay-200: oklch(0.885 0.055 45);
+  --color-clay-300: oklch(0.808 0.084 43);
+  --color-clay-400: oklch(0.704 0.115 41);
+  --color-clay-500: oklch(0.612 0.132 39);
+  --color-clay-600: oklch(0.532 0.126 38);
+  --color-clay-700: oklch(0.452 0.106 37);
+  --color-clay-800: oklch(0.385 0.086 37);
+  --color-clay-900: oklch(0.334 0.069 38);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html {
+  /* Base de 14 px: densidad de aplicacion de gestion, no de landing page. */
+  font-size: 87.5%;
+}
+
+body {
+  @apply bg-white text-zinc-900 antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    @apply bg-zinc-950 text-zinc-100;
+  }
+}
+
+/* Foco visible y consistente en todos los controles interactivos. */
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-clay-600;
+}
