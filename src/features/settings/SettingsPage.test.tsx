@@ -1,0 +1,642 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  AUDIT_PAGE,
+  COMMERCIAL_FILLED,
+  COMPANY_EMPTY,
+  COMPANY_FILLED,
+  REFERENCE_DATA,
+  SEQUENCES,
+} from "@/test/settingsFixtures";
+import {
+  csrfResponse,
+  errorResponse,
+  jsonResponse,
+  mockFetch,
+  renderApp,
+  sessionResponse,
+  TEST_USER,
+} from "@/test/utils";
+import type { SessionUser } from "@/types/auth";
+
+const OPERATOR: SessionUser = { ...TEST_USER, display_name: "Operario", role: "OPERATOR" };
+
+interface Overrides {
+  user?: SessionUser;
+  company?: unknown;
+  commercial?: unknown;
+  sequences?: unknown;
+  reference?: unknown;
+  onRequest?: (url: string, init: RequestInit) => Response | undefined;
+}
+
+/** Instala respuestas para toda la pantalla de configuración. */
+function mockSettings(overrides: Overrides = {}) {
+  return mockFetch((url, init) => {
+    const custom = overrides.onRequest?.(url, init);
+    if (custom) return custom;
+
+    if (url.includes("/auth/csrf")) return csrfResponse();
+    if (url.includes("/auth/me")) return sessionResponse(overrides.user ?? TEST_USER);
+    if (url.includes("/settings/reference-data"))
+      return jsonResponse(200, overrides.reference ?? REFERENCE_DATA);
+    if (url.includes("/settings/sequence-patterns")) {
+      const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return jsonResponse(201, { id: 10, is_system: false, ...enviado });
+    }
+    if (url.includes("/settings/company/logo")) return new Response(null, { status: 404 });
+    if (url.includes("/settings/company")) {
+      // El backend devuelve el estado resultante con la version incrementada.
+      if (init.method === "PUT") {
+        const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return jsonResponse(200, {
+          ...COMPANY_FILLED,
+          ...enviado,
+          version: Number(enviado.version) + 1,
+        });
+      }
+      return jsonResponse(200, overrides.company ?? COMPANY_FILLED);
+    }
+    if (url.includes("/settings/commercial"))
+      return jsonResponse(200, overrides.commercial ?? COMMERCIAL_FILLED);
+    if (url.includes("/settings/sequences")) {
+      // El PUT devuelve la secuencia actualizada, no la lista completa.
+      if (init.method === "PUT") {
+        const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+        const tipo = url.endsWith("/FIRING") ? "FIRING" : "QUOTE";
+        const actual = SEQUENCES.find((item) => item.sequence_type === tipo)!;
+        return jsonResponse(200, { ...actual, ...enviado, version: Number(enviado.version) + 1 });
+      }
+      return jsonResponse(200, { sequences: overrides.sequences ?? SEQUENCES });
+    }
+    if (url.includes("/settings/audit")) return jsonResponse(200, AUDIT_PAGE);
+    return jsonResponse(200, {});
+  });
+}
+
+async function abrirPestana(nombre: RegExp) {
+  await userEvent.setup().click(await screen.findByRole("tab", { name: nombre }));
+}
+
+describe("pantalla de configuración", () => {
+  it("se alcanza desde el menú principal", async () => {
+    mockSettings();
+    renderApp(["/"]);
+
+    await userEvent.setup().click(
+      await screen.findByRole("link", { name: /^configuracion$/i }),
+    );
+
+    expect(await screen.findByRole("heading", { name: /configuración/i })).toBeInTheDocument();
+  });
+
+  it("muestra un estado de carga mientras consulta", async () => {
+    let liberar: (() => void) | undefined;
+    const retenida = new Promise<void>((resolve) => {
+      liberar = resolve;
+    });
+    mockFetch(async (url) => {
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      await retenida;
+      if (url.includes("/settings/reference-data")) return jsonResponse(200, REFERENCE_DATA);
+      if (url.includes("/settings/company")) return jsonResponse(200, COMPANY_FILLED);
+      if (url.includes("/settings/commercial")) return jsonResponse(200, COMMERCIAL_FILLED);
+      if (url.includes("/settings/sequences"))
+        return jsonResponse(200, { sequences: SEQUENCES });
+      return jsonResponse(200, {});
+    });
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByText(/cargando configuración/i)).toBeInTheDocument();
+    liberar?.();
+  });
+
+  it("muestra los datos de empresa que devuelve el backend", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByDisplayValue("Taller Greda SAC")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("20123456789")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("contacto@greda.pe")).toBeInTheDocument();
+  });
+
+  it("no inventa datos cuando la configuración está vacía", async () => {
+    mockSettings({ company: COMPANY_EMPTY });
+    renderApp(["/configuracion"]);
+
+    const razonSocial = await screen.findByLabelText(/razón social/i);
+    expect(razonSocial).toHaveValue("");
+  });
+
+  it("identifica visualmente los campos opcionales", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    expect(screen.getAllByText("Opcional").length).toBeGreaterThan(5);
+  });
+
+  it("informa cuando el backend no responde", async () => {
+    mockFetch((url) => {
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      throw new TypeError("Failed to fetch");
+    });
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no se pudo conectar/i);
+  });
+});
+
+describe("edición como ADMIN", () => {
+  it("el botón de guardar arranca deshabilitado", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByRole("button", { name: /guardar cambios/i })).toBeDisabled();
+  });
+
+  it("al editar aparece el aviso de cambios sin guardar", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    const campo = await screen.findByLabelText(/nombre comercial/i);
+    await userEvent.setup().type(campo, " Editado");
+
+    expect(screen.getByText(/cambios sin guardar/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeEnabled();
+  });
+
+  it("cancelar descarta los cambios", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    const campo = await screen.findByLabelText(/nombre comercial/i);
+    await user.type(campo, " Editado");
+    await user.click(screen.getByRole("button", { name: /cancelar/i }));
+
+    expect(campo).toHaveValue("Greda");
+    expect(screen.queryByText(/cambios sin guardar/i)).not.toBeInTheDocument();
+  });
+
+  it("guardar envía la configuración al backend", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/nombre comercial/i), " Editado");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/company") && init?.method === "PUT",
+      );
+      expect(put).toBeDefined();
+      const cuerpo = JSON.parse(String(put![1]?.body));
+      expect(cuerpo.trade_name).toBe("Greda Editado");
+      // La versión viaja siempre: es el control de concurrencia.
+      expect(cuerpo.version).toBe(COMPANY_FILLED.version);
+    });
+  });
+
+  it("selecciona departamento, provincia y distrito por ubigeo con React Select", async () => {
+    const fetchSpy = mockSettings({ company: COMPANY_EMPTY });
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    // 1. Departamento: Abrir select y elegir Lima
+    const deptoTrigger = await screen.findByRole("combobox", { name: /departamento/i });
+    await user.click(deptoTrigger);
+    await user.click(screen.getByRole("option", { name: /^Lima$/i }));
+
+    // 2. Provincia: Abrir select y elegir Lima
+    const provTrigger = screen.getByRole("combobox", { name: /provincia/i });
+    await user.click(provTrigger);
+    await user.click(screen.getByRole("option", { name: /^Lima$/i }));
+
+    // 3. Distrito: Abrir combobox y elegir Miraflores
+    const distTrigger = screen.getByRole("combobox", { name: /distrito/i });
+    await user.click(distTrigger);
+    await user.click(screen.getByRole("option", { name: /^Miraflores$/i }));
+
+    expect(screen.getByLabelText(/país/i)).toHaveValue("Perú");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/company") && init?.method === "PUT",
+      );
+      const body = JSON.parse(String(put?.[1]?.body)) as Record<string, unknown>;
+      expect(body.ubigeo_code).toBe("150122");
+      expect(body.department).toBe("LIMA");
+      expect(body.province).toBe("LIMA");
+      expect(body.district).toBe("MIRAFLORES");
+    });
+  });
+
+  it("tras guardar el formulario queda limpio", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/nombre comercial/i), " Editado");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    expect(await screen.findByText(/cambios guardados/i)).toBeInTheDocument();
+    expect(screen.queryByText(/cambios sin guardar/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/nombre comercial/i)).toHaveValue("Greda Editado");
+    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
+  });
+
+  it("un RUC inválido bloquea el guardado sin llamar al backend", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    const ruc = await screen.findByLabelText(/ruc/i);
+    await user.clear(ruc);
+    await user.type(ruc, "123");
+
+    expect(screen.getByText(/11 dígitos/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
+    expect(
+      fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT"),
+    ).toBe(false);
+  });
+
+  it("informa cuando otra persona modificó la configuración", async () => {
+    mockSettings({
+      onRequest: (url, init) =>
+        url.includes("/settings/company") && init.method === "PUT"
+          ? errorResponse(409, "SETTINGS_VERSION_CONFLICT")
+          : undefined,
+    });
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/nombre comercial/i), " X");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/otra persona modific[oó]/i);
+    expect(screen.getByRole("button", { name: /recargar configuración/i })).toBeInTheDocument();
+  });
+
+  it("maneja un 403 del backend al guardar", async () => {
+    mockSettings({
+      onRequest: (url, init) =>
+        url.includes("/settings/company") && init.method === "PUT"
+          ? errorResponse(403, "AUTH_INSUFFICIENT_ROLE")
+          : undefined,
+    });
+    renderApp(["/configuracion"]);
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(/nombre comercial/i), " X");
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/rol no permite/i);
+  });
+});
+
+describe("permisos de OPERATOR", () => {
+  it("no ofrece acciones de edición", async () => {
+    mockSettings({ user: OPERATOR });
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+
+    expect(screen.queryByRole("button", { name: /guardar cambios/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/solo un administrador puede modificar/i)).toBeInTheDocument();
+  });
+
+  it("los campos se muestran deshabilitados", async () => {
+    mockSettings({ user: OPERATOR });
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByLabelText(/razón social/i)).toBeDisabled();
+  });
+
+  it("no ve la pestaña de historial", async () => {
+    mockSettings({ user: OPERATOR });
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+
+    expect(screen.queryByRole("tab", { name: /historial/i })).not.toBeInTheDocument();
+  });
+
+  it("puede consultar la configuración comercial", async () => {
+    mockSettings({ user: OPERATOR });
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
+    expect(screen.getByDisplayValue("18")).toBeInTheDocument();
+  });
+});
+
+describe("sección comercial", () => {
+  it("muestra moneda, IGV, vigencia y banco", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
+    expect(screen.getByDisplayValue("18")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("15")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("00219300123456789015")).toBeInTheDocument();
+  });
+
+  it("rechaza un IGV fuera de rango sin llamar al backend", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    const user = userEvent.setup();
+    const igv = await screen.findByLabelText(/igv/i);
+    await user.clear(igv);
+    await user.type(igv, "150");
+
+    expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
+  it("solo permite monedas del catálogo y completa el símbolo con Select React", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    const user = userEvent.setup();
+    const moneda = await screen.findByRole("combobox", { name: /moneda/i });
+    expect(moneda).toHaveTextContent(/PEN/);
+
+    await user.click(moneda);
+    expect(screen.queryByRole("option", { name: /ABC/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: /USD/ }));
+
+    expect(screen.getByLabelText(/símbolo/i)).toHaveValue("USD");
+
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/commercial") && init?.method === "PUT",
+      );
+      const body = JSON.parse(String(put?.[1]?.body)) as Record<string, unknown>;
+      expect(body.currency_code).toBe("USD");
+      expect(body.currency_symbol).toBe("USD");
+    });
+  });
+
+  it("rechaza un CCI que no tenga veinte dígitos", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    const user = userEvent.setup();
+    const cci = await screen.findByLabelText(/^cci/i);
+    await user.clear(cci);
+    await user.type(cci, "123");
+
+    expect(screen.getByText(/20 dígitos/i)).toBeInTheDocument();
+  });
+});
+
+describe("sección de numeración", () => {
+  it("muestra la configuración de cotizaciones y quemas", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    expect(await screen.findByRole("heading", { name: "Cotizaciones" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Quemas" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("CTZ")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("HR")).toBeInTheDocument();
+  });
+
+  it("la vista previa está identificada como tal", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    expect(await screen.findAllByText(/vista previa/i)).not.toHaveLength(0);
+    expect(screen.getAllByText(/no reserva ni consume/i).length).toBeGreaterThan(0);
+  });
+
+  it("marca como obligatorios los datos de numeración", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    expect((await screen.findAllByText("* Obligatorio")).length).toBeGreaterThan(4);
+  });
+
+  it("la vista previa se recalcula en el navegador y no llama al backend", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    const prefijo = await screen.findByDisplayValue("CTZ");
+    const llamadasAntes = fetchSpy.mock.calls.length;
+
+    const user = userEvent.setup();
+    await user.clear(prefijo);
+    await user.type(prefijo, "GRE");
+
+    expect(await screen.findByText(/^GRE-\d{4}-000001$/)).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.length).toBe(llamadasAntes);
+  });
+
+  it("no existe ninguna acción para generar el siguiente número", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    await screen.findByRole("heading", { name: "Cotizaciones" });
+    expect(
+      screen.queryByRole("button", { name: /generar|siguiente numero|reservar/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("guardar el formato envía la versión y el patrón", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    const user = userEvent.setup();
+    const prefijo = await screen.findByDisplayValue("CTZ");
+    await user.clear(prefijo);
+    await user.type(prefijo, "GRE");
+
+    const tarjeta = prefijo.closest("form")!;
+    await user.click(within(tarjeta).getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/sequences/QUOTE") && init?.method === "PUT",
+      );
+      expect(put).toBeDefined();
+      const cuerpo = JSON.parse(String(put![1]?.body));
+      expect(cuerpo.prefix).toBe("GRE");
+      expect(cuerpo.version).toBe(1);
+    });
+  });
+
+  it("permite crear un formato nuevo en el catálogo y usarlo con Select React", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
+
+    const prefijo = await screen.findByDisplayValue("CTZ");
+    const tarjeta = prefijo.closest("form")!;
+    const user = userEvent.setup();
+
+    const formatoSelect = within(tarjeta).getByRole("combobox", { name: /formato/i });
+    await user.click(formatoSelect);
+    await user.click(screen.getByRole("option", { name: /crear un nuevo formato/i }));
+
+    await user.type(within(tarjeta).getByLabelText(/nombre del nuevo formato/i), "Serie mensual");
+    await user.click(within(tarjeta).getByRole("button", { name: /crear y usar/i }));
+
+    await waitFor(() => {
+      const post = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/settings/sequence-patterns") && init?.method === "POST",
+      );
+      expect(post).toBeDefined();
+      const body = JSON.parse(String(post?.[1]?.body)) as Record<string, unknown>;
+      expect(body.name).toBe("Serie mensual");
+      expect(body.pattern).toBe("{PREFIX}-{YYYY}-{NUMBER}");
+    });
+  });
+});
+
+describe("historial", () => {
+  it("ADMIN ve los cambios registrados", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/historial/i);
+
+    expect(await screen.findByText("tax_percent")).toBeInTheDocument();
+    expect(screen.getByText("legal_name")).toBeInTheDocument();
+    expect(screen.getAllByText("Administrador").length).toBeGreaterThan(0);
+  });
+});
+
+describe("logo", () => {
+  it("muestra que no hay logo cargado", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByText(/sin logo/i)).toBeInTheDocument();
+  });
+
+  it("subir un archivo lo envía al backend, nunca a Supabase", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+
+    const entrada = await screen.findByLabelText(/seleccionar archivo de logo/i);
+    const archivo = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "logo.png", {
+      type: "image/png",
+    });
+    await userEvent.setup().upload(entrada, archivo);
+
+    await waitFor(() => {
+      const post = fetchSpy.mock.calls.find(
+        ([url, init]) => String(url).includes("/settings/company/logo") && init?.method === "POST",
+      );
+      expect(post).toBeDefined();
+      expect(post![1]?.body).toBeInstanceOf(FormData);
+      expect(post![1]?.credentials).toBe("include");
+    });
+
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("supabase"))).toBe(false);
+  });
+
+  it("el atributo accept ya descarta los formatos no admitidos", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    const entrada = await screen.findByLabelText(/seleccionar archivo de logo/i);
+    expect(entrada).toHaveAttribute("accept", "image/png,image/jpeg,image/webp");
+  });
+
+  it("informa cuando el servidor rechaza el archivo", async () => {
+    mockSettings({
+      onRequest: (url, init) =>
+        url.includes("/settings/company/logo") && init.method === "POST"
+          ? errorResponse(422, "LOGO_TYPE_NOT_ALLOWED")
+          : undefined,
+    });
+    renderApp(["/configuracion"]);
+
+    const entrada = await screen.findByLabelText(/seleccionar archivo de logo/i);
+    await userEvent
+      .setup()
+      .upload(entrada, new File(["<svg/>"], "disfrazado.png", { type: "image/png" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/png, jpg o webp/i);
+  });
+
+  it("descarga la vista previa por el backend con las cookies incluidas", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const fetchSpy = mockSettings({
+      company: { ...COMPANY_FILLED, logo: { content_type: "image/png", size_bytes: 4, url: "/api/v1/settings/company/logo" } },
+      onRequest: (url, init) =>
+        url.includes("/settings/company/logo") && (init.method ?? "GET") === "GET"
+          ? new Response(png, { status: 200, headers: { "Content-Type": "image/png" } })
+          : undefined,
+    });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    renderApp(["/configuracion"]);
+
+    expect(await screen.findByAltText(/logo de la empresa/i)).toHaveAttribute("src", "blob:preview");
+
+    const get = fetchSpy.mock.calls.find(
+      ([url, init]) =>
+        String(url).includes("/settings/company/logo") && (init?.method ?? "GET") === "GET",
+    );
+    expect(get![1]?.credentials).toBe("include");
+  });
+
+  it("OPERATOR no puede subir ni eliminar el logo", async () => {
+    mockSettings({ user: OPERATOR });
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+
+    expect(screen.queryByLabelText(/seleccionar archivo de logo/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
+  });
+});

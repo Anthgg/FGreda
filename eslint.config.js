@@ -21,7 +21,12 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/consistent-type-imports": "error",
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      // El guion bajo marca lo descartado a proposito, tipico al omitir campos
+      // por desestructuracion antes de reenviar un objeto.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
 
       // Regla arquitectonica: el frontend no habla con Supabase ni guarda
       // tokens en el navegador. Se hace cumplir de forma automatica.

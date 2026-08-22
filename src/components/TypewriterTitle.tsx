@@ -44,8 +44,8 @@ export function TypewriterTitle({
   const displayedText = text.slice(0, charIndex);
 
   return (
-    <h1 className={className}>
-      <span>{displayedText}</span>
+    <h1 className={className} aria-label={text}>
+      <span aria-hidden="true">{displayedText}</span>
       {showCaret ? (
         <span
           aria-hidden="true"
