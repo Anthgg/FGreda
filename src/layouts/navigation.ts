@@ -74,7 +74,8 @@ export const NAVIGATION: readonly NavigationItem[] = [
   },
   {
     label: "Recetas",
-    enabled: false,
+    to: "/recetas",
+    enabled: true,
     icon: "flask",
     description: "Preparaciones y composiciones de pastas y esmaltes.",
   },

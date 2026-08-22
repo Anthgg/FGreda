@@ -6,6 +6,7 @@ import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
+import { RecipeListPage } from "@/features/recipes/RecipeListPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { AppShell } from "@/layouts/AppShell";
 import { HomePage } from "@/routes/HomePage";
@@ -31,6 +32,7 @@ export function AppRoutes() {
           <Route path="terceros" element={<PartnersPage />} />
           <Route path="inventario" element={<InventoryPage />} />
           <Route path="importaciones" element={<ImportsPage />} />
+          <Route path="recetas" element={<RecipeListPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
@@ -38,3 +40,4 @@ export function AppRoutes() {
     </Routes>
   );
 }
+

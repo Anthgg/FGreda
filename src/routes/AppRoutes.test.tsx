@@ -72,9 +72,8 @@ describe("rutas protegidas y Dashboard", () => {
     renderApp(["/"]);
 
     await screen.findByRole("heading", { name: /inicio/i });
-    // Fase 3 habilita maestros, inventario e importaciones; el resto sigue
-    // visible y deshabilitado hasta que llegue su fase.
-    for (const modulo of ["Recetas", "Quemas", "Cotizaciones"]) {
+    // Recetas se habilita en Fase 3.5; Quemas y Cotizaciones siguen como futuros.
+    for (const modulo of ["Quemas", "Cotizaciones"]) {
       const entradas = screen.getAllByText(modulo);
       expect(entradas.length).toBeGreaterThan(0);
       const disabledParent = entradas[0]?.closest("[aria-disabled='true']");
@@ -82,7 +81,7 @@ describe("rutas protegidas y Dashboard", () => {
     }
   });
 
-  it("los modulos de Fase 3 son navegables desde el menu", async () => {
+  it("los modulos de Fase 3 y 3.5 son navegables desde el menu", async () => {
     mockFetch(() => sessionResponse());
 
     renderApp(["/"]);
@@ -93,6 +92,7 @@ describe("rutas protegidas y Dashboard", () => {
       ["Terceros", "/terceros"],
       ["Inventario", "/inventario"],
       ["Importaciones", "/importaciones"],
+      ["Recetas", "/recetas"],
     ] as const) {
       const enlaces = screen
         .getAllByRole("link", { name: new RegExp(modulo, "i") })
