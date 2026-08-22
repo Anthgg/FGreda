@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Ningun paso lleva continue-on-error: un fallo real debe romper el pipeline.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, tipos, tests y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        # npm ci falla si package-lock.json no coincide con package.json.
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verificar que el bundle no contiene Supabase ni sesion local
+        # Guarda de ultima linea sobre el artefacto realmente publicado.
+        run: |
+          for patron in supabase localStorage sessionStorage sb_publishable service_role; do
+            if grep -rqi "$patron" dist/; then
+              echo "El bundle contiene '$patron', lo cual viola la arquitectura del proyecto."
+              exit 1
+            fi
+          done
+          echo "Bundle limpio."
+
+  docker:
+    name: Imagen de contenedor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: fgreda:ci
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8000
+
+      - name: Arrancar el contenedor y comprobar que sirve la SPA
+        run: |
+          docker run -d --name fgreda-ci -p 8080:8080 -e PORT=8080 fgreda:ci
+          for intento in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/ -o /dev/null; then
+              echo "Contenedor operativo"
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/ -o /dev/null
+
+      - name: Comprobar el fallback de React Router
+        # Una ruta profunda inexistente en disco debe devolver la SPA, no 404.
+        run: |
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/alguna/ruta/profunda)
+          echo "HTTP $codigo"
+          test "$codigo" = "200"
+
+      - name: Comprobar que el proceso no corre como root
+        run: |
+          uid=$(docker exec fgreda-ci id -u)
+          echo "UID del proceso: $uid"
+          test "$uid" != "0"
+
+      - name: Detener el contenedor
+        if: always()
+        run: docker rm -f fgreda-ci || true

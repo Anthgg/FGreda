@@ -1,0 +1,39 @@
+# Configuracion de nginx para servir la SPA.
+# El entrypoint de la imagen sustituye ${PORT} en el arranque (Cloud Run lo
+# inyecta). Las variables de nginx como $uri no llevan llaves y no se tocan.
+
+server {
+    listen       ${PORT};
+    server_name  _;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    # Sin tokens de sesion accesibles: la unica proteccion que aporta el
+    # servidor estatico son estas cabeceras.
+    add_header X-Content-Type-Options "nosniff"        always;
+    add_header X-Frame-Options        "DENY"           always;
+    add_header Referrer-Policy        "same-origin"    always;
+
+    gzip              on;
+    gzip_vary         on;
+    gzip_min_length   1024;
+    gzip_types        text/plain text/css application/javascript application/json image/svg+xml;
+
+    # Los assets llevan hash en el nombre: se pueden cachear indefinidamente.
+    location /assets/ {
+        expires    1y;
+        add_header Cache-Control "public, immutable";
+        try_files  $uri =404;
+    }
+
+    # index.html nunca se cachea: es quien apunta a los assets vigentes.
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    # Fallback de React Router: cualquier ruta desconocida devuelve la SPA.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
