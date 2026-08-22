@@ -1,16 +1,17 @@
 /**
  * Formulario para crear una nueva version de receta.
  *
- * Permite agregar componentes (BASE / COLORANT / ADDITIVE) con sus porcentajes.
- * La validacion semantica (Base=100%) la ejecuta el backend; el frontend solo
- * muestra el marcador de suma actual como referencia visual.
+ * Utiliza SelectField para todos los desplegables con soporte de teclado,
+ * mini buscador y cero selects nativos.
+ * No utiliza parseFloat/Number para porcentajes o calculos de negocio.
  */
 
 import { useState } from "react";
 
-import { Field, PrimaryButton, SecondaryButton } from "@/components/form";
+import { Field, PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
 import { describeError } from "@/features/settings/messages";
 import { useProducts } from "@/features/masters/useMasters";
+import { formatDecimal, sumDecimalStrings } from "@/features/recipes/formatDecimal";
 import type { RecipeComponentType, RecipeLineIn, RecipeVersionIn } from "@/types/recipes";
 
 interface Props {
@@ -20,14 +21,14 @@ interface Props {
   isPending: boolean;
 }
 
-const COMPONENT_TYPES: { value: RecipeComponentType; label: string }[] = [
+const COMPONENT_TYPE_OPTIONS = [
   { value: "BASE", label: "Base" },
   { value: "COLORANT", label: "Colorante" },
   { value: "ADDITIVE", label: "Aditivo" },
-];
+] as const;
 
 interface DraftLine {
-  component_product_id: number | "";
+  component_product_id: string;
   component_type: RecipeComponentType;
   percentage: string;
 }
@@ -42,14 +43,21 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
   const [activateNow, setActivateNow] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Productos disponibles como componentes
-  const products = useProducts({ limit: 200 });
-  const productOptions = products.data?.items ?? [];
+  // Insumos y materias primas disponibles
+  const products = useProducts({ limit: 300 });
+  const rawProducts = products.data?.items ?? [];
 
-  // Marcadores visuales
-  const baseSum = lines
-    .filter((l) => l.component_type === "BASE")
-    .reduce((acc, l) => acc + (parseFloat(l.percentage) || 0), 0);
+  const productOptions = rawProducts.map((p) => ({
+    value: String(p.id),
+    label: `${p.internal_reference} · ${p.name}`,
+  }));
+
+  // Suma de componentes base calculada con strings (cero float)
+  const basePercentages = lines
+    .filter((l) => l.component_type === "BASE" && l.percentage.trim() !== "")
+    .map((l) => l.percentage);
+  const baseSum = sumDecimalStrings(basePercentages);
+  const isBase100 = baseSum === "100" || baseSum === "100.0" || baseSum === "100.00" || baseSum === "100.0000";
 
   const handleAddLine = () => setLines((prev) => [...prev, emptyLine()]);
 
@@ -59,7 +67,7 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
   const handleLineChange = (i: number, field: keyof DraftLine, value: string) => {
     setLines((prev) =>
       prev.map((l, idx) =>
-        idx === i ? { ...l, [field]: field === "component_product_id" ? Number(value) : value } : l,
+        idx === i ? { ...l, [field]: value } : l,
       ),
     );
   };
@@ -68,11 +76,11 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
     e.preventDefault();
     setSubmitError(null);
     const validLines: RecipeLineIn[] = lines
-      .filter((l) => l.component_product_id !== "" && l.percentage !== "")
+      .filter((l) => l.component_product_id !== "" && l.percentage.trim() !== "")
       .map((l, i) => ({
-        component_product_id: l.component_product_id as number,
+        component_product_id: Number(l.component_product_id),
         component_type: l.component_type,
-        percentage: parseFloat(l.percentage),
+        percentage: l.percentage.trim(),
         sort_order: i,
       }));
     const trimmedNotes = notes.trim();
@@ -92,7 +100,7 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
       className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-16"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
         <button
           type="button"
           onClick={onClose}
@@ -108,77 +116,71 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
           {/* Indicador de suma de base */}
           <div
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              Math.abs(baseSum - 100) < 0.01
+              isBase100
                 ? "bg-emerald-50 text-emerald-700"
                 : "bg-amber-50 text-amber-700"
             }`}
           >
-            Suma base: {baseSum.toFixed(2)}% {Math.abs(baseSum - 100) < 0.01 ? "✓" : "≠ 100"}
+            Suma base: {formatDecimal(baseSum)}% {isBase100 ? "✓ (Exacto 100%)" : "≠ 100% (La suma debe ser 100%)"}
           </div>
 
           {/* Líneas de componentes */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             {lines.map((line, i) => (
-              <div key={i} className="flex flex-wrap gap-2 items-end">
+              <div key={i} className="flex flex-wrap gap-2 items-end rounded-xl border border-zinc-100 bg-zinc-50/50 p-3">
                 {/* Tipo */}
-                <div className="w-28">
-                  <label className="mb-0.5 block text-[11px] font-medium text-zinc-600">Tipo</label>
-                  <select
+                <div className="w-36">
+                  <SelectField
+                    label="Tipo"
                     value={line.component_type}
-                    onChange={(e) => handleLineChange(i, "component_type", e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900"
-                  >
-                    {COMPONENT_TYPES.map((ct) => (
-                      <option key={ct.value} value={ct.value}>
-                        {ct.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Producto */}
-                <div className="flex-1 min-w-40">
-                  <label className="mb-0.5 block text-[11px] font-medium text-zinc-600">
-                    Componente
-                  </label>
-                  <select
-                    value={line.component_product_id}
-                    onChange={(e) => handleLineChange(i, "component_product_id", e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900"
-                    required
-                  >
-                    <option value="">— Seleccionar —</option>
-                    {productOptions.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.internal_reference} · {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Porcentaje */}
-                <div className="w-20">
-                  <label className="mb-0.5 block text-[11px] font-medium text-zinc-600">%</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={9999}
-                    step="0.01"
-                    value={line.percentage}
-                    onChange={(e) => handleLineChange(i, "percentage", e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm"
-                    required
+                    options={COMPONENT_TYPE_OPTIONS}
+                    onChange={(val) => handleLineChange(i, "component_type", val)}
+                    searchable={false}
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleRemoveLine(i)}
-                  className="mb-0.5 text-zinc-400 hover:text-red-500 text-lg font-bold"
-                  aria-label="Quitar línea"
-                >
-                  ×
-                </button>
+                {/* Producto */}
+                <div className="flex-1 min-w-[200px]">
+                  <SelectField
+                    label="Componente"
+                    requirement="required"
+                    value={line.component_product_id}
+                    options={productOptions}
+                    onChange={(val) => handleLineChange(i, "component_product_id", val)}
+                    searchable={true}
+                    searchPlaceholder="Buscar componente..."
+                    placeholder="Seleccionar..."
+                  />
+                </div>
+
+                {/* Porcentaje */}
+                <div className="w-24">
+                  <Field label="%" requirement="required">
+                    {(id) => (
+                      <input
+                        id={id}
+                        type="text"
+                        inputMode="decimal"
+                        value={line.percentage}
+                        onChange={(e) => handleLineChange(i, "percentage", e.target.value)}
+                        className="w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-right font-mono"
+                        placeholder="Ej: 50.00"
+                        required
+                      />
+                    )}
+                  </Field>
+                </div>
+
+                <div className="pb-1">
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLine(i)}
+                    className="rounded-lg p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50"
+                    aria-label="Quitar línea"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -186,7 +188,7 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
           <button
             type="button"
             onClick={handleAddLine}
-            className="text-xs text-zinc-500 hover:text-zinc-900 underline"
+            className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 underline"
           >
             + Agregar componente
           </button>
@@ -216,7 +218,7 @@ export function RecipeVersionForm({ onClose, onSubmit, isPending }: Props) {
           </label>
 
           {submitError && (
-            <p className="text-sm text-red-600">{describeError(submitError)}</p>
+            <p className="text-sm text-red-600">{submitError}</p>
           )}
 
           <div className="flex justify-end gap-3 pt-2">

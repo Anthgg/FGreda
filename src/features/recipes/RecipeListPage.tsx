@@ -2,12 +2,13 @@
  * Lista de recetas del taller.
  *
  * Muestra solo recetas activas por defecto con opcion de ver todas.
- * La busqueda y el filtro los resuelve el backend.
+ * Incluye acceso al importador de staging y creacion de recetas.
+ * Utiliza formateo decimal basado en string sin conversiones IEEE-754.
  */
 
 import { useState } from "react";
 
-import { PrimaryButton } from "@/components/form";
+import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
@@ -24,9 +25,11 @@ import {
   Th,
   Toolbar,
 } from "@/features/masters/MasterTable";
+import { formatDecimal } from "@/features/recipes/formatDecimal";
 import { useRecipes } from "@/features/recipes/useRecipes";
 import { RecipeDetailModal } from "@/features/recipes/RecipeDetailModal";
 import { RecipeCreateModal } from "@/features/recipes/RecipeCreateModal";
+import { RecipeImportModal } from "@/features/recipes/RecipeImportModal";
 import type { RecipeOut } from "@/types/recipes";
 
 const PAGE_SIZE = 25;
@@ -39,12 +42,6 @@ function statusBadge(recipe: RecipeOut) {
   return <Badge tone="positive">Activa</Badge>;
 }
 
-function yieldDisplay(version: RecipeOut["current_version"]) {
-  if (!version) return "—";
-  const f = parseFloat(version.yield_factor);
-  return isNaN(f) ? "—" : `×${f.toFixed(3)}`;
-}
-
 export function RecipeListPage() {
   const { data: user } = useSession();
   const isAdmin = user?.role === "ADMIN";
@@ -54,6 +51,7 @@ export function RecipeListPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const recipes = useRecipes({
     ...(search ? { search } : {}),
@@ -75,7 +73,14 @@ export function RecipeListPage() {
           subtitle="Fórmulas y composiciones de materiales preparados del taller."
           actions={
             isAdmin ? (
-              <PrimaryButton onClick={() => setCreating(true)}>Nueva receta</PrimaryButton>
+              <div className="flex gap-2">
+                <SecondaryButton onClick={() => setImporting(true)}>
+                  Importar desde maestro
+                </SecondaryButton>
+                <PrimaryButton onClick={() => setCreating(true)}>
+                  Nueva receta
+                </PrimaryButton>
+              </div>
             ) : undefined
           }
         />
@@ -127,7 +132,7 @@ export function RecipeListPage() {
               <tbody>
                 {recipes.data.items.map((recipe) => (
                   <tr key={recipe.id} className="hover:bg-zinc-50">
-                    <Td mono muted>{recipe.product_ref}</Td>
+                    <Td mono muted>{recipe.product_internal_reference}</Td>
                     <Td>{recipe.name}</Td>
                     <Td muted>{recipe.product_name}</Td>
                     <Td muted>
@@ -135,7 +140,11 @@ export function RecipeListPage() {
                         ? `v${recipe.current_version.version_number}`
                         : "—"}
                     </Td>
-                    <Td mono>{yieldDisplay(recipe.current_version)}</Td>
+                    <Td mono>
+                      {recipe.current_version
+                        ? `×${formatDecimal(recipe.current_version.yield_factor, 4)}`
+                        : "—"}
+                    </Td>
                     <Td>{statusBadge(recipe)}</Td>
                     <Td>
                       <button
@@ -171,6 +180,10 @@ export function RecipeListPage() {
 
       {creating && isAdmin && (
         <RecipeCreateModal onClose={() => setCreating(false)} />
+      )}
+
+      {importing && isAdmin && (
+        <RecipeImportModal onClose={() => setImporting(false)} />
       )}
     </div>
   );

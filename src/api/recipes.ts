@@ -1,5 +1,5 @@
 /**
- * Capa API del motor de recetas.
+ * Capa API del motor de recetas e importacion desde staging.
  *
  * Todo pasa por el cliente HTTP unico; ningun componente usa fetch directamente.
  */
@@ -10,8 +10,11 @@ import type {
   RecipeCalculateIn,
   RecipeCalculateOut,
   RecipeCreate,
-  RecipePage,
+  RecipeImportCommitResult,
+  RecipeImportPreviewOut,
   RecipeOut,
+  RecipePage,
+  RecipeRowResolutionIn,
   RecipeUpdate,
   RecipeVersionIn,
   RecipeVersionOut,
@@ -19,6 +22,7 @@ import type {
 
 const RECIPES = "/recipes";
 const RECIPE_VERSIONS = "/recipe-versions";
+const RECIPE_IMPORTS = "/recipe-imports";
 
 // ---------------------------------------------------------------------------
 // Recetas
@@ -72,4 +76,33 @@ export function activateRecipeVersion(versionId: number): Promise<RecipeVersionO
 // ---------------------------------------------------------------------------
 export function calculateRecipe(payload: RecipeCalculateIn): Promise<RecipeCalculateOut> {
   return apiClient.post<RecipeCalculateOut>(`${RECIPES}/calculate`, payload);
+}
+
+// ---------------------------------------------------------------------------
+// Importador de Recetas (Staging)
+// ---------------------------------------------------------------------------
+export function fetchLatestRecipeBatch(): Promise<{ batch_id: number | null }> {
+  return apiClient.get<{ batch_id: number | null }>(`${RECIPE_IMPORTS}/latest-batch`);
+}
+
+export function fetchRecipeImportPreview(batchId: number): Promise<RecipeImportPreviewOut> {
+  return apiClient.get<RecipeImportPreviewOut>(`${RECIPE_IMPORTS}/${batchId}/preview`);
+}
+
+export function resolveRecipeImportRows(
+  batchId: number,
+  resolutions: RecipeRowResolutionIn[],
+): Promise<RecipeImportPreviewOut> {
+  return apiClient.post<RecipeImportPreviewOut>(
+    `${RECIPE_IMPORTS}/${batchId}/resolve`,
+    resolutions,
+  );
+}
+
+export function commitRecipeImport(batchId: number): Promise<RecipeImportCommitResult> {
+  return apiClient.post<RecipeImportCommitResult>(
+    `${RECIPE_IMPORTS}/${batchId}/commit`,
+    {},
+    { timeoutMs: 120_000 },
+  );
 }

@@ -2,7 +2,7 @@
  * Modal de detalle de receta: cabecera, composicion activa, historial de
  * versiones y calculador de batch.
  *
- * Solo lectura para usuarios normales; ADMIN puede activar versiones.
+ * Utiliza formateo decimal string sin conversiones IEEE-754.
  */
 
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { Spinner } from "@/components/Spinner";
 import { useSession } from "@/features/auth/useSession";
 import { describeError } from "@/features/settings/messages";
 import { Badge } from "@/features/masters/MasterTable";
+import { formatDecimal } from "@/features/recipes/formatDecimal";
 import {
   useActivateVersion,
   useCreateVersion,
@@ -95,7 +96,7 @@ export function RecipeDetailModal({ recipeId, onClose }: Props) {
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">{r.name}</h2>
             <p className="mt-0.5 text-xs text-zinc-500">
-              {r.product_ref} · {r.product_name}
+              {r.product_internal_reference} · {r.product_name}
             </p>
           </div>
           <div className="flex gap-2">
@@ -150,8 +151,8 @@ export function RecipeDetailModal({ recipeId, onClose }: Props) {
         <RecipeVersionForm
           recipeId={recipeId}
           onClose={() => setCreatingVersion(false)}
-          onSubmit={async (payload, activate) => {
-            await createVersion.mutateAsync({ payload, activate });
+          onSubmit={async (payload, activateNow) => {
+            await createVersion.mutateAsync({ payload, activate: activateNow });
             setCreatingVersion(false);
           }}
           isPending={createVersion.isPending}
@@ -162,15 +163,14 @@ export function RecipeDetailModal({ recipeId, onClose }: Props) {
 }
 
 function ActiveVersionCard({ version }: { version: RecipeVersionOut }) {
-  const yf = parseFloat(version.yield_factor);
   return (
     <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium text-emerald-800">
           Versión {version.version_number} — activa
         </span>
-        <span className="text-xs text-emerald-700">
-          Rendimiento: ×{isNaN(yf) ? "—" : yf.toFixed(4)}
+        <span className="text-xs text-emerald-700 font-mono">
+          Rendimiento: ×{formatDecimal(version.yield_factor, 4)}
         </span>
       </div>
       <div className="overflow-x-auto">
@@ -197,13 +197,13 @@ function ActiveVersionCard({ version }: { version: RecipeVersionOut }) {
                   </Badge>
                 </td>
                 <td className="py-0.5 pr-4 text-zinc-800">
-                  {line.component_product_name}
+                  {line.component_name}
                   <span className="ml-1 font-mono text-zinc-400">
-                    {line.component_product_ref}
+                    {line.component_internal_reference}
                   </span>
                 </td>
                 <td className="py-0.5 text-right font-mono text-zinc-700">
-                  {parseFloat(line.percentage).toFixed(2)}%
+                  {formatDecimal(line.percentage, 2)}%
                 </td>
               </tr>
             ))}

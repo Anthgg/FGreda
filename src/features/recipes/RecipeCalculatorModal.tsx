@@ -2,8 +2,8 @@
  * Modal de simulacion de batch.
  *
  * El usuario ingresa la cantidad de base objetivo en gramos; el backend
- * calcula las cantidades reales, el rendimiento y el costo. No muta ningun
- * inventario.
+ * calcula las cantidades reales, el rendimiento y el costo sin mutar inventario.
+ * Utiliza formateo decimal basado en string sin conversiones IEEE-754.
  */
 
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { Field } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 import { Badge } from "@/features/masters/MasterTable";
+import { formatDecimal } from "@/features/recipes/formatDecimal";
 import { useRecipeCalc, useRecipeVersion } from "@/features/recipes/useRecipes";
 
 interface Props {
@@ -25,18 +26,14 @@ function componentTypeTone(t: string) {
   return "positive" as const;
 }
 
-function fmt(val: string | null, decimals = 4): string {
-  if (val === null) return "—";
-  const n = parseFloat(val);
-  return isNaN(n) ? "—" : n.toFixed(decimals);
-}
-
 export function RecipeCalculatorModal({ versionId, onClose }: Props) {
-  const [targetGrams, setTargetGrams] = useState(1000);
+  const [targetGrams, setTargetGrams] = useState("1000");
 
   const version = useRecipeVersion(versionId);
   const calc = useRecipeCalc(
-    targetGrams > 0 ? { version_id: versionId, target_base_grams: targetGrams } : null,
+    targetGrams.trim() !== ""
+      ? { recipe_version_id: versionId, target_base_quantity: targetGrams.trim() }
+      : null,
   );
 
   return (
@@ -58,7 +55,7 @@ export function RecipeCalculatorModal({ versionId, onClose }: Props) {
         {version.data && (
           <p className="mb-4 text-xs text-zinc-500">
             Versión {version.data.version_number} — Factor rendimiento: ×
-            {fmt(version.data.yield_factor, 4)}
+            {formatDecimal(version.data.yield_factor, 4)}
           </p>
         )}
 
@@ -67,12 +64,11 @@ export function RecipeCalculatorModal({ versionId, onClose }: Props) {
           {(id) => (
             <input
               id={id}
-              type="number"
-              min={1}
-              step={1}
+              type="text"
+              inputMode="decimal"
               value={targetGrams}
-              onChange={(e) => setTargetGrams(Number(e.target.value))}
-              className="w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              onChange={(e) => setTargetGrams(e.target.value)}
+              className="w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none font-mono"
             />
           )}
         </Field>
@@ -95,16 +91,16 @@ export function RecipeCalculatorModal({ versionId, onClose }: Props) {
               <div className="mb-4 grid grid-cols-3 gap-3">
                 <SummaryCard
                   label="Base objetivo"
-                  value={`${fmt(calc.data.target_base_grams, 0)} g`}
+                  value={`${formatDecimal(calc.data.target_base_quantity, 2)} g`}
                 />
                 <SummaryCard
                   label="Salida real"
-                  value={`${fmt(calc.data.real_output_grams, 0)} g`}
+                  value={`${formatDecimal(calc.data.real_output_quantity, 2)} g`}
                   highlight
                 />
                 <SummaryCard
                   label="Costo total"
-                  value={calc.data.total_material_cost ? `S/ ${fmt(calc.data.total_material_cost, 4)}` : "—"}
+                  value={calc.data.total_material_cost ? `S/ ${formatDecimal(calc.data.total_material_cost, 4)}` : "—"}
                 />
               </div>
 
@@ -121,7 +117,7 @@ export function RecipeCalculatorModal({ versionId, onClose }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {calc.data.lines.map((line, i) => (
+                    {calc.data.components.map((line, i) => (
                       <tr key={i} className="border-b border-zinc-100">
                         <td className="py-1 pr-3">
                           <Badge tone={componentTypeTone(line.component_type)}>
@@ -132,15 +128,15 @@ export function RecipeCalculatorModal({ versionId, onClose }: Props) {
                               : "Aditivo"}
                           </Badge>
                         </td>
-                        <td className="py-1 pr-3 text-zinc-800">{line.component_product_name}</td>
+                        <td className="py-1 pr-3 text-zinc-800">{line.component_name}</td>
                         <td className="py-1 pr-3 text-right font-mono text-zinc-600">
-                          {fmt(line.percentage, 2)}%
+                          {formatDecimal(line.percentage, 2)}%
                         </td>
                         <td className="py-1 pr-3 text-right font-mono text-zinc-700">
-                          {fmt(line.grams, 2)} g
+                          {formatDecimal(line.required_quantity, 2)} g
                         </td>
                         <td className="py-1 text-right font-mono text-zinc-700">
-                          {line.line_cost ? `S/ ${fmt(line.line_cost, 4)}` : "—"}
+                          {line.component_cost ? `S/ ${formatDecimal(line.component_cost, 4)}` : "—"}
                         </td>
                       </tr>
                     ))}
@@ -148,9 +144,9 @@ export function RecipeCalculatorModal({ versionId, onClose }: Props) {
                 </table>
               </div>
 
-              {calc.data.cost_per_gram && (
+              {calc.data.cost_per_real_unit && (
                 <p className="mt-3 text-right text-xs text-zinc-500">
-                  Costo por gramo: <span className="font-mono font-semibold text-zinc-800">S/ {fmt(calc.data.cost_per_gram, 6)}</span>
+                  Costo por gramo: <span className="font-mono font-semibold text-zinc-800">S/ {formatDecimal(calc.data.cost_per_real_unit, 6)}</span>
                 </p>
               )}
             </>

@@ -1,13 +1,12 @@
 /**
  * Modal para crear una nueva receta.
  *
- * Solo ADMIN puede crear recetas. El selector de producto filtra por
- * PREPARED_MATERIAL ya que solo esos tienen receta.
+ * Utiliza SelectField accesible con mini buscador integrado (cero selects nativos).
  */
 
 import { useState } from "react";
 
-import { Field, PrimaryButton, SecondaryButton } from "@/components/form";
+import { Field, PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
 import { describeError } from "@/features/settings/messages";
 import { useProducts } from "@/features/masters/useMasters";
 import { useCreateRecipe } from "@/features/recipes/useRecipes";
@@ -20,7 +19,7 @@ interface Props {
 
 export function RecipeCreateModal({ onClose }: Props) {
   const [step, setStep] = useState<"header" | "version">("header");
-  const [productId, setProductId] = useState<number | "">("");
+  const [productId, setProductId] = useState("");
   const [name, setName] = useState("");
   const [headerError, setHeaderError] = useState<string | null>(null);
 
@@ -29,6 +28,11 @@ export function RecipeCreateModal({ onClose }: Props) {
   // Productos de tipo PREPARED_MATERIAL
   const products = useProducts({ product_type: "PREPARED_MATERIAL", limit: 200 });
   const prepProducts = products.data?.items ?? [];
+
+  const productOptions = prepProducts.map((p) => ({
+    value: String(p.id),
+    label: `${p.internal_reference} · ${p.name}`,
+  }));
 
   const handleHeaderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,13 +46,13 @@ export function RecipeCreateModal({ onClose }: Props) {
 
   const handleVersionSubmit = async (versionPayload: RecipeVersionIn, activate: boolean) => {
     const payload: RecipeCreate = {
-      product_id: productId as number,
+      product_id: Number(productId),
       name: name.trim(),
       lines: versionPayload.lines,
       ...(versionPayload.notes ? { notes: versionPayload.notes } : {}),
+      active: true,
+      activate_immediately: activate,
     };
-    // activate en create siempre activa la version inicial automaticamente
-    void activate; // la version inicial siempre inicia como ACTIVE en el backend
     await createRecipe.mutateAsync(payload);
     onClose();
   };
@@ -56,7 +60,7 @@ export function RecipeCreateModal({ onClose }: Props) {
   if (step === "version") {
     return (
       <RecipeVersionForm
-        recipeId={0} // ignorado en create
+        recipeId={0}
         onClose={onClose}
         onSubmit={handleVersionSubmit}
         isPending={createRecipe.isPending}
@@ -82,24 +86,16 @@ export function RecipeCreateModal({ onClose }: Props) {
         <h2 className="mb-4 text-lg font-semibold text-zinc-900">Nueva receta</h2>
 
         <form onSubmit={handleHeaderSubmit} className="space-y-4">
-          <Field label="Producto (material preparado)" requirement="required">
-            {(id) => (
-              <select
-                id={id}
-                value={productId}
-                onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}
-                className="w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
-                required
-              >
-                <option value="">— Seleccionar —</option>
-                {prepProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.internal_reference} · {p.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
+          <SelectField
+            label="Producto (material preparado)"
+            requirement="required"
+            value={productId}
+            options={productOptions}
+            onChange={setProductId}
+            searchable={true}
+            searchPlaceholder="Buscar material preparado..."
+            placeholder="Seleccionar material preparado..."
+          />
 
           <Field label="Nombre de la receta" requirement="required">
             {(id) => (
