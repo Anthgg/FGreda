@@ -148,13 +148,13 @@ export const REFERENCE_DATA: ReferenceData = {
   sequence_patterns: [
     {
       id: 1,
-      name: "Prefijo - ano - numero",
+      name: "Prefijo - año - número",
       pattern: "{PREFIX}-{YYYY}-{NUMBER}",
       is_system: true,
     },
     {
       id: 2,
-      name: "Prefijo - numero",
+      name: "Prefijo - número",
       pattern: "{PREFIX}-{NUMBER}",
       is_system: true,
     },

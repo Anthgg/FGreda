@@ -32,7 +32,7 @@ interface Overrides {
   onRequest?: (url: string, init: RequestInit) => Response | undefined;
 }
 
-/** Instala respuestas para toda la pantalla de configuracion. */
+/** Instala respuestas para toda la pantalla de configuración. */
 function mockSettings(overrides: Overrides = {}) {
   return mockFetch((url, init) => {
     const custom = overrides.onRequest?.(url, init);
@@ -77,11 +77,11 @@ function mockSettings(overrides: Overrides = {}) {
 }
 
 async function abrirPestana(nombre: RegExp) {
-  await userEvent.setup().click(screen.getByRole("tab", { name: nombre }));
+  await userEvent.setup().click(await screen.findByRole("tab", { name: nombre }));
 }
 
-describe("pantalla de configuracion", () => {
-  it("se alcanza desde el menu principal", async () => {
+describe("pantalla de configuración", () => {
+  it("se alcanza desde el menú principal", async () => {
     mockSettings();
     renderApp(["/"]);
 
@@ -89,12 +89,10 @@ describe("pantalla de configuracion", () => {
       await screen.findByRole("link", { name: /^configuracion$/i }),
     );
 
-    expect(await screen.findByRole("heading", { name: /^configuracion$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /configuración/i })).toBeInTheDocument();
   });
 
   it("muestra un estado de carga mientras consulta", async () => {
-    // La respuesta se retiene y se libera al final: dejar una promesa sin
-    // resolver mantendria viva la peticion y colgaria la suite.
     let liberar: (() => void) | undefined;
     const retenida = new Promise<void>((resolve) => {
       liberar = resolve;
@@ -112,7 +110,7 @@ describe("pantalla de configuracion", () => {
     });
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByText(/cargando configuracion/i)).toBeInTheDocument();
+    expect(await screen.findByText(/cargando configuración/i)).toBeInTheDocument();
     liberar?.();
   });
 
@@ -125,11 +123,11 @@ describe("pantalla de configuracion", () => {
     expect(screen.getByDisplayValue("contacto@greda.pe")).toBeInTheDocument();
   });
 
-  it("no inventa datos cuando la configuracion esta vacia", async () => {
+  it("no inventa datos cuando la configuración está vacía", async () => {
     mockSettings({ company: COMPANY_EMPTY });
     renderApp(["/configuracion"]);
 
-    const razonSocial = await screen.findByLabelText(/razon social/i);
+    const razonSocial = await screen.findByLabelText(/razón social/i);
     expect(razonSocial).toHaveValue("");
   });
 
@@ -137,7 +135,7 @@ describe("pantalla de configuracion", () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     expect(screen.getAllByText("Opcional").length).toBeGreaterThan(5);
   });
 
@@ -153,8 +151,8 @@ describe("pantalla de configuracion", () => {
   });
 });
 
-describe("edicion como ADMIN", () => {
-  it("el boton de guardar arranca deshabilitado", async () => {
+describe("edición como ADMIN", () => {
+  it("el botón de guardar arranca deshabilitado", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
@@ -185,7 +183,7 @@ describe("edicion como ADMIN", () => {
     expect(screen.queryByText(/cambios sin guardar/i)).not.toBeInTheDocument();
   });
 
-  it("guardar envia la configuracion al backend", async () => {
+  it("guardar envía la configuración al backend", async () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
@@ -200,21 +198,32 @@ describe("edicion como ADMIN", () => {
       expect(put).toBeDefined();
       const cuerpo = JSON.parse(String(put![1]?.body));
       expect(cuerpo.trade_name).toBe("Greda Editado");
-      // La version viaja siempre: es el control de concurrencia.
+      // La versión viaja siempre: es el control de concurrencia.
       expect(cuerpo.version).toBe(COMPANY_FILLED.version);
     });
   });
 
-  it("selecciona departamento, provincia y distrito por ubigeo", async () => {
+  it("selecciona departamento, provincia y distrito por ubigeo con React Select", async () => {
     const fetchSpy = mockSettings({ company: COMPANY_EMPTY });
     renderApp(["/configuracion"]);
 
     const user = userEvent.setup();
-    await user.selectOptions(await screen.findByLabelText(/departamento/i), "15");
-    await user.selectOptions(screen.getByLabelText(/provincia/i), "1501");
-    await user.selectOptions(screen.getByLabelText(/distrito/i), "150122");
+    // 1. Departamento: Abrir select y elegir Lima
+    const deptoTrigger = await screen.findByRole("combobox", { name: /departamento/i });
+    await user.click(deptoTrigger);
+    await user.click(screen.getByRole("option", { name: /^Lima$/i }));
 
-    expect(screen.getByLabelText(/pais/i)).toHaveValue("Peru");
+    // 2. Provincia: Abrir select y elegir Lima
+    const provTrigger = screen.getByRole("combobox", { name: /provincia/i });
+    await user.click(provTrigger);
+    await user.click(screen.getByRole("option", { name: /^Lima$/i }));
+
+    // 3. Distrito: Abrir combobox y elegir Miraflores
+    const distTrigger = screen.getByRole("combobox", { name: /distrito/i });
+    await user.click(distTrigger);
+    await user.click(screen.getByRole("option", { name: /^Miraflores$/i }));
+
+    expect(screen.getByLabelText(/país/i)).toHaveValue("Perú");
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
 
     await waitFor(() => {
@@ -230,8 +239,6 @@ describe("edicion como ADMIN", () => {
   });
 
   it("tras guardar el formulario queda limpio", async () => {
-    // Regresion: la version cambia al guardar, y si entrase en la comparacion
-    // de cambios el formulario quedaria marcado como modificado para siempre.
     mockSettings();
     renderApp(["/configuracion"]);
 
@@ -245,7 +252,7 @@ describe("edicion como ADMIN", () => {
     expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
   });
 
-  it("un RUC invalido bloquea el guardado sin llamar al backend", async () => {
+  it("un RUC inválido bloquea el guardado sin llamar al backend", async () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
@@ -254,14 +261,14 @@ describe("edicion como ADMIN", () => {
     await user.clear(ruc);
     await user.type(ruc, "123");
 
-    expect(screen.getByText(/11 digitos/i)).toBeInTheDocument();
+    expect(screen.getByText(/11 dígitos/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
     expect(
       fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT"),
     ).toBe(false);
   });
 
-  it("informa cuando otra persona modifico la configuracion", async () => {
+  it("informa cuando otra persona modificó la configuración", async () => {
     mockSettings({
       onRequest: (url, init) =>
         url.includes("/settings/company") && init.method === "PUT"
@@ -274,8 +281,8 @@ describe("edicion como ADMIN", () => {
     await user.type(await screen.findByLabelText(/nombre comercial/i), " X");
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/otra persona modifico/i);
-    expect(screen.getByRole("button", { name: /recargar configuracion/i })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/otra persona modific[oó]/i);
+    expect(screen.getByRole("button", { name: /recargar configuración/i })).toBeInTheDocument();
   });
 
   it("maneja un 403 del backend al guardar", async () => {
@@ -296,11 +303,11 @@ describe("edicion como ADMIN", () => {
 });
 
 describe("permisos de OPERATOR", () => {
-  it("no ofrece acciones de edicion", async () => {
+  it("no ofrece acciones de edición", async () => {
     mockSettings({ user: OPERATOR });
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
 
     expect(screen.queryByRole("button", { name: /guardar cambios/i })).not.toBeInTheDocument();
     expect(screen.getByText(/solo un administrador puede modificar/i)).toBeInTheDocument();
@@ -310,39 +317,39 @@ describe("permisos de OPERATOR", () => {
     mockSettings({ user: OPERATOR });
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByLabelText(/razon social/i)).toBeDisabled();
+    expect(await screen.findByLabelText(/razón social/i)).toBeDisabled();
   });
 
-  it("no ve la pestana de historial", async () => {
+  it("no ve la pestaña de historial", async () => {
     mockSettings({ user: OPERATOR });
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
 
     expect(screen.queryByRole("tab", { name: /historial/i })).not.toBeInTheDocument();
   });
 
-  it("puede consultar la configuracion comercial", async () => {
+  it("puede consultar la configuración comercial", async () => {
     mockSettings({ user: OPERATOR });
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByLabelText(/moneda/i)).toHaveValue("PEN");
+    expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
     expect(screen.getByDisplayValue("18")).toBeInTheDocument();
   });
 });
 
-describe("seccion comercial", () => {
+describe("sección comercial", () => {
   it("muestra moneda, IGV, vigencia y banco", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByLabelText(/moneda/i)).toHaveValue("PEN");
+    expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
     expect(screen.getByDisplayValue("18")).toBeInTheDocument();
     expect(screen.getByDisplayValue("15")).toBeInTheDocument();
     expect(screen.getByDisplayValue("00219300123456789015")).toBeInTheDocument();
@@ -352,7 +359,7 @@ describe("seccion comercial", () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
     const user = userEvent.setup();
@@ -365,19 +372,22 @@ describe("seccion comercial", () => {
     expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
   });
 
-  it("solo permite monedas del catalogo y completa el simbolo", async () => {
+  it("solo permite monedas del catálogo y completa el símbolo con Select React", async () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
     const user = userEvent.setup();
-    const moneda = await screen.findByLabelText(/moneda/i);
-    expect(moneda).toHaveValue("PEN");
-    expect(within(moneda).queryByRole("option", { name: /ABC/ })).not.toBeInTheDocument();
-    await user.selectOptions(moneda, "USD");
-    expect(screen.getByLabelText(/simbolo/i)).toHaveValue("USD");
+    const moneda = await screen.findByRole("combobox", { name: /moneda/i });
+    expect(moneda).toHaveTextContent(/PEN/);
+
+    await user.click(moneda);
+    expect(screen.queryByRole("option", { name: /ABC/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: /USD/ }));
+
+    expect(screen.getByLabelText(/símbolo/i)).toHaveValue("USD");
 
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
     await waitFor(() => {
@@ -390,11 +400,11 @@ describe("seccion comercial", () => {
     });
   });
 
-  it("rechaza un CCI que no tenga veinte digitos", async () => {
+  it("rechaza un CCI que no tenga veinte dígitos", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
     const user = userEvent.setup();
@@ -402,43 +412,41 @@ describe("seccion comercial", () => {
     await user.clear(cci);
     await user.type(cci, "123");
 
-    expect(screen.getByText(/20 digitos/i)).toBeInTheDocument();
+    expect(screen.getByText(/20 dígitos/i)).toBeInTheDocument();
   });
 });
 
-describe("seccion de numeracion", () => {
-  it("muestra la configuracion de cotizaciones y quemas", async () => {
+describe("sección de numeración", () => {
+  it("muestra la configuración de cotizaciones y quemas", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
-    // Se acota a los titulos: "Cotizaciones" y "Quemas" tambien aparecen en el
-    // menu lateral como modulos aun deshabilitados.
     expect(await screen.findByRole("heading", { name: "Cotizaciones" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Quemas" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("CTZ")).toBeInTheDocument();
     expect(screen.getByDisplayValue("HR")).toBeInTheDocument();
   });
 
-  it("la vista previa esta identificada como tal", async () => {
+  it("la vista previa está identificada como tal", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
     expect(await screen.findAllByText(/vista previa/i)).not.toHaveLength(0);
     expect(screen.getAllByText(/no reserva ni consume/i).length).toBeGreaterThan(0);
   });
 
-  it("marca como obligatorios los datos de numeracion", async () => {
+  it("marca como obligatorios los datos de numeración", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
     expect((await screen.findAllByText("* Obligatorio")).length).toBeGreaterThan(4);
   });
@@ -447,8 +455,8 @@ describe("seccion de numeracion", () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
     const prefijo = await screen.findByDisplayValue("CTZ");
     const llamadasAntes = fetchSpy.mock.calls.length;
@@ -458,16 +466,15 @@ describe("seccion de numeracion", () => {
     await user.type(prefijo, "GRE");
 
     expect(await screen.findByText(/^GRE-\d{4}-000001$/)).toBeInTheDocument();
-    // Ni una sola peticion: cambiar el formato no consume correlativos.
     expect(fetchSpy.mock.calls.length).toBe(llamadasAntes);
   });
 
-  it("no existe ninguna accion para generar el siguiente numero", async () => {
+  it("no existe ninguna acción para generar el siguiente número", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
     await screen.findByRole("heading", { name: "Cotizaciones" });
     expect(
@@ -475,12 +482,12 @@ describe("seccion de numeracion", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("guardar el formato envia la version y el patron", async () => {
+  it("guardar el formato envía la versión y el patrón", async () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
     const user = userEvent.setup();
     const prefijo = await screen.findByDisplayValue("CTZ");
@@ -501,17 +508,21 @@ describe("seccion de numeracion", () => {
     });
   });
 
-  it("permite crear un formato nuevo en el catalogo y usarlo", async () => {
+  it("permite crear un formato nuevo en el catálogo y usarlo con Select React", async () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
-    await abrirPestana(/numeracion/i);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/numeraci[oó]n/i);
 
     const prefijo = await screen.findByDisplayValue("CTZ");
     const tarjeta = prefijo.closest("form")!;
     const user = userEvent.setup();
-    await user.selectOptions(within(tarjeta).getByLabelText(/formato/i), "__create_pattern__");
+
+    const formatoSelect = within(tarjeta).getByRole("combobox", { name: /formato/i });
+    await user.click(formatoSelect);
+    await user.click(screen.getByRole("option", { name: /crear un nuevo formato/i }));
+
     await user.type(within(tarjeta).getByLabelText(/nombre del nuevo formato/i), "Serie mensual");
     await user.click(within(tarjeta).getByRole("button", { name: /crear y usar/i }));
 
@@ -533,7 +544,7 @@ describe("historial", () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
     await abrirPestana(/historial/i);
 
     expect(await screen.findByText("tax_percent")).toBeInTheDocument();
@@ -550,7 +561,7 @@ describe("logo", () => {
     expect(await screen.findByText(/sin logo/i)).toBeInTheDocument();
   });
 
-  it("subir un archivo lo envia al backend, nunca a Supabase", async () => {
+  it("subir un archivo lo envía al backend, nunca a Supabase", async () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
@@ -581,9 +592,6 @@ describe("logo", () => {
   });
 
   it("informa cuando el servidor rechaza el archivo", async () => {
-    // Un archivo con extension permitida cuyo contenido no lo es: el filtro del
-    // navegador lo deja pasar y quien lo rechaza es el backend, que es el unico
-    // que inspecciona los bytes reales.
     mockSettings({
       onRequest: (url, init) =>
         url.includes("/settings/company/logo") && init.method === "POST"
@@ -609,8 +617,6 @@ describe("logo", () => {
           ? new Response(png, { status: 200, headers: { "Content-Type": "image/png" } })
           : undefined,
     });
-    // Se parchean solo los metodos: reemplazar el objeto URL entero romperia
-    // cualquier uso interno de "new URL(...)".
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     renderApp(["/configuracion"]);
@@ -628,7 +634,7 @@ describe("logo", () => {
     mockSettings({ user: OPERATOR });
     renderApp(["/configuracion"]);
 
-    await screen.findByLabelText(/razon social/i);
+    await screen.findByLabelText(/razón social/i);
 
     expect(screen.queryByLabelText(/seleccionar archivo de logo/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();

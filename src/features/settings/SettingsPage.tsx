@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { ApiError } from "@/api/client";
 import { Spinner } from "@/components/Spinner";
+import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
 import { AuditSection } from "@/features/settings/AuditSection";
 import { CommercialSection } from "@/features/settings/CommercialSection";
@@ -22,7 +23,7 @@ const TABS: readonly { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "empresa", label: "Empresa" },
   { id: "comercial", label: "Comercial" },
   { id: "documentos", label: "Documentos" },
-  { id: "numeracion", label: "Numeracion" },
+  { id: "numeracion", label: "Numeración" },
   { id: "historial", label: "Historial", adminOnly: true },
 ];
 
@@ -30,8 +31,8 @@ export function SettingsPage() {
   const [tab, setTab] = useState<TabId>("empresa");
   const { data: user } = useSession();
 
-  // El rol solo decide que se muestra. Quien autoriza de verdad es el backend:
-  // una peticion de escritura desde OPERATOR responde 403 aunque llegue.
+  // El rol solo decide qué se muestra. Quien autoriza de verdad es el backend:
+  // una petición de escritura desde OPERATOR responde 403 aunque llegue.
   const isAdmin = user?.role === "ADMIN";
 
   const company = useCompanySettings();
@@ -46,75 +47,87 @@ export function SettingsPage() {
   const visibleTabs = TABS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <header>
-        <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Configuracion
-        </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Datos de empresa, parametros comerciales y numeracion de documentos.
+    <div className="w-full max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 py-2">
+      {/* Encabezado Principal */}
+      <header className="mb-6">
+        <TypewriterTitle text="Configuración." className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900" />
+        <p className="mt-1 text-xs sm:text-sm text-zinc-500">
+          Datos de empresa, parámetros comerciales y numeración de documentos.
         </p>
       </header>
 
-      <nav
-        aria-label="Secciones de configuracion"
-        className="mt-5 flex flex-wrap gap-1 border-b border-zinc-200 dark:border-zinc-800"
-      >
-        {visibleTabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => setTab(item.id)}
-            className={[
-              "-mb-px border-b-2 px-3 py-1.5 text-sm transition-colors",
-              tab === item.id
-                ? "border-clay-600 font-medium text-clay-800 dark:border-clay-400 dark:text-clay-200"
-                : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
-            ].join(" ")}
+      {/* Tarjeta Principal Glassmorphism Fluida */}
+      <div className="glass-panel rounded-2xl sm:rounded-3xl p-5 sm:p-8 w-full shadow-lg border border-white/60">
+        {/* Navegación de Pestañas */}
+        <div className="border-b border-zinc-200/80 mb-8">
+          <nav
+            role="tablist"
+            aria-label="Secciones de configuración"
+            className="-mb-px flex space-x-6 sm:space-x-8 overflow-x-auto no-scrollbar sm:custom-scrollbar"
           >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+            {visibleTabs.map((item) => {
+              const isActive = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  id={`tab-${item.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`panel-${item.id}`}
+                  onClick={() => setTab(item.id)}
+                  className={[
+                    "whitespace-nowrap pb-3.5 pt-1 text-sm font-medium border-b-2 transition-all duration-150 cursor-pointer",
+                    isActive
+                      ? "border-zinc-900 text-zinc-900 font-semibold"
+                      : "border-transparent text-zinc-400 hover:text-zinc-700 hover:border-zinc-300",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-      <div className="mt-5">
-        {loading ? (
-          <p className="text-sm text-zinc-500">
-            <Spinner className="size-3.5" label="Cargando configuracion..." />
-          </p>
-        ) : failure ? (
-          <div
-            role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
-          >
-            <p>{describeError(failure)}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void company.refetch();
-                void commercial.refetch();
-                void sequences.refetch();
-                void reference.refetch();
-              }}
-              className="mt-1.5 text-xs font-medium underline underline-offset-2"
+        {/* Contenido de la Pestaña Activa */}
+        <div>
+          {loading ? (
+            <div className="py-12 text-center text-sm text-zinc-500">
+              <Spinner className="size-5" label="Cargando configuración..." />
+            </div>
+          ) : failure ? (
+            <div
+              role="alert"
+              className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"
             >
-              Reintentar
-            </button>
-            {failure instanceof ApiError && failure.status === 403 ? (
-              <p className="mt-1 text-xs">Su rol no tiene acceso a esta seccion.</p>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            {tab === "empresa" ? <CompanySection canEdit={isAdmin} /> : null}
-            {tab === "comercial" ? <CommercialSection canEdit={isAdmin} /> : null}
-            {tab === "documentos" ? <DocumentsSection canEdit={isAdmin} /> : null}
-            {tab === "numeracion" ? <SequencesSection canEdit={isAdmin} /> : null}
-            {tab === "historial" ? <AuditSection canView={isAdmin} /> : null}
-          </>
-        )}
+              <p className="font-semibold">{describeError(failure)}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  void company.refetch();
+                  void commercial.refetch();
+                  void sequences.refetch();
+                  void reference.refetch();
+                }}
+                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-red-800 underline underline-offset-2 hover:text-red-900"
+              >
+                Reintentar carga
+              </button>
+              {failure instanceof ApiError && failure.status === 403 ? (
+                <p className="mt-2 text-xs">Su rol no tiene acceso a esta sección.</p>
+              ) : null}
+            </div>
+          ) : (
+            <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+              {tab === "empresa" ? <CompanySection canEdit={isAdmin} /> : null}
+              {tab === "comercial" ? <CommercialSection canEdit={isAdmin} /> : null}
+              {tab === "documentos" ? <DocumentsSection canEdit={isAdmin} /> : null}
+              {tab === "numeracion" ? <SequencesSection canEdit={isAdmin} /> : null}
+              {tab === "historial" ? <AuditSection canView={isAdmin} /> : null}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

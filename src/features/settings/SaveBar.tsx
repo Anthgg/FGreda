@@ -13,10 +13,7 @@ interface SaveBarProps {
 }
 
 /**
- * Barra de acciones comun a todas las secciones editables.
- *
- * Concentra los estados que exige la fase: guardando, guardado, error,
- * formulario modificado y descarte de cambios.
+ * Barra de acciones para secciones editables de Configuración.
  */
 export function SaveBar({
   canEdit,
@@ -29,45 +26,57 @@ export function SaveBar({
 }: SaveBarProps) {
   if (!canEdit) {
     return (
-      <p className="mt-5 border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        Solo un administrador puede modificar esta configuracion.
-      </p>
+      <div className="mt-8 border-t border-zinc-200/80 pt-4">
+        <p className="text-xs text-zinc-500">
+          Solo un administrador puede modificar esta configuración.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="mt-5 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+    <div className="mt-10 border-t border-zinc-200/80 pt-6">
       {error ? (
         <div
           role="alert"
-          className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+          className="mb-4 rounded-xl border border-red-200 bg-red-50/90 p-4 text-sm text-red-700"
         >
-          <p>{describeError(error)}</p>
+          <p className="font-medium">{describeError(error)}</p>
           {isConflict(error) ? (
             <button
               type="button"
               onClick={onReload}
-              className="mt-1.5 text-xs font-medium underline underline-offset-2"
+              className="mt-2 text-xs font-semibold text-red-800 underline underline-offset-2 hover:text-red-900"
             >
-              Recargar configuracion
+              Recargar configuración vigente
             </button>
           ) : null}
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        <PrimaryButton disabled={!isDirty || isSaving}>
-          {isSaving ? <Spinner className="size-3.5" label="Guardando..." /> : "Guardar cambios"}
-        </PrimaryButton>
-        <SecondaryButton disabled={!isDirty || isSaving} onClick={onCancel}>
-          Cancelar
-        </SecondaryButton>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <PrimaryButton disabled={!isDirty || isSaving}>
+            {isSaving ? <Spinner className="size-4" label="Guardando..." /> : "Guardar cambios"}
+          </PrimaryButton>
+          <SecondaryButton disabled={!isDirty || isSaving} onClick={onCancel}>
+            Cancelar
+          </SecondaryButton>
+        </div>
 
-        {isDirty ? (
-          <span className="text-xs text-amber-700 dark:text-amber-500">Cambios sin guardar</span>
-        ) : isSuccess ? (
-          <span className="text-xs text-emerald-700 dark:text-emerald-500">Cambios guardados</span>
-        ) : null}
+        <div>
+          {isDirty ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200/70 px-3 py-1.5 rounded-full animate-pulse">
+              <span className="size-1.5 rounded-full bg-amber-500" />
+              Cambios sin guardar
+            </span>
+          ) : isSuccess ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/70 px-3 py-1.5 rounded-full">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              Cambios guardados
+            </span>
+          ) : null}
+        </div>
       </div>
     </div>
   );

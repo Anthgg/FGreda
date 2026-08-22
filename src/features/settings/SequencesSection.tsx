@@ -23,9 +23,9 @@ const TITULOS: Record<string, string> = {
 };
 
 const POLITICAS: readonly { value: ResetPolicy; label: string }[] = [
-  { value: "YEARLY", label: "Cada ano" },
+  { value: "YEARLY", label: "Cada año" },
   { value: "MONTHLY", label: "Cada mes" },
-  { value: "DAILY", label: "Cada dia" },
+  { value: "DAILY", label: "Cada día" },
   { value: "NEVER", label: "Nunca" },
 ];
 
@@ -59,13 +59,13 @@ function previewOf(draft: SequenceConfigInput, sequence: SequenceConfig): string
 function validate(draft: SequenceConfigInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
   if (!/^[A-Za-z0-9]{1,10}$/.test(draft.prefix ?? "")) {
-    errors.prefix = "Entre 1 y 10 letras o digitos, sin separadores.";
+    errors.prefix = "Entre 1 y 10 letras o dígitos, sin separadores.";
   }
   if (!(draft.pattern ?? "").includes("{NUMBER}")) {
     errors.pattern = "El formato debe incluir {NUMBER}.";
   }
   if (draft.padding < 1 || draft.padding > 12) {
-    errors.padding = "Entre 1 y 12 digitos.";
+    errors.padding = "Entre 1 y 12 dígitos.";
   }
   return errors;
 }
@@ -156,20 +156,20 @@ function SequenceCard({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0 dark:border-zinc-800"
+      className="border-t border-zinc-200/80 pt-6 first:border-t-0 first:pt-0"
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+      <div className="flex items-baseline justify-between gap-3 mb-4">
+        <h3 className="text-sm font-semibold text-zinc-900">
           {TITULOS[sequence.sequence_type] ?? sequence.sequence_type}
         </h3>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs text-zinc-400">
           {sequence.current_value === 0
             ? "Sin documentos emitidos"
-            : `Ultimo emitido: ${sequence.current_value}`}
+            : `Último emitido: ${sequence.current_value}`}
         </span>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 items-start">
         <TextField
           label="Prefijo"
           requirement="required"
@@ -178,6 +178,7 @@ function SequenceCard({
           disabled={disabled}
           maxLength={10}
           error={errors.prefix}
+          className="lg:col-span-2"
         />
         <SelectField
           label="Formato"
@@ -187,16 +188,17 @@ function SequenceCard({
           onChange={selectPattern}
           disabled={disabled}
           error={errors.pattern}
-          className="lg:col-span-2"
+          className="lg:col-span-5"
         />
         <TextField
-          label="Digitos"
+          label="Dígitos"
           requirement="required"
           value={String(draft.padding)}
           onChange={(value) => set("padding", Number(value) || 0)}
           disabled={disabled}
           inputMode="numeric"
           error={errors.padding}
+          className="lg:col-span-2"
         />
         <SelectField
           label="Reinicio del contador"
@@ -205,24 +207,26 @@ function SequenceCard({
           options={POLITICAS}
           onChange={(value) => set("reset_policy", value)}
           disabled={disabled}
+          className="lg:col-span-3"
         />
-        <div className="flex items-end pb-1.5">
-          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              checked={draft.active}
-              onChange={(event) => set("active", event.target.checked)}
-              disabled={disabled}
-              className="size-3.5 rounded border-zinc-300 text-clay-700 focus:ring-clay-600 dark:border-zinc-700"
-            />
-            Activa
-            <span className="text-xs text-clay-700 dark:text-clay-300">* Obligatorio</span>
-          </label>
-        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draft.active}
+            onChange={(event) => set("active", event.target.checked)}
+            disabled={disabled}
+            className="size-4 rounded-md border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+          />
+          <span className="text-sm font-medium">Activa</span>
+          <span className="text-xs text-orange-600 font-semibold">* Obligatorio</span>
+        </label>
       </div>
 
       {creatingPattern ? (
-        <div className="mt-3 grid gap-3 rounded-md border border-clay-200 bg-clay-50/60 p-3 sm:grid-cols-2 dark:border-clay-900 dark:bg-clay-950/20">
+        <div className="mt-4 grid gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-2">
           <TextField
             label="Nombre del nuevo formato"
             requirement="required"
@@ -232,7 +236,7 @@ function SequenceCard({
             error={patternName.length > 0 && patternName.trim().length < 2 ? "Use al menos 2 caracteres." : undefined}
           />
           <TextField
-            label="Patron"
+            label="Patrón"
             requirement="required"
             value={newPattern}
             onChange={setNewPattern}
@@ -256,44 +260,38 @@ function SequenceCard({
             </SecondaryButton>
           </div>
           {createPattern.error ? (
-            <p role="alert" className="text-sm text-red-700 sm:col-span-2 dark:text-red-300">
+            <p role="alert" className="text-sm text-red-700 sm:col-span-2">
               {describeError(createPattern.error)}
             </p>
           ) : null}
         </div>
       ) : null}
 
-      <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Vista previa
-        </p>
-        <p className="mt-0.5 font-mono text-sm text-zinc-900 dark:text-zinc-100">
+      {/* Banner Vista Previa */}
+      <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-4">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+          Vista Previa
+        </span>
+        <span className="font-mono text-sm font-semibold text-zinc-900 tracking-tight">
           {hasErrors ? "—" : previewOf(draft, sequence)}
-        </p>
-        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-          Solo un ejemplo del formato. No reserva ni consume ningun numero: el correlativo oficial
-          lo asigna el servidor al crear el documento.
+        </span>
+        <p className="mt-1 text-xs text-zinc-400">
+          Marcadores admitidos: {"{PREFIX}"} {"{YYYY}"} {"{YY}"} {"{MM}"} {"{DD}"} {"{NUMBER}"}. Solo un ejemplo del formato: no reserva ni consume correlativos.
         </p>
       </div>
-
-      <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-        Marcadores admitidos: <code>{"{PREFIX}"}</code> <code>{"{YYYY}"}</code>{" "}
-        <code>{"{YY}"}</code> <code>{"{MM}"}</code> <code>{"{DD}"}</code>{" "}
-        <code>{"{NUMBER}"}</code>. Los cambios afectan solo a los documentos futuros.
-      </p>
 
       {update.error ? (
         <p
           role="alert"
-          className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+          className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
         >
           {describeError(update.error)}
-          {isConflict(update.error) ? " Recargue la pagina para ver la version vigente." : ""}
+          {isConflict(update.error) ? " Recargue la página para ver la versión vigente." : ""}
         </p>
       ) : null}
 
       {canEdit ? (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <PrimaryButton disabled={!isDirty || hasErrors || update.isPending || creatingPattern}>
             {update.isPending ? <Spinner className="size-3.5" label="Guardando..." /> : "Guardar"}
           </PrimaryButton>
@@ -301,7 +299,9 @@ function SequenceCard({
             Cancelar
           </SecondaryButton>
           {isDirty ? (
-            <span className="text-xs text-amber-700 dark:text-amber-500">Cambios sin guardar</span>
+            <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              Cambios sin guardar
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -316,7 +316,7 @@ export function SequencesSection({ canEdit }: { canEdit: boolean }) {
   if (!query.data || !reference.data) return null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       {query.data.map((sequence) => (
         <SequenceCard
           key={sequence.sequence_type}
@@ -326,8 +326,8 @@ export function SequencesSection({ canEdit }: { canEdit: boolean }) {
         />
       ))}
       {!canEdit ? (
-        <p className="border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-          Solo un administrador puede modificar la numeracion.
+        <p className="border-t border-zinc-200/80 pt-4 text-xs text-zinc-500">
+          Solo un administrador puede modificar la numeración.
         </p>
       ) : null}
     </div>

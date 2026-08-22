@@ -10,9 +10,6 @@ import type { CommercialSettingsInput } from "@/types/settings";
 
 /**
  * Textos por defecto de los documentos.
- *
- * Comparten almacenamiento con los parametros comerciales, pero se editan
- * aparte porque son un trabajo distinto: aqui se redacta, alli se configura.
  */
 export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
   const query = useCommercialSettings();
@@ -32,8 +29,6 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
     if (!isDirty || update.isPending) return;
     update.mutate(
       { ...draft, version: query.data?.version ?? draft.version },
-      // Se adopta la respuesta del servidor: deja el formulario limpio y
-      // la siguiente escritura parte de la version ya confirmada.
       { onSuccess: (data) => commit(toCommercialInput(data)) },
     );
   };
@@ -42,43 +37,45 @@ export function DocumentsSection({ canEdit }: { canEdit: boolean }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <FormSection
-        title="Textos de documentos"
-        description="Se almacenan y se muestran como texto plano. No se admite HTML."
-      >
-        <TextAreaField
-          label="Condiciones generales"
-          requirement="optional"
-          value={draft.general_conditions}
-          onChange={(value) => setField("general_conditions", value)}
-          disabled={disabled}
-          rows={5}
-          className="sm:col-span-2"
-        />
-        <TextAreaField
-          label="Notas de pago"
-          requirement="optional"
-          value={draft.payment_notes}
-          onChange={(value) => setField("payment_notes", value)}
-          disabled={disabled}
-          rows={3}
-          className="sm:col-span-2"
-        />
-        <TextAreaField
-          label="Pie de documento"
-          requirement="optional"
-          value={draft.document_footer}
-          onChange={(value) => setField("document_footer", value)}
-          disabled={disabled}
-          rows={2}
-          className="sm:col-span-2"
-        />
-      </FormSection>
+      <div className="space-y-6">
+        <FormSection
+          title="Textos de Documentos"
+          description="Se almacenan y se muestran como texto plano. No se admite HTML."
+          className="space-y-6"
+        >
+          <TextAreaField
+            label="Condiciones generales"
+            requirement="optional"
+            value={draft.general_conditions}
+            onChange={(value) => setField("general_conditions", value)}
+            disabled={disabled}
+            rows={4}
+            className="w-full"
+          />
+          <TextAreaField
+            label="Notas de pago"
+            requirement="optional"
+            value={draft.payment_notes}
+            onChange={(value) => setField("payment_notes", value)}
+            disabled={disabled}
+            rows={3}
+            className="w-full"
+          />
+          <TextAreaField
+            label="Pie de documento"
+            requirement="optional"
+            value={draft.document_footer}
+            onChange={(value) => setField("document_footer", value)}
+            disabled={disabled}
+            rows={3}
+            className="w-full"
+          />
+        </FormSection>
 
-      <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
-        Estos textos se usaran en los documentos que generen las fases siguientes. La Fase 2 no
-        genera PDF todavia.
-      </p>
+        <p className="text-xs text-zinc-400 italic">
+          Estos textos se usarán en los documentos que generen las fases siguientes. La Fase 2 no genera PDF todavía.
+        </p>
+      </div>
 
       <SaveBar
         canEdit={canEdit}

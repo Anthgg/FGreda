@@ -35,14 +35,14 @@ function uniqueOptions(
   );
 }
 
-/** Validacion de experiencia de usuario. El backend la repite entera. */
+/** Validación de experiencia de usuario. El backend la repite entera. */
 function validate(draft: CompanySettingsInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
   if (draft.tax_id && !/^\d{11}$/.test(draft.tax_id)) {
-    errors.tax_id = "El RUC peruano tiene 11 digitos.";
+    errors.tax_id = "El RUC peruano tiene 11 dígitos.";
   }
   if (draft.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) {
-    errors.email = "Formato de correo no valido.";
+    errors.email = "Formato de correo no válido.";
   }
   if (draft.website && !/^https?:\/\//.test(draft.website)) {
     errors.website = "Debe empezar por http:// o https://";
@@ -51,7 +51,7 @@ function validate(draft: CompanySettingsInput): Partial<Record<string, string>> 
     errors.province = "Seleccione una provincia del departamento.";
   }
   if ((draft.department || draft.province || draft.district || draft.country) && !draft.ubigeo_code) {
-    errors.district = "Complete la ubicacion seleccionando un distrito INEI.";
+    errors.district = "Complete la ubicación seleccionando un distrito INEI.";
   }
   return errors;
 }
@@ -106,7 +106,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
             department: selected?.department_name ?? null,
             province: null,
             district: null,
-            country: selected ? "Peru" : null,
+            country: selected ? "Perú" : null,
           }
         : current,
     );
@@ -136,7 +136,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
             department: selected?.department_name ?? current.department,
             province: selected?.province_name ?? current.province,
             district: selected?.district_name ?? null,
-            country: selected ? "Peru" : current.country,
+            country: selected ? "Perú" : current.country,
           }
         : current,
     );
@@ -155,10 +155,11 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div className="space-y-5">
-        <FormSection title="Identificacion">
+      <div className="space-y-8">
+        {/* IDENTIFICACIÓN */}
+        <FormSection title="Identificación" className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <TextField
-            label="Razon social"
+            label="Razón social"
             requirement="optional"
             value={draft.legal_name}
             onChange={(value) => setField("legal_name", value)}
@@ -180,21 +181,23 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
             inputMode="numeric"
             maxLength={11}
             error={errors.tax_id}
-            hint="11 digitos"
+            hint="11 dígitos"
           />
         </FormSection>
 
+        {/* DOMICILIO */}
         <FormSection
           title="Domicilio"
-          description="Ubicacion validada con el catalogo oficial de distritos INEI."
+          description="Ubicación validada con el catálogo oficial de distritos INEI."
+          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
         >
           <TextField
-            label="Direccion"
+            label="Dirección"
             requirement="optional"
             value={draft.address_line1}
             onChange={(value) => setField("address_line1", value)}
             disabled={disabled}
-            className="sm:col-span-2"
+            className="sm:col-span-2 lg:col-span-2"
           />
           <TextField
             label="Referencia"
@@ -202,7 +205,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
             value={draft.address_line2}
             onChange={(value) => setField("address_line2", value)}
             disabled={disabled}
-            className="sm:col-span-2"
+            className="sm:col-span-2 lg:col-span-1"
           />
           <SelectField
             label="Departamento"
@@ -228,19 +231,21 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
             options={districtOptions}
             onChange={selectDistrict}
             disabled={disabled || !provinceCode}
+            searchable={true}
+            searchPlaceholder="Buscar distrito..."
             error={errors.district}
           />
           <TextField
-            label="Pais"
+            label="País"
             requirement="automatic"
-            value={draft.country ? "Peru" : null}
+            value={draft.country ? "Perú" : null}
             onChange={() => {}}
             disabled={disabled}
             readOnly
             hint="Se completa al seleccionar el distrito."
           />
           <TextField
-            label="Codigo postal"
+            label="Código postal"
             requirement="optional"
             value={draft.postal_code}
             onChange={(value) => setField("postal_code", value)}
@@ -248,9 +253,10 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
         </FormSection>
 
-        <FormSection title="Contacto">
+        {/* CONTACTO */}
+        <FormSection title="Contacto" className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <TextField
-            label="Telefono"
+            label="Teléfono"
             requirement="optional"
             value={draft.phone}
             onChange={(value) => setField("phone", value)}
@@ -266,7 +272,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
             type="tel"
           />
           <TextField
-            label="Correo electronico"
+            label="Correo electrónico"
             requirement="optional"
             value={draft.email}
             onChange={(value) => setField("email", value)}
@@ -300,6 +306,7 @@ export function CompanySection({ canEdit }: { canEdit: boolean }) {
           />
         </FormSection>
 
+        {/* LOGO */}
         <LogoField logo={query.data?.logo ?? null} canEdit={canEdit} />
       </div>
 

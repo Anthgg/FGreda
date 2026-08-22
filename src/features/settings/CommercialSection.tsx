@@ -12,7 +12,7 @@ import {
 } from "@/features/settings/useSettings";
 import type { CommercialSettingsInput } from "@/types/settings";
 
-/** Validacion de experiencia de usuario. El backend la repite entera. */
+/** Validación de experiencia de usuario. El backend la repite entera. */
 function validate(draft: CommercialSettingsInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
 
@@ -25,12 +25,12 @@ function validate(draft: CommercialSettingsInput): Partial<Record<string, string
   if (draft.quote_validity_days !== null) {
     const days = Number(draft.quote_validity_days);
     if (!Number.isInteger(days) || days < 1) {
-      errors.quote_validity_days = "Debe ser un numero entero de dias mayor que cero.";
+      errors.quote_validity_days = "Debe ser un número entero de días mayor que cero.";
     }
   }
   const cci = draft.bank_account?.cci?.replace(/[\s-]/g, "");
   if (cci && !/^\d{20}$/.test(cci)) {
-    errors.cci = "El CCI peruano tiene 20 digitos.";
+    errors.cci = "El CCI peruano tiene 20 dígitos.";
   }
   return errors;
 }
@@ -74,13 +74,8 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isDirty || hasErrors || update.isPending) return;
-    // Se envia la version que el servidor confirmo por ultima vez, no la que
-    // se capturo al abrir el formulario: asi guardar en otra pestana de esta
-    // misma pantalla no provoca un conflicto contra uno mismo.
     update.mutate(
       { ...draft, version: query.data?.version ?? draft.version },
-      // Se adopta la respuesta del servidor: deja el formulario limpio y
-      // la siguiente escritura parte de la version ya confirmada.
       { onSuccess: (data) => commit(toCommercialInput(data)) },
     );
   };
@@ -110,10 +105,12 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div className="space-y-5">
+      <div className="space-y-8">
+        {/* MONEDA E IMPUESTOS */}
         <FormSection
-          title="Moneda e impuestos"
+          title="Moneda e Impuestos"
           description="Valores por defecto de las cotizaciones. El backend es quien los aplica."
+          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
         >
           <SelectField
             label="Moneda (ISO 4217)"
@@ -124,7 +121,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             disabled={disabled}
           />
           <TextField
-            label="Simbolo"
+            label="Símbolo"
             requirement="automatic"
             value={draft.currency_symbol}
             onChange={() => {}}
@@ -140,11 +137,11 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             disabled={disabled}
             inputMode="decimal"
             placeholder="18"
-            hint="Porcentaje, no fraccion: 18 significa 18 %."
+            hint="Porcentaje, no fracción: 18 significa 18%."
             error={errors.tax_percent}
           />
           <TextField
-            label="Vigencia de cotizacion (dias)"
+            label="Vigencia de cotización (días)"
             requirement="optional"
             value={draft.quote_validity_days === null ? null : String(draft.quote_validity_days)}
             onChange={(value) =>
@@ -156,9 +153,11 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
           />
         </FormSection>
 
+        {/* DATOS BANCARIOS */}
         <FormSection
-          title="Datos bancarios"
+          title="Datos Bancarios"
           description="Cuenta principal para las instrucciones de pago."
+          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
         >
           <TextField
             label="Banco"
@@ -175,7 +174,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             disabled={disabled}
           />
           <TextField
-            label="Numero de cuenta"
+            label="Número de cuenta"
             requirement="optional"
             value={bank?.account_number ?? null}
             onChange={(value) => setBankField("account_number", value)}
@@ -188,7 +187,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             onChange={(value) => setBankField("cci", value)}
             disabled={disabled}
             inputMode="numeric"
-            hint="20 digitos"
+            hint="20 dígitos"
             error={errors.cci}
           />
           <TextAreaField
@@ -197,8 +196,8 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             value={bank?.notes ?? null}
             onChange={(value) => setBankField("notes", value)}
             disabled={disabled}
-            rows={2}
-            className="sm:col-span-2"
+            rows={3}
+            className="sm:col-span-2 lg:col-span-4"
           />
         </FormSection>
       </div>

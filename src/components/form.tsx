@@ -1,19 +1,22 @@
 /**
- * Primitivas de formulario.
- *
- * Densidad moderada y controles planos: la configuracion es una pantalla de
- * trabajo, no un escaparate. Cada campo es una etiqueta y un control, sin
- * encerrar cada uno en su propia tarjeta.
+ * Primitivas de formulario y componentes accesibles para GREDA.
  */
 
 import { useId } from "react";
 import type { ReactNode } from "react";
 
+export { SelectField } from "@/components/SelectField";
+export type { SelectOption } from "@/components/SelectField";
+
 const CONTROL =
-  "w-full rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-900 " +
-  "placeholder:text-zinc-400 focus:border-clay-500 focus:outline-none " +
-  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500 " +
-  "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:disabled:bg-zinc-900/60";
+  "w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-xs " +
+  "placeholder:text-zinc-400 transition-colors focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900 " +
+  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:border-zinc-200 disabled:shadow-none disabled:opacity-60";
+
+const TEXTAREA_CONTROL =
+  "w-full rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-900 shadow-xs " +
+  "placeholder:text-zinc-400 transition-colors focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900 " +
+  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:border-zinc-200 disabled:shadow-none disabled:opacity-60";
 
 interface FieldProps {
   label: string;
@@ -37,30 +40,30 @@ export function Field({
     <div className={className}>
       <label
         htmlFor={id}
-        className="flex items-baseline justify-between gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300"
+        className="flex items-baseline justify-between gap-2 text-xs font-medium text-zinc-700 mb-1"
       >
         <span>{label}</span>
         {requirement ? (
           <span
             className={
               requirement === "required"
-                ? "text-clay-700 dark:text-clay-300"
-                : "font-normal text-zinc-400 dark:text-zinc-500"
+                ? "text-orange-600 font-semibold"
+                : "font-normal text-zinc-400"
             }
           >
             {requirement === "required"
               ? "* Obligatorio"
               : requirement === "optional"
                 ? "Opcional"
-                : "Automatico"}
+                : "Automático"}
           </span>
         ) : null}
       </label>
-      <div className="mt-1">{children(id)}</div>
+      <div>{children(id)}</div>
       {error ? (
-        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+        <p className="mt-1 text-xs text-red-600">{error}</p>
       ) : hint ? (
-        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{hint}</p>
+        <p className="mt-1 text-xs text-zinc-400">{hint}</p>
       ) : null}
     </div>
   );
@@ -118,7 +121,11 @@ export function TextField({
           maxLength={maxLength}
           inputMode={inputMode}
           aria-invalid={error ? true : undefined}
-          className={CONTROL}
+          className={[
+            CONTROL,
+            error ? "border-red-400 focus:border-red-500 focus:ring-red-500" : "",
+            readOnly ? "bg-zinc-50/80 cursor-default opacity-80" : "",
+          ].join(" ")}
         />
       )}
     </Field>
@@ -132,6 +139,7 @@ interface TextAreaFieldProps {
   onChange: (value: string) => void;
   disabled?: boolean | undefined;
   rows?: number | undefined;
+  placeholder?: string | undefined;
   hint?: string | undefined;
   error?: string | undefined;
   className?: string | undefined;
@@ -144,6 +152,7 @@ export function TextAreaField({
   onChange,
   disabled = false,
   rows = 3,
+  placeholder,
   hint,
   error,
   className,
@@ -164,61 +173,14 @@ export function TextAreaField({
           disabled={disabled}
           required={requirement === "required"}
           rows={rows}
+          placeholder={placeholder}
           aria-invalid={error ? true : undefined}
-          className={`${CONTROL} resize-y`}
+          className={[
+            TEXTAREA_CONTROL,
+            "resize-y",
+            error ? "border-red-400 focus:border-red-500 focus:ring-red-500" : "",
+          ].join(" ")}
         />
-      )}
-    </Field>
-  );
-}
-
-interface SelectFieldProps<T extends string> {
-  label: string;
-  requirement?: "required" | "optional" | "automatic" | undefined;
-  value: T;
-  options: readonly { value: T; label: string }[];
-  onChange: (value: T) => void;
-  disabled?: boolean | undefined;
-  hint?: string | undefined;
-  error?: string | undefined;
-  className?: string | undefined;
-}
-
-export function SelectField<T extends string>({
-  label,
-  requirement,
-  value,
-  options,
-  onChange,
-  disabled = false,
-  hint,
-  error,
-  className,
-}: SelectFieldProps<T>) {
-  return (
-    <Field
-      label={label}
-      requirement={requirement}
-      hint={hint}
-      error={error}
-      className={className}
-    >
-      {(id) => (
-        <select
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value as T)}
-          disabled={disabled}
-          required={requirement === "required"}
-          aria-invalid={error ? true : undefined}
-          className={CONTROL}
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       )}
     </Field>
   );
@@ -228,20 +190,24 @@ export function FormSection({
   title,
   description,
   children,
+  className = "",
 }: {
   title: string;
   description?: string | undefined;
   children: ReactNode;
+  className?: string | undefined;
 }) {
   return (
-    <section className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0 dark:border-zinc-800">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        {title}
-      </h3>
-      {description ? (
-        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{description}</p>
-      ) : null}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">{children}</div>
+    <section className="border-t border-zinc-200/80 pt-6 first:border-t-0 first:pt-0">
+      <div className="mb-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-1 text-xs text-zinc-500">{description}</p>
+        ) : null}
+      </div>
+      <div className={className || "grid gap-5 sm:grid-cols-2 lg:grid-cols-3"}>{children}</div>
     </section>
   );
 }
@@ -262,7 +228,7 @@ export function PrimaryButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center justify-center gap-2 rounded-md bg-clay-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-clay-800 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
@@ -283,7 +249,7 @@ export function SecondaryButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center justify-center rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+      className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
