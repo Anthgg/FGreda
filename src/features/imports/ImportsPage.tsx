@@ -8,11 +8,11 @@
 
 import { useState } from "react";
 
-import { ApiError } from "@/api/client";
 import { PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
+import { describeError } from "@/features/settings/messages";
 import {
   Badge,
   EmptyState,
@@ -296,9 +296,7 @@ export function ImportsPage() {
           {upload.isPending ? <Spinner label="Analizando el archivo..." /> : null}
           {upload.error ? (
             <p className="mt-2 text-sm text-red-600">
-              {upload.error instanceof ApiError
-                ? upload.error.message
-                : "No se pudo procesar el archivo."}
+              {describeError(upload.error)}
             </p>
           ) : null}
         </section>
@@ -463,9 +461,7 @@ export function ImportsPage() {
                   </p>
                   {commit.error ? (
                     <p className="mt-2 text-sm text-red-600">
-                      {commit.error instanceof ApiError
-                        ? commit.error.message
-                        : "No se pudo confirmar la importación."}
+                      {describeError(commit.error)}
                     </p>
                   ) : null}
                   <div className="mt-3 flex gap-2">

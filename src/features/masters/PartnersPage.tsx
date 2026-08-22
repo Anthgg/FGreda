@@ -7,7 +7,6 @@
 
 import { useState } from "react";
 
-import { ApiError } from "@/api/client";
 import {
   PrimaryButton,
   SecondaryButton,
@@ -18,6 +17,7 @@ import {
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
+import { describeError } from "@/features/settings/messages";
 import {
   Badge,
   EmptyState,
@@ -198,7 +198,7 @@ function PartnerForm({
 
       {error ? (
         <p className="text-sm text-red-600">
-          {error instanceof ApiError ? error.message : "No se pudo guardar el tercero."}
+          {describeError(error)}
         </p>
       ) : null}
 
@@ -305,9 +305,7 @@ export function PartnersPage() {
               <Spinner label="Cargando terceros..." />
             ) : partners.error ? (
               <p className="py-8 text-center text-sm text-red-600">
-                {partners.error instanceof ApiError
-                  ? partners.error.message
-                  : "No se pudieron cargar los terceros."}
+                {describeError(partners.error)}
               </p>
             ) : (partners.data?.items.length ?? 0) === 0 ? (
               <EmptyState message="No hay terceros que coincidan con la búsqueda." />

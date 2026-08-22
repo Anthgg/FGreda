@@ -7,7 +7,6 @@
 
 import { useState } from "react";
 
-import { ApiError } from "@/api/client";
 import {
   PrimaryButton,
   SecondaryButton,
@@ -16,6 +15,7 @@ import {
   type SelectOption,
 } from "@/components/form";
 import { PRODUCT_TYPE_LABELS } from "@/features/masters/labels";
+import { describeError } from "@/features/settings/messages";
 import type {
   PosCategory,
   Product,
@@ -231,7 +231,7 @@ export function ProductForm({
 
       {error ? (
         <p className="text-sm text-red-600">
-          {error instanceof ApiError ? error.message : "No se pudo guardar el producto."}
+          {describeError(error)}
         </p>
       ) : null}
 

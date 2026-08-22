@@ -145,6 +145,38 @@ describe("Modulo de productos", () => {
   });
 });
 
+describe("Backend equivocado", () => {
+  it("un 404 en toda la API no se muestra como 'Not Found' en ingles", async () => {
+    // Reproduce el incidente del user test: la aplicacion apuntaba al backend
+    // de Fase 2, que no conoce estas rutas, y la pantalla mostraba el texto
+    // crudo del servidor en vez de explicar que pasaba.
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/products") || url.includes("/categories")
+          ? errorResponse(404, "NOT_FOUND", "Not Found")
+          : undefined,
+    });
+    renderApp(["/productos"]);
+
+    expect(
+      await screen.findByText(/Verifique que la aplicacion apunte al backend correcto/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not Found")).not.toBeInTheDocument();
+  });
+
+  it("el inventario tampoco filtra el texto crudo del servidor", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/inventory") ? errorResponse(404, "NOT_FOUND", "Not Found") : undefined,
+    });
+    renderApp(["/inventario"]);
+
+    expect(
+      await screen.findByText(/Verifique que la aplicacion apunte al backend correcto/),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Modulo de terceros", () => {
   it("muestra clientes y proveedores en un unico maestro", async () => {
     mockMasters();

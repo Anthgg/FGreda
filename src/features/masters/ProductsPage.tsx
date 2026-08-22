@@ -7,11 +7,11 @@
 
 import { useState } from "react";
 
-import { ApiError } from "@/api/client";
 import { PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
+import { describeError } from "@/features/settings/messages";
 import {
   Badge,
   EmptyState,
@@ -161,9 +161,7 @@ export function ProductsPage() {
               <Spinner label="Cargando productos..." />
             ) : failure ? (
               <p className="py-8 text-center text-sm text-red-600">
-                {failure instanceof ApiError
-                  ? failure.message
-                  : "No se pudieron cargar los productos."}
+                {describeError(failure)}
               </p>
             ) : (products.data?.items.length ?? 0) === 0 ? (
               <EmptyState message="No hay productos que coincidan con la búsqueda." />

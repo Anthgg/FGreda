@@ -8,11 +8,11 @@
 
 import { useState } from "react";
 
-import { ApiError } from "@/api/client";
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
+import { describeError } from "@/features/settings/messages";
 import {
   Badge,
   EmptyState,
@@ -86,7 +86,7 @@ function AdjustmentForm({
       </div>
       {error ? (
         <p className="mt-3 text-sm text-red-600">
-          {error instanceof ApiError ? error.message : "No se pudo registrar el ajuste."}
+          {describeError(error)}
         </p>
       ) : null}
       <div className="mt-4 flex gap-2">
@@ -164,9 +164,7 @@ export function InventoryPage() {
           <Spinner label="Cargando inventario..." />
         ) : stock.error ? (
           <p className="py-8 text-center text-sm text-red-600">
-            {stock.error instanceof ApiError
-              ? stock.error.message
-              : "No se pudo cargar el inventario."}
+            {describeError(stock.error)}
           </p>
         ) : (stock.data?.items.length ?? 0) === 0 ? (
           <EmptyState message="Todavía no hay existencias registradas." />
