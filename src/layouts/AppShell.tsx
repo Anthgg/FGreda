@@ -1,130 +1,358 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import gredaLogo from "@/assets/greda-frame-1.png";
+import { GredaParticleBackground } from "@/components/GredaParticleBackground";
+import {
+  BoxesIcon,
+  CloseIcon,
+  FileTextIcon,
+  FlameIcon,
+  FlaskIcon,
+  HomeIcon,
+  LogOutIcon,
+  MenuIcon,
+  PackageIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  SettingsIcon,
+} from "@/components/icons";
 import { Spinner } from "@/components/Spinner";
 import { useLogout, useSession } from "@/features/auth/useSession";
-import { NAVIGATION } from "@/layouts/navigation";
+import { NAVIGATION, type NavigationIconKey, type NavigationItem } from "@/layouts/navigation";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Administrador",
   OPERATOR: "Operario",
 };
 
-function NavigationList({ onNavigate }: { onNavigate?: () => void }) {
+function renderNavigationIcon(icon: NavigationIconKey, className = "size-5 shrink-0") {
+  switch (icon) {
+    case "home":
+      return <HomeIcon className={className} />;
+    case "package":
+      return <PackageIcon className={className} />;
+    case "boxes":
+      return <BoxesIcon className={className} />;
+    case "flask":
+      return <FlaskIcon className={className} />;
+    case "flame":
+      return <FlameIcon className={className} />;
+    case "file-text":
+      return <FileTextIcon className={className} />;
+    case "settings":
+      return <SettingsIcon className={className} />;
+  }
+}
+
+interface NavigationListProps {
+  items: readonly NavigationItem[];
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}
+
+function NavigationList({ items, collapsed = false, onNavigate }: NavigationListProps) {
   return (
-    <nav aria-label="Navegacion principal" className="space-y-0.5">
-      {NAVIGATION.map((item) =>
-        item.enabled && item.to ? (
-          <NavLink
-            key={item.label}
-            to={item.to}
-            end
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              [
-                "block rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                isActive
-                  ? "bg-clay-50 font-medium text-clay-800 dark:bg-clay-900/30 dark:text-clay-200"
-                  : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900",
-              ].join(" ")
-            }
-          >
-            {item.label}
-          </NavLink>
-        ) : (
+    <nav aria-label="Navegación principal" className="space-y-1">
+      {items.map((item) => {
+        const icon = renderNavigationIcon(item.icon, "size-4.5 shrink-0");
+
+        if (item.enabled && item.to) {
+          return (
+            <NavLink
+              key={item.label}
+              to={item.to}
+              end
+              onClick={onNavigate}
+              title={collapsed ? item.label : undefined}
+              aria-label={item.label}
+              className={({ isActive }) =>
+                [
+                  "group flex items-center rounded-xl text-sm font-medium transition-all duration-150",
+                  collapsed ? "justify-center p-2.5" : "justify-between px-3 py-2",
+                  isActive
+                    ? "bg-black text-white shadow-xs hover:scale-[1.01]"
+                    : "text-zinc-600 hover:bg-white hover:text-zinc-900 hover:shadow-xs",
+                ].join(" ")
+              }
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {icon}
+                {!collapsed ? <span className="truncate">{item.label}</span> : null}
+              </div>
+            </NavLink>
+          );
+        }
+
+        return (
           <span
             key={item.label}
             aria-disabled="true"
-            title="Modulo previsto para una fase posterior"
-            className="flex cursor-not-allowed items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-zinc-400 dark:text-zinc-600"
+            title={collapsed ? `${item.label} (Próximamente)` : "Módulo previsto para una fase posterior"}
+            aria-label={`${item.label} (Próximamente)`}
+            className={[
+              "flex cursor-not-allowed items-center rounded-xl text-sm font-medium text-zinc-400 transition-colors",
+              collapsed ? "justify-center p-2.5" : "justify-between px-3 py-2",
+            ].join(" ")
+          }
           >
-            {item.label}
-            <span className="ml-2 rounded border border-zinc-200 px-1 py-px text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800 dark:text-zinc-600">
-              Proximo
-            </span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              {icon}
+              {!collapsed ? <span>{item.label}</span> : null}
+            </div>
+            {!collapsed ? (
+              <span className="ml-1 shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                Próximo
+              </span>
+            ) : null}
           </span>
-        ),
-      )}
+        );
+      })}
     </nav>
   );
 }
 
-/** Estructura visual de la aplicacion autenticada. */
+/**
+ * Estructura visual de la aplicación autenticada de Cotizador GREDA.
+ * Incluye Sidebar translúcida colapsable en Desktop, Drawer en Móvil y Fondo de partículas sutil.
+ */
 export function AppShell() {
   const { data: user } = useSession();
   const logout = useLogout();
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
+
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => !prev);
+  };
 
   const handleLogout = () => {
     logout.mutate(undefined, {
-      // Se navega en onSettled: aunque la llamada falle, el estado en memoria
-      // ya fue limpiado y no debe quedar una vista autenticada.
       onSettled: () => navigate("/login", { replace: true }),
     });
   };
 
+  // Manejo de la tecla Escape para cerrar el drawer móvil
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileMenuOpen]);
+
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[13rem_1fr]">
-      {/* Barra superior, solo en pantallas pequenas */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 lg:hidden dark:border-zinc-800">
-        <div className="flex items-center gap-2">
-          <img src={gredaLogo} alt="Logo de Greda" className="h-6 w-auto object-contain" />
-          <span className="text-sm font-semibold tracking-tight">Cotizador Greda</span>
+    <div className="relative min-h-dvh flex flex-col lg:flex-row bg-white text-zinc-900 selection:bg-zinc-900 selection:text-white">
+      {/* Fondo interactivo Canvas 2D atenuado para el Dashboard */}
+      <GredaParticleBackground variant="dashboard" />
+
+      {/* ========================================================================= */}
+      {/* BARRA SUPERIOR MÓVIL (visible solo en < lg)                               */}
+      {/* ========================================================================= */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md lg:hidden">
+        <div className="flex items-center gap-2.5">
+          <img
+            src={gredaLogo}
+            alt="Logo de Greda"
+            className="size-7 select-none object-contain"
+            draggable={false}
+          />
+          <span className="text-base font-bold tracking-tight text-zinc-900">Cotizador Greda</span>
         </div>
         <button
           type="button"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-expanded={menuOpen}
-          aria-controls="menu-principal"
-          className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+          onClick={() => setMobileMenuOpen(true)}
+          aria-expanded={mobileMenuOpen}
+          aria-label="Abrir menú principal"
+          className="flex size-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-xs hover:bg-zinc-50"
         >
-          {menuOpen ? "Cerrar" : "Menu"}
+          <MenuIcon className="size-5" />
         </button>
-      </div>
+      </header>
 
+      {/* ========================================================================= */}
+      {/* DRAWER MÓVIL (overlay + panel deslizante)                                 */}
+      {/* ========================================================================= */}
+      {mobileMenuOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menú principal"
+          className="fixed inset-0 z-50 lg:hidden"
+        >
+          {/* Backdrop con blur */}
+          <div
+            className="fixed inset-0 bg-black/25 backdrop-blur-xs transition-opacity duration-200"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Panel deslizante */}
+          <div className="fixed inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col justify-between glass-sidebar p-5 shadow-2xl transition-transform duration-200">
+            <div>
+              <div className="flex items-center justify-between pb-6 border-b border-zinc-200/80">
+                <div className="flex items-center gap-2.5">
+                  <img
+                    src={gredaLogo}
+                    alt="Logo de Greda"
+                    className="size-7 select-none object-contain"
+                    draggable={false}
+                  />
+                  <span className="text-base font-bold tracking-tight text-zinc-900">
+                    Cotizador Greda
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Cerrar menú"
+                  className="flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                >
+                  <CloseIcon className="size-5" />
+                </button>
+              </div>
+
+              <div className="mt-6">
+                <NavigationList
+                  items={NAVIGATION}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
+              </div>
+            </div>
+
+            {/* Perfil en Drawer Móvil */}
+            <div className="border-t border-zinc-200/80 pt-4">
+              {user ? (
+                <div className="mb-3 px-1">
+                  <p className="truncate text-sm font-bold text-zinc-900">{user.display_name}</p>
+                  <p className="truncate text-xs text-zinc-500">{user.email}</p>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    Rol: {ROLE_LABEL[user.role] ?? user.role}
+                  </p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={logout.isPending}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+              >
+                {logout.isPending ? (
+                  <Spinner className="size-4" label="Saliendo..." />
+                ) : (
+                  <>
+                    <LogOutIcon className="size-4" />
+                    <span>Cerrar sesión</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ========================================================================= */}
+      {/* SIDEBAR DESKTOP (fija y translúcida en pantallas grandes)                  */}
+      {/* ========================================================================= */}
       <aside
         id="menu-principal"
         className={[
-          "flex-col justify-between border-zinc-200 px-3 py-3 lg:flex lg:min-h-dvh lg:border-r dark:border-zinc-800",
-          menuOpen ? "flex border-b" : "hidden",
+          "hidden lg:flex flex-col justify-between glass-sidebar min-h-dvh sticky top-0 transition-all duration-300 z-20",
+          collapsed ? "w-18 p-3" : "w-64 p-5",
         ].join(" ")}
       >
         <div>
-          <div className="mb-4 hidden px-2.5 lg:block">
-            <div className="flex items-center gap-2">
-              <img src={gredaLogo} alt="Logo de Greda" className="h-7 w-auto object-contain" />
-              <span className="text-sm font-semibold tracking-tight">Cotizador Greda</span>
+          {/* Logo y Botón de Colapso */}
+          <div
+            className={[
+              "flex items-center pb-6 border-b border-zinc-200/60",
+              collapsed ? "justify-center" : "justify-between",
+            ].join(" ")}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={gredaLogo}
+                alt="Logo de Greda"
+                className="size-7 shrink-0 select-none object-contain transition-transform duration-200 hover:scale-105"
+                draggable={false}
+              />
+              {!collapsed ? (
+                <span className="truncate text-base font-bold tracking-tight text-zinc-900">
+                  Cotizador Greda
+                </span>
+              ) : null}
             </div>
+
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
+              aria-label={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
+              className={[
+                "flex size-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors",
+                collapsed ? "mt-2" : "",
+              ].join(" ")}
+            >
+              {collapsed ? (
+                <PanelLeftOpenIcon className="size-4" />
+              ) : (
+                <PanelLeftCloseIcon className="size-4" />
+              )}
+            </button>
           </div>
-          <NavigationList onNavigate={() => setMenuOpen(false)} />
+
+          {/* Menú de Navegación */}
+          <div className="mt-6">
+            <NavigationList items={NAVIGATION} collapsed={collapsed} />
+          </div>
         </div>
 
-        <div className="mt-6 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-          {user ? (
-            <div className="px-2.5 pb-2">
-              <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                {user.display_name}
-              </p>
-              <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</p>
-              <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-                {ROLE_LABEL[user.role] ?? user.role}
+        {/* Perfil de Usuario Abajo */}
+        <div className="border-t border-zinc-200/60 pt-4">
+          {user && !collapsed ? (
+            <div className="mb-3 px-1">
+              <p className="truncate text-sm font-bold text-zinc-900">{user.display_name}</p>
+              <p className="truncate text-xs text-zinc-500">{user.email}</p>
+              <p className="mt-0.5 text-xs text-zinc-400">
+                Rol: {ROLE_LABEL[user.role] ?? user.role}
               </p>
             </div>
           ) : null}
+
           <button
             type="button"
             onClick={handleLogout}
             disabled={logout.isPending}
-            className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            title={collapsed ? "Cerrar sesión" : undefined}
+            aria-label="Cerrar sesión"
+            className={[
+              "flex w-full items-center rounded-xl text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50",
+              collapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2",
+            ].join(" ")}
           >
-            {logout.isPending ? <Spinner className="size-3.5" label="Saliendo..." /> : "Cerrar sesion"}
+            {logout.isPending ? (
+              <Spinner className="size-4" label="Saliendo..." />
+            ) : (
+              <>
+                <LogOutIcon className="size-4 shrink-0" />
+                {!collapsed ? <span>Cerrar sesión</span> : null}
+              </>
+            )}
           </button>
         </div>
       </aside>
 
-      <main className="px-4 py-5 lg:px-8 lg:py-7">
+      {/* ========================================================================= */}
+      {/* ÁREA DE CONTENIDO PRINCIPAL                                               */}
+      {/* ========================================================================= */}
+      <main className="flex-1 w-full min-h-dvh px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 z-10">
         <Outlet />
       </main>
     </div>
