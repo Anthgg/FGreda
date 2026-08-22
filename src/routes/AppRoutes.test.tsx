@@ -52,7 +52,7 @@ describe("rutas protegidas", () => {
 
     renderApp(["/"]);
 
-    expect(await screen.findByRole("button", { name: /iniciar sesion/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /iniciar sesión/i })).toBeInTheDocument();
   });
 
   it("ofrece reintentar cuando el backend no responde", async () => {
@@ -100,7 +100,7 @@ describe("rutas protegidas", () => {
     await waitFor(() =>
       expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/auth/logout"))).toBe(true),
     );
-    expect(await screen.findByRole("button", { name: /iniciar sesion/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /iniciar sesión/i })).toBeInTheDocument();
   });
 
   it("no permite volver al login con una sesion activa", async () => {
