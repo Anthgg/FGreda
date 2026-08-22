@@ -1,8 +1,8 @@
 /**
  * Menu principal previsto para todo el producto.
  *
- * En la Fase 1 solo `Inicio` tiene contenido funcional. El resto queda visible
- * y deshabilitado para fijar la estructura de navegacion: su logica de negocio
+ * `Inicio` y `Configuracion` estan operativos. El resto queda visible y
+ * deshabilitado para fijar la estructura de navegacion: su logica de negocio
  * corresponde a fases posteriores y no se adelanta aqui.
  */
 
@@ -21,5 +21,5 @@ export const NAVIGATION: readonly NavigationItem[] = [
   { label: "Recetas", enabled: false },
   { label: "Quemas", enabled: false },
   { label: "Cotizaciones", enabled: false },
-  { label: "Configuracion", enabled: false },
+  { label: "Configuracion", to: "/configuracion", enabled: true },
 ];
