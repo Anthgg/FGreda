@@ -6,10 +6,14 @@ import { LoginParticleBackground } from "@/features/auth/LoginParticleBackground
 describe("fondo de partículas del login", () => {
   it("dibuja una escena estática sin requestAnimationFrame con reduced motion", () => {
     const context = {
-      arc: vi.fn(),
       beginPath: vi.fn(),
+      closePath: vi.fn(),
       clearRect: vi.fn(),
-      fill: vi.fn(),
+      fillRect: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
       fillStyle: "",
       setTransform: vi.fn(),
     } as unknown as CanvasRenderingContext2D;
@@ -38,7 +42,7 @@ describe("fondo de partículas del login", () => {
 
     expect(container.querySelector("canvas")).toHaveAttribute("aria-hidden", "true");
     expect(context.setTransform).toHaveBeenCalled();
-    expect(context.fill).toHaveBeenCalled();
+    expect(context.fillRect).toHaveBeenCalled();
     expect(requestFrame).not.toHaveBeenCalled();
   });
 });

@@ -168,4 +168,16 @@ describe("pantalla de login", () => {
 
     resolveLogin?.(sessionResponse());
   });
+
+  it("muestra el estado visual de éxito tras una autenticación correcta", async () => {
+    mockFetch((url) =>
+      url.includes("/auth/csrf") ? csrfResponse() : sessionResponse(),
+    );
+    renderWithProviders(<LoginPage />);
+
+    await fillAndSubmit();
+
+    expect(await screen.findByText(/¡acceso concedido!/i)).toBeInTheDocument();
+    expect(screen.getByText(/iniciando plataforma/i)).toBeInTheDocument();
+  });
 });

@@ -3,54 +3,48 @@ import { LoginForm } from "@/features/auth/LoginForm";
 import { LoginParticleBackground } from "@/features/auth/LoginParticleBackground";
 import { useTypewriter } from "@/features/auth/useTypewriter";
 
-const GREDA_MESSAGES = [
+const ROTATING_PHRASES = [
+  "Inicia sesión.",
   "Bienvenido a Greda.",
   "Gestiona tu taller.",
-  "Cotiza con precisión.",
 ] as const;
 
 export function LoginPage() {
-  const message = useTypewriter(GREDA_MESSAGES);
+  const message = useTypewriter(ROTATING_PHRASES);
 
   return (
     <main
-      className="login-experience relative isolate flex min-h-dvh w-full items-center justify-center overflow-x-hidden px-4 py-6 text-zinc-900 sm:px-6 sm:py-10"
+      className="login-experience relative isolate flex min-h-dvh w-full items-center justify-center overflow-x-hidden p-4 text-gray-900 sm:p-6"
       style={{ colorScheme: "light" }}
     >
       <LoginParticleBackground />
 
       <section
         aria-labelledby="login-title"
-        className="login-card-enter relative z-10 w-full max-w-[420px] rounded-[1.75rem] border border-white/80 bg-white/88 px-6 py-7 shadow-[0_24px_70px_-32px_rgba(64,39,29,0.38)] backdrop-blur-md sm:px-9 sm:py-9"
+        className="login-card-enter relative z-10 w-full max-w-[380px] rounded-[32px] border border-white/60 bg-white/95 p-8 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.08)] backdrop-blur-md sm:p-10"
       >
-        <header className="text-center">
+        <header className="mb-6 text-center">
           <BrandMark />
 
-          <div className="mt-7">
-            <h1 id="login-title" className="text-3xl font-semibold tracking-[-0.035em] text-zinc-950">
-              Bienvenido
+          <div className="flex h-10 items-center justify-center">
+            <h1
+              id="login-title"
+              className="inline-flex items-center text-2xl font-bold tracking-tight text-gray-900"
+            >
+              <span>{message}</span>
+              <span
+                className="login-caret-blink ml-1 inline-block h-[1.15em] w-[2px] rounded-sm bg-black"
+                aria-hidden="true"
+              />
             </h1>
-            <p className="mt-2 text-base leading-6 text-zinc-600">
-              Accede a tu espacio de trabajo.
-            </p>
           </div>
 
-          <p aria-hidden="true" className="mt-3 min-h-6 text-base font-medium text-clay-700">
-            {message}
-            <span className="login-typewriter-caret ml-0.5" aria-hidden="true">
-              |
-            </span>
-          </p>
           <p className="sr-only">
-            Bienvenido a Greda. Gestiona tu taller y cotiza con precisión.
+            Inicia sesión en Greda. Gestiona tu taller y cotiza con precisión.
           </p>
         </header>
 
         <LoginForm />
-
-        <p className="mt-5 text-center text-sm leading-5 text-zinc-500">
-          Gestión de cotizaciones y producción cerámica.
-        </p>
       </section>
     </main>
   );

@@ -2,63 +2,88 @@ import { useEffect, useRef } from "react";
 
 import { useReducedMotion } from "@/features/auth/useReducedMotion";
 
+const PARTICLE_COLORS = [
+  "#4285F4", // Azul
+  "#EA4335", // Rojo
+  "#FBBC05", // Amarillo
+  "#34A853", // Verde
+  "#8B5CF6", // Violeta
+  "#F43F5E", // Rosa / Coral
+  "#10B981", // Esmeralda
+] as const;
+
 interface Particle {
   x: number;
   y: number;
-  radius: number;
-  opacity: number;
+  vx: number;
+  vy: number;
+  size: number;
   color: string;
-  velocityX: number;
-  velocityY: number;
+  density: number;
+  angle: number;
 }
 
-const PARTICLE_COLORS = ["151, 86, 59", "185, 121, 87", "63, 63, 70"] as const;
-
 function createParticle(width: number, height: number): Particle {
-  const angle = Math.random() * Math.PI * 2;
-  const speed = 0.035 + Math.random() * 0.1;
-
   return {
     x: Math.random() * width,
     y: Math.random() * height,
-    radius: 0.55 + Math.random() * 1.25,
-    opacity: 0.12 + Math.random() * 0.2,
+    vx: (Math.random() - 0.5) * 1.2,
+    vy: (Math.random() - 0.5) * 1.2,
+    size: Math.random() * 2.2 + 0.8,
     color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]!,
-    velocityX: Math.cos(angle) * speed,
-    velocityY: Math.sin(angle) * speed,
+    density: Math.random() * 25 + 2,
+    angle: Math.random() * Math.PI * 2,
   };
 }
 
-function particleCount(width: number, height: number): number {
-  const mobile = width < 640;
-  const minimum = mobile ? 18 : 42;
-  const maximum = mobile ? 56 : 140;
-  return Math.min(maximum, Math.max(minimum, Math.floor((width * height) / 13_000)));
+function calculateParticleCount(width: number, height: number): number {
+  const isMobile = width < 640;
+  const min = isMobile ? 35 : 90;
+  const max = isMobile ? 65 : 150;
+  return Math.min(max, Math.max(min, Math.floor((width * height) / 7500)));
 }
 
-/** Canvas decorativo de pigmentos suspendidos, aislado del render del formulario. */
+/**
+ * Fondo Canvas 2D con partículas multicolor flotantes e interactividad al clic,
+ * desacoplado del ciclo de renderizado de React.
+ */
 export function LoginParticleBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
 
     let width = 0;
     let height = 0;
     let animationFrame = 0;
+    let clickTimeout = 0;
     let particles: Particle[] = [];
-    const pointer = { x: 0, y: 0, active: false };
+
+    const mouse: { x: number | null; y: number | null; radius: number } = {
+      x: null,
+      y: null,
+      radius: 160,
+    };
 
     const draw = () => {
-      context.clearRect(0, 0, width, height);
-      for (const particle of particles) {
-        context.beginPath();
-        context.fillStyle = `rgba(${particle.color}, ${particle.opacity})`;
-        context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        context.fill();
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i]!;
+        ctx.beginPath();
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = p.color;
+        // Pequeño trazo rectangular como en el prototipo
+        ctx.fillRect(-p.size, -p.size / 4, p.size * 2, p.size / 2);
+        ctx.restore();
+        ctx.closePath();
       }
     };
 
@@ -69,46 +94,60 @@ export function LoginParticleBackground() {
 
       canvas.width = Math.max(1, Math.floor(width * pixelRatio));
       canvas.height = Math.max(1, Math.floor(height * pixelRatio));
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      particles = Array.from({ length: particleCount(width, height) }, () =>
-        createParticle(width, height),
-      );
-      if (reducedMotion) draw();
+      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+      const count = calculateParticleCount(width, height);
+      particles = Array.from({ length: count }, () => createParticle(width, height));
+
+      if (reducedMotion) {
+        draw();
+      }
     };
 
-    const movePointer = (event: PointerEvent) => {
-      pointer.x = event.clientX;
-      pointer.y = event.clientY;
-      pointer.active = true;
-    };
+    const handleClick = (event: MouseEvent) => {
+      mouse.x = event.clientX;
+      mouse.y = event.clientY;
 
-    const clearPointer = () => {
-      pointer.active = false;
+      window.clearTimeout(clickTimeout);
+      clickTimeout = window.setTimeout(() => {
+        mouse.x = null;
+        mouse.y = null;
+      }, 120);
     };
 
     const animate = () => {
-      for (const particle of particles) {
-        if (pointer.active) {
-          const deltaX = particle.x - pointer.x;
-          const deltaY = particle.y - pointer.y;
-          const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-          if (distanceSquared > 0 && distanceSquared < 8_100) {
-            const distance = Math.sqrt(distanceSquared);
-            const force = (1 - distance / 90) * 0.006;
-            particle.velocityX += (deltaX / distance) * force;
-            particle.velocityY += (deltaY / distance) * force;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i]!;
+
+        // Movimiento base
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Rebote en bordes de la ventana
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+
+        // Interacción de repulsión por clic
+        if (mouse.x !== null && mouse.y !== null) {
+          const dx = mouse.x - p.x;
+          const dy = mouse.y - p.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < mouse.radius && dist > 0) {
+            const force = (mouse.radius - dist) / mouse.radius;
+            const forceDirX = dx / dist;
+            const forceDirY = dy / dist;
+
+            p.x -= forceDirX * force * p.density * 2.5;
+            p.y -= forceDirY * force * p.density * 2.5;
+            p.vx += (Math.random() - 0.5) * 1.5;
+            p.vy += (Math.random() - 0.5) * 1.5;
           }
         }
 
-        particle.velocityX = Math.max(-0.28, Math.min(0.28, particle.velocityX * 0.998));
-        particle.velocityY = Math.max(-0.28, Math.min(0.28, particle.velocityY * 0.998));
-        particle.x += particle.velocityX;
-        particle.y += particle.velocityY;
-
-        if (particle.x < -3) particle.x = width + 3;
-        if (particle.x > width + 3) particle.x = -3;
-        if (particle.y < -3) particle.y = height + 3;
-        if (particle.y > height + 3) particle.y = -3;
+        // Amortiguación hacia velocidad natural
+        if (p.vx > 1.2 || p.vx < -1.2) p.vx *= 0.96;
+        if (p.vy > 1.2 || p.vy < -1.2) p.vy *= 0.96;
       }
 
       draw();
@@ -119,16 +158,15 @@ export function LoginParticleBackground() {
     window.addEventListener("resize", resize, { passive: true });
 
     if (!reducedMotion) {
-      window.addEventListener("pointermove", movePointer, { passive: true });
-      window.addEventListener("pointerout", clearPointer, { passive: true });
+      window.addEventListener("click", handleClick, { passive: true });
       animationFrame = window.requestAnimationFrame(animate);
     }
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(clickTimeout);
       window.removeEventListener("resize", resize);
-      window.removeEventListener("pointermove", movePointer);
-      window.removeEventListener("pointerout", clearPointer);
+      window.removeEventListener("click", handleClick);
     };
   }, [reducedMotion]);
 
@@ -136,7 +174,7 @@ export function LoginParticleBackground() {
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 -z-10 size-full"
+      className="pointer-events-none fixed inset-0 -z-10 size-full"
     />
   );
 }
