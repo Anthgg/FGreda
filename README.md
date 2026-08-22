@@ -147,10 +147,9 @@ Diseño compacto y profesional pensado para uso prolongado al 100 % de zoom: bas
 tipográfica de 14 px, superficies planas, bordes finos y un acento terracota
 apagado. Barra lateral en escritorio, menú plegable en móvil.
 
-El menú declara toda la navegación prevista del producto —Inicio, Productos,
-Inventario, Recetas, Quemas, Cotizaciones y Configuración— pero **en la Fase 1
-solo `Inicio` tiene contenido funcional**. El resto aparece deshabilitado y
-marcado como próximo módulo; su lógica corresponde a fases posteriores.
+El menú declara toda la navegación prevista del producto. **`Inicio` y
+`Configuración` están operativos**; el resto aparece deshabilitado y marcado
+como próximo módulo, porque su lógica corresponde a fases posteriores.
 
 ---
 
@@ -195,3 +194,72 @@ imagen.
    de React Router y comprobación de que el proceso no corre como root
 
 Ningún paso usa `continue-on-error`.
+
+
+---
+
+## Módulo Configuración
+
+Ruta `/configuracion`, organizada en pestañas:
+
+| Pestaña | Contenido |
+|---|---|
+| **Empresa** | Razón social, nombre comercial, RUC, domicilio, contacto y logo. |
+| **Comercial** | Moneda, IGV, vigencia de cotización y datos bancarios. |
+| **Documentos** | Condiciones generales, notas de pago y pie de documento. |
+| **Numeración** | Prefijo, formato, dígitos y política de reinicio de CTZ y HR. |
+| **Historial** | Cambios registrados. Solo ADMIN. |
+
+### API consumida
+
+Todo pasa por el cliente centralizado de `src/api/client.ts`. No existe un
+segundo cliente ni ningún `fetch` suelto.
+
+```
+GET    /api/v1/settings/company            PUT /api/v1/settings/company
+GET    /api/v1/settings/company/logo       POST/DELETE   idem
+GET    /api/v1/settings/commercial         PUT /api/v1/settings/commercial
+GET    /api/v1/settings/sequences          PUT /api/v1/settings/sequences/{tipo}
+GET    /api/v1/settings/audit
+```
+
+### Permisos
+
+`ADMIN` edita; `OPERATOR` consulta y no ve acciones de escritura. **Esto es solo
+presentación.** La autorización real la impone el backend: una escritura desde
+`OPERATOR` responde `403` aunque la petición llegue. Ocultar un botón nunca es
+una medida de seguridad.
+
+### Concurrencia de edición
+
+Cada configuración lleva una versión. Al guardar se envía la última versión que
+el servidor confirmó; si otra persona modificó los datos entretanto, el backend
+responde `409` y la interfaz ofrece recargar en vez de perder el trabajo ajeno
+en silencio.
+
+Cada formulario detecta si tiene cambios sin guardar, permite descartarlos y
+bloquea el envío mientras la petición está en curso.
+
+### Logo
+
+```
+archivo → cliente HTTP → backend → validación → Storage
+```
+
+El binario se descarga **por el backend** con `credentials: "include"` y se
+muestra desde un *object URL*, que se revoca al desmontar. Una etiqueta `img`
+apuntando al backend no enviaría las cookies en contexto cross-site, y en
+ningún caso se contacta con Supabase.
+
+### Numeración
+
+La vista previa se calcula **en el navegador** a partir del formato que se está
+editando, y está etiquetada como tal. No llama a ningún endpoint y **no reserva
+ni consume ningún correlativo**: el número oficial lo asigna el backend al
+crear un documento. No existe ninguna acción de "generar siguiente número".
+
+### Estado
+
+Todo el estado de servidor vive en la caché de TanStack Query. No se duplica en
+ningún almacén global: las mutaciones actualizan la caché con lo que responde el
+backend, incluida la nueva versión.
