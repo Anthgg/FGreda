@@ -276,6 +276,7 @@ export interface RowResolution {
   row_id: number;
   action?: "RESOLVE" | "SKIP";
   product_id?: number;
+  base_uom_code?: string;
   partner_role?: PartnerRole;
   document_number?: string;
   ubigeo_code?: string;

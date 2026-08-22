@@ -28,6 +28,7 @@ import {
   useImportPreview,
   useImports,
   useResolveRows,
+  useUnits,
   useUploadWorkbook,
 } from "@/features/masters/useMasters";
 import type {
@@ -36,6 +37,7 @@ import type {
   ImportRowStatus,
   PartnerRole,
   RowResolution,
+  UnitOfMeasure,
 } from "@/types/masters";
 
 const ENTITY_LABELS: Record<ImportEntity, string> = {
@@ -92,10 +94,12 @@ function RowIssues({ row }: { row: ImportRow }) {
 
 function RowResolver({
   row,
+  units,
   onResolve,
   disabled,
 }: {
   row: ImportRow;
+  units: UnitOfMeasure[];
   onResolve: (resolution: RowResolution) => void;
   disabled: boolean;
 }) {
@@ -130,6 +134,38 @@ function RowResolver({
               accept_suggestion: true,
             })
           }
+        >
+          Aplicar
+        </SecondaryButton>
+        <SecondaryButton
+          disabled={disabled}
+          onClick={() => onResolve({ row_id: row.id, action: "SKIP" })}
+        >
+          Omitir
+        </SecondaryButton>
+      </div>
+    );
+  }
+
+  if (row.entity === "PRODUCT") {
+    // Lo unico que un producto puede necesitar del usuario es la unidad que
+    // el archivo no trajo. No se le asigna una por parecido.
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <SelectField
+          label="Unidad"
+          value={choice}
+          options={[
+            { value: "", label: "Elegir unidad" },
+            ...units.map((unit) => ({ value: unit.code, label: `${unit.name} (${unit.symbol})` })),
+          ]}
+          onChange={setChoice}
+          disabled={disabled}
+          className="w-52"
+        />
+        <SecondaryButton
+          disabled={disabled || choice === ""}
+          onClick={() => onResolve({ row_id: row.id, base_uom_code: choice })}
         >
           Aplicar
         </SecondaryButton>
@@ -205,6 +241,7 @@ export function ImportsPage() {
   const [confirming, setConfirming] = useState(false);
 
   const history = useImports();
+  const units = useUnits();
   const batch = useImportBatch(batchId);
   const preview = useImportPreview(batchId, {
     ...(entity !== "" ? { entity } : {}),
@@ -395,6 +432,7 @@ export function ImportsPage() {
                       <Td>
                         <RowResolver
                           row={row}
+                          units={units.data ?? []}
                           disabled={!isAdmin || resolve.isPending}
                           onResolve={(resolution) => resolve.mutate([resolution])}
                         />
