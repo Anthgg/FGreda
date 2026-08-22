@@ -126,12 +126,15 @@ describe("Modulo de productos", () => {
     expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
   });
 
-  it("el alta exige unidad salvo en un servicio", async () => {
+  it("el alta exige unidad salvo en un servicio y muestra referencia automatica", async () => {
     mockMasters();
     renderApp(["/productos"]);
     await userEvent.click(await screen.findByRole("button", { name: "Nuevo producto" }));
 
-    await userEvent.type(screen.getByLabelText(/Referencia interna/), "INS-9");
+    const refInput = screen.getByLabelText(/Referencia interna/);
+    expect(refInput).toBeDisabled();
+    expect(refInput).toHaveValue("Se generará automáticamente");
+
     await userEvent.type(screen.getByLabelText(/^Nombre/), "Arcilla nueva");
     const submit = screen.getByRole("button", { name: "Crear producto" });
     expect(submit).toBeDisabled();
@@ -143,7 +146,24 @@ describe("Modulo de productos", () => {
 
     expect(screen.getByRole("button", { name: "Crear producto" })).toBeEnabled();
   });
+
+  it("la edición muestra la referencia interna en modo solo lectura", async () => {
+    mockMasters();
+    renderApp(["/productos"]);
+    await screen.findByText("Arcilla blanca");
+
+    const editButtons = screen.getAllByRole("button", { name: "Editar" });
+    const firstButton = editButtons[0];
+    expect(firstButton).toBeDefined();
+    await userEvent.click(firstButton!);
+
+    const refInput = screen.getByLabelText(/Referencia interna/);
+    expect(refInput).toBeDisabled();
+    expect(refInput).toHaveValue("INS-1");
+  });
 });
+
+
 
 describe("Backend equivocado", () => {
   it("un 404 en toda la API no se muestra como 'Not Found' en ingles", async () => {

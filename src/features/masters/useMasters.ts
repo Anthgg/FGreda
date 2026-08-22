@@ -85,13 +85,12 @@ export function useCreateProduct() {
 export function useUpdateProduct() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: ProductInput }) => {
-      const { internal_reference: _ignored, ...rest } = payload;
-      return updateProduct(id, rest);
-    },
+    mutationFn: ({ id, payload }: { id: number; payload: ProductInput }) =>
+      updateProduct(id, payload),
     onSuccess: () => client.invalidateQueries({ queryKey: PRODUCTS_KEY }),
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // Terceros

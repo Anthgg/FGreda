@@ -66,8 +66,9 @@ export interface Product {
 
 export type ProductInput = Omit<
   Product,
-  "id" | "product_category_path" | "pos_category_name"
+  "id" | "internal_reference" | "product_category_path" | "pos_category_name"
 >;
+
 
 export interface Page<T> {
   items: T[];

@@ -85,9 +85,10 @@ export function createProduct(payload: ProductInput): Promise<Product> {
   return apiClient.post<Product>(PRODUCTS, payload);
 }
 
-export function updateProduct(id: number, payload: Omit<ProductInput, "internal_reference">) {
+export function updateProduct(id: number, payload: ProductInput): Promise<Product> {
   return apiClient.put<Product>(`${PRODUCTS}/${id}`, payload);
 }
+
 
 // ---------------------------------------------------------------------------
 // Terceros

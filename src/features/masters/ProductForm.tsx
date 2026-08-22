@@ -39,7 +39,6 @@ interface ProductFormProps {
 
 function emptyDraft(): ProductInput {
   return {
-    internal_reference: "",
     name: "",
     product_type: "RAW_MATERIAL",
     product_category_id: 0,
@@ -60,7 +59,13 @@ function emptyDraft(): ProductInput {
 
 function toDraft(product: Product | null): ProductInput {
   if (product === null) return emptyDraft();
-  const { id: _id, product_category_path: _path, pos_category_name: _pos, ...rest } = product;
+  const {
+    id: _id,
+    internal_reference: _ref,
+    product_category_path: _path,
+    pos_category_name: _pos,
+    ...rest
+  } = product;
   return rest;
 }
 
@@ -100,7 +105,6 @@ export function ProductForm({
   const missingUom = draft.product_type !== "SERVICE" && !draft.base_uom_code;
   const incomplete =
     draft.name.trim() === "" ||
-    draft.internal_reference.trim() === "" ||
     draft.product_category_id === 0 ||
     missingUom;
 
@@ -115,13 +119,18 @@ export function ProductForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <TextField
           label="Referencia interna"
-          requirement="required"
-          value={draft.internal_reference}
-          onChange={(value) => set("internal_reference", value)}
-          disabled={disabled || product !== null}
-          hint={product !== null ? "No se edita: es la clave del maestro." : undefined}
+          requirement="optional"
+          value={product === null ? "Se generará automáticamente" : product.internal_reference}
+          onChange={() => {}}
+          disabled={true}
+          hint={
+            product === null
+              ? "El código se asignará automáticamente según la familia al guardar."
+              : "No se edita: es la clave del maestro."
+          }
           maxLength={32}
         />
+
         <TextField
           label="Nombre"
           requirement="required"
