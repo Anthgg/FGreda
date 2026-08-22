@@ -1,9 +1,11 @@
 /**
  * Modal de importacion de recetas desde staging (Fase 003.5).
  *
- * Permite visualizar el lote de staging ya subido, revisar y resolver
- * lineas ambiguas (asignar BASE/COLORANT/ADDITIVE o SKIP), y confirmar
- * atomicamente la importacion a recetas productivas cuando este 100% resuelto.
+ * Clasificacion estructural por bloque BASE 100%:
+ * - Muestra identificacion automatica de componentes base que acumulan 100%.
+ * - Permite resolver componentes adicionales posteriores (COLORANT / ADDITIVE / SKIP).
+ * - Muestra acumulados, origen amigable ("Estructura del maestro", "Decisión humana", "Pendiente").
+ * - Soporta boton rapido de aceptar sugerencia y confirmacion atomica cuando este 100% resuelto.
  */
 
 import { useState } from "react";
@@ -31,9 +33,9 @@ interface Props {
 }
 
 const COMPONENT_TYPE_OPTIONS = [
-  { value: "BASE", label: "Base" },
   { value: "COLORANT", label: "Colorante" },
   { value: "ADDITIVE", label: "Aditivo" },
+  { value: "BASE", label: "Base" },
 ] as const;
 
 const ACTION_OPTIONS = [
@@ -51,7 +53,7 @@ export function RecipeImportModal({ onClose }: Props) {
 
   const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<number | null>(null);
-  const [draftType, setDraftType] = useState<RecipeComponentType>("BASE");
+  const [draftType, setDraftType] = useState<RecipeComponentType>("COLORANT");
   const [draftPercentage, setDraftPercentage] = useState("");
   const [draftAction, setDraftAction] = useState<"RESOLVE" | "SKIP">("RESOLVE");
   const [commitSuccess, setCommitSuccess] = useState(false);
@@ -82,7 +84,7 @@ export function RecipeImportModal({ onClose }: Props) {
 
   const handleStartEdit = (line: RecipeStagingLineOut) => {
     setEditingRow(line.row_id);
-    setDraftType(line.component_type || line.suggested_component_type || "BASE");
+    setDraftType(line.component_type || line.suggested_component_type || "COLORANT");
     setDraftPercentage(line.final_percentage);
     setDraftAction(line.action === "SKIP" ? "SKIP" : "RESOLVE");
   };
@@ -99,6 +101,30 @@ export function RecipeImportModal({ onClose }: Props) {
     setEditingRow(null);
   };
 
+  const handleAcceptSuggestion = async (line: RecipeStagingLineOut) => {
+    if (!line.suggested_component_type) return;
+    const payload: RecipeRowResolutionIn = {
+      row_id: line.row_id,
+      action: "RESOLVE",
+      component_type: line.suggested_component_type,
+    };
+    await resolve.mutateAsync([payload]);
+  };
+
+  const handleAcceptGroupSuggestions = async (group: RecipeStagingGroupOut) => {
+    const pendingLines = group.lines.filter(
+      (l) => l.status === "REVIEW_REQUIRED" && l.suggested_component_type
+    );
+    if (pendingLines.length === 0) return;
+
+    const payloads: RecipeRowResolutionIn[] = pendingLines.map((l) => ({
+      row_id: l.row_id,
+      action: "RESOLVE",
+      ...(l.suggested_component_type ? { component_type: l.suggested_component_type } : {}),
+    }));
+    await resolve.mutateAsync(payloads);
+  };
+
   const handleCommit = async () => {
     if (!canCommit) return;
     await commit.mutateAsync();
@@ -112,7 +138,7 @@ export function RecipeImportModal({ onClose }: Props) {
           Importación de recetas desde staging
         </h2>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Lote #{p.batch_id} · Revisión y resolución de clasificación de componentes
+          Lote #{p.batch_id} · Clasificación estructural por bloque BASE 100% y resolución de adicionales
         </p>
       </div>
 
@@ -165,6 +191,8 @@ export function RecipeImportModal({ onClose }: Props) {
                 onDraftPercentageChange={setDraftPercentage}
                 onDraftActionChange={setDraftAction}
                 onSaveResolution={handleSaveResolution}
+                onAcceptSuggestion={handleAcceptSuggestion}
+                onAcceptGroupSuggestions={handleAcceptGroupSuggestions}
                 isResolving={resolve.isPending}
               />
             ))}
@@ -214,6 +242,8 @@ function RecipeGroupCard({
   onDraftPercentageChange,
   onDraftActionChange,
   onSaveResolution,
+  onAcceptSuggestion,
+  onAcceptGroupSuggestions,
   isResolving,
 }: {
   group: RecipeStagingGroupOut;
@@ -229,6 +259,8 @@ function RecipeGroupCard({
   onDraftPercentageChange: (p: string) => void;
   onDraftActionChange: (a: "RESOLVE" | "SKIP") => void;
   onSaveResolution: (rowId: number) => void;
+  onAcceptSuggestion: (line: RecipeStagingLineOut) => void;
+  onAcceptGroupSuggestions: (group: RecipeStagingGroupOut) => void;
   isResolving: boolean;
 }) {
   const statusTone =
@@ -244,6 +276,10 @@ function RecipeGroupCard({
       : group.status === "REVIEW_REQUIRED"
       ? "Revisión requerida"
       : "Lista (Ready)";
+
+  const pendingCount = group.lines.filter(
+    (l) => l.status === "REVIEW_REQUIRED" && l.suggested_component_type
+  ).length;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-xs">
@@ -287,13 +323,30 @@ function RecipeGroupCard({
             </div>
           )}
 
+          {pendingCount > 0 && (
+            <div className="flex items-center justify-between bg-amber-50/60 p-2 rounded-lg border border-amber-100">
+              <span className="text-xs text-amber-900 font-medium">
+                {pendingCount} componentes adicionales pendientes de clasificación
+              </span>
+              <button
+                type="button"
+                disabled={isResolving}
+                onClick={() => onAcceptGroupSuggestions(group)}
+                className="text-xs bg-amber-600 text-white font-medium px-2.5 py-1 rounded hover:bg-amber-700 disabled:opacity-50"
+              >
+                Aceptar sugerencias ({pendingCount})
+              </button>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-zinc-200 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                   <th className="pb-1 pr-2">Componente</th>
-                  <th className="pb-1 pr-2">Tipo</th>
-                  <th className="pb-1 pr-2 text-right">Porcentaje</th>
+                  <th className="pb-1 pr-2 text-right">% (Acumulado)</th>
+                  <th className="pb-1 pr-2">Clasificación</th>
+                  <th className="pb-1 pr-2">Origen</th>
                   <th className="pb-1 pr-2">Estado</th>
                   <th className="pb-1 text-right">Acción</th>
                 </tr>
@@ -309,31 +362,47 @@ function RecipeGroupCard({
                         </span>
                       )}
                     </td>
+                    <td className="py-2 pr-2 text-right font-mono">
+                      <div>{line.action === "SKIP" ? "—" : `${formatDecimal(line.final_percentage, 2)}%`}</div>
+                      <div className="text-[10px] text-zinc-400">
+                        Acum: {formatDecimal(line.cumulative_percentage, 2)}%
+                      </div>
+                    </td>
                     <td className="py-2 pr-2">
                       {line.action === "SKIP" ? (
-                        <span className="text-zinc-400 italic">Omitido</span>
-                      ) : line.component_type ? (
-                        <Badge tone={line.component_type === "BASE" ? "positive" : "warning"}>
-                          {line.component_type}
-                        </Badge>
+                        <Badge tone="neutral">SKIP</Badge>
+                      ) : line.component_type === "BASE" ? (
+                        <Badge tone="positive">BASE</Badge>
+                      ) : line.component_type === "COLORANT" ? (
+                        <Badge tone="warning">COLORANT</Badge>
+                      ) : line.component_type === "ADDITIVE" ? (
+                        <Badge tone="neutral">ADDITIVE</Badge>
                       ) : (
-                        <span className="text-amber-600 font-medium text-[11px]">
-                          Sugerido: {line.suggested_component_type || "—"}
-                        </span>
+                        <div className="space-y-0.5">
+                          <Badge tone="warning">PENDIENTE</Badge>
+                          {line.suggested_component_type && (
+                            <div className="text-[10px] text-zinc-500">
+                              Sugerencia: {line.suggested_component_type}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
-                    <td className="py-2 pr-2 text-right font-mono">
-                      {line.action === "SKIP" ? "—" : `${formatDecimal(line.final_percentage, 2)}%`}
+                    <td className="py-2 pr-2 text-zinc-600 text-[11px]">
+                      {line.classification_source === "SOURCE_STRUCTURE" && "Estructura del maestro"}
+                      {line.classification_source === "HUMAN_RESOLUTION" && "Decisión humana"}
+                      {line.classification_source === "UNRESOLVED" && "Pendiente"}
+                      {line.classification_source === "SUGGESTED" && "Sugerencia"}
                     </td>
                     <td className="py-2 pr-2">
                       <Badge
                         tone={
                           line.status === "RESOLVED"
                             ? "positive"
+                            : line.status === "READY"
+                            ? "positive"
                             : line.status === "REVIEW_REQUIRED"
                             ? "warning"
-                            : line.status === "SKIPPED"
-                            ? "neutral"
                             : "neutral"
                         }
                       >
@@ -353,7 +422,7 @@ function RecipeGroupCard({
                           {draftAction === "RESOLVE" && (
                             <>
                               <SelectField
-                                label="Tipo"
+                                label="Tipo de componente"
                                 value={draftType}
                                 options={COMPONENT_TYPE_OPTIONS}
                                 onChange={(v) => onDraftTypeChange(v as RecipeComponentType)}
@@ -392,13 +461,25 @@ function RecipeGroupCard({
                           </div>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => onStartEdit(line)}
-                          className="text-xs text-zinc-600 hover:text-zinc-900 underline"
-                        >
-                          Resolver
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {line.status === "REVIEW_REQUIRED" && line.suggested_component_type && (
+                            <button
+                              type="button"
+                              disabled={isResolving}
+                              onClick={() => onAcceptSuggestion(line)}
+                              className="text-xs text-amber-700 hover:text-amber-900 font-medium underline"
+                            >
+                              Aceptar sugerencia
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onStartEdit(line)}
+                            className="text-xs text-zinc-600 hover:text-zinc-900 underline"
+                          >
+                            Resolver
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

@@ -145,7 +145,7 @@ const CALC_RESULT: RecipeCalculateOut = {
 const STAGING_PREVIEW_INITIAL: RecipeImportPreviewOut = {
   batch_id: 1,
   recipes_detected: 1,
-  lines_detected: 2,
+  lines_detected: 3,
   ready_count: 0,
   review_required_count: 1,
   error_count: 0,
@@ -157,13 +157,14 @@ const STAGING_PREVIEW_INITIAL: RecipeImportPreviewOut = {
       recipe_name: "Esmalte Azul Cobalto",
       target_quantity: "1.000000",
       target_uom: "gr",
-      base_total: "0.000000",
-      additional_total: "0.000000",
-      yield_factor: "1.000000",
+      base_total: "100.000000",
+      additional_total: "5.000000",
+      yield_factor: "1.050000",
       estimated_cost_per_gram: "0.000000",
       is_valid: false,
+      has_structural_base_boundary: true,
       status: "REVIEW_REQUIRED",
-      warnings: ["Contiene componentes sin clasificar (requiere revisión)"],
+      warnings: ["La receta contiene componentes adicionales pendientes de clasificación"],
       errors: [],
       lines: [
         {
@@ -173,15 +174,18 @@ const STAGING_PREVIEW_INITIAL: RecipeImportPreviewOut = {
           component_product_id: 1,
           component_reference: "INS-1",
           component_product_name: "Feldespato Potásico",
-          component_type: null,
-          suggested_component_type: "BASE",
+          component_type: "BASE",
+          suggested_component_type: null,
+          classification_role: "BASE",
+          classification_source: "SOURCE_STRUCTURE",
+          cumulative_percentage: "60.000000",
           source_percentage: "60.000000",
           final_percentage: "60.000000",
           percentage: "60.000000",
-          resolution_source: "UNRESOLVED",
-          status: "REVIEW_REQUIRED",
+          resolution_source: "SOURCE",
+          status: "READY",
           action: "CREATE",
-          requires_review: true,
+          requires_review: false,
           quantity_raw: "0.600000",
           uom_raw: "gr",
           warnings: [],
@@ -194,16 +198,43 @@ const STAGING_PREVIEW_INITIAL: RecipeImportPreviewOut = {
           component_product_id: 2,
           component_reference: "INS-2",
           component_product_name: "Cuarzo Malla 200",
-          component_type: null,
-          suggested_component_type: "BASE",
+          component_type: "BASE",
+          suggested_component_type: null,
+          classification_role: "BASE",
+          classification_source: "SOURCE_STRUCTURE",
+          cumulative_percentage: "100.000000",
           source_percentage: "40.000000",
           final_percentage: "40.000000",
           percentage: "40.000000",
+          resolution_source: "SOURCE",
+          status: "READY",
+          action: "CREATE",
+          requires_review: false,
+          quantity_raw: "0.400000",
+          uom_raw: "gr",
+          warnings: [],
+          errors: [],
+        },
+        {
+          row_id: 12,
+          source_row: 4,
+          component_name_raw: "Óxido de Cobalto",
+          component_product_id: 3,
+          component_reference: "INS-3",
+          component_product_name: "Óxido de Cobalto",
+          component_type: null,
+          suggested_component_type: "COLORANT",
+          classification_role: "ADDITIONAL",
+          classification_source: "UNRESOLVED",
+          cumulative_percentage: "105.000000",
+          source_percentage: "5.000000",
+          final_percentage: "5.000000",
+          percentage: "5.000000",
           resolution_source: "UNRESOLVED",
           status: "REVIEW_REQUIRED",
           action: "CREATE",
           requires_review: true,
-          quantity_raw: "0.400000",
+          quantity_raw: "0.050000",
           uom_raw: "gr",
           warnings: [],
           errors: [],
@@ -309,7 +340,7 @@ describe("Modulo de recetas (Fase 003.5)", () => {
     expect(document.querySelectorAll("select").length).toBe(0);
   });
 
-  it("muestra el modal de importador de recetas y bloquea commit si hay revisiones pendientes", async () => {
+  it("muestra el modal de importador de recetas con clasificacion estructural y origen amigable", async () => {
     const user = userEvent.setup();
     mockRecipesApi();
     renderApp(["/recetas"]);
@@ -319,6 +350,13 @@ describe("Modulo de recetas (Fase 003.5)", () => {
 
     expect(await screen.findByText(/importación de recetas desde staging/i)).toBeInTheDocument();
     expect(screen.getByText("Revisión")).toBeInTheDocument();
+
+    // Expandir grupo de receta para verificar origen estructural y boton aceptar sugerencia
+    const groupBtn = screen.getByRole("button", { name: /esmalte azul cobalto/i });
+    await user.click(groupBtn);
+
+    expect(await screen.findAllByText("Estructura del maestro")).not.toHaveLength(0);
+    expect(screen.getByText("Aceptar sugerencia")).toBeInTheDocument();
 
     // Boton confirmar importacion debe estar deshabilitado porque review_required > 0
     const commitBtn = screen.getByRole("button", { name: /confirmar importación/i });

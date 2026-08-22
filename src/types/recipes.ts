@@ -135,6 +135,9 @@ export interface RecipeStagingLineOut {
   component_product_name: string | null;
   component_type: RecipeComponentType | null;
   suggested_component_type: RecipeComponentType | null;
+  classification_role: "BASE" | "ADDITIONAL" | "UNKNOWN";
+  classification_source: "SOURCE_STRUCTURE" | "HUMAN_RESOLUTION" | "UNRESOLVED" | "SUGGESTED";
+  cumulative_percentage: string;
   source_percentage: string;
   final_percentage: string;
   percentage: string;
@@ -160,6 +163,7 @@ export interface RecipeStagingGroupOut {
   yield_factor: string;
   estimated_cost_per_gram: string;
   is_valid: boolean;
+  has_structural_base_boundary: boolean;
   status: "READY" | "REVIEW_REQUIRED" | "ERROR";
   warnings: string[];
   errors: string[];
