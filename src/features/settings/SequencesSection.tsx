@@ -50,10 +50,13 @@ function previewOf(draft: SequenceConfigInput, sequence: SequenceConfig): string
 
 function validate(draft: SequenceConfigInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
-  if (!/^[A-Za-z0-9]{1,10}$/.test(draft.prefix)) {
+  // Se comprueba la presencia antes que el contenido: una respuesta
+  // inesperada del servidor debe mostrar un error, no dejar la pantalla en
+  // blanco.
+  if (!/^[A-Za-z0-9]{1,10}$/.test(draft.prefix ?? "")) {
     errors.prefix = "Entre 1 y 10 letras o digitos, sin separadores.";
   }
-  if (!draft.pattern.includes("{NUMBER}")) {
+  if (!(draft.pattern ?? "").includes("{NUMBER}")) {
     errors.pattern = "El formato debe incluir {NUMBER}.";
   }
   if (draft.padding < 1 || draft.padding > 12) {

@@ -53,8 +53,16 @@ function mockSettings(overrides: Overrides = {}) {
     }
     if (url.includes("/settings/commercial"))
       return jsonResponse(200, overrides.commercial ?? COMMERCIAL_FILLED);
-    if (url.includes("/settings/sequences"))
+    if (url.includes("/settings/sequences")) {
+      // El PUT devuelve la secuencia actualizada, no la lista completa.
+      if (init.method === "PUT") {
+        const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+        const tipo = url.endsWith("/FIRING") ? "FIRING" : "QUOTE";
+        const actual = SEQUENCES.find((item) => item.sequence_type === tipo)!;
+        return jsonResponse(200, { ...actual, ...enviado, version: Number(enviado.version) + 1 });
+      }
       return jsonResponse(200, { sequences: overrides.sequences ?? SEQUENCES });
+    }
     if (url.includes("/settings/audit")) return jsonResponse(200, AUDIT_PAGE);
     return jsonResponse(200, {});
   });
