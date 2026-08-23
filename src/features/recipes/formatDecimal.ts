@@ -34,35 +34,51 @@ export function formatDecimal(
 }
 
 /**
- * Suma una lista de valores decimales representados como string con precision
- * fija de 4 decimales sin usar parseFloat.
+ * Suma una lista de valores decimales representados como string con precisión
+ * fija configurable (por defecto 6 decimales) sin usar parseFloat ni Number.
  */
-export function sumDecimalStrings(values: string[]): string {
+export function sumDecimalStrings(
+  values: (string | null | undefined)[],
+  scale: number = 6,
+): string {
   let totalScaled = 0n;
-  const SCALE = 10000n;
+  const multiplier = 10n ** BigInt(scale);
 
   for (const raw of values) {
-    const trimmed = raw.trim();
+    if (raw === null || raw === undefined) continue;
+    const trimmed = String(raw).trim();
     if (!trimmed) continue;
 
-    const parts = trimmed.split(".");
+    const isNegative = trimmed.startsWith("-");
+    const cleanStr = isNegative ? trimmed.slice(1) : trimmed;
+    const parts = cleanStr.split(".");
     const intPart = parts[0] ? BigInt(parts[0]) : 0n;
-    let fracPartStr = (parts[1] || "").slice(0, 4);
-    while (fracPartStr.length < 4) {
+    let fracPartStr = (parts[1] || "").slice(0, scale);
+    while (fracPartStr.length < scale) {
       fracPartStr += "0";
     }
-    const fracPart = BigInt(fracPartStr);
-    const sign = trimmed.startsWith("-") ? -1n : 1n;
-    const valueScaled = intPart * SCALE + fracPart * sign;
-    totalScaled += valueScaled;
+    const fracPart = BigInt(fracPartStr || "0");
+    const valueScaled = intPart * multiplier + fracPart;
+    totalScaled += isNegative ? -valueScaled : valueScaled;
   }
 
   const isNeg = totalScaled < 0n;
   const absVal = isNeg ? -totalScaled : totalScaled;
-  const intResult = absVal / SCALE;
-  const fracResult = absVal % SCALE;
-  const fracStr = fracResult.toString().padStart(4, "0").replace(/0+$/, "");
+  const intResult = absVal / multiplier;
+  const fracResult = absVal % multiplier;
+  const fracStr = fracResult.toString().padStart(scale, "0").replace(/0+$/, "");
 
   const resStr = fracStr ? `${intResult}.${fracStr}` : `${intResult}`;
   return isNeg ? `-${resStr}` : resStr;
+}
+
+/**
+ * Suma dos valores decimales en formato string.
+ */
+export function addDecimalStrings(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  scale: number = 6,
+): string {
+  return sumDecimalStrings([a, b], scale);
 }

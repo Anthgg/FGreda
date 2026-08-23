@@ -14,7 +14,7 @@ import { useMemo, useState } from "react";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
-import { formatDecimal } from "@/features/recipes/formatDecimal";
+import { addDecimalStrings, formatDecimal } from "@/features/recipes/formatDecimal";
 import { ComponentBadge, Metric, VersionStatusBadge } from "@/features/recipes/RecipeBadges";
 import { useActivateVersion, useRecipe, useRecipeCalc } from "@/features/recipes/useRecipes";
 import type { RecipeLine, RecipeOut, RecipeVersionOut } from "@/types/recipes";
@@ -32,14 +32,15 @@ const TABS: readonly { id: DetailTab; label: string }[] = [
  *
  * Solo las líneas BASE acumulan hasta el 100 %: colorantes y aditivos se
  * calculan por encima de esa base y por eso no entran en la suma.
+ * Opera estrictamente con strings decimales sin conversión IEEE-754.
  */
 function cumulativeBase(lines: RecipeLine[]): Map<number, string> {
   const acumulado = new Map<number, string>();
-  let total = 0;
+  let total = "0";
   for (const line of lines) {
     if (line.component_type !== "BASE") continue;
-    total += Number(line.percentage);
-    acumulado.set(line.id, total.toFixed(2));
+    total = addDecimalStrings(total, line.percentage, 6);
+    acumulado.set(line.id, formatDecimal(total, 2));
   }
   return acumulado;
 }
@@ -359,7 +360,7 @@ export function RecipeDetailPanel({
           <Metric
             label="Total fórmula"
             value={`${formatDecimal(
-              String(Number(version.base_total) + Number(version.additional_total)),
+              addDecimalStrings(version.base_total, version.additional_total, 6),
               2,
             )} %`}
           />

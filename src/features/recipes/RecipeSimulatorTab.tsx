@@ -59,7 +59,7 @@ export function RecipeSimulatorTab({
   // Solo se pide el cálculo con una cantidad positiva: enviar vacío o cero
   // provocaría un 422 en cada pulsación de tecla.
   const cantidad = target.trim();
-  const valida = /^\d+(\.\d+)?$/.test(cantidad) && Number(cantidad) > 0;
+  const valida = /^\d+(\.\d+)?$/.test(cantidad) && !/^0+(\.0+)?$/.test(cantidad);
 
   const payload = useMemo(
     () =>
