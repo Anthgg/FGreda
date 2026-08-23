@@ -37,6 +37,14 @@ export interface FiringDraft {
 
 let contador = 0;
 
+export function fechaHoyLocal(): string {
+  const hoy = new Date();
+  const yyyy = hoy.getFullYear();
+  const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+  const dd = String(hoy.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function nuevaLinea(): LineDraft {
   contador += 1;
   return {
@@ -55,8 +63,9 @@ export function nuevaLinea(): LineDraft {
 }
 
 export function borradorVacio(): FiringDraft {
-  return { firing_date: "", notes: "", sessions: [], lines: [nuevaLinea()] };
+  return { firing_date: fechaHoyLocal(), notes: "", sessions: [], lines: [nuevaLinea()] };
 }
+
 
 export function sessionKey(session: SessionDraft): string {
   return `${session.kiln_id}:${session.firing_type}`;

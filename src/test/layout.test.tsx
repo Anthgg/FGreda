@@ -73,4 +73,28 @@ describe("Reglas estructurales de Layout y AppShell", () => {
       expect(content).not.toMatch(/<select[\s>]/);
     }
   });
+
+  it("NATIVE_DATE_INPUT_COUNT: No existen inputs nativos type=\"date\" en el código fuente de componentes", () => {
+    function getFiles(dir: string): string[] {
+      const entries = readdirSync(dir);
+      const results: string[] = [];
+      for (const entry of entries) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+          results.push(...getFiles(full));
+        } else if (full.endsWith(".tsx") && !full.endsWith(".test.tsx") && !full.endsWith(".spec.tsx")) {
+          results.push(full);
+        }
+      }
+      return results;
+    }
+
+    const tsxFiles = getFiles(join(process.cwd(), "src"));
+    for (const file of tsxFiles) {
+      const content = readFileSync(file, "utf-8");
+      // Verifica que no haya <input ... type="date">
+      expect(content).not.toMatch(/<input[\s\S]*?type=["']date["']/);
+    }
+  });
 });
+

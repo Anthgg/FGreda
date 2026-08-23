@@ -10,12 +10,15 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  DatePickerField,
   ProductSelectField,
   SecondaryButton,
   SelectField,
   TextAreaField,
   TextField,
 } from "@/components/form";
+
+
 import { Spinner } from "@/components/Spinner";
 import { useSession } from "@/features/auth/useSession";
 import { describeError } from "@/features/settings/messages";
@@ -168,16 +171,16 @@ export function FiringEditor({
       {showMetadata ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3 sm:gap-6">
           <div className="col-span-1">
-            <TextField
+            <DatePickerField
               label="Fecha de quema"
-              type="text"
               value={value.firing_date}
               onChange={(fecha) => onChange({ ...value, firing_date: fecha })}
-              placeholder="AAAA-MM-DD"
+              placeholder="DD/MM/AAAA"
               hint="Opcional mientras la hoja esté en borrador."
             />
           </div>
           <div className="col-span-1 md:col-span-2">
+
             <TextAreaField
               label="Notas"
               value={value.notes}
