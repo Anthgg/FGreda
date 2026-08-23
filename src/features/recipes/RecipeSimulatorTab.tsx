@@ -64,7 +64,7 @@ export function RecipeSimulatorTab({
   const payload = useMemo(
     () =>
       versionId && valida
-        ? { recipe_version_id: versionId, target_base_quantity: cantidad }
+        ? { recipe_version_id: versionId, target_base_quantity: cantidad, target_uom: "g" as const }
         : null,
     [versionId, valida, cantidad],
   );
@@ -127,7 +127,7 @@ export function RecipeSimulatorTab({
         </div>
 
         <TextField
-          label="Base objetivo (gramos)"
+          label="Base objetivo (g)"
           value={target}
           onChange={setTarget}
           inputMode="decimal"
