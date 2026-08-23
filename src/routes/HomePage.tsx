@@ -51,7 +51,7 @@ export function HomePage() {
   const quickAccessModules = NAVIGATION.filter((item) => item.label !== "Inicio");
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full space-y-6">
       {/* Encabezado con Typewriter dinámico */}
       <header className="mb-8">
         <TypewriterTitle text="Inicio." />

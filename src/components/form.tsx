@@ -9,6 +9,9 @@ export { SelectField } from "@/components/SelectField";
 export type { SelectOption } from "@/components/SelectField";
 export { ProductSelectField } from "@/components/ProductSelectField";
 export type { ProductSelectOption } from "@/components/ProductSelectField";
+export { DatePickerField } from "@/components/DatePickerField";
+export type { DatePickerFieldProps } from "@/components/DatePickerField";
+
 
 const CONTROL =
   "w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-xs " +

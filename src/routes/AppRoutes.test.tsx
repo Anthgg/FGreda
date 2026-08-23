@@ -72,8 +72,8 @@ describe("rutas protegidas y Dashboard", () => {
     renderApp(["/"]);
 
     await screen.findByRole("heading", { name: /inicio/i });
-    // Recetas se habilita en Fase 3.5; Quemas y Cotizaciones siguen como futuros.
-    for (const modulo of ["Quemas", "Cotizaciones"]) {
+    // Quemas se habilita en Fase 4; Cotizaciones sigue siendo el unico futuro.
+    for (const modulo of ["Cotizaciones"]) {
       const entradas = screen.getAllByText(modulo);
       expect(entradas.length).toBeGreaterThan(0);
       const disabledParent = entradas[0]?.closest("[aria-disabled='true']");
@@ -81,7 +81,7 @@ describe("rutas protegidas y Dashboard", () => {
     }
   });
 
-  it("los modulos de Fase 3 y 3.5 son navegables desde el menu", async () => {
+  it("los modulos de Fase 3, 3.5 y 4 son navegables desde el menu", async () => {
     mockFetch(() => sessionResponse());
 
     renderApp(["/"]);
@@ -93,6 +93,7 @@ describe("rutas protegidas y Dashboard", () => {
       ["Inventario", "/inventario"],
       ["Importaciones", "/importaciones"],
       ["Recetas", "/recetas"],
+      ["Quemas", "/quemas"],
     ] as const) {
       const enlaces = screen
         .getAllByRole("link", { name: new RegExp(modulo, "i") })
@@ -181,5 +182,20 @@ describe("rutas protegidas y Dashboard", () => {
     renderApp(["/login"]);
 
     expect(await screen.findByRole("heading", { name: /inicio/i })).toBeInTheDocument();
+  });
+
+  it("renderiza la ruta dedicada de /quemas/nueva dentro de AppShell", async () => {
+    mockFetch((url) => {
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/kilns")) return jsonResponse(200, { items: [], total: 0, limit: 200, offset: 0 });
+      if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    renderApp(["/quemas/nueva"]);
+
+    expect(await screen.findByRole("heading", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /nueva quema/i })).not.toBeInTheDocument();
   });
 });

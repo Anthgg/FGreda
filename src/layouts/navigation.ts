@@ -1,7 +1,8 @@
 /**
  * Menu principal previsto para todo el producto Cotizador GREDA.
  *
- * `Inicio`, `Productos`, `Terceros`, `Inventario`, `Importaciones` y
+ * `Inicio`, `Productos`, `Terceros`, `Inventario`, `Importaciones`, `Recetas`,
+ * `Quemas` y
  * `Configuracion` estan operativos. El resto queda visible y
  * deshabilitado para fijar la estructura de navegacion: su logica de negocio
  * corresponde a fases posteriores y no se adelanta aqui.
@@ -81,7 +82,8 @@ export const NAVIGATION: readonly NavigationItem[] = [
   },
   {
     label: "Quemas",
-    enabled: false,
+    to: "/quemas",
+    enabled: true,
     icon: "flame",
     description: "Registro de horneadas, curvas térmicas y costos de energía.",
   },

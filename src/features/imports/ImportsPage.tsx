@@ -279,7 +279,7 @@ export function ImportsPage() {
     (summary?.errors ?? 1) === 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1536px] px-4 py-2 sm:px-6 lg:px-8">
+    <div className="w-full space-y-6">
       <MasterHeader
         title={
           <TypewriterTitle

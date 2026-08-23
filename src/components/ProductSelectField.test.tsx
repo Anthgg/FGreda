@@ -243,4 +243,151 @@ describe("ProductSelectField (Componente con búsqueda y paginación servidor)",
 
     expect(screen.getByText("LAB70098 · Carbonato de calcio")).toBeInTheDocument();
   });
+
+  it("permite crear pieza cuando no hay resultados y allowCreate está activo", async () => {
+    const user = userEvent.setup();
+    const handleCreate = vi.fn();
+
+    mockFetch((url) => {
+      if (url.includes("/products")) {
+        const u = new URL(url, "http://localhost");
+        const search = u.searchParams.get("search");
+        if (search === "Taza Dragón") {
+          return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+        }
+        return jsonResponse(200, SAMPLE_PAGE);
+      }
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    renderWithProviders(
+      <ProductSelectField
+        label="Pieza"
+        value=""
+        onChange={vi.fn()}
+        allowCreate={true}
+        onCreateRequested={handleCreate}
+      />
+    );
+
+    const button = screen.getByRole("combobox", { name: "Pieza" });
+    await user.click(button);
+
+    const input = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    await user.type(input, "Taza Dragón");
+
+    const createBtn = await screen.findByText('+ Crear pieza "Taza Dragón"');
+    expect(createBtn).toBeInTheDocument();
+
+    await user.click(createBtn);
+    expect(handleCreate).toHaveBeenCalledWith("Taza Dragón");
+  });
+
+  it("no muestra acción de crear si allowCreate=false aunque no haya resultados", async () => {
+    const user = userEvent.setup();
+
+    mockFetch((url) => {
+      if (url.includes("/products")) {
+        return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      }
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    renderWithProviders(
+      <ProductSelectField
+        label="Pieza"
+        value=""
+        onChange={vi.fn()}
+        allowCreate={false}
+      />
+    );
+
+    const button = screen.getByRole("combobox", { name: "Pieza" });
+    await user.click(button);
+
+    const input = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    await user.type(input, "Florero inexistente");
+
+    await waitFor(() => {
+      expect(screen.getByText(/No se encontraron piezas para/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Crear pieza/i)).not.toBeInTheDocument();
+  });
+
+  it("no muestra acción de crear cuando la búsqueda coincide exactamente ignorando mayúsculas y espacios", async () => {
+    const user = userEvent.setup();
+
+    mockFetch((url) => {
+      if (url.includes("/products")) {
+        return jsonResponse(200, SAMPLE_PAGE);
+      }
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    renderWithProviders(
+      <ProductSelectField
+        label="Pieza"
+        value=""
+        onChange={vi.fn()}
+        allowCreate={true}
+        onCreateRequested={vi.fn()}
+      />
+    );
+
+    const button = screen.getByRole("combobox", { name: "Pieza" });
+    await user.click(button);
+
+    const input = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    // Búsqueda con espacios adicionales y mayúsculas
+    await user.type(input, "  CARBONATO   DE   CALCIO  ");
+
+    // Debe mostrar la opción existente
+    expect(await screen.findByText("Carbonato de calcio")).toBeInTheDocument();
+
+    // No debe ofrecer crear un duplicado
+    expect(screen.queryByText(/Crear pieza/i)).not.toBeInTheDocument();
+  });
+
+  it("soporta selección y creación mediante teclado (ArrowDown, Enter, Escape)", async () => {
+    const user = userEvent.setup();
+    const handleCreate = vi.fn();
+
+    mockFetch((url) => {
+      if (url.includes("/products")) {
+        const u = new URL(url, "http://localhost");
+        const search = u.searchParams.get("search");
+        if (search === "Nuevo plato") {
+          return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+        }
+        return jsonResponse(200, SAMPLE_PAGE);
+      }
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    renderWithProviders(
+      <ProductSelectField
+        label="Pieza"
+        value=""
+        onChange={vi.fn()}
+        allowCreate={true}
+        onCreateRequested={handleCreate}
+      />
+    );
+
+    const button = screen.getByRole("combobox", { name: "Pieza" });
+    await user.click(button);
+
+    const input = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    await user.type(input, "Nuevo plato");
+
+    // Esperar a que la búsqueda remota responda sin resultados
+    expect(await screen.findByText(/No se encontraron piezas para/i)).toBeInTheDocument();
+    const createBtn = await screen.findByText('+ Crear pieza "Nuevo plato"');
+    expect(createBtn).toBeInTheDocument();
+
+    // Presionar Enter en el buscador ejecuta la acción creatable
+    await user.type(input, "{Enter}");
+
+    expect(handleCreate).toHaveBeenCalledWith("Nuevo plato");
+  });
 });

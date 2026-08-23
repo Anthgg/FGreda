@@ -155,14 +155,14 @@ export function AppShell() {
   }, [mobileMenuOpen]);
 
   return (
-    <div className="relative min-h-dvh flex flex-col lg:flex-row bg-white text-zinc-900 selection:bg-zinc-900 selection:text-white">
+    <div className="relative h-dvh w-full overflow-hidden flex flex-col lg:flex-row bg-white text-zinc-900 selection:bg-zinc-900 selection:text-white">
       {/* Fondo interactivo Canvas 2D atenuado para el Dashboard */}
       <GredaParticleBackground variant="dashboard" />
 
       {/* ========================================================================= */}
       {/* BARRA SUPERIOR MÓVIL (visible solo en < lg)                               */}
       {/* ========================================================================= */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md lg:hidden">
+      <header className="shrink-0 z-30 flex items-center justify-between border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md lg:hidden">
         <div className="size-9" aria-hidden="true" />
         <div className="flex items-center justify-center">
           <img
@@ -265,15 +265,15 @@ export function AppShell() {
       <aside
         id="menu-principal"
         className={[
-          "hidden lg:flex flex-col justify-between glass-sidebar min-h-dvh sticky top-0 transition-all duration-300 z-20",
+          "hidden lg:flex flex-col justify-between shrink-0 h-dvh glass-sidebar z-20 transition-all duration-300",
           collapsed ? "w-18 p-3" : "w-64 p-5",
         ].join(" ")}
       >
-        <div>
+        <div className="flex flex-col min-h-0 flex-1">
           {/* Logo y Botón de Colapso */}
           <div
             className={[
-              "relative flex items-center pb-6 border-b border-zinc-200/60",
+              "relative flex items-center pb-6 border-b border-zinc-200/60 shrink-0",
               collapsed ? "flex-col justify-center" : "justify-center",
             ].join(" ")}
           >
@@ -303,13 +303,13 @@ export function AppShell() {
           </div>
 
           {/* Menú de Navegación */}
-          <div className="mt-6">
+          <div className="mt-6 flex-1 overflow-y-auto no-scrollbar">
             <NavigationList items={NAVIGATION} collapsed={collapsed} />
           </div>
         </div>
 
         {/* Perfil de Usuario Abajo */}
-        <div className="border-t border-zinc-200/60 pt-4">
+        <div className="mt-auto shrink-0 border-t border-zinc-200/60 pt-4">
           {user && !collapsed ? (
             <div className="mb-3 px-1">
               <p className="truncate text-sm font-bold text-zinc-900">{user.display_name}</p>
@@ -346,7 +346,7 @@ export function AppShell() {
       {/* ========================================================================= */}
       {/* ÁREA DE CONTENIDO PRINCIPAL                                               */}
       {/* ========================================================================= */}
-      <main className="flex-1 w-full min-h-dvh px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 z-10">
+      <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-6 z-10 custom-scrollbar">
         <Outlet />
       </main>
     </div>
