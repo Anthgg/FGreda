@@ -10,7 +10,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 
 import { fetchProducts } from "@/api/masters";
 import { PRODUCTS_KEY } from "@/features/masters/useMasters";
@@ -32,6 +32,11 @@ interface ProductSelectFieldProps {
   placeholder?: string | undefined;
   searchPlaceholder?: string | undefined;
   productType?: ProductType | undefined;
+  /**
+   * Tipos admitidos cuando hay más de uno. El endpoint filtra por un solo
+   * tipo por llamada, así que se consulta cada uno y se combinan.
+   */
+  productTypes?: readonly ProductType[] | undefined;
   activeOnly?: boolean | undefined;
   excludeIds?: number[] | undefined;
   hint?: string | undefined;
@@ -51,6 +56,7 @@ export function ProductSelectField({
   placeholder = "Seleccionar componente...",
   searchPlaceholder = "Buscar por nombre o referencia (ej. Carbonato, LAB70...)",
   productType,
+  productTypes,
   activeOnly = true,
   excludeIds = [],
   hint,
@@ -82,23 +88,56 @@ export function ProductSelectField({
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Consulta al servidor mediante TanStack Query
-  const queryParams = useMemo(
+  // Tipos a consultar. Sin restricción se pide una sola vez sin filtro.
+  const tipos = useMemo<readonly (ProductType | undefined)[]>(
+    () => (productTypes?.length ? productTypes : [productType]),
+    [productTypes, productType],
+  );
+
+  const base = useMemo(
     () => ({
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
-      ...(productType ? { product_type: productType } : {}),
       ...(activeOnly ? { active: true as const } : {}),
       limit: PAGE_SIZE,
       offset,
     }),
-    [debouncedSearch, productType, activeOnly, offset],
+    [debouncedSearch, activeOnly, offset],
   );
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: [...PRODUCTS_KEY, "remote-picker", queryParams],
-    queryFn: () => fetchProducts(queryParams),
-    staleTime: 30_000,
+  const consultas = useQueries({
+    queries: tipos.map((tipo) => {
+      const params = { ...base, ...(tipo ? { product_type: tipo } : {}) };
+      return {
+        queryKey: [...PRODUCTS_KEY, "remote-picker", params],
+        queryFn: () => fetchProducts(params),
+        staleTime: 30_000,
+      };
+    }),
   });
+
+  const isLoading = consultas.some((q) => q.isLoading);
+  const isFetching = consultas.some((q) => q.isFetching);
+  const isError = consultas.some((q) => q.isError);
+  const refetch = () => consultas.forEach((q) => void q.refetch());
+
+  // Firma del contenido devuelto. Se memoiza por valor y no por marca de
+  // tiempo: una respuesta servida desde caché no actualiza `dataUpdatedAt`, y
+  // con esa dependencia la lista se quedaba congelada al buscar.
+  const firma = consultas
+    .map((q) => (q.data ? q.data.items.map((i) => i.id).join(".") : "?"))
+    .join("|");
+
+  // Se combinan los resultados y se ordenan por referencia para que el listado
+  // no dependa del orden en que respondan las consultas.
+  const data = useMemo(() => {
+    if (firma.includes("?")) return undefined;
+    const items = consultas
+      .flatMap((q) => q.data!.items)
+      .sort((a, b) => a.internal_reference.localeCompare(b.internal_reference));
+    const total = consultas.reduce((suma, q) => suma + q.data!.total, 0);
+    return { items, total, limit: PAGE_SIZE, offset };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firma, offset]);
 
   // Acumular productos para paginación incremental
   useEffect(() => {

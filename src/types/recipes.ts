@@ -46,6 +46,7 @@ export interface RecipeOut {
   active: boolean;
   current_version_id: number | null;
   current_version: RecipeVersionOut | null;
+  versions?: RecipeVersionOut[];
   versions_count: number;
   created_at: string;
   updated_at: string;

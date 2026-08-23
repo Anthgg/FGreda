@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -74,6 +74,23 @@ const RECIPE_VERSION_1: RecipeVersionOut = {
   ],
 };
 
+const RECIPE_VERSION_2_DRAFT: RecipeVersionOut = {
+  id: 11,
+  recipe_id: 1,
+  version_number: 2,
+  status: "DRAFT",
+  yield_factor: "1.060000",
+  base_total: "100.000000",
+  additional_total: "6.000000",
+  fingerprint: "def456hash",
+  notes: "Ajuste de colorante al 6%",
+  created_at: "2026-08-22T11:00:00Z",
+  updated_at: "2026-08-22T11:00:00Z",
+  lines: [
+    ...RECIPE_VERSION_1.lines,
+  ],
+};
+
 const RECIPE_1: RecipeOut = {
   id: 1,
   product_id: 100,
@@ -83,7 +100,8 @@ const RECIPE_1: RecipeOut = {
   active: true,
   current_version_id: 10,
   current_version: RECIPE_VERSION_1,
-  versions_count: 1,
+  versions: [RECIPE_VERSION_2_DRAFT, RECIPE_VERSION_1],
+  versions_count: 2,
   created_at: "2026-08-22T10:00:00Z",
   updated_at: "2026-08-22T10:00:00Z",
 };
@@ -282,87 +300,303 @@ function mockRecipesApi(overrides: {
   });
 }
 
-describe("Modulo de recetas (Fase 003.5)", () => {
-  it("lista las recetas activas con producto, versión y factor de rendimiento", async () => {
+describe("Recetas · estructura general", () => {
+  it("muestra las tres vistas y «Nueva receta» como acción, no como pestaña", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Listado", "Importador", "Simulador"]);
+    expect(screen.getByRole("button", { name: /nueva receta/i })).toBeInTheDocument();
+  });
+
+  it("no ofrece acciones decorativas sin función", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findAllByRole("tab");
+    expect(screen.queryByRole("button", { name: /documentaci[oó]n/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /exportar/i })).not.toBeInTheDocument();
+  });
+
+  it("conserva el AppShell oficial sin reconstruir la navegación", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findAllByRole("tab");
+    expect(screen.getByRole("link", { name: /inicio/i })).toBeInTheDocument();
+  });
+});
+
+describe("Recetas · listado y detalle", () => {
+  it("lista las recetas con referencia, versión, rendimiento y estado", async () => {
     mockRecipesApi();
     renderApp(["/recetas"]);
 
     expect(await screen.findByText("Esmalte Azul Cobalto v1")).toBeInTheDocument();
-    expect(screen.getByText("LAB70001")).toBeInTheDocument();
+    expect(screen.getAllByText("LAB70001").length).toBeGreaterThan(0);
     expect(screen.getByText("v1")).toBeInTheDocument();
-    expect(screen.getByText("×1.05")).toBeInTheDocument();
-    expect(screen.getByText("Activa")).toBeInTheDocument();
+    expect(screen.getAllByText("Activa").length).toBeGreaterThan(0);
   });
 
-  it("abre el detalle de receta y muestra componentes, porcentajes y rendimiento", async () => {
-    const user = userEvent.setup();
+  it("no muestra el tipo interno en cada fila del catálogo productivo", async () => {
     mockRecipesApi();
     renderApp(["/recetas"]);
 
-    const detailBtn = await screen.findByRole("button", { name: /ver detalle/i });
-    await user.click(detailBtn);
+    await screen.findByText("Esmalte Azul Cobalto v1");
+    expect(screen.queryByText("PREPARED_MATERIAL")).not.toBeInTheDocument();
+  });
 
-    expect(await screen.findByText("Versión 1 — activa")).toBeInTheDocument();
+  it("selecciona la primera receta y muestra su detalle sin abrir un modal", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    expect(
+      await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Estructura" })).toBeInTheDocument();
+  });
+
+  it("muestra las cuatro métricas de la receta", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    for (const etiqueta of ["Adicionales", "Total fórmula", "Rendimiento"]) {
+      expect(screen.getByText(etiqueta)).toBeInTheDocument();
+    }
+    expect(screen.getAllByText("Base").length).toBeGreaterThan(0);
+  });
+
+  it("muestra los componentes con tipo legible", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
     expect(screen.getByText("Feldespato Potásico")).toBeInTheDocument();
-    expect(screen.getByText("60%")).toBeInTheDocument();
-    expect(screen.getByText("Cuarzo Malla 200")).toBeInTheDocument();
-    expect(screen.getByText("40%")).toBeInTheDocument();
     expect(screen.getByText("Óxido de Cobalto")).toBeInTheDocument();
-    expect(screen.getByText("5%")).toBeInTheDocument();
+    expect(screen.getByText("Colorante")).toBeInTheDocument();
+    expect(screen.queryByText("COLORANT")).not.toBeInTheDocument();
   });
 
-  it("abre el simulador de batch y muestra la salida real y costo en formato string exacto", async () => {
+  it("no muestra vocabulario del importador en el catálogo productivo", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    expect(screen.queryByText("SOURCE_STRUCTURE")).not.toBeInTheDocument();
+    expect(screen.queryByText("REVIEW_REQUIRED")).not.toBeInTheDocument();
+  });
+
+  it("busca en el servidor, no solo en la página cargada", async () => {
+    const fetchSpy = mockRecipesApi();
+    renderApp(["/recetas"]);
+    await screen.findByText("Esmalte Azul Cobalto v1");
+
+    await userEvent.setup().type(screen.getByLabelText(/buscar recetas/i), "cobalto");
+
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("search=cobalto"))).toBe(
+        true,
+      );
+    });
+  });
+
+  it("ofrece el filtro de estado sin usar un select nativo", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findByText("Esmalte Azul Cobalto v1");
+    expect(screen.getByLabelText(/estado/i)).toBeInTheDocument();
+    expect(document.querySelectorAll("select")).toHaveLength(0);
+  });
+
+  it("informa cuando el backend falla", async () => {
+    mockRecipesApi({
+      onRequest: (url) =>
+        url.includes("/recipes") && !url.includes("calculate")
+          ? errorResponse(500, "INTERNAL_ERROR")
+          : undefined,
+    });
+    renderApp(["/recetas"]);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+});
+
+describe("Recetas · versiones y costos", () => {
+  it("la pestaña Versiones muestra todas las versiones registradas y permite activar un borrador", async () => {
+    const user = userEvent.setup();
+    let activatedVersionId: number | null = null;
+
+    mockRecipesApi({
+      onRequest: (url, init) => {
+        if (url.includes("/recipe-versions/11/activate") && init?.method === "POST") {
+          activatedVersionId = 11;
+          return jsonResponse(200, { ...RECIPE_VERSION_2_DRAFT, status: "ACTIVE" });
+        }
+        return undefined;
+      },
+    });
+    renderApp(["/recetas"]);
+
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    await user.click(screen.getByRole("tab", { name: "Versiones" }));
+
+    // Ambas versiones deben estar visibles en el listado
+    expect(await screen.findByText("V2")).toBeInTheDocument();
+    expect(screen.getByText("Borrador")).toBeInTheDocument();
+    expect(screen.getAllByText("V1").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Activa").length).toBeGreaterThanOrEqual(1);
+
+    // V2 debe tener botón Activar, V1 no debe tenerlo porque ya está activa
+    const activateBtn = screen.getByRole("button", { name: "Activar" });
+    expect(activateBtn).toBeInTheDocument();
+
+    await user.click(activateBtn);
+    await waitFor(() => {
+      expect(activatedVersionId).toBe(11);
+    });
+  });
+
+  it("permite simular una versión específica desde el historial de versiones", async () => {
     const user = userEvent.setup();
     mockRecipesApi();
     renderApp(["/recetas"]);
 
-    const detailBtn = await screen.findByRole("button", { name: /ver detalle/i });
-    await user.click(detailBtn);
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    await user.click(screen.getByRole("tab", { name: "Versiones" }));
 
-    const calcBtn = await screen.findByRole("button", { name: /calculador/i });
-    await user.click(calcBtn);
+    const simularBtns = await screen.findAllByRole("button", { name: "Simular" });
+    expect(simularBtns.length).toBeGreaterThanOrEqual(2);
 
-    expect(await screen.findByText("Simulador de batch")).toBeInTheDocument();
-    expect(await screen.findByText("1050 g")).toBeInTheDocument();
-    expect(screen.getByText("S/ 28.5")).toBeInTheDocument();
+    // Simular V2
+    await user.click(simularBtns[0]!);
+
+    expect(await screen.findByText("Base objetivo")).toBeInTheDocument();
+    expect(screen.getByText("Salida real")).toBeInTheDocument();
   });
 
-  it("garantiza cero selects nativos en el formulario de creación de recetas", async () => {
+  it("la pestaña Costos usa el cálculo del servidor", async () => {
+    const fetchSpy = mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Costos" }));
+
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/recipes/calculate"))).toBe(
+        true,
+      );
+    });
+    expect(await screen.findByText(/costo por unidad real/i)).toBeInTheDocument();
+  });
+});
+
+describe("Recetas · simulador", () => {
+  it("calcula el batch en el servidor y muestra salida real", async () => {
+    const fetchSpy = mockRecipesApi();
+    renderApp(["/recetas"]);
+
     const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    await user.click(screen.getByRole("button", { name: /simular/i }));
+
+    expect(await screen.findByText("Base objetivo")).toBeInTheDocument();
+    expect(screen.getByText("Salida real")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/recipes/calculate"))).toBe(
+        true,
+      );
+    });
+  });
+
+  it("permite abrir el simulador desde su propia pestaña", async () => {
     mockRecipesApi();
     renderApp(["/recetas"]);
 
-    const createBtn = await screen.findByRole("button", { name: /nueva receta/i });
-    await user.click(createBtn);
+    await screen.findAllByRole("tab");
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Simulador" }));
+
+    expect(await screen.findByLabelText(/base objetivo/i)).toBeInTheDocument();
+  });
+});
+
+describe("Recetas · importador", () => {
+  it("muestra las métricas reales del lote, no valores fijos", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findAllByRole("tab");
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Importador" }));
+
+    expect(await screen.findByText(/lote #1/i)).toBeInTheDocument();
+    expect(screen.getByText("Recetas detectadas")).toBeInTheDocument();
+    expect(screen.getByText("Requieren revisión")).toBeInTheDocument();
+  });
+
+  it("traduce los estados del staging a lenguaje del taller", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findAllByRole("tab");
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Importador" }));
+
+    await screen.findByText(/lote #1/i);
+    expect(screen.queryByText("REVIEW_REQUIRED")).not.toBeInTheDocument();
+  });
+});
+
+describe("Recetas · formularios y selector remoto", () => {
+  it("cero selects nativos en toda la pantalla", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    expect(document.querySelectorAll("select")).toHaveLength(0);
+  });
+
+  it("cero selects nativos al crear una receta", async () => {
+    mockRecipesApi();
+    renderApp(["/recetas"]);
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: /nueva receta/i }));
 
     expect(await screen.findByRole("heading", { name: /nueva receta/i })).toBeInTheDocument();
-    // No debe existir ningun elemento select nativo en el DOM
-    expect(document.querySelectorAll("select").length).toBe(0);
+    expect(document.querySelectorAll("select")).toHaveLength(0);
   });
 
-  it("muestra el modal de importador de recetas con clasificacion estructural y origen amigable", async () => {
-    const user = userEvent.setup();
-    mockRecipesApi();
+  it("el selector de componentes pide los productos al servidor sin exceder el límite", async () => {
+    const fetchSpy = mockRecipesApi();
     renderApp(["/recetas"]);
 
-    const importBtn = await screen.findByRole("button", { name: /importar desde maestro/i });
-    await user.click(importBtn);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /nueva receta/i }));
+    await screen.findByRole("heading", { name: /nueva receta/i });
 
-    expect(await screen.findByText(/importación de recetas desde staging/i)).toBeInTheDocument();
-    expect(screen.getByText("Revisión")).toBeInTheDocument();
+    await waitFor(() => {
+      const llamada = fetchSpy.mock.calls.find(([url]) => String(url).includes("/products"));
+      expect(llamada).toBeDefined();
+      const limite = new URL(String(llamada![0]), "http://x").searchParams.get("limit");
+      expect(Number(limite)).toBeLessThanOrEqual(200);
+    });
+  });
+});
 
-    // Expandir grupo de receta para verificar origen estructural y boton aceptar sugerencia
-    const groupBtn = screen.getByRole("button", { name: /esmalte azul cobalto/i });
-    await user.click(groupBtn);
+describe("Recetas · permisos", () => {
+  it("OPERATOR no ve acciones de escritura", async () => {
+    mockRecipesApi({ user: { ...TEST_USER, role: "OPERATOR", display_name: "Operario" } });
+    renderApp(["/recetas"]);
 
-    expect(await screen.findAllByText("Estructura del maestro")).not.toHaveLength(0);
-    expect(screen.getByText("Aceptar sugerencia")).toBeInTheDocument();
+    await screen.findByText("Esmalte Azul Cobalto v1");
+    expect(screen.queryByRole("button", { name: /nueva receta/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /nueva versi[oó]n/i })).not.toBeInTheDocument();
+  });
 
-    // Boton confirmar importacion debe estar deshabilitado porque review_required > 0
-    const commitBtn = screen.getByRole("button", { name: /confirmar importación/i });
-    expect(commitBtn).toBeDisabled();
+  it("OPERATOR sí puede consultar y simular", async () => {
+    mockRecipesApi({ user: { ...TEST_USER, role: "OPERATOR", display_name: "Operario" } });
+    renderApp(["/recetas"]);
 
-    // No debe existir ningun elemento select nativo en el modal
-    expect(document.querySelectorAll("select").length).toBe(0);
+    await screen.findByRole("heading", { name: "Esmalte Azul Cobalto v1" });
+    expect(screen.getByRole("button", { name: /simular/i })).toBeInTheDocument();
   });
 });

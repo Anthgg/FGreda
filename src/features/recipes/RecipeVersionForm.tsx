@@ -9,6 +9,7 @@
 import { useState } from "react";
 
 import { Field, PrimaryButton, SecondaryButton, SelectField, ProductSelectField } from "@/components/form";
+import { COMPONENT_PRODUCT_TYPES } from "@/features/recipes/componentTypes";
 import { describeError } from "@/features/settings/messages";
 import { formatDecimal, sumDecimalStrings } from "@/features/recipes/formatDecimal";
 import type { RecipeComponentType, RecipeLineIn, RecipeVersionIn } from "@/types/recipes";
@@ -133,6 +134,7 @@ export function RecipeVersionForm({ recipeId, onClose, onSubmit, isPending }: Pr
                 <div className="flex-1 min-w-[200px]">
                   <ProductSelectField
                     label="Componente"
+                    productTypes={COMPONENT_PRODUCT_TYPES}
                     requirement="required"
                     value={line.component_product_id}
                     onChange={(val) => handleLineChange(i, "component_product_id", val)}
