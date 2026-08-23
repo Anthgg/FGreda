@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
+import { FiringsPage } from "@/features/firings/FiringsPage";
 import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
@@ -33,6 +34,7 @@ export function AppRoutes() {
           <Route path="inventario" element={<InventoryPage />} />
           <Route path="importaciones" element={<ImportsPage />} />
           <Route path="recetas" element={<RecipesPage />} />
+          <Route path="quemas" element={<FiringsPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
