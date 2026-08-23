@@ -838,4 +838,92 @@ describe("quemas: construccion del cuerpo de la API", () => {
     expect(payload!.lines).toHaveLength(1);
     expect(payload!.lines[0]!.description).toBe("Completa");
   });
+
+  it("rechaza cantidades no enteras estrictas o con sufijos/formato invalido", () => {
+    const invalidas = ["0", "-1", "1.5", "12abc", "1e3", "1 2", "", "   "];
+    for (const q of invalidas) {
+      const draft = {
+        ...borradorVacio(),
+        sessions: [{ kiln_id: 1, firing_type: "LOW" as const }],
+        lines: [
+          {
+            ...nuevaLinea(),
+            description: "Plato",
+            quantity: q,
+            length_cm: "10",
+            width_cm: "10",
+            height_cm: "5",
+            low_kiln_id: 1,
+          },
+        ],
+      };
+      expect(aPayload(draft)).toBeNull();
+    }
+  });
+});
+
+describe("quemas: preservacion de factor_kiln y preview de lineas", () => {
+  it("preserva factor_kiln_id si el horno sigue participando en otra sesion", async () => {
+    const user = userEvent.setup();
+    mockQuemas();
+    renderApp(["/quemas/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva quema" });
+    await screen.findByRole("button", { name: /añadir sesión/i });
+
+    // Añadir sesión LOW de Horno pequeño (id=1)
+    const selectHorno = screen.getByRole("combobox", { name: "Horno" });
+    await user.click(selectHorno);
+    const opcionChico = await screen.findByRole("option", { name: /horno pequeño/i });
+    await user.click(opcionChico);
+    await user.click(screen.getByRole("button", { name: /añadir sesión/i }));
+
+    // Añadir sesión HIGH de Horno pequeño
+    await user.click(selectHorno);
+    const opcionChico2 = await screen.findByRole("option", { name: /horno pequeño/i });
+    await user.click(opcionChico2);
+
+    const tipoSelect = screen.getByRole("combobox", { name: "Tipo de quema" });
+    await user.click(tipoSelect);
+    const opcionAlta = await screen.findByRole("option", { name: /^alta$/i });
+    await user.click(opcionAlta);
+    await user.click(screen.getByRole("button", { name: /añadir sesión/i }));
+
+    // Configurar pieza con factor_kiln_id = Horno pequeño
+    const selectFactor = screen.getByRole("combobox", { name: "Ocupación medida en" });
+    await user.click(selectFactor);
+    const opcionHornoChicoFactor = await screen.findByRole("option", { name: /horno pequeño/i });
+    await user.click(opcionHornoChicoFactor);
+
+    // Quitar la primera sesión (LOW)
+    const botonesQuitar = screen.getAllByRole("button", { name: /^quitar$/i });
+    await user.click(botonesQuitar[0]!);
+
+    // El factor_kiln_id debe permanecer en Horno pequeño porque la sesión HIGH de Horno pequeño sigue activa
+    expect(
+      screen.getByRole("combobox", { name: "Ocupación medida en" }),
+    ).toHaveTextContent(/horno pequeño/i);
+  });
+
+  it("limpia el detalle cuando un filtro o busqueda retorna cero filas", async () => {
+    mockQuemas({
+      firings: {
+        items: [],
+        total: 0,
+        limit: 25,
+        offset: 0,
+      },
+    });
+
+    renderApp(["/quemas"]);
+
+    expect(
+      await screen.findByText(/No hay quemas que coincidan con la búsqueda/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Seleccione una quema para ver su detalle/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Confirmar quema/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Anular quema/i })).not.toBeInTheDocument();
+  });
 });

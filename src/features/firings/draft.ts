@@ -63,6 +63,11 @@ export function sessionKey(session: SessionDraft): string {
 }
 
 const DECIMAL_POSITIVO = /^\d+(\.\d+)?$/;
+const ENTERO_POSITIVO = /^[1-9]\d*$/;
+
+export function esEnteroPositivo(valor: string): boolean {
+  return ENTERO_POSITIVO.test(valor.trim());
+}
 
 function esDecimalPositivo(valor: string): boolean {
   const limpio = valor.trim();
@@ -71,11 +76,9 @@ function esDecimalPositivo(valor: string): boolean {
 
 /** Una linea esta lista cuando el servidor podria calcularla. */
 export function lineaCompleta(linea: LineDraft): boolean {
-  const cantidad = Number.parseInt(linea.quantity.trim(), 10);
   return (
     linea.description.trim() !== "" &&
-    Number.isInteger(cantidad) &&
-    cantidad > 0 &&
+    esEnteroPositivo(linea.quantity) &&
     esDecimalPositivo(linea.length_cm) &&
     esDecimalPositivo(linea.width_cm) &&
     esDecimalPositivo(linea.height_cm) &&
@@ -111,18 +114,24 @@ export function aPayload(draft: FiringDraft): FiringIn | null {
       firing_type: session.firing_type,
       sort_order: indice,
     })),
-    lines: listas.map((linea, indice) => ({
-      ...(linea.product_id !== null ? { product_id: linea.product_id } : {}),
-      description: linea.description.trim(),
-      quantity: Number.parseInt(linea.quantity.trim(), 10),
-      length_cm: linea.length_cm.trim(),
-      width_cm: linea.width_cm.trim(),
-      height_cm: linea.height_cm.trim(),
-      ...(linea.low_kiln_id !== null ? { low_kiln_id: linea.low_kiln_id } : {}),
-      ...(linea.high_kiln_id !== null ? { high_kiln_id: linea.high_kiln_id } : {}),
-      ...(linea.factor_kiln_id !== null ? { factor_kiln_id: linea.factor_kiln_id } : {}),
-      sort_order: indice,
-    })),
+    lines: draft.lines.flatMap((linea, indice) =>
+      lineaCompleta(linea)
+        ? [
+            {
+              ...(linea.product_id !== null ? { product_id: linea.product_id } : {}),
+              description: linea.description.trim(),
+              quantity: Number.parseInt(linea.quantity.trim(), 10),
+              length_cm: linea.length_cm.trim(),
+              width_cm: linea.width_cm.trim(),
+              height_cm: linea.height_cm.trim(),
+              ...(linea.low_kiln_id !== null ? { low_kiln_id: linea.low_kiln_id } : {}),
+              ...(linea.high_kiln_id !== null ? { high_kiln_id: linea.high_kiln_id } : {}),
+              ...(linea.factor_kiln_id !== null ? { factor_kiln_id: linea.factor_kiln_id } : {}),
+              sort_order: indice,
+            },
+          ]
+        : [],
+    ),
   };
 }
 

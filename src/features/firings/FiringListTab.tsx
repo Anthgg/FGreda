@@ -82,7 +82,11 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
   const items = useMemo(() => firings.data?.items ?? [], [firings.data]);
 
   useEffect(() => {
-    if (!items.length) return;
+    if (!items.length) {
+      setSelectedId(null);
+      setMobileDetail(false);
+      return;
+    }
     if (selectedId === null || !items.some((f) => f.id === selectedId)) {
       setSelectedId(items[0]!.id);
     }

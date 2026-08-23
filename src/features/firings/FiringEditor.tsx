@@ -126,9 +126,11 @@ export function FiringEditor({
   const quitarSesion = (indice: number) => {
     const fuera = value.sessions[indice];
     if (!fuera) return;
+    const restantes = value.sessions.filter((_, i) => i !== indice);
+    const hornosRestantes = new Set(restantes.map((s) => s.kiln_id));
     onChange({
       ...value,
-      sessions: value.sessions.filter((_, i) => i !== indice),
+      sessions: restantes,
       // Las piezas que apuntaban a esa sesion dejan de apuntarla.
       lines: value.lines.map((linea) => ({
         ...linea,
@@ -141,7 +143,9 @@ export function FiringEditor({
             ? null
             : linea.high_kiln_id,
         factor_kiln_id:
-          linea.factor_kiln_id === fuera.kiln_id ? null : linea.factor_kiln_id,
+          linea.factor_kiln_id !== null && !hornosRestantes.has(linea.factor_kiln_id)
+            ? null
+            : linea.factor_kiln_id,
       })),
     });
   };
@@ -157,7 +161,7 @@ export function FiringEditor({
   const hornosAlta = hornosDeSesion(value, kilns, "HIGH");
   const hornosHoja = hornosDeLaHoja(value, kilns);
 
-  const porLinea = new Map(preview.data?.lines.map((l) => [l.description, l]) ?? []);
+  const porIndice = new Map(preview.data?.lines.map((l) => [l.sort_order, l]) ?? []);
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -315,7 +319,7 @@ export function FiringEditor({
 
         <div className="space-y-4">
           {value.lines.map((linea, indice) => {
-            const calculada = porLinea.get(linea.description.trim());
+            const calculada = porIndice.get(indice);
             const volumenLocal = multiplyDecimalStrings(
               linea.quantity || "0",
               linea.length_cm || "0",
