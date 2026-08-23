@@ -23,6 +23,7 @@ import {
   HISTORIAL_TARIFAS,
   HORNO_CHICO,
   KILNS_PAGE,
+  PRODUCTS_PAGE,
   QUEMA_BORRADOR,
   QUEMA_CONFIRMADA,
 } from "@/test/firingsFixtures";
@@ -82,6 +83,7 @@ function mockQuemas(escenario: Escenario = {}) {
       return jsonResponse(201, HORNO_CHICO);
     }
     if (url.includes("/kilns")) return jsonResponse(200, KILNS_PAGE);
+    if (url.includes("/products")) return jsonResponse(200, PRODUCTS_PAGE);
     return errorResponse(404, "NOT_FOUND");
   });
 }
@@ -416,6 +418,27 @@ describe("quemas: nueva quema", () => {
     expect(within(dialogo).getByRole("button", { name: /guardar borrador/i })).toBeDisabled();
   });
 
+  it("la pieza se elige del catálogo y no se teclea a mano", async () => {
+    const spy = mockQuemas();
+    const user = userEvent.setup();
+    renderApp(["/quemas"]);
+
+    await user.click(await screen.findByRole("button", { name: "Nueva quema" }));
+    const dialogo = await screen.findByRole("dialog", { name: /nueva quema/i });
+
+    // Hay un selector de pieza, y ningun campo libre de descripcion que
+    // permitiria inventar un producto que ya existe en el catalogo.
+    expect(within(dialogo).getByRole("combobox", { name: /pieza/i })).toBeInTheDocument();
+    expect(within(dialogo).queryByLabelText(/descripción/i)).not.toBeInTheDocument();
+
+    // El catalogo se consulta al servidor, filtrado a productos terminados.
+    await waitFor(() =>
+      expect(
+        urls(spy).some((u) => u.includes("/products") && u.includes("FINISHED_PRODUCT")),
+      ).toBe(true),
+    );
+  });
+
   it("selecciona el horno con el selector propio, no con uno nativo", async () => {
     mockQuemas();
     const user = userEvent.setup();
@@ -432,7 +455,7 @@ describe("quemas: nueva quema", () => {
 
 // ---------------------------------------------------------------------------
 describe("quemas: tuberia decimal", () => {
-  it("recorta los decimales sobre el texto, sin pasar por coma flotante", () => {
+  it("formatea sobre el texto, sin pasar por coma flotante", () => {
     // 1041.384083 no es representable en binario: si pasara por parseFloat el
     // ultimo digito podria cambiar.
     expect(formatDecimalString("1041.384083", 2)).toBe("1041.38");
@@ -440,6 +463,17 @@ describe("quemas: tuberia decimal", () => {
     expect(formatDecimalString("0.1", 3)).toBe("0.100");
     expect(formatDecimalString("26010.000000", 0)).toBe("26010");
     expect(formatDecimalString("-5.5", 1)).toBe("-5.5");
+  });
+
+  it("redondea a la mitad hacia arriba, como la hoja del negocio", () => {
+    // La hoja muestra 23.36 y 70.07 para estas dos cifras: truncar dejaria
+    // ambas un centimo por debajo y no cuadrarian con el documento.
+    expect(formatDecimalString("23.356401", 2)).toBe("23.36");
+    expect(formatDecimalString("70.069204", 2)).toBe("70.07");
+    expect(formatDecimalString("112.110727", 2)).toBe("112.11");
+    // El acarreo se propaga por toda la cifra.
+    expect(formatDecimalString("9.999", 2)).toBe("10.00");
+    expect(formatDecimalString("0.5", 0)).toBe("1");
   });
 
   it("conserva digitos que un float perderia", () => {

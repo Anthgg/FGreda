@@ -32,26 +32,35 @@ export const FIRING_STATUS_TONE: Record<FiringStatus, "neutral" | "positive" | "
 /**
  * Formatea un decimal recibido como texto sin pasar por `parseFloat`.
  *
- * Se trabaja sobre la cadena: se recorta o se rellena la parte decimal. Asi
- * "1041.384083" se muestra como "1041.38" sin que el numero pase nunca por la
- * coma flotante binaria.
+ * Se trabaja sobre la cadena y se redondea a la mitad hacia arriba con
+ * `BigInt`, que es lo que hace la hoja de cálculo del negocio: 23.356401 se
+ * muestra como 23.36, no como 23.35. Truncar daría importes un céntimo por
+ * debajo y quien comparase con el documento vería una diferencia.
  */
 export function formatDecimalString(value: string | null | undefined, decimals: number): string {
   if (value === null || value === undefined || value === "") return "—";
+  if (!/^-?\d*(\.\d+)?$/.test(value.trim())) return "—";
 
-  const negative = value.startsWith("-");
-  const cuerpo = negative ? value.slice(1) : value;
+  const limpio = value.trim();
+  const negative = limpio.startsWith("-");
+  const cuerpo = negative ? limpio.slice(1) : limpio;
   const [enteraCruda = "0", decimalCruda = ""] = cuerpo.split(".");
   const entera = enteraCruda === "" ? "0" : enteraCruda;
 
-  if (decimals <= 0) return `${negative ? "-" : ""}${entera}`;
+  // Un digito de mas para poder mirar el que decide el redondeo.
+  const relleno = decimalCruda.padEnd(decimals + 1, "0");
+  const conservados = relleno.slice(0, decimals);
+  const siguiente = relleno.charCodeAt(decimals) - 48;
 
-  const decimal =
-    decimalCruda.length >= decimals
-      ? decimalCruda.slice(0, decimals)
-      : decimalCruda.padEnd(decimals, "0");
+  let digitos = BigInt(entera + conservados);
+  if (siguiente >= 5) digitos += 1n;
 
-  return `${negative ? "-" : ""}${entera}.${decimal}`;
+  const texto = digitos.toString().padStart(decimals + 1, "0");
+  const corte = texto.length - decimals;
+  const signo = negative && digitos !== 0n ? "-" : "";
+
+  if (decimals <= 0) return `${signo}${texto}`;
+  return `${signo}${texto.slice(0, corte)}.${texto.slice(corte)}`;
 }
 
 /** Porcentaje con un decimal, listo para mostrar. */

@@ -9,7 +9,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { SecondaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
+import {
+  ProductSelectField,
+  SecondaryButton,
+  SelectField,
+  TextAreaField,
+  TextField,
+} from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 import {
@@ -28,6 +34,7 @@ import {
   formatPercentage,
   multiplyDecimalStrings,
 } from "@/features/firings/labels";
+import { FIRING_PIECE_PRODUCT_TYPES } from "@/features/firings/pieceTypes";
 import { useFiringPreview } from "@/features/firings/useFirings";
 import type { FiringCalculateOut, FiringType, KilnOut } from "@/types/firings";
 
@@ -282,10 +289,21 @@ export function FiringEditor({
                 ].join(" ")}
               >
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  <TextField
-                    label="Descripción"
-                    value={linea.description}
-                    onChange={(texto) => cambiarLinea(indice, { description: texto })}
+                  {/* La pieza se elige del catálogo: escribir el nombre a
+                      mano acabaría duplicando productos que ya existen. */}
+                  <ProductSelectField
+                    label="Pieza"
+                    value={linea.product_id === null ? "" : String(linea.product_id)}
+                    selectedLabel={linea.description || undefined}
+                    onChange={(valor, product) =>
+                      cambiarLinea(indice, {
+                        product_id: valor === "" ? null : Number(valor),
+                        description: product ? product.name : "",
+                      })
+                    }
+                    productTypes={FIRING_PIECE_PRODUCT_TYPES}
+                    placeholder="Seleccionar pieza…"
+                    searchPlaceholder="Buscar por nombre o referencia (ej. Plato, LAB50…)"
                     className="col-span-2"
                   />
                   <TextField

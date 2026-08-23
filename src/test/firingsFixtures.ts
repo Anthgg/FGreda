@@ -237,3 +237,30 @@ export const CALCULO_EXCEDIDO: FiringCalculateOut = {
     capacity_exceeded: true,
   })),
 };
+
+/** Catálogo mínimo para el selector de piezas. */
+export const PRODUCTS_PAGE = {
+  items: [
+    {
+      id: 501,
+      internal_reference: "LAB50001",
+      name: "Plato palta",
+      product_type: "FINISHED_PRODUCT" as const,
+      product_category_id: 1,
+      product_category_path: "Piezas",
+      pos_category_id: null,
+      pos_category_name: null,
+      base_uom_code: "u",
+      purchase_uom_code: null,
+      cost: null,
+      sale_price: null,
+      sale_tax_rate: null,
+      active: true,
+      purchasable: false,
+      sellable: true,
+    },
+  ],
+  total: 1,
+  limit: 50,
+  offset: 0,
+};
