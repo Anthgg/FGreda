@@ -10,6 +10,10 @@ import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
+import { DetalleCotizacionPage } from "@/features/quotations/DetalleCotizacionPage";
+import { EditarCotizacionPage } from "@/features/quotations/EditarCotizacionPage";
+import { NuevaCotizacionPage } from "@/features/quotations/NuevaCotizacionPage";
+import { QuotationsPage } from "@/features/quotations/QuotationsPage";
 import { RecipesPage } from "@/features/recipes/RecipesPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { AppShell } from "@/layouts/AppShell";
@@ -41,6 +45,10 @@ export function AppRoutes() {
           <Route path="quemas/nueva" element={<NuevaQuemaPage />} />
           <Route path="quemas/:id" element={<DetalleQuemaPage />} />
           <Route path="quemas/:id/editar" element={<EditarQuemaPage />} />
+          <Route path="cotizaciones" element={<QuotationsPage />} />
+          <Route path="cotizaciones/nueva" element={<NuevaCotizacionPage />} />
+          <Route path="cotizaciones/:id" element={<DetalleCotizacionPage />} />
+          <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
@@ -48,4 +56,3 @@ export function AppRoutes() {
     </Routes>
   );
 }
-
