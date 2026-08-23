@@ -42,9 +42,19 @@ interface ProductSelectFieldProps {
   hint?: string | undefined;
   error?: string | undefined;
   className?: string | undefined;
+  /** Permite solicitar la creación de un nuevo producto cuando no hay coincidencia exacta */
+  allowCreate?: boolean | undefined;
+  /** Callback cuando se solicita crear un producto */
+  onCreateRequested?: ((searchText: string) => void) | undefined;
+  /** Etiqueta de la acción de crear */
+  createLabel?: ((searchText: string) => string) | undefined;
 }
 
 const PAGE_SIZE = 50;
+
+function normalizeSearchText(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
 
 export function ProductSelectField({
   label,
@@ -62,6 +72,9 @@ export function ProductSelectField({
   hint,
   error,
   className = "",
+  allowCreate = false,
+  onCreateRequested,
+  createLabel,
 }: ProductSelectFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -174,13 +187,38 @@ export function ProductSelectField({
 
   // Determinar el label a mostrar
   const displayLabel = useMemo(() => {
-    if (!value) return null;
+    if (value && labelCache[value]) return labelCache[value];
+    if (value) {
+      const found = availableProducts.find((p) => String(p.id) === value);
+      if (found) return `${found.internal_reference} · ${found.name}`;
+    }
     if (selectedLabel) return selectedLabel;
-    if (labelCache[value]) return labelCache[value];
-    const found = availableProducts.find((p) => String(p.id) === value);
-    if (found) return `${found.internal_reference} · ${found.name}`;
     return null;
   }, [value, selectedLabel, labelCache, availableProducts]);
+
+  // Coincidencia exacta normalizada con productos disponibles
+  const normalizedSearch = normalizeSearchText(search);
+  const hasExactMatch = useMemo(() => {
+    if (!normalizedSearch) return false;
+    return availableProducts.some(
+      (p) =>
+        normalizeSearchText(p.name) === normalizedSearch ||
+        normalizeSearchText(p.internal_reference) === normalizedSearch,
+    );
+  }, [availableProducts, normalizedSearch]);
+
+  const canShowCreate =
+    Boolean(allowCreate) &&
+    Boolean(onCreateRequested) &&
+    Boolean(search.trim()) &&
+    !isLoading &&
+    !hasExactMatch;
+
+  const createActionText = useMemo(() => {
+    const trimmed = search.trim();
+    if (createLabel) return createLabel(trimmed);
+    return `+ Crear pieza "${trimmed}"`;
+  }, [createLabel, search]);
 
   // Cerrar al hacer click fuera
   useEffect(() => {
@@ -243,12 +281,22 @@ export function ProductSelectField({
     triggerRef.current?.focus();
   };
 
+  const handleCreateAction = () => {
+    const trimmed = search.trim();
+    if (!trimmed || !onCreateRequested) return;
+    setIsOpen(false);
+    onCreateRequested(trimmed);
+    triggerRef.current?.focus();
+  };
+
   const handleLoadMore = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isFetching && hasMore) {
       setOffset((prev) => prev + PAGE_SIZE);
     }
   };
+
+  const totalNavigable = availableProducts.length + (canShowCreate ? 1 : 0);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (disabled) return;
@@ -261,7 +309,7 @@ export function ProductSelectField({
           setHighlightedIndex(0);
         } else {
           setHighlightedIndex((prev) =>
-            prev < availableProducts.length - 1 ? prev + 1 : prev,
+            prev < totalNavigable - 1 ? prev + 1 : prev,
           );
         }
         break;
@@ -270,7 +318,7 @@ export function ProductSelectField({
         event.preventDefault();
         if (!isOpen) {
           setIsOpen(true);
-          setHighlightedIndex(availableProducts.length - 1);
+          setHighlightedIndex(totalNavigable > 0 ? totalNavigable - 1 : 0);
         } else {
           setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
         }
@@ -280,6 +328,9 @@ export function ProductSelectField({
         if (!isOpen) {
           event.preventDefault();
           setIsOpen(true);
+        } else if (canShowCreate && highlightedIndex === availableProducts.length) {
+          event.preventDefault();
+          handleCreateAction();
         } else if (
           highlightedIndex >= 0 &&
           highlightedIndex < availableProducts.length
@@ -411,6 +462,7 @@ export function ProductSelectField({
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder={searchPlaceholder}
                   className="w-full h-8 pl-8 pr-7 text-xs bg-zinc-50 rounded-lg border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 focus:bg-white transition-colors"
                 />
@@ -445,14 +497,45 @@ export function ProductSelectField({
                   </button>
                 </li>
               ) : availableProducts.length === 0 ? (
-                <li className="px-3 py-6 text-center text-xs text-zinc-400 select-none">
+                <li className="px-3 py-4 text-center text-xs text-zinc-500 select-none space-y-2">
                   {debouncedSearch ? (
-                    <span>
-                      No se encontraron resultados para &ldquo;{debouncedSearch}&rdquo;
-                    </span>
+                    <p>
+                      No se encontraron piezas para &ldquo;{debouncedSearch}&rdquo;
+                    </p>
                   ) : (
-                    <span>No hay productos disponibles</span>
+                    <p>No hay piezas disponibles</p>
                   )}
+                  {canShowCreate ? (
+                    <button
+                      type="button"
+                      id={`${id}-create-option`}
+                      role="option"
+                      aria-selected={highlightedIndex === 0}
+                      onClick={handleCreateAction}
+                      onMouseEnter={() => setHighlightedIndex(0)}
+                      className={[
+                        "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer text-left",
+                        highlightedIndex === 0
+                          ? "bg-zinc-900 text-white border-zinc-900"
+                          : "bg-zinc-50 text-zinc-900 border-zinc-200 hover:bg-zinc-100",
+                      ].join(" ")}
+                    >
+                      <svg
+                        className="size-3.5 shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      <span>{createActionText}</span>
+                    </button>
+                  ) : null}
                 </li>
               ) : (
                 <>
@@ -508,6 +591,41 @@ export function ProductSelectField({
                       </li>
                     );
                   })}
+
+                  {/* Opción Crear si no hay coincidencia exacta */}
+                  {canShowCreate ? (
+                    <li className="p-1 border-t border-zinc-100 mt-1">
+                      <button
+                        type="button"
+                        id={`${id}-create-option`}
+                        role="option"
+                        aria-selected={highlightedIndex === availableProducts.length}
+                        onClick={handleCreateAction}
+                        onMouseEnter={() => setHighlightedIndex(availableProducts.length)}
+                        className={[
+                          "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer text-left",
+                          highlightedIndex === availableProducts.length
+                            ? "bg-zinc-900 text-white border-zinc-900"
+                            : "bg-zinc-50 text-zinc-900 border-zinc-200 hover:bg-zinc-100",
+                        ].join(" ")}
+                      >
+                        <svg
+                          className="size-3.5 shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M12 4v16m8-8H4"
+                          />
+                        </svg>
+                        <span>{createActionText}</span>
+                      </button>
+                    </li>
+                  ) : null}
 
                   {/* Botón Cargar Más */}
                   {hasMore ? (

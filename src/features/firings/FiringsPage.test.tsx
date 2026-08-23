@@ -83,7 +83,54 @@ function mockQuemas(escenario: Escenario = {}) {
       return jsonResponse(201, HORNO_CHICO);
     }
     if (url.includes("/kilns")) return jsonResponse(200, KILNS_PAGE);
-    if (url.includes("/products")) return jsonResponse(200, PRODUCTS_PAGE);
+    if (url.includes("/categories")) {
+      return jsonResponse(200, [
+        { id: 1, name: "Piezas", parent_id: null, display_path: "Piezas", active: true },
+      ]);
+    }
+    if (url.includes("/units")) {
+      return jsonResponse(200, [
+        {
+          code: "unit",
+          name: "Unidad",
+          symbol: "u",
+          dimension: "COUNT",
+          factor_to_base: "1",
+          is_base: true,
+          active: true,
+        },
+      ]);
+    }
+    if (url.includes("/products") && (init.method ?? "GET") === "POST") {
+      const body = init.body ? JSON.parse(String(init.body)) : {};
+      return jsonResponse(201, {
+        id: 502,
+        internal_reference: "LAB50002",
+        name: body.name || "Nueva pieza",
+        product_type: body.product_type || "FINISHED_PRODUCT",
+        product_category_id: body.product_category_id || 1,
+        product_category_path: "Piezas",
+        base_uom_code: body.base_uom_code || "unit",
+        purchase_uom_code: body.purchase_uom_code || "unit",
+        active: true,
+        sellable: false,
+        purchasable: false,
+        available_in_pos: false,
+        cost: null,
+        sale_price: null,
+        sale_tax_rate: null,
+        purchase_tax_rate: null,
+        notes: null,
+      });
+    }
+    if (url.includes("/products")) {
+      const u = new URL(url, "http://localhost");
+      const search = u.searchParams.get("search");
+      if (search && !search.toLowerCase().includes("plato")) {
+        return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      }
+      return jsonResponse(200, PRODUCTS_PAGE);
+    }
     return errorResponse(404, "NOT_FOUND");
   });
 }
@@ -112,7 +159,7 @@ describe("quemas: estructura de la pantalla", () => {
     renderApp(["/quemas"]);
 
     await screen.findByRole("tab", { name: "Listado" });
-    expect(screen.getByRole("button", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Nueva quema" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /nueva quema/i })).not.toBeInTheDocument();
   });
 
@@ -371,7 +418,7 @@ describe("quemas: permisos", () => {
     renderApp(["/quemas"]);
 
     await screen.findByRole("tab", { name: "Listado" });
-    expect(screen.queryByRole("button", { name: "Nueva quema" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Nueva quema" })).not.toBeInTheDocument();
   });
 
   it("un OPERATOR no puede confirmar ni anular", async () => {
@@ -388,48 +435,50 @@ describe("quemas: permisos", () => {
     renderApp(["/quemas"]);
 
     expect(await screen.findByRole("button", { name: "Confirmar" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Nueva quema" })).toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
-describe("quemas: nueva quema", () => {
-  it("abre el formulario y ofrece añadir sesiones y piezas", async () => {
+// ---------------------------------------------------------------------------
+describe("quemas: nueva quema (/quemas/nueva)", () => {
+  it("navega a /quemas/nueva al hacer clic en 'Nueva quema' y NO renderiza un modal dialog", async () => {
     mockQuemas();
     const user = userEvent.setup();
     renderApp(["/quemas"]);
 
-    await user.click(await screen.findByRole("button", { name: "Nueva quema" }));
+    await user.click(await screen.findByRole("link", { name: "Nueva quema" }));
 
-    const dialogo = await screen.findByRole("dialog", { name: /nueva quema/i });
-    expect(within(dialogo).getByText("Sesiones de horno")).toBeInTheDocument();
-    expect(within(dialogo).getByText("Piezas")).toBeInTheDocument();
-    expect(within(dialogo).getByRole("button", { name: /agregar pieza/i })).toBeInTheDocument();
+    // La nueva quema es una página real, no un modal dialog
+    expect(screen.queryByRole("dialog", { name: /nueva quema/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.getByText("Borrador")).toBeInTheDocument();
+    expect(await screen.findByText("Sesiones de horno")).toBeInTheDocument();
+    expect(screen.getByText("Piezas")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /agregar pieza/i })).toBeInTheDocument();
   });
 
   it("no permite guardar una hoja incompleta", async () => {
     mockQuemas();
-    const user = userEvent.setup();
-    renderApp(["/quemas"]);
+    renderApp(["/quemas/nueva"]);
 
-    await user.click(await screen.findByRole("button", { name: "Nueva quema" }));
-    const dialogo = await screen.findByRole("dialog", { name: /nueva quema/i });
-
-    expect(within(dialogo).getByRole("button", { name: /guardar borrador/i })).toBeDisabled();
+    await screen.findByRole("heading", { name: "Nueva quema" });
+    await screen.findByText("Sesiones de horno");
+    const guardarBtns = screen.getAllByRole("button", { name: /guardar borrador/i });
+    for (const btn of guardarBtns) {
+      expect(btn).toBeDisabled();
+    }
   });
 
   it("la pieza se elige del catálogo y no se teclea a mano", async () => {
     const spy = mockQuemas();
-    const user = userEvent.setup();
-    renderApp(["/quemas"]);
+    renderApp(["/quemas/nueva"]);
 
-    await user.click(await screen.findByRole("button", { name: "Nueva quema" }));
-    const dialogo = await screen.findByRole("dialog", { name: /nueva quema/i });
+    await screen.findByRole("heading", { name: "Nueva quema" });
 
-    // Hay un selector de pieza, y ningun campo libre de descripcion que
-    // permitiria inventar un producto que ya existe en el catalogo.
-    expect(within(dialogo).getByRole("combobox", { name: /pieza/i })).toBeInTheDocument();
-    expect(within(dialogo).queryByLabelText(/descripción/i)).not.toBeInTheDocument();
+    // Hay un selector de pieza, y ningun campo libre de descripcion
+    expect(await screen.findByRole("combobox", { name: /pieza/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/descripción/i)).not.toBeInTheDocument();
 
     // El catalogo se consulta al servidor, filtrado a productos terminados.
     await waitFor(() =>
@@ -441,15 +490,225 @@ describe("quemas: nueva quema", () => {
 
   it("selecciona el horno con el selector propio, no con uno nativo", async () => {
     mockQuemas();
-    const user = userEvent.setup();
-    const { container } = renderApp(["/quemas"]);
+    const { container } = renderApp(["/quemas/nueva"]);
 
-    await user.click(await screen.findByRole("button", { name: "Nueva quema" }));
-    await screen.findByRole("dialog", { name: /nueva quema/i });
+    await screen.findByRole("heading", { name: "Nueva quema" });
+    await screen.findByText("Sesiones de horno");
 
     expect(container.querySelectorAll("select")).toHaveLength(0);
     // El selector propio se expone como combobox accesible, no como <select>.
     expect(screen.getAllByRole("combobox", { name: /horno/i }).length).toBeGreaterThan(0);
+  });
+
+  it("ADMIN puede crear una pieza contextual desde el selector y queda automáticamente seleccionada", async () => {
+    const spy = mockQuemas();
+    const user = userEvent.setup();
+    renderApp(["/quemas/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva quema" });
+
+    // Ingresar dimensiones previamente
+    const inputLargo = await screen.findByPlaceholderText("Largo");
+    await user.type(inputLargo, "15");
+
+    // Abrir selector de pieza y buscar una no existente
+    const pieceSelect = screen.getByRole("combobox", { name: /pieza/i });
+    await user.click(pieceSelect);
+
+    const searchInput = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    await user.type(searchInput, "Florero volcán");
+
+    // Debe mostrar la opción de crear
+    const createBtn = await screen.findByText('+ Crear pieza "Florero volcán"');
+    await user.click(createBtn);
+
+    // Abre el modal compacto de Nueva pieza (este SÍ es modal porque es alta rápida de producto)
+    const modalPieza = await screen.findByRole("dialog", { name: /nueva pieza/i });
+    expect(within(modalPieza).getByDisplayValue("Florero volcán")).toBeInTheDocument();
+    expect(within(modalPieza).getByText("Pieza terminada")).toBeInTheDocument();
+    expect(within(modalPieza).getByText(/Automática \(LAB50xxx\)/i)).toBeInTheDocument();
+
+    // Seleccionar categoría
+    const catSelect = within(modalPieza).getByRole("combobox", { name: /categoría/i });
+    await user.click(catSelect);
+    const catOption = await within(modalPieza).findByText("Piezas");
+    await user.click(catOption);
+
+    // Guardar pieza
+    const guardarBtn = within(modalPieza).getByRole("button", { name: /guardar pieza/i });
+    await user.click(guardarBtn);
+
+    // Modal debe cerrarse y el producto quedar seleccionado en la línea
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /nueva pieza/i })).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText("LAB50002 · Florero volcán")).toBeInTheDocument();
+    // Conserva las dimensiones ingresadas
+    expect(inputLargo).toHaveValue("15");
+
+    // Verificar que se invocó POST /products con FINISHED_PRODUCT
+    const postCalls = spy.mock.calls.filter(
+      ([url, init]) => String(url).includes("/products") && (init?.method ?? "GET") === "POST",
+    );
+    expect(postCalls).toHaveLength(1);
+    const bodySent = JSON.parse(String(postCalls[0]![1]?.body));
+    expect(bodySent.name).toBe("Florero volcán");
+    expect(bodySent.product_type).toBe("FINISHED_PRODUCT");
+    expect(bodySent.product_category_id).toBe(1);
+  });
+
+  it("OPERATOR no ve la opción de crear pieza en el selector", async () => {
+    mockQuemas({ rol: "OPERATOR" });
+    const user = userEvent.setup();
+    renderApp(["/quemas"]);
+
+    // OPERATOR puede ver el simulador
+    await user.click(await screen.findByRole("tab", { name: "Simulador" }));
+
+    const pieceSelect = await screen.findByRole("combobox", { name: /pieza/i });
+    await user.click(pieceSelect);
+
+    const searchInput = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    await user.type(searchInput, "Florero volcán");
+
+    await waitFor(() => {
+      expect(screen.getByText(/No se encontraron piezas para/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Crear pieza/i)).not.toBeInTheDocument();
+  });
+
+  it("no muestra acción de crear cuando la búsqueda coincide con un producto existente (insensible a mayúsculas/espacios)", async () => {
+    mockQuemas();
+    const user = userEvent.setup();
+    renderApp(["/quemas/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva quema" });
+
+    const pieceSelect = await screen.findByRole("combobox", { name: /pieza/i });
+    await user.click(pieceSelect);
+
+    const searchInput = await screen.findByPlaceholderText(/Buscar por nombre o referencia/i);
+    await user.type(searchInput, "  PLATO   PALTA  ");
+
+    // Debe mostrar la coincidencia existente
+    expect(await screen.findByText("Plato palta")).toBeInTheDocument();
+    // No debe mostrar botón de crear
+    expect(screen.queryByText(/Crear pieza/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("quemas: rutas dedicadas (/quemas/nueva, /quemas/:id, /quemas/:id/editar)", () => {
+  it("/quemas/nueva guarda la quema y redirige al detalle /quemas/:id", async () => {
+    const spy = mockQuemas();
+    const user = userEvent.setup();
+    renderApp(["/quemas/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva quema" });
+    await screen.findByRole("button", { name: /añadir sesión/i });
+
+    // Añadir sesión de horno
+    const kilnSelect = screen.getByRole("combobox", { name: "Horno" });
+    await user.click(kilnSelect);
+    const kilnOption = await screen.findByText(/Horno pequeño/);
+    await user.click(kilnOption);
+    await user.click(screen.getByRole("button", { name: /añadir sesión/i }));
+
+    // Ingresar datos de pieza
+    const inputLargo = screen.getByPlaceholderText("Largo");
+    await user.type(inputLargo, "18");
+    const inputAncho = screen.getByPlaceholderText("Ancho");
+    await user.type(inputAncho, "12");
+    const inputAlto = screen.getByPlaceholderText("Alto");
+    await user.type(inputAlto, "3");
+
+    // Seleccionar pieza existente
+    const pieceSelect = screen.getByRole("combobox", { name: "Pieza" });
+    await user.click(pieceSelect);
+    const pieceOption = await screen.findByText(/Plato palta/);
+    await user.click(pieceOption);
+
+    // Asignar quema baja
+    const lowKilnSelect = screen.getByRole("combobox", { name: "Quema baja en" });
+    await user.click(lowKilnSelect);
+    const lowOptions = await screen.findAllByText(/Horno pequeño/);
+    // Seleccionar la opción del dropdown abierto
+    await user.click(lowOptions[lowOptions.length - 1]!);
+
+    // El botón guardar borrador ahora debe estar habilitado
+    const guardarBtn = screen.getAllByRole("button", { name: /guardar borrador/i })[0]!;
+    expect(guardarBtn).toBeEnabled();
+    await user.click(guardarBtn);
+
+    // Verifica que se llamó POST /firings
+    await waitFor(() => {
+      expect(
+        spy.mock.calls.some(([url, init]) => String(url).includes("/firings") && (init?.method ?? "GET") === "POST"),
+      ).toBe(true);
+    });
+
+    // Redirige al detalle /quemas/:id
+    expect(await screen.findByText(/HR-2026-/)).toBeInTheDocument();
+  });
+
+  it("/quemas/:id muestra el detalle de la quema y enlace para volver", async () => {
+    mockQuemas({ detalle: QUEMA_CONFIRMADA });
+    renderApp(["/quemas/10"]);
+
+    expect(await screen.findByText("HR-2026-000001")).toBeInTheDocument();
+    expect(screen.getByText("Confirmada")).toBeInTheDocument();
+    expect(screen.getByText("Volver a quemas")).toBeInTheDocument();
+    expect(screen.getByText("Sesiones de horno")).toBeInTheDocument();
+    expect(screen.getByText("Piezas")).toBeInTheDocument();
+  });
+
+  it("/quemas/:id para una quema DRAFT muestra botón de Editar que navega a /quemas/:id/editar", async () => {
+    mockQuemas({ detalle: QUEMA_BORRADOR });
+    const user = userEvent.setup();
+    renderApp(["/quemas/11"]);
+
+    expect(await screen.findByText("HR-2026-000002")).toBeInTheDocument();
+    expect(screen.getByText("Borrador")).toBeInTheDocument();
+
+    const editLink = screen.getByRole("link", { name: /editar/i });
+    expect(editLink).toHaveAttribute("href", "/quemas/11/editar");
+
+    await user.click(editLink);
+    expect(await screen.findByRole("heading", { name: /editar quema/i })).toBeInTheDocument();
+  });
+
+  it("/quemas/:id/editar permite modificar borrador y guardar cambios", async () => {
+    const spy = mockQuemas({ detalle: QUEMA_BORRADOR });
+    const user = userEvent.setup();
+    renderApp(["/quemas/11/editar"]);
+
+    expect(await screen.findByRole("heading", { name: /editar quema/i })).toBeInTheDocument();
+    expect(await screen.findByText("Plato palta")).toBeInTheDocument();
+
+    // Modificar notas
+    const notesInput = screen.getByPlaceholderText(/Añadir observaciones adicionales/i);
+    await user.type(notesInput, "Notas actualizadas");
+
+    const guardarBtn = screen.getAllByRole("button", { name: /guardar cambios/i })[0]!;
+    expect(guardarBtn).toBeEnabled();
+    await user.click(guardarBtn);
+
+    // Debe invocar PUT /firings/11
+    await waitFor(() => {
+      expect(
+        spy.mock.calls.some(([url, init]) => String(url).includes("/firings/11") && (init?.method ?? "GET") === "PUT"),
+      ).toBe(true);
+    });
+  });
+
+  it("/quemas/:id/editar para una quema CONFIRMED no permite edición y muestra aviso", async () => {
+    mockQuemas({ detalle: QUEMA_CONFIRMADA });
+    renderApp(["/quemas/10/editar"]);
+
+    expect(await screen.findByText("Esta quema no puede editarse")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ver detalle de la quema/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /guardar cambios/i })).not.toBeInTheDocument();
   });
 });
 

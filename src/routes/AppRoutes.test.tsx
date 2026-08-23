@@ -183,4 +183,19 @@ describe("rutas protegidas y Dashboard", () => {
 
     expect(await screen.findByRole("heading", { name: /inicio/i })).toBeInTheDocument();
   });
+
+  it("renderiza la ruta dedicada de /quemas/nueva dentro de AppShell", async () => {
+    mockFetch((url) => {
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/kilns")) return jsonResponse(200, { items: [], total: 0, limit: 200, offset: 0 });
+      if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    renderApp(["/quemas/nueva"]);
+
+    expect(await screen.findByRole("heading", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /nueva quema/i })).not.toBeInTheDocument();
+  });
 });

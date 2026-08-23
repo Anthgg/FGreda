@@ -6,6 +6,8 @@
  * ahora seria reescribir la historia.
  */
 
+import { Link } from "react-router-dom";
+
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Badge } from "@/features/masters/MasterTable";
 import {
@@ -89,11 +91,22 @@ export function FiringDetailPanel({
         </div>
 
         {canEdit ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {esBorrador ? (
-              <PrimaryButton type="button" onClick={() => onConfirm(firing)} disabled={isBusy}>
-                Confirmar
-              </PrimaryButton>
+              <>
+                <Link
+                  to={`/quemas/${firing.id}/editar`}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-xs font-medium text-zinc-700 shadow-xs hover:bg-zinc-50 hover:text-zinc-900 transition-colors"
+                >
+                  <svg className="size-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  Editar
+                </Link>
+                <PrimaryButton type="button" onClick={() => onConfirm(firing)} disabled={isBusy}>
+                  Confirmar
+                </PrimaryButton>
+              </>
             ) : null}
             {firing.status !== "CANCELLED" ? (
               <SecondaryButton onClick={() => onCancel(firing)} disabled={isBusy}>

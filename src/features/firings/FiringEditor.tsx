@@ -17,6 +17,7 @@ import {
   TextField,
 } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { useSession } from "@/features/auth/useSession";
 import { describeError } from "@/features/settings/messages";
 import {
   aPayload,
@@ -34,6 +35,7 @@ import {
   formatPercentage,
   multiplyDecimalStrings,
 } from "@/features/firings/labels";
+import { NuevaPiezaModal } from "@/features/firings/NuevaPiezaModal";
 import { FIRING_PIECE_PRODUCT_TYPES } from "@/features/firings/pieceTypes";
 import { useFiringPreview } from "@/features/firings/useFirings";
 import type { FiringCalculateOut, FiringType, KilnOut } from "@/types/firings";
@@ -69,9 +71,9 @@ function Metric({
     alert: "border-red-200 bg-red-50",
   };
   return (
-    <div className={`rounded-2xl border p-3 ${tones[tone]}`}>
-      <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-zinc-900">{value}</p>
+    <div className={`rounded-2xl border p-3.5 shadow-xs ${tones[tone]}`}>
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">{label}</p>
+      <p className="mt-0.5 truncate text-base font-semibold tabular-nums text-zinc-900">{value}</p>
       {hint ? <p className="mt-0.5 text-[10px] text-zinc-400">{hint}</p> : null}
     </div>
   );
@@ -84,8 +86,15 @@ export function FiringEditor({
   onPreview,
   showMetadata = true,
 }: FiringEditorProps) {
+  const { data: user } = useSession();
+  const isAdmin = user?.role === "ADMIN";
+
   const [nuevoHorno, setNuevoHorno] = useState<string>(SIN_HORNO);
   const [nuevoTipo, setNuevoTipo] = useState<FiringType>("LOW");
+  const [creandoPieza, setCreandoPieza] = useState<{
+    lineIndex: number;
+    initialName: string;
+  } | null>(null);
 
   const payload = useMemo(() => aPayload(value), [value]);
   const [payloadDebounced, setPayloadDebounced] = useState(payload);
@@ -151,46 +160,72 @@ export function FiringEditor({
   const porLinea = new Map(preview.data?.lines.map((l) => [l.description, l]) ?? []);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 sm:space-y-8">
       {showMetadata ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField
-            label="Fecha de quema"
-            type="text"
-            value={value.firing_date}
-            onChange={(fecha) => onChange({ ...value, firing_date: fecha })}
-            placeholder="AAAA-MM-DD"
-            hint="Opcional mientras la hoja esté en borrador."
-          />
-          <TextAreaField
-            label="Notas"
-            value={value.notes}
-            onChange={(notas) => onChange({ ...value, notes: notas })}
-            rows={2}
-          />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 sm:gap-6">
+          <div className="col-span-1">
+            <TextField
+              label="Fecha de quema"
+              type="text"
+              value={value.firing_date}
+              onChange={(fecha) => onChange({ ...value, firing_date: fecha })}
+              placeholder="AAAA-MM-DD"
+              hint="Opcional mientras la hoja esté en borrador."
+            />
+          </div>
+          <div className="col-span-1 md:col-span-2">
+            <TextAreaField
+              label="Notas"
+              value={value.notes}
+              onChange={(notas) => onChange({ ...value, notes: notas })}
+              rows={2}
+              placeholder="Añadir observaciones adicionales..."
+            />
+          </div>
         </div>
       ) : null}
 
-      {/* Sesiones de horno */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900">Sesiones de horno</h3>
+      <hr className="border-zinc-200/60" />
 
-        {value.sessions.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-zinc-300 px-3 py-4 text-xs text-zinc-500">
+      {/* Sesiones de horno */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
+            Sesiones de horno
+          </h3>
+        </div>
+
+        <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 flex items-start text-xs text-blue-900 gap-3">
+          <svg
+            className="size-5 text-blue-600 shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <p>
             Añada al menos un horno y su tipo de quema. Una pieza suele pasar por una quema
             baja y otra alta, que pueden ocurrir en hornos distintos.
           </p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+        </div>
+
+        {value.sessions.length > 0 ? (
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white/80 shadow-xs">
             <table className="min-w-full text-left text-xs">
-              <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
+              <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500 font-semibold border-b border-zinc-100">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Horno</th>
-                  <th className="px-3 py-2 font-semibold">Tipo</th>
-                  <th className="px-3 py-2 text-right font-semibold">Tarifa</th>
-                  <th className="px-3 py-2 text-right font-semibold">Capacidad</th>
-                  <th className="px-3 py-2 text-right font-semibold">Ocupación</th>
-                  <th className="px-3 py-2" />
+                  <th className="px-4 py-2.5">Horno</th>
+                  <th className="px-4 py-2.5">Tipo</th>
+                  <th className="px-4 py-2.5 text-right">Tarifa</th>
+                  <th className="px-4 py-2.5 text-right">Capacidad</th>
+                  <th className="px-4 py-2.5 text-right">Ocupación</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -204,31 +239,31 @@ export function FiringEditor({
                     (s) => s.kiln_id === sesion.kiln_id && s.firing_type === sesion.firing_type,
                   );
                   return (
-                    <tr key={sessionKey(sesion)}>
-                      <td className="px-3 py-2 font-medium text-zinc-900">
+                    <tr key={sessionKey(sesion)} className="hover:bg-zinc-50/50">
+                      <td className="px-4 py-2.5 font-medium text-zinc-900">
                         {kiln?.name ?? "—"}
                       </td>
-                      <td className="px-3 py-2">{FIRING_TYPE_LABEL[sesion.firing_type]}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-4 py-2.5">{FIRING_TYPE_LABEL[sesion.firing_type]}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
                         {tarifa ? (
                           formatDecimalString(tarifa, 2)
                         ) : (
                           <span className="text-red-600">Sin tarifa</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
+                      <td className="px-4 py-2.5 text-right tabular-nums text-zinc-500">
                         {formatDecimalString(kiln?.capacity_volume_cm3, 0)} cm³
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
+                      <td className="px-4 py-2.5 text-right tabular-nums text-zinc-500">
                         {calculada
                           ? formatPercentage(calculada.physical_occupancy_percentage)
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-4 py-2.5 text-right">
                         <button
                           type="button"
                           onClick={() => quitarSesion(indice)}
-                          className="text-[11px] text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline"
+                          className="text-[11px] text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline cursor-pointer"
                         >
                           Quitar
                         </button>
@@ -239,26 +274,31 @@ export function FiringEditor({
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
 
-        <div className="flex flex-wrap items-end gap-3">
-          <SelectField
-            label="Horno"
-            value={nuevoHorno}
-            options={opcionesHorno}
-            onChange={setNuevoHorno}
-            placeholder="Seleccionar horno…"
-            className="min-w-[220px] flex-1"
-          />
-          <SelectField
-            label="Tipo de quema"
-            value={nuevoTipo}
-            options={FIRING_TYPE_OPTIONS}
-            onChange={setNuevoTipo}
-            className="w-40"
-          />
+        <div className="flex flex-wrap md:flex-nowrap items-end gap-3 bg-zinc-50/60 p-4 rounded-2xl border border-zinc-100 shadow-xs">
+          <div className="flex-1 min-w-[200px]">
+            <SelectField
+              label="Horno"
+              value={nuevoHorno}
+              options={opcionesHorno}
+              onChange={setNuevoHorno}
+              placeholder="Seleccionar horno…"
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <SelectField
+              label="Tipo de quema"
+              value={nuevoTipo}
+              options={FIRING_TYPE_OPTIONS}
+              onChange={setNuevoTipo}
+            />
+          </div>
           <div className="pb-0.5">
-            <SecondaryButton onClick={anadirSesion} disabled={nuevoHorno === SIN_HORNO}>
+            <SecondaryButton
+              onClick={anadirSesion}
+              disabled={nuevoHorno === SIN_HORNO}
+            >
               Añadir sesión
             </SecondaryButton>
           </div>
@@ -266,10 +306,14 @@ export function FiringEditor({
       </section>
 
       {/* Piezas */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900">Piezas</h3>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
+            Piezas
+          </h3>
+        </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {value.lines.map((linea, indice) => {
             const calculada = porLinea.get(linea.description.trim());
             const volumenLocal = multiplyDecimalStrings(
@@ -282,57 +326,100 @@ export function FiringEditor({
               <div
                 key={linea.key}
                 className={[
-                  "rounded-2xl border p-3",
+                  "rounded-2xl border p-5 shadow-xs relative space-y-4 transition-colors",
                   calculada?.capacity_exceeded
-                    ? "border-red-300 bg-red-50/50"
-                    : "border-zinc-200 bg-white/60",
+                    ? "border-red-300 bg-red-50/40"
+                    : "border-zinc-200 bg-white/70",
                 ].join(" ")}
               >
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {/* La pieza se elige del catálogo: escribir el nombre a
-                      mano acabaría duplicando productos que ya existen. */}
-                  <ProductSelectField
-                    label="Pieza"
-                    value={linea.product_id === null ? "" : String(linea.product_id)}
-                    selectedLabel={linea.description || undefined}
-                    onChange={(valor, product) =>
-                      cambiarLinea(indice, {
-                        product_id: valor === "" ? null : Number(valor),
-                        description: product ? product.name : "",
-                      })
-                    }
-                    productTypes={FIRING_PIECE_PRODUCT_TYPES}
-                    placeholder="Seleccionar pieza…"
-                    searchPlaceholder="Buscar por nombre o referencia (ej. Plato, LAB50…)"
-                    className="col-span-2"
-                  />
-                  <TextField
-                    label="Cantidad"
-                    value={linea.quantity}
-                    onChange={(texto) => cambiarLinea(indice, { quantity: texto })}
-                    inputMode="numeric"
-                  />
-                  <TextField
-                    label="Largo (cm)"
-                    value={linea.length_cm}
-                    onChange={(texto) => cambiarLinea(indice, { length_cm: texto })}
-                    inputMode="decimal"
-                  />
-                  <TextField
-                    label="Ancho (cm)"
-                    value={linea.width_cm}
-                    onChange={(texto) => cambiarLinea(indice, { width_cm: texto })}
-                    inputMode="decimal"
-                  />
-                  <TextField
-                    label="Alto (cm)"
-                    value={linea.height_cm}
-                    onChange={(texto) => cambiarLinea(indice, { height_cm: texto })}
-                    inputMode="decimal"
-                  />
+                {/* Fila 1: Pieza, Cantidad y Dimensiones */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                  <div className="lg:col-span-5">
+                    <ProductSelectField
+                      label="Pieza"
+                      value={linea.product_id === null ? "" : String(linea.product_id)}
+                      selectedLabel={
+                        linea.product_internal_reference && linea.description
+                          ? `${linea.product_internal_reference} · ${linea.description}`
+                          : linea.description || undefined
+                      }
+                      onChange={(valor, product) =>
+                        cambiarLinea(indice, {
+                          product_id: valor === "" ? null : Number(valor),
+                          product_internal_reference: product ? product.internal_reference : null,
+                          description: product ? product.name : "",
+                        })
+                      }
+                      productTypes={FIRING_PIECE_PRODUCT_TYPES}
+                      placeholder="Seleccionar pieza…"
+                      searchPlaceholder="Buscar por nombre o referencia (ej. Plato, LAB50…)"
+                      allowCreate={isAdmin}
+                      onCreateRequested={(searchText) =>
+                        setCreandoPieza({ lineIndex: indice, initialName: searchText })
+                      }
+                      createLabel={(searchText) => `+ Crear pieza "${searchText}"`}
+                    />
+                  </div>
+
+                  <div className="lg:col-span-2">
+                    <TextField
+                      label="Cantidad"
+                      value={linea.quantity}
+                      onChange={(texto) => cambiarLinea(indice, { quantity: texto })}
+                      inputMode="numeric"
+                    />
+                  </div>
+
+                  <div className="lg:col-span-5">
+                    <label className="block text-xs font-medium text-zinc-700 mb-1">
+                      Dimensiones (cm)
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={linea.length_cm}
+                          onChange={(e) => cambiarLinea(indice, { length_cm: e.target.value })}
+                          placeholder="Largo"
+                          inputMode="decimal"
+                          className="w-full h-10 pl-7 pr-2 rounded-xl border border-zinc-200 bg-white text-xs sm:text-sm text-zinc-900 shadow-xs focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900"
+                        />
+                        <span className="absolute left-2.5 top-2.5 text-xs font-bold text-zinc-400 select-none">
+                          L
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={linea.width_cm}
+                          onChange={(e) => cambiarLinea(indice, { width_cm: e.target.value })}
+                          placeholder="Ancho"
+                          inputMode="decimal"
+                          className="w-full h-10 pl-7 pr-2 rounded-xl border border-zinc-200 bg-white text-xs sm:text-sm text-zinc-900 shadow-xs focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900"
+                        />
+                        <span className="absolute left-2.5 top-2.5 text-xs font-bold text-zinc-400 select-none">
+                          A
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={linea.height_cm}
+                          onChange={(e) => cambiarLinea(indice, { height_cm: e.target.value })}
+                          placeholder="Alto"
+                          inputMode="decimal"
+                          className="w-full h-10 pl-7 pr-2 rounded-xl border border-zinc-200 bg-white text-xs sm:text-sm text-zinc-900 shadow-xs focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900"
+                        />
+                        <span className="absolute left-2.5 top-2.5 text-xs font-bold text-zinc-400 select-none">
+                          H
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {/* Fila 2: Configuración de Quema */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end bg-zinc-50/70 p-4 rounded-xl border border-zinc-100">
                   <SelectField
                     label="Quema baja en"
                     value={linea.low_kiln_id === null ? SIN_HORNO : String(linea.low_kiln_id)}
@@ -359,28 +446,31 @@ export function FiringEditor({
                       })
                     }
                   />
-                  <SelectField
-                    label="Ocupación medida en"
-                    value={
-                      linea.factor_kiln_id === null ? SIN_HORNO : String(linea.factor_kiln_id)
-                    }
-                    options={[
-                      { value: SIN_HORNO, label: "Automático" },
-                      ...hornosHoja.map((k) => ({ value: String(k.id), label: k.name })),
-                    ]}
-                    onChange={(texto) =>
-                      cambiarLinea(indice, {
-                        factor_kiln_id: texto === SIN_HORNO ? null : Number(texto),
-                      })
-                    }
-                    hint="Horno cuya capacidad decide el factor."
-                  />
+                  <div>
+                    <SelectField
+                      label="Ocupación medida en"
+                      value={
+                        linea.factor_kiln_id === null ? SIN_HORNO : String(linea.factor_kiln_id)
+                      }
+                      options={[
+                        { value: SIN_HORNO, label: "Automático" },
+                        ...hornosHoja.map((k) => ({ value: String(k.id), label: k.name })),
+                      ]}
+                      onChange={(texto) =>
+                        cambiarLinea(indice, {
+                          factor_kiln_id: texto === SIN_HORNO ? null : Number(texto),
+                        })
+                      }
+                      hint="Horno cuya capacidad decide el factor."
+                    />
+                  </div>
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
+                {/* Fila 3: Métricas y acciones */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500 pt-1 border-t border-zinc-100">
                   <span className="tabular-nums">
                     Volumen:{" "}
-                    <strong className="text-zinc-700">
+                    <strong className="text-zinc-800">
                       {calculada
                         ? `${formatDecimalString(calculada.total_volume_cm3, 0)} cm³`
                         : volumenLocal
@@ -390,19 +480,19 @@ export function FiringEditor({
                     {calculada ? (
                       <>
                         {" · ocupación "}
-                        <strong className="text-zinc-700">
+                        <strong className="text-zinc-800">
                           {formatPercentage(calculada.occupancy_percentage)}
                         </strong>
                         {" · tramo "}
-                        <strong className="text-zinc-700">
+                        <strong className="text-zinc-800">
                           {calculada.occupancy_bracket} %
                         </strong>
                         {" · factor ×"}
-                        <strong className="text-zinc-700">
+                        <strong className="text-zinc-800">
                           {formatDecimalString(calculada.occupancy_factor, 2)}
                         </strong>
                         {" · costo "}
-                        <strong className="text-zinc-900">
+                        <strong className="text-zinc-950 font-bold">
                           {formatDecimalString(calculada.allocated_cost, 2)}
                         </strong>
                       </>
@@ -417,7 +507,7 @@ export function FiringEditor({
                           lines: value.lines.filter((_, i) => i !== indice),
                         })
                       }
-                      className="text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline"
+                      className="text-xs text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline cursor-pointer"
                     >
                       Quitar pieza
                     </button>
@@ -425,7 +515,7 @@ export function FiringEditor({
                 </div>
 
                 {calculada?.capacity_exceeded ? (
-                  <p role="alert" className="mt-2 text-[11px] font-medium text-red-600">
+                  <p role="alert" className="text-xs font-medium text-red-600">
                     Capacidad excedida: {formatDecimalString(calculada.total_volume_cm3, 0)} cm³
                     frente a la capacidad del horno elegido.
                   </p>
@@ -435,29 +525,33 @@ export function FiringEditor({
           })}
         </div>
 
-        <SecondaryButton onClick={() => onChange({ ...value, lines: [...value.lines, nuevaLinea()] })}>
+        <SecondaryButton
+          onClick={() => onChange({ ...value, lines: [...value.lines, nuevaLinea()] })}
+        >
           + Agregar pieza
         </SecondaryButton>
       </section>
 
       {/* Resumen */}
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-zinc-900">Resumen</h3>
+          <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
+            Resumen
+          </h3>
           {preview.isFetching ? <Spinner className="size-3" label="Calculando…" /> : null}
         </div>
 
         {payloadDebounced === null ? (
-          <p className="rounded-xl border border-dashed border-zinc-300 px-3 py-4 text-xs text-zinc-500">
+          <div className="rounded-2xl border border-dashed border-zinc-300 p-6 text-center text-xs text-zinc-500 bg-zinc-50/50">
             Complete al menos una sesión de horno y una pieza con sus dimensiones para ver el
-            costo.
-          </p>
+            costo estimado.
+          </div>
         ) : preview.isError ? (
-          <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-700">
+          <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">
             {describeError(preview.error)}
           </p>
         ) : preview.data ? (
-          <>
+          <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               <Metric
                 label="Volumen total"
@@ -487,13 +581,29 @@ export function FiringEditor({
                 marcadas.
               </p>
             ) : null}
-          </>
+          </div>
         ) : (
           <div className="flex justify-center py-6">
             <Spinner className="size-4" label="Calculando…" />
           </div>
         )}
       </section>
+
+      {/* Modal de alta rápida de pieza contextual */}
+      {creandoPieza !== null ? (
+        <NuevaPiezaModal
+          initialName={creandoPieza.initialName}
+          onClose={() => setCreandoPieza(null)}
+          onCreated={(nuevoProducto) => {
+            cambiarLinea(creandoPieza.lineIndex, {
+              product_id: nuevoProducto.id,
+              product_internal_reference: nuevoProducto.internal_reference,
+              description: nuevoProducto.name,
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
+

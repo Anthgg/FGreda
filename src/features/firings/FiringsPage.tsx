@@ -10,18 +10,18 @@
  * distintos garantizaria que se desincronizasen.
  */
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
-import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
 import { describeError } from "@/features/settings/messages";
-import { borradorVacio, aPayload, type FiringDraft } from "@/features/firings/draft";
+import { borradorVacio, type FiringDraft } from "@/features/firings/draft";
 import { FiringEditor } from "@/features/firings/FiringEditor";
 import { FiringListTab } from "@/features/firings/FiringListTab";
 import { KilnsTab } from "@/features/firings/KilnsTab";
-import { useCreateFiring, useKilns } from "@/features/firings/useFirings";
+import { useKilns } from "@/features/firings/useFirings";
 
 type TabId = "listado" | "hornos" | "simulador";
 
@@ -66,80 +66,11 @@ function SimuladorTab() {
   );
 }
 
-/** Alta de una hoja en borrador. */
-function NuevaQuema({ onClose }: { onClose: () => void }) {
-  const [draft, setDraft] = useState<FiringDraft>(borradorVacio);
-  const kilns = useKilns({ active: true, limit: 200 });
-  const crear = useCreateFiring();
-
-  // `useCallback` para que el editor no dispare su efecto en cada render.
-  const sinPreview = useCallback(() => {}, []);
-
-  const payload = aPayload(draft);
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Nueva quema"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-zinc-900/30 p-4 backdrop-blur-sm"
-    >
-      <div className="my-8 w-full max-w-5xl rounded-3xl border border-white/60 bg-white p-5 shadow-xl sm:p-6">
-        <header className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-zinc-900">Nueva quema</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-          >
-            ✕
-          </button>
-        </header>
-
-        {kilns.isPending ? (
-          <div className="flex justify-center py-16">
-            <Spinner className="size-5" label="Cargando hornos…" />
-          </div>
-        ) : (
-          <FiringEditor
-            kilns={kilns.data?.items ?? []}
-            value={draft}
-            onChange={setDraft}
-            onPreview={sinPreview}
-          />
-        )}
-
-        {crear.isError ? (
-          <p role="alert" className="mt-4 text-xs text-red-600">
-            {describeError(crear.error)}
-          </p>
-        ) : null}
-
-        <footer className="mt-5 flex flex-wrap justify-end gap-2 border-t border-zinc-100 pt-4">
-          <SecondaryButton onClick={onClose}>Cancelar</SecondaryButton>
-          <PrimaryButton
-            type="button"
-            disabled={payload === null || crear.isPending}
-            onClick={() => {
-              if (!payload) return;
-              crear.mutate(payload, { onSuccess: onClose });
-            }}
-          >
-            {crear.isPending ? "Guardando…" : "Guardar borrador"}
-          </PrimaryButton>
-        </footer>
-      </div>
-    </div>
-  );
-}
-
 export function FiringsPage() {
   const { data: user } = useSession();
   const isAdmin = user?.role === "ADMIN";
 
   const [tab, setTab] = useState<TabId>("listado");
-  const [creando, setCreando] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-[1536px] px-4 py-2 sm:px-6 lg:px-8">
@@ -154,9 +85,12 @@ export function FiringsPage() {
           </p>
         </div>
         {isAdmin ? (
-          <PrimaryButton type="button" onClick={() => setCreando(true)}>
+          <Link
+            to="/quemas/nueva"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-black"
+          >
             Nueva quema
-          </PrimaryButton>
+          </Link>
         ) : null}
       </header>
 
@@ -194,8 +128,6 @@ export function FiringsPage() {
           {tab === "simulador" ? <SimuladorTab /> : null}
         </div>
       </div>
-
-      {creando && isAdmin ? <NuevaQuema onClose={() => setCreando(false)} /> : null}
     </div>
   );
 }

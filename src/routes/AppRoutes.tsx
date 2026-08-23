@@ -2,7 +2,10 @@ import { Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
+import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
+import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
+import { NuevaQuemaPage } from "@/features/firings/NuevaQuemaPage";
 import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
@@ -35,6 +38,9 @@ export function AppRoutes() {
           <Route path="importaciones" element={<ImportsPage />} />
           <Route path="recetas" element={<RecipesPage />} />
           <Route path="quemas" element={<FiringsPage />} />
+          <Route path="quemas/nueva" element={<NuevaQuemaPage />} />
+          <Route path="quemas/:id" element={<DetalleQuemaPage />} />
+          <Route path="quemas/:id/editar" element={<EditarQuemaPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

@@ -6,7 +6,7 @@
  * excepcion son los identificadores y la cantidad de piezas, que son enteros.
  */
 
-import type { FiringIn, FiringType, KilnOut } from "@/types/firings";
+import type { FiringIn, FiringOut, FiringType, KilnOut } from "@/types/firings";
 
 export interface SessionDraft {
   kiln_id: number;
@@ -17,6 +17,7 @@ export interface LineDraft {
   /** Identificador local, para que React conserve el foco al reordenar. */
   key: string;
   product_id: number | null;
+  product_internal_reference?: string | null;
   description: string;
   quantity: string;
   length_cm: string;
@@ -41,6 +42,7 @@ export function nuevaLinea(): LineDraft {
   return {
     key: `linea-${contador}`,
     product_id: null,
+    product_internal_reference: null,
     description: "",
     quantity: "1",
     length_cm: "",
@@ -140,4 +142,29 @@ export function hornosDeSesion(
 export function hornosDeLaHoja(draft: FiringDraft, kilns: KilnOut[]): KilnOut[] {
   const ids = new Set(draft.sessions.map((s) => s.kiln_id));
   return kilns.filter((kiln) => ids.has(kiln.id));
+}
+
+/** Transforma una quema del backend a borrador editable. */
+export function firingADraft(firing: FiringOut): FiringDraft {
+  return {
+    firing_date: firing.firing_date ?? "",
+    notes: firing.notes ?? "",
+    sessions: firing.sessions.map((s) => ({
+      kiln_id: s.kiln_id,
+      firing_type: s.firing_type,
+    })),
+    lines: firing.lines.map((l, idx) => ({
+      key: `linea-edit-${l.id ?? idx}`,
+      product_id: l.product_id,
+      product_internal_reference: l.product_internal_reference,
+      description: l.description,
+      quantity: String(l.quantity),
+      length_cm: l.length_cm,
+      width_cm: l.width_cm,
+      height_cm: l.height_cm,
+      low_kiln_id: l.low_kiln_id,
+      high_kiln_id: l.high_kiln_id,
+      factor_kiln_id: l.factor_kiln_id,
+    })),
+  };
 }
