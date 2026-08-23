@@ -27,7 +27,7 @@ export function DetalleQuemaPage() {
 
   if (!Number.isInteger(firingId) || firingId <= 0) {
     return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="w-full py-8">
         <p role="alert" className="text-center text-sm text-red-600">
           Identificador de quema inválido.
         </p>
@@ -45,7 +45,7 @@ export function DetalleQuemaPage() {
 
   if (firingQuery.isError) {
     return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-4">
+      <div className="w-full py-8 space-y-4">
         <Link
           to="/quemas"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
@@ -66,7 +66,7 @@ export function DetalleQuemaPage() {
   if (!firing) return null;
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-6">
       <Link
         to="/quemas"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"

@@ -40,7 +40,7 @@ export function EditarQuemaPage() {
 
   if (!Number.isInteger(firingId) || firingId <= 0) {
     return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="w-full py-8">
         <p role="alert" className="text-center text-sm text-red-600">
           Identificador de quema inválido.
         </p>
@@ -58,7 +58,7 @@ export function EditarQuemaPage() {
 
   if (firingQuery.isError) {
     return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="w-full py-8">
         <p role="alert" className="text-center text-sm text-red-600">
           {describeError(firingQuery.error)}
         </p>
@@ -71,7 +71,7 @@ export function EditarQuemaPage() {
 
   if (firing.status !== "DRAFT") {
     return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-4 text-center">
+      <div className="w-full py-8 space-y-4 text-center">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="text-base font-semibold text-amber-900">
             Esta quema no puede editarse
@@ -94,7 +94,7 @@ export function EditarQuemaPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-6">
       {/* Cabecera */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200/80 pb-5">
         <div className="space-y-1">

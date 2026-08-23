@@ -47,7 +47,7 @@ export function SettingsPage() {
   const visibleTabs = TABS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <div className="w-full max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 py-2">
+    <div className="w-full space-y-6">
       {/* Encabezado Principal */}
       <header className="mb-6">
         <TypewriterTitle text="Configuración." className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900" />

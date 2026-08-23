@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export function NotFoundPage() {
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full space-y-4">
       <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
         Pagina no encontrada
       </h1>

@@ -26,7 +26,7 @@ export function NuevaQuemaPage() {
   const payload = aPayload(draft);
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-6">
       {/* Cabecera de Página */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200/80 pb-5">
         <div className="space-y-1">

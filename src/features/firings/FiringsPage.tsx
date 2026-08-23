@@ -73,7 +73,7 @@ export function FiringsPage() {
   const [tab, setTab] = useState<TabId>("listado");
 
   return (
-    <div className="mx-auto w-full max-w-[1536px] px-4 py-2 sm:px-6 lg:px-8">
+    <div className="w-full space-y-5">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <TypewriterTitle
