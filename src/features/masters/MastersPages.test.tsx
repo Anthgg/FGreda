@@ -409,6 +409,84 @@ describe("Modulo de terceros", () => {
     );
   });
 
+  it("cambiar el documento tras un autofill limpia el nombre autocompletado, no uno escrito a mano", async () => {
+    const DNI_RESULT_B = { ...DNI_RESULT, full_name: "Luis Vega Rios" };
+    mockMasters({
+      onRequest: (url) => {
+        if (url.includes("/identity/dni/12345678"))
+          return jsonResponse(200, DNI_RESULT);
+        if (url.includes("/identity/dni/99999999"))
+          return jsonResponse(200, DNI_RESULT_B);
+        return undefined;
+      },
+    });
+    await openNewPartnerWithDocumentType("DNI");
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "12345678",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+    expect(
+      await screen.findByText("Encontrado: Ana Torres Diaz"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Ana Torres Diaz",
+    );
+
+    // El usuario se da cuenta de que era otro documento y lo corrige.
+    const numero = screen.getByLabelText(/Número de documento/);
+    await userEvent.clear(numero);
+    await userEvent.type(numero, "99999999");
+
+    // El nombre de A no debe seguir ahi: ya no corresponde al documento actual.
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue("");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+    expect(
+      await screen.findByText("Encontrado: Luis Vega Rios"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Luis Vega Rios",
+    );
+  });
+
+  it("cambiar el documento no borra un nombre que el usuario escribio a mano", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/identity/dni/12345678")
+          ? jsonResponse(200, DNI_RESULT)
+          : undefined,
+    });
+    await openNewPartnerWithDocumentType("DNI");
+    await userEvent.type(
+      screen.getByLabelText(/Nombre o razón social/),
+      "Nombre manual",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "12345678",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+    expect(
+      await screen.findByText("Encontrado: Ana Torres Diaz"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Nombre manual",
+    );
+
+    await userEvent.type(screen.getByLabelText(/Número de documento/), "9");
+
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Nombre manual",
+    );
+  });
+
   it("Consultar RUC autocompleta razon social y direccion, y muestra la ubicacion resuelta", async () => {
     mockMasters({
       onRequest: (url) =>

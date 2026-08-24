@@ -60,6 +60,8 @@ const DOCUMENT_TYPES: DocumentType[] = [
 const DNI_PATTERN = /^\d{8}$/;
 const RUC_PATTERN = /^\d{11}$/;
 
+type AutofillField = "name" | "address" | "ubigeo_code";
+
 /** Solo rellena si el campo esta vacio: la consulta nunca pisa lo ya escrito. */
 function fillIfEmpty(
   current: string | null,
@@ -120,6 +122,42 @@ function PartnerForm({
   const set = <K extends keyof PartnerInput>(key: K, value: PartnerInput[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
+  // Campos cuyo contenido actual vino de una consulta, no de que el usuario
+  // los haya escrito. Sirve para poder limpiarlos si el documento cambia
+  // (ver clearStaleAutofill) sin tocar lo que el usuario si edito a mano.
+  const [autofilled, setAutofilled] = useState<Set<AutofillField>>(new Set());
+
+  const markAutofilled = (fields: AutofillField[]) => {
+    if (fields.length === 0) return;
+    setAutofilled((current) => new Set([...current, ...fields]));
+  };
+  const unmarkAutofilled = (field: AutofillField) => {
+    setAutofilled((current) => {
+      if (!current.has(field)) return current;
+      const next = new Set(current);
+      next.delete(field);
+      return next;
+    });
+  };
+
+  /** Deshace el autofill vigente cuando el documento consultado cambia.
+   *
+   * Sin esto, buscar el documento A rellena el nombre, y si el usuario
+   * corrige el numero al documento B sin volver a consultar, el formulario
+   * podria guardarse con el numero de B pero el nombre de A: fillIfEmpty
+   * nunca lo corrige porque el campo ya no esta vacio.
+   */
+  const clearStaleAutofill = () => {
+    if (autofilled.size === 0) return;
+    setDraft((current) => ({
+      ...current,
+      name: autofilled.has("name") ? "" : current.name,
+      address: autofilled.has("address") ? null : current.address,
+      ubigeo_code: autofilled.has("ubigeo_code") ? null : current.ubigeo_code,
+    }));
+    setAutofilled(new Set());
+  };
+
   const dniLookup = useDniLookup();
   const rucLookup = useRucLookup();
 
@@ -132,10 +170,12 @@ function PartnerForm({
   const handleLookupDni = () => {
     dniLookup.mutate(documentNumber, {
       onSuccess: (result) => {
-        setDraft((current) => ({
-          ...current,
-          name: fillIfEmpty(current.name, result.full_name) ?? current.name,
-        }));
+        setDraft((current) => {
+          const name =
+            fillIfEmpty(current.name, result.full_name) ?? current.name;
+          if (name !== current.name) markAutofilled(["name"]);
+          return { ...current, name };
+        });
       },
     });
   };
@@ -143,12 +183,18 @@ function PartnerForm({
   const handleLookupRuc = () => {
     rucLookup.mutate(documentNumber, {
       onSuccess: (result) => {
-        setDraft((current) => ({
-          ...current,
-          name: fillIfEmpty(current.name, result.business_name) ?? current.name,
-          address: fillIfEmpty(current.address, result.address),
-          ubigeo_code: fillIfEmpty(current.ubigeo_code, result.ubigeo),
-        }));
+        setDraft((current) => {
+          const name =
+            fillIfEmpty(current.name, result.business_name) ?? current.name;
+          const address = fillIfEmpty(current.address, result.address);
+          const ubigeo_code = fillIfEmpty(current.ubigeo_code, result.ubigeo);
+          const filled: AutofillField[] = [];
+          if (name !== current.name) filled.push("name");
+          if (address !== current.address) filled.push("address");
+          if (ubigeo_code !== current.ubigeo_code) filled.push("ubigeo_code");
+          markAutofilled(filled);
+          return { ...current, name, address, ubigeo_code };
+        });
       },
     });
   };
@@ -182,7 +228,10 @@ function PartnerForm({
           label="Nombre o razón social"
           requirement="required"
           value={draft.name}
-          onChange={(value) => set("name", value)}
+          onChange={(value) => {
+            set("name", value);
+            unmarkAutofilled("name");
+          }}
           disabled={disabled}
           maxLength={200}
           className="sm:col-span-2"
@@ -204,6 +253,7 @@ function PartnerForm({
             set("document_type", value === "" ? null : (value as DocumentType));
             dniLookup.reset();
             rucLookup.reset();
+            clearStaleAutofill();
           }}
           disabled={disabled}
         />
@@ -215,6 +265,7 @@ function PartnerForm({
             set("document_number", value === "" ? null : value);
             dniLookup.reset();
             rucLookup.reset();
+            clearStaleAutofill();
           }}
           disabled={disabled}
           maxLength={20}
@@ -228,7 +279,10 @@ function PartnerForm({
           label="Dirección"
           requirement="optional"
           value={draft.address}
-          onChange={(value) => set("address", value === "" ? null : value)}
+          onChange={(value) => {
+            set("address", value === "" ? null : value);
+            unmarkAutofilled("address");
+          }}
           disabled={disabled}
           maxLength={240}
         />
