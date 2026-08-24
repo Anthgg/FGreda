@@ -272,17 +272,18 @@ describe("selector remoto de recetas", () => {
     created_at: "2026-08-24T00:00:00Z",
     updated_at: "2026-08-24T00:00:00Z",
   });
-  const CATALOGO = Array.from({ length: 125 }, (_, i) => receta(i + 1));
+  const catalogo = (n: number) => Array.from({ length: n }, (_, i) => receta(i + 1));
+  const CATALOGO = catalogo(125);
 
-  function handlerConRecetas(url: string, init: RequestInit) {
+  function handlerConRecetas(url: string, init: RequestInit, fuente = CATALOGO) {
     if (url.includes("/recipes")) {
       const u = new URL(url, "http://localhost");
       const limit = Number(u.searchParams.get("limit") ?? "50");
       const offset = Number(u.searchParams.get("offset") ?? "0");
       const search = (u.searchParams.get("search") ?? "").toLowerCase();
       const filtradas = search
-        ? CATALOGO.filter((r) => r.name.toLowerCase().includes(search))
-        : CATALOGO;
+        ? fuente.filter((r) => r.name.toLowerCase().includes(search))
+        : fuente;
       return jsonResponse(200, {
         items: filtradas.slice(offset, offset + limit),
         total: filtradas.length,
@@ -365,5 +366,96 @@ describe("selector remoto de recetas", () => {
     expect(
       await screen.findByText(/cuántos gramos de receta lleva una pieza/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("paginación del selector de recetas sin techo", () => {
+  it("llega a la receta 225, encadenando páginas de cincuenta", async () => {
+    const user = userEvent.setup();
+    const recetas = Array.from({ length: 225 }, (_, i) => ({
+      id: i + 1,
+      product_id: 1000 + i + 1,
+      product_internal_reference: `LAB70${String(i + 1).padStart(3, "0")}`,
+      name: `BARNIZ ${i + 1}`,
+      active: true,
+      current_version_id: i + 1,
+      current_version: null,
+      versions: [],
+      created_at: "2026-08-24T00:00:00Z",
+      updated_at: "2026-08-24T00:00:00Z",
+    }));
+    const offsets: number[] = [];
+    const spy = mockFetch((url, init) => {
+      if (url.includes("/recipes")) {
+        const u = new URL(url, "http://localhost");
+        const limit = Number(u.searchParams.get("limit") ?? "50");
+        const offset = Number(u.searchParams.get("offset") ?? "0");
+        offsets.push(offset);
+        return jsonResponse(200, {
+          items: recetas.slice(offset, offset + limit),
+          total: recetas.length,
+          limit,
+          offset,
+        });
+      }
+      return quoteHandler(url, init);
+    });
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    await user.click(screen.getByRole("combobox", { name: "Receta" }));
+    await screen.findByText("LAB70001 · BARNIZ 1");
+
+    // Cuatro pulsaciones llevan de cincuenta a doscientas veinticinco: con las
+    // tres consultas fijas que habia antes, el techo estaba en ciento cincuenta.
+    for (let paso = 0; paso < 4; paso += 1) {
+      await user.click(await screen.findByRole("button", { name: /ver más/i }));
+    }
+
+    await waitFor(() => expect(offsets).toEqual([0, 50, 100, 150, 200]));
+    await user.click(await screen.findByText("LAB70225 · BARNIZ 225"));
+    expect(screen.getByRole("combobox", { name: "Receta" })).toHaveTextContent(
+      "LAB70225 · BARNIZ 225",
+    );
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("al llegar al final ya no ofrece «Ver más»", async () => {
+    const user = userEvent.setup();
+    const treinta = Array.from({ length: 30 }, (_, i) => ({
+      id: i + 1,
+      product_id: 2000 + i,
+      product_internal_reference: `LAB70${String(i + 1).padStart(3, "0")}`,
+      name: `BARNIZ ${i + 1}`,
+      active: true,
+      current_version_id: i + 1,
+      current_version: null,
+      versions: [],
+      created_at: "2026-08-24T00:00:00Z",
+      updated_at: "2026-08-24T00:00:00Z",
+    }));
+    mockFetch((url, init) =>
+      url.includes("/recipes")
+        ? jsonResponse(200, { items: treinta, total: 30, limit: 50, offset: 0 })
+        : quoteHandler(url, init),
+    );
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    await user.click(screen.getByRole("combobox", { name: "Receta" }));
+    await screen.findByText("LAB70001 · BARNIZ 1");
+
+    expect(screen.queryByRole("button", { name: /ver más/i })).not.toBeInTheDocument();
+  });
+
+  it("no menciona en ningún sitio un valor por omisión de un gramo", async () => {
+    mockFetch(quoteHandler);
+    const { container } = renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    // El texto contradecia la regla: con receta elegida, los gramos son
+    // obligatorios y no hay ningun valor supuesto.
+    expect(container.textContent).not.toMatch(/vac[íi]o usa 1\s*g/i);
+    expect(screen.getByText(/peso de material de receta utilizado por cada pieza/i)).toBeInTheDocument();
   });
 });

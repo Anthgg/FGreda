@@ -1,19 +1,24 @@
 /**
- * Selector remoto de recetas.
+ * Selector remoto de recetas, con paginación real.
  *
  * Busca y pagina en el servidor en lugar de descargar el catálogo entero. Hoy
- * hay 93 recetas y cabrían en una sola petición, pero el día que pasen de cien
- * el selector dejaría de ofrecer las últimas sin que nada avisara: un límite
- * que se cumple por poco no es un límite.
+ * hay 93 recetas y cabrían en una sola petición, pero un límite que se cumple
+ * por poco no es un límite: el día que pasen del tope el selector dejaría de
+ * ofrecer las últimas sin que nada avisara.
+ *
+ * Por el mismo motivo la paginación es dinámica y no un puñado de consultas
+ * fijas: encadenar tres páginas resuelve hasta ciento cincuenta resultados y
+ * vuelve a fallar en silencio en la ciento cincuenta y uno.
  *
  * Se mantiene aparte del selector de recetas de Fase 003.5 a propósito: aquel
  * funciona y no hay motivo para arriesgarlo por esto.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 
+import { fetchRecipes } from "@/api/recipes";
 import { Spinner } from "@/components/Spinner";
-import { useRecipes } from "@/features/recipes/useRecipes";
 import type { RecipeOut } from "@/types/recipes";
 
 const PAGE_SIZE = 50;
@@ -46,16 +51,12 @@ export function RecipeSelectField({
   const [abierto, setAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [debounced, setDebounced] = useState("");
-  const [limite, setLimite] = useState(PAGE_SIZE);
   const contenedor = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(busqueda), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [busqueda]);
-
-  // Una búsqueda nueva empieza por la primera página.
-  useEffect(() => setLimite(PAGE_SIZE), [debounced]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -66,33 +67,35 @@ export function RecipeSelectField({
     return () => document.removeEventListener("mousedown", fuera);
   }, [abierto]);
 
-  const filtros = useMemo(
-    () => ({
-      ...(debounced.trim() ? { search: debounced.trim() } : {}),
-      active: true as const,
-      limit: Math.min(limite, 100),
-      offset: 0,
-    }),
-    [debounced, limite],
-  );
+  const termino = debounced.trim();
 
-  // El endpoint admite como mucho cien por página, así que «Ver más» avanza
-  // por bloques en lugar de pedir un límite que el servidor rechazaría.
-  const primera = useRecipes({ ...filtros, limit: PAGE_SIZE, offset: 0 });
-  const segunda = useRecipes({
-    ...filtros,
-    limit: PAGE_SIZE,
-    offset: PAGE_SIZE,
+  // La búsqueda forma parte de la clave, así que cambiarla empieza una
+  // paginación nueva desde el primer resultado en lugar de mezclarse con la
+  // anterior.
+  const consulta = useInfiniteQuery({
+    queryKey: ["recipe-select", termino],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchRecipes({
+        ...(termino ? { search: termino } : {}),
+        active: true,
+        limit: PAGE_SIZE,
+        offset: pageParam,
+      }),
+    getNextPageParam: (ultima, todas) => {
+      const cargadas = todas.reduce((suma, pagina) => suma + pagina.items.length, 0);
+      return cargadas < ultima.total ? cargadas : undefined;
+    },
+    enabled: abierto,
   });
-  const tercera = useRecipes({ ...filtros, limit: PAGE_SIZE, offset: PAGE_SIZE * 2 });
 
-  const paginas = [primera, ...(limite > PAGE_SIZE ? [segunda] : []), ...(limite > PAGE_SIZE * 2 ? [tercera] : [])];
-  const items = paginas.flatMap((pagina) => pagina.data?.items ?? []);
-  const total = primera.data?.total ?? 0;
-  const cargando = paginas.some((pagina) => pagina.isPending);
-  const hayMas = items.length < total;
+  const items = useMemo(
+    () => consulta.data?.pages.flatMap((pagina) => pagina.items) ?? [],
+    [consulta.data],
+  );
+  const total = consulta.data?.pages[0]?.total ?? 0;
 
-  const mostrado = value ? (items.find((r) => String(r.id) === value)) : undefined;
+  const mostrado = value ? items.find((r) => String(r.id) === value) : undefined;
   const textoBoton = mostrado ? etiqueta(mostrado) : selectedLabel || "Elegir receta";
 
   return (
@@ -115,7 +118,11 @@ export function RecipeSelectField({
           onClick={() => setAbierto((previo) => !previo)}
           className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-left text-sm transition-colors hover:border-zinc-300 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
         >
-          <span className={mostrado || selectedLabel ? "truncate text-zinc-900" : "truncate text-zinc-400"}>
+          <span
+            className={
+              mostrado || selectedLabel ? "truncate text-zinc-900" : "truncate text-zinc-400"
+            }
+          >
             {textoBoton}
           </span>
           <span aria-hidden="true" className="text-zinc-400">
@@ -138,7 +145,7 @@ export function RecipeSelectField({
             </div>
 
             <ul role="listbox" aria-label={label} className="max-h-64 overflow-y-auto p-1">
-              {cargando && items.length === 0 ? (
+              {consulta.isPending ? (
                 <li className="flex justify-center py-6">
                   <Spinner className="size-4" label="Buscando recetas…" />
                 </li>
@@ -170,14 +177,17 @@ export function RecipeSelectField({
               )}
             </ul>
 
-            {hayMas ? (
+            {consulta.hasNextPage ? (
               <div className="border-t border-zinc-100 p-2">
                 <button
                   type="button"
-                  onClick={() => setLimite((previo) => previo + PAGE_SIZE)}
-                  className="w-full rounded-lg px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                  disabled={consulta.isFetchingNextPage}
+                  onClick={() => void consulta.fetchNextPage()}
+                  className="w-full rounded-lg px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
                 >
-                  Ver más ({items.length} de {total})
+                  {consulta.isFetchingNextPage
+                    ? "Cargando…"
+                    : `Ver más (${items.length} de ${total})`}
                 </button>
               </div>
             ) : null}

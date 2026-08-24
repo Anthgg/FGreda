@@ -199,7 +199,9 @@ export function QuotationEditor({
               hint={
                 preview.data
                   ? `${preview.data.quantity} piezas × ${formatDecimalString(preview.data.material_grams_per_piece, 2)} g = ${formatDecimalString(preview.data.material_total_grams, 2)} g de receta.`
-                  : "Gramos de receta que lleva una pieza. Vacío usa 1 g."
+                  : value.recipeId
+                    ? "Obligatorio para calcular el costo de materiales."
+                    : "Peso de material de receta utilizado por cada pieza."
               }
             />
             <TextField
