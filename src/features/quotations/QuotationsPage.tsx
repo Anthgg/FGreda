@@ -16,7 +16,7 @@ type TabId = "list" | "masters";
 const ALL = "ALL";
 const PAGE_SIZE = 25;
 const STATUS_OPTIONS = [
-  { value: ALL, label: "Todos" },
+  { value: ALL, label: "Todos los estados" },
   { value: "DRAFT", label: "Borrador" },
   { value: "CONFIRMED", label: "Confirmada" },
   { value: "CANCELLED", label: "Anulada" },
@@ -67,7 +67,7 @@ export function QuotationsPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <TypewriterTitle text="Cotizaciones." className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl" />
-          <p className="mt-1 text-xs text-zinc-500 sm:text-sm">Costos integrales, trazabilidad de fuentes y precios de venta.</p>
+          <p className="mt-1 text-xs text-zinc-500 sm:text-sm">Costos integrales, trazabilidad de clientes y precios de venta.</p>
         </div>
         {isAdmin ? (
           <Link to="/cotizaciones/nueva" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-zinc-900 px-5 text-sm font-medium text-white shadow-xs hover:bg-black">
@@ -95,7 +95,7 @@ export function QuotationsPage() {
         {tab === "masters" ? <QuotationMastersTab canEdit={isAdmin} /> : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <SearchInput value={search} onChange={setSearch} label="Buscar cotizaciones" placeholder="CTZ, producto o referencia…" />
+              <SearchInput value={search} onChange={setSearch} label="Buscar cotizaciones" placeholder="CTZ, cliente, producto..." />
               <SelectField label="Estado" value={status} options={STATUS_OPTIONS} onChange={setStatus} />
               <ProductSelectField
                 label="Producto"
@@ -124,27 +124,54 @@ export function QuotationsPage() {
                   <table className="min-w-full text-left text-xs">
                     <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
                       <tr>
-                        <th className="px-4 py-3 font-semibold">CTZ</th>
+                        <th className="px-4 py-3 font-semibold">CTZ / Nombre</th>
+                        <th className="px-4 py-3 font-semibold">Cliente</th>
                         <th className="px-4 py-3 font-semibold">Fecha</th>
                         <th className="px-4 py-3 font-semibold">Producto</th>
                         <th className="px-4 py-3 text-right font-semibold">Cantidad</th>
                         <th className="px-4 py-3 font-semibold">Estado</th>
                         <th className="px-4 py-3 text-right font-semibold">Precio unitario</th>
-                        <th className="px-4 py-3 text-right font-semibold">Precio total</th>
+                        <th className="px-4 py-3 text-right font-semibold">Total con IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
                       {quotes.data!.items.map((quote) => (
                         <tr key={quote.id} className="hover:bg-zinc-50/70">
-                          <td className="px-4 py-3 font-mono font-semibold text-zinc-900">{quote.code}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-mono font-bold text-zinc-900">{quote.code}</span>
+                            {quote.name ? <span className="block text-[11px] text-zinc-600 font-medium truncate max-w-[12rem]">{quote.name}</span> : null}
+                          </td>
+                          <td className="px-4 py-3">
+                            {quote.customer_name ? (
+                              <>
+                                <span className="font-medium text-zinc-900 block truncate max-w-[10rem]">{quote.customer_name}</span>
+                                {quote.customer_document_number ? (
+                                  <span className="text-[10px] text-zinc-400 font-mono">{quote.customer_document_number}</span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-zinc-500">{quote.created_at.slice(0, 10)}</td>
-                          <td className="px-4 py-3"><span className="font-medium text-zinc-900">{quote.product_name}</span><span className="block font-mono text-[10px] text-zinc-400">{quote.product_internal_reference}</span></td>
-                          <td className="px-4 py-3 text-right tabular-nums">{quote.quantity}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-medium text-zinc-900">{quote.product_name}</span>
+                            <span className="block font-mono text-[10px] text-zinc-400">{quote.product_internal_reference}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.quantity}</td>
                           <td className="px-4 py-3"><Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge></td>
-                          <td className="px-4 py-3 text-right tabular-nums">S/ {formatDecimalString(quote.calculated_unit_price, 2)}</td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums">S/ {formatDecimalString(quote.calculated_total, 2)}</td>
-                          <td className="px-4 py-3 text-right"><Link to={`/cotizaciones/${quote.id}`} className="font-medium text-zinc-700 hover:text-black hover:underline">Ver detalle</Link></td>
+                          <td className="px-4 py-3 text-right tabular-nums">
+                            S/ {formatDecimalString(quote.commercial_sale_unit_price || quote.calculated_unit_price, 2)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-zinc-950">
+                            S/ {formatDecimalString(quote.commercial_total || quote.total_with_tax, 2)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Link to={`/cotizaciones/${quote.id}`} className="font-medium text-zinc-700 hover:text-black hover:underline">
+                              Ver detalle
+                            </Link>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

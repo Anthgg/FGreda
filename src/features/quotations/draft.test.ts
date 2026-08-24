@@ -42,4 +42,23 @@ describe("captura decimal y cantidades del cotizador", () => {
     expect(payload?.additionals[0]?.additional_quantity).toBe("1.500000000000000001");
     expect(payload?.other_costs?.[0]?.unit_price).toBe("110.000000000000000001");
   });
+
+  it("mapea cliente, nombre de cotizacion, markup y precio comercial", () => {
+    const payload = draftToPayload({
+      ...emptyQuotationDraft,
+      name: "Cotización Pedido Especial",
+      customerId: "42",
+      customerLabel: "Cliente Ejemplo S.A.C.",
+      productId: "1",
+      quantity: "10",
+      markupPercent: "60",
+      commercialSaleUnitPrice: "35.50",
+    });
+
+    expect(payload).not.toBeNull();
+    expect(payload?.name).toBe("Cotización Pedido Especial");
+    expect(payload?.customer_id).toBe(42);
+    expect(payload?.markup_percent).toBe("60");
+    expect(payload?.commercial_sale_unit_price).toBe("35.50");
+  });
 });
