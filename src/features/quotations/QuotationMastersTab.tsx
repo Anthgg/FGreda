@@ -12,6 +12,17 @@ import {
   useTechniques,
 } from "@/features/quotations/useQuotations";
 import { describeError } from "@/features/settings/messages";
+
+/** La tabla no muestra valores del contrato: el taller no habla en enums. */
+const FORMULA_TECNICA: Record<string, string> = { ONE_FACTOR: "Un factor", TWO_FACTORS: "Dos factores" };
+const FORMULA_ADICIONAL: Record<string, string> = {
+  PIECE_QUANTITY: "Cantidad de piezas",
+  SIMPLE_QUANTITY: "Cantidad simple",
+  PIECE_X_ADDITIONAL: "Piezas por adicional",
+};
+const TIPO_GASTO: Record<string, string> = { PER_DAY: "Por día", FIXED: "Fijo", PER_PIECE: "Por pieza" };
+/** Los factores se muestran sin la cola de ceros de la columna NUMERIC. */
+const factor = (v: string | null | undefined) => (v ? formatDecimalString(v, 2).replace(/.00$/, "") : "—");
 import type {
   AdditionalFormulaType,
   AdditionalInput,
@@ -73,7 +84,7 @@ function TechniqueMasters({ canEdit }: { canEdit: boolean }) {
   const [editing, setEditing] = useState<{ id?: number; value: TechniqueInput } | null>(null);
   const state = <LoadingOrError pending={query.isPending} error={query.error} />;
   if (query.isPending || query.isError) return state;
-  return <section className={shell}><MasterHeader title="Técnicas" description="Precios y factores que alimentan los cálculos oficiales." canEdit={canEdit} onNew={() => setEditing({ value: emptyTechnique })} />{editing ? <TechniqueForm state={editing} busy={save.isPending} error={save.error} onCancel={() => setEditing(null)} onSave={() => save.mutate({ id: editing.id, payload: editing.value }, { onSuccess: () => setEditing(null) })} onChange={(value) => setEditing({ ...editing, value })} /> : null}<MasterTable headers={["Código", "Nombre", "Precio", "Fórmula", "Factores", "Estado"]} rows={(query.data?.items ?? []).map((item) => ({ id: item.id, cells: [item.code, item.name, `S/ ${formatDecimalString(item.unit_price, 2)}`, item.formula_type, `${item.factor_1}${item.factor_2 ? ` / ${item.factor_2}` : ""}`, item.active ? "Activo" : "Archivado"], ...(canEdit ? { onEdit: () => setEditing({ id: item.id, value: techniqueInput(item) }) } : {}) }))} /></section>;
+  return <section className={shell}><MasterHeader title="Técnicas" description="Precios y factores que alimentan los cálculos oficiales." canEdit={canEdit} onNew={() => setEditing({ value: emptyTechnique })} />{editing ? <TechniqueForm state={editing} busy={save.isPending} error={save.error} onCancel={() => setEditing(null)} onSave={() => save.mutate({ id: editing.id, payload: editing.value }, { onSuccess: () => setEditing(null) })} onChange={(value) => setEditing({ ...editing, value })} /> : null}<MasterTable headers={["Código", "Nombre", "Precio", "Fórmula", "Factores", "Estado"]} rows={(query.data?.items ?? []).map((item) => ({ id: item.id, cells: [item.code, item.name, `S/ ${formatDecimalString(item.unit_price, 2)}`, FORMULA_TECNICA[item.formula_type] ?? item.formula_type, `${factor(item.factor_1)}${item.factor_2 ? ` / ${factor(item.factor_2)}` : ""}`, item.active ? "Activo" : "Archivado"], ...(canEdit ? { onEdit: () => setEditing({ id: item.id, value: techniqueInput(item) }) } : {}) }))} /></section>;
 }
 const techniqueInput = (item: TechniqueOut): TechniqueInput => ({ code: item.code, name: item.name, unit_price: item.unit_price, formula_type: item.formula_type, factor_1: item.factor_1, factor_2: item.factor_2, active: item.active, notes: item.notes });
 
@@ -88,7 +99,7 @@ function AdditionalMasters({ canEdit }: { canEdit: boolean }) {
   const save = useSaveAdditional();
   const [editing, setEditing] = useState<{ id?: number; value: AdditionalInput } | null>(null);
   if (query.isPending || query.isError) return <LoadingOrError pending={query.isPending} error={query.error} />;
-  return <section className={shell}><MasterHeader title="Adicionales" description="Aplicaciones, vidriado e ilustración con su regla de cálculo." canEdit={canEdit} onNew={() => setEditing({ value: emptyAdditional })} />{editing ? <AdditionalForm state={editing} busy={save.isPending} error={save.error} onCancel={() => setEditing(null)} onSave={() => save.mutate({ id: editing.id, payload: editing.value }, { onSuccess: () => setEditing(null) })} onChange={(value) => setEditing({ ...editing, value })} /> : null}<MasterTable headers={["Código", "Nombre", "Precio", "Fórmula", "Factor", "Estado"]} rows={(query.data?.items ?? []).map((item) => ({ id: item.id, cells: [item.code, item.name, `S/ ${formatDecimalString(item.unit_price, 2)}`, item.formula_type, item.factor_1 ?? "—", item.active ? "Activo" : "Archivado"], ...(canEdit ? { onEdit: () => setEditing({ id: item.id, value: additionalInput(item) }) } : {}) }))} /></section>;
+  return <section className={shell}><MasterHeader title="Adicionales" description="Aplicaciones, vidriado e ilustración con su regla de cálculo." canEdit={canEdit} onNew={() => setEditing({ value: emptyAdditional })} />{editing ? <AdditionalForm state={editing} busy={save.isPending} error={save.error} onCancel={() => setEditing(null)} onSave={() => save.mutate({ id: editing.id, payload: editing.value }, { onSuccess: () => setEditing(null) })} onChange={(value) => setEditing({ ...editing, value })} /> : null}<MasterTable headers={["Código", "Nombre", "Precio", "Fórmula", "Factor", "Estado"]} rows={(query.data?.items ?? []).map((item) => ({ id: item.id, cells: [item.code, item.name, `S/ ${formatDecimalString(item.unit_price, 2)}`, FORMULA_ADICIONAL[item.formula_type] ?? item.formula_type, factor(item.factor_1) ?? "—", item.active ? "Activo" : "Archivado"], ...(canEdit ? { onEdit: () => setEditing({ id: item.id, value: additionalInput(item) }) } : {}) }))} /></section>;
 }
 const additionalInput = (item: AdditionalOut): AdditionalInput => ({ code: item.code, name: item.name, unit_price: item.unit_price, formula_type: item.formula_type, factor_1: item.factor_1, active: item.active, notes: item.notes });
 function AdditionalForm({ state, busy, error, onCancel, onSave, onChange }: { state: { id?: number; value: AdditionalInput }; busy: boolean; error: unknown; onCancel: () => void; onSave: () => void; onChange: (value: AdditionalInput) => void }) {
@@ -102,7 +113,7 @@ function OtherCostMasters({ canEdit }: { canEdit: boolean }) {
   const save = useSaveOtherCost();
   const [editing, setEditing] = useState<{ id?: number; value: OtherCostInput } | null>(null);
   if (query.isPending || query.isError) return <LoadingOrError pending={query.isPending} error={query.error} />;
-  return <section className={shell}><MasterHeader title="Otros gastos" description="Valores comerciales editables sin desplegar código." canEdit={canEdit} onNew={() => setEditing({ value: emptyOther })} />{editing ? <OtherCostForm state={editing} busy={save.isPending} error={save.error} onCancel={() => setEditing(null)} onSave={() => save.mutate({ id: editing.id, payload: editing.value }, { onSuccess: () => setEditing(null) })} onChange={(value) => setEditing({ ...editing, value })} /> : null}<MasterTable headers={["Código", "Nombre", "Valor", "Cálculo", "Estado"]} rows={(query.data?.items ?? []).map((item) => ({ id: item.id, cells: [item.code, item.name, formatDecimalString(item.unit_price, 2), item.calculation_type, item.active ? "Activo" : "Archivado"], ...(canEdit ? { onEdit: () => setEditing({ id: item.id, value: otherInput(item) }) } : {}) }))} /></section>;
+  return <section className={shell}><MasterHeader title="Otros gastos" description="Valores comerciales editables sin desplegar código." canEdit={canEdit} onNew={() => setEditing({ value: emptyOther })} />{editing ? <OtherCostForm state={editing} busy={save.isPending} error={save.error} onCancel={() => setEditing(null)} onSave={() => save.mutate({ id: editing.id, payload: editing.value }, { onSuccess: () => setEditing(null) })} onChange={(value) => setEditing({ ...editing, value })} /> : null}<MasterTable headers={["Código", "Nombre", "Valor", "Cálculo", "Estado"]} rows={(query.data?.items ?? []).map((item) => ({ id: item.id, cells: [item.code, item.name, formatDecimalString(item.unit_price, 2), TIPO_GASTO[item.calculation_type] ?? item.calculation_type, item.active ? "Activo" : "Archivado"], ...(canEdit ? { onEdit: () => setEditing({ id: item.id, value: otherInput(item) }) } : {}) }))} /></section>;
 }
 const otherInput = (item: OtherCostOut): OtherCostInput => ({ code: item.code, name: item.name, unit_price: item.unit_price, calculation_type: item.calculation_type, active: item.active, notes: item.notes });
 function OtherCostForm({ state, busy, error, onCancel, onSave, onChange }: { state: { id?: number; value: OtherCostInput }; busy: boolean; error: unknown; onCancel: () => void; onSave: () => void; onChange: (value: OtherCostInput) => void }) {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   DatePickerField,
@@ -17,6 +18,9 @@ import {
   useQuotationPreview,
   useTechniques,
 } from "@/features/quotations/useQuotations";
+import { NuevoMaestroModal } from "@/features/quotations/NuevoMaestroModal";
+import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
+import { useSession } from "@/features/auth/useSession";
 import { draftToPayload, type QuotationDraft } from "@/features/quotations/draft";
 import type { AdditionalCalculationOut, TechniqueCalculationOut } from "@/types/quotations";
 
@@ -56,6 +60,12 @@ export function QuotationEditor({
   const additionals = useAdditionals(true);
   const otherCosts = useOtherCosts(true);
   const otherCostsInitialized = useRef(value.otherCosts.length > 0);
+  const { data: sessionUser } = useSession();
+  const isAdmin = sessionUser?.role === "ADMIN";
+  const [creandoPieza, setCreandoPieza] = useState<string | null>(null);
+  const [creandoMaestro, setCreandoMaestro] = useState<
+    { tipo: "technique" | "additional"; nombre: string } | null
+  >(null);
   const [techniqueToAdd, setTechniqueToAdd] = useState("");
   const [additionalToAdd, setAdditionalToAdd] = useState("");
 
@@ -121,6 +131,9 @@ export function QuotationEditor({
               selectedLabel={value.productLabel}
               productType="FINISHED_PRODUCT"
               placeholder="Buscar producto terminado…"
+              allowCreate={isAdmin}
+              onCreateRequested={(texto) => setCreandoPieza(texto)}
+              createLabel={(texto) => `+ Crear pieza «${texto}»`}
               onChange={(next, product) =>
                 update({
                   productId: next,
@@ -211,6 +224,25 @@ export function QuotationEditor({
               hint={value.materialsApplied ? "Ajustado a mano: se conservan el calculado y el aplicado." : "Vacío usa el costo calculado de arriba."}
             />
           </div>
+          {preview.data && preview.data.materials_without_cost.length > 0 ? (
+            <div role="alert" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+              <p className="font-medium">
+                Estos materiales de la receta no tienen precio, así que suman cero al costo:
+              </p>
+              <ul className="mt-1 list-disc pl-5">
+                {preview.data.materials_without_cost.map((material) => (
+                  <li key={material}>{material}</li>
+                ))}
+              </ul>
+              <p className="mt-2">
+                Ponles el costo en{" "}
+                <Link to="/productos" className="font-medium underline underline-offset-2">
+                  Productos
+                </Link>{" "}
+                y vuelve a calcular.
+              </p>
+            </div>
+          ) : null}
           {!recipes.isPending && recipeOptions.length === 0 ? (
             <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               RECIPE_REQUIRED: no hay ninguna receta activa en el catálogo. Puede guardar un borrador, pero no confirmarlo.
@@ -253,6 +285,9 @@ export function QuotationEditor({
                   .filter((item) => !value.techniques.some((line) => line.techniqueId === String(item.id)))
                   .map((item) => ({ value: String(item.id), label: item.name }))}
                 onChange={setTechniqueToAdd}
+                allowCreate={isAdmin}
+                onCreateRequested={(nombre) => setCreandoMaestro({ tipo: "technique", nombre })}
+                createLabel={(nombre) => `+ Crear técnica «${nombre}»`}
                 className="min-w-0 flex-1"
               />
               <button
@@ -306,6 +341,9 @@ export function QuotationEditor({
                   .filter((item) => !value.additionals.some((line) => line.additionalId === String(item.id)))
                   .map((item) => ({ value: String(item.id), label: item.name }))}
                 onChange={setAdditionalToAdd}
+                allowCreate={isAdmin}
+                onCreateRequested={(nombre) => setCreandoMaestro({ tipo: "additional", nombre })}
+                createLabel={(nombre) => `+ Crear adicional «${nombre}»`}
                 className="min-w-0 flex-1"
               />
               <button
@@ -422,6 +460,52 @@ export function QuotationEditor({
           ) : null}
         </div>
       </aside>
+
+      {/* Altas rápidas: lo creado se selecciona solo, para no perder el hilo. */}
+      {creandoPieza !== null ? (
+        <NuevaPiezaModal
+          initialName={creandoPieza}
+          onClose={() => setCreandoPieza(null)}
+          onCreated={(product) => {
+            update({
+              productId: String(product.id),
+              productLabel: `${product.internal_reference} · ${product.name}`,
+              recipeId: "",
+              recipeVersionId: "",
+              firingLineId: "",
+            });
+            setCreandoPieza(null);
+          }}
+        />
+      ) : null}
+
+      {creandoMaestro !== null ? (
+        <NuevoMaestroModal
+          tipo={creandoMaestro.tipo}
+          initialName={creandoMaestro.nombre}
+          onClose={() => setCreandoMaestro(null)}
+          onCreated={(item) => {
+            if (creandoMaestro.tipo === "technique") {
+              onChange({
+                ...value,
+                techniques: [
+                  ...value.techniques,
+                  { techniqueId: String(item.id), quantity: value.quantity, appliedDays: "", appliedCost: "" },
+                ],
+              });
+            } else {
+              onChange({
+                ...value,
+                additionals: [
+                  ...value.additionals,
+                  { additionalId: String(item.id), additionalQuantity: "", appliedCost: "" },
+                ],
+              });
+            }
+            setCreandoMaestro(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,9 @@
 /**
- * Modal compacto para dar de alta una nueva pieza desde Quemas.
+ * Modal compacto para dar de alta una nueva pieza sin salir de donde estas.
+ *
+ * Vive con los maestros y no en un modulo concreto porque crea un producto:
+ * lo usan tanto Quemas como Cotizaciones, y duplicarlo daria dos formularios
+ * que acabarian divergiendo.
  *
  * Solo pide los campos mínimos e indispensables: Nombre, Categoría y Unidad.
  * El tipo queda bloqueado como FINISHED_PRODUCT y el backend genera

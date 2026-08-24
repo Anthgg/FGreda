@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -56,6 +56,7 @@ const preview = {
   base_commercial_cost: "11.58",
   calculated_total: "280.16",
   calculated_unit_price: "14.745263157894736842",
+  materials_without_cost: [],
   material_grams_per_piece: "1",
   material_total_grams: "19",
   tax_percentage: "18",
@@ -212,5 +213,46 @@ describe("pantallas de cotizaciones", () => {
     await user.click(screen.getAllByRole("button", { name: "Actualizar precio" }).at(-1)!);
     expect(await screen.findByRole("status")).toHaveTextContent("Precio actualizado");
     expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("update-product-price"))).toBe(true);
+  });
+
+  it("permite crear una técnica desde el propio selector, sin salir del formulario", async () => {
+    const user = userEvent.setup();
+    let creadas = 0;
+    const panDeOro = {
+      id: 99, code: "TEC-ORO", name: "Pan de oro", unit_price: "300",
+      formula_type: "ONE_FACTOR", factor_1: "10", factor_2: null,
+      active: true, notes: null, created_at: "2026-08-24", updated_at: "2026-08-24",
+    };
+    mockFetch((url, init) => {
+      if (url.includes("/techniques") && init.method === "POST") {
+        creadas += 1;
+        return jsonResponse(201, panDeOro);
+      }
+      // Tras crearla, el maestro ya la incluye: es lo que hace el backend real
+      // cuando la mutación invalida la consulta.
+      if (url.includes("/techniques") && creadas > 0) {
+        return jsonResponse(200, page([panDeOro]));
+      }
+      return quoteHandler(url, init);
+    });
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    await user.click(screen.getByRole("combobox", { name: "Añadir técnica" }));
+
+    // Se busca algo que no está en el maestro: en vez de un callejón sin
+    // salida, el selector ofrece crearlo.
+    const buscador = screen.getByPlaceholderText(/buscar opción/i);
+    await user.type(buscador, "Pan de oro");
+    await user.click(await screen.findByRole("button", { name: /crear técnica «Pan de oro»/i }));
+
+    const dialogo = await screen.findByRole("dialog", { name: "Nueva técnica" });
+    await user.type(within(dialogo).getByLabelText(/Precio unitario/i), "300");
+    await user.type(within(dialogo).getByLabelText(/Factor 1/i), "10");
+    await user.click(within(dialogo).getByRole("button", { name: /crear y usar/i }));
+
+    await waitFor(() => expect(creadas).toBe(1));
+    // Y queda añadida a la cotización, no solo guardada en el maestro.
+    expect(await screen.findByText("Pan de oro")).toBeInTheDocument();
   });
 });

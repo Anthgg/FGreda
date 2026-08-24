@@ -173,6 +173,8 @@ export interface QuotationCalculateOut {
   calculated_total: string;
   calculated_unit_price: string;
   /** Gramos de receta por pieza; el costo de materiales se calcula sobre ellos. */
+  /** Componentes de la receta sin precio: suman cero y abaratan el material. */
+  materials_without_cost: string[];
   material_grams_per_piece: string;
   material_total_grams: string;
   /** IGV en porcentaje. El total y el unitario de arriba son netos. */

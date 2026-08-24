@@ -19,6 +19,15 @@ interface SelectFieldProps<T extends string> {
   hint?: string | undefined;
   error?: string | undefined;
   className?: string | undefined;
+  /**
+   * Ofrece crear el valor buscado cuando no hay coincidencias.
+   *
+   * Existe para no obligar a abandonar el formulario a medias: si al cotizar
+   * falta un vidriado o una técnica, se crea desde aquí y se sigue.
+   */
+  allowCreate?: boolean | undefined;
+  onCreateRequested?: ((searchText: string) => void) | undefined;
+  createLabel?: ((searchText: string) => string) | undefined;
 }
 
 export function SelectField<T extends string>({
@@ -34,6 +43,9 @@ export function SelectField<T extends string>({
   hint,
   error,
   className = "",
+  allowCreate = false,
+  onCreateRequested,
+  createLabel,
 }: SelectFieldProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -50,7 +62,10 @@ export function SelectField<T extends string>({
   const selectedOption = options.find((opt) => opt.value === value);
 
   // Mostrar buscador si está habilitado y hay más de 2 opciones
-  const showSearch = searchable && options.length > 2;
+  // Con `allowCreate` el buscador va siempre: es la única vía para escribir el
+  // nombre de algo que todavía no existe. Sin esto, un maestro con dos entradas
+  // dejaría al usuario sin forma de crear la tercera.
+  const showSearch = searchable && (options.length > 2 || allowCreate);
 
   // Filtrado local para modo búsqueda
   const filteredOptions = showSearch && search.trim() !== ""
@@ -305,7 +320,22 @@ export function SelectField<T extends string>({
             >
               {filteredOptions.length === 0 ? (
                 <li className="px-3 py-4 text-center text-xs text-zinc-400 select-none">
-                  No se encontraron resultados
+                  {allowCreate && onCreateRequested && search.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const texto = search.trim();
+                        setIsOpen(false);
+                        setSearch("");
+                        onCreateRequested(texto);
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+                    >
+                      {createLabel ? createLabel(search.trim()) : `+ Crear «${search.trim()}»`}
+                    </button>
+                  ) : (
+                    "No se encontraron resultados"
+                  )}
                 </li>
               ) : (
                 filteredOptions.map((opt, idx) => {
