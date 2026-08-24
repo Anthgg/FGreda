@@ -69,6 +69,13 @@ export function describeError(error: unknown): string {
       return "La importacion no admite esta operacion en su estado actual.";
     case "IMPORT_ROWS_PENDING":
       return error.message;
+    case "INVALID_DNI":
+    case "INVALID_RUC":
+      return error.message;
+    case "IDENTITY_NOT_FOUND":
+      return "No se encontro informacion para ese documento.";
+    case "IDENTITY_LOOKUP_UNAVAILABLE":
+      return "La consulta no esta disponible en este momento. Intente mas tarde.";
     default:
       return error.message;
   }
@@ -78,7 +85,9 @@ export function describeError(error: unknown): string {
 function describeValidation(error: ApiError): string {
   if (!error.details.length) return error.message;
   return error.details
-    .map((detail) => (detail.field ? `${detail.field}: ${detail.reason}` : detail.reason))
+    .map((detail) =>
+      detail.field ? `${detail.field}: ${detail.reason}` : detail.reason,
+    )
     .join(". ");
 }
 

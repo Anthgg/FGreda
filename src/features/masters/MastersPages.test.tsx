@@ -24,7 +24,11 @@ import {
 } from "@/test/utils";
 import type { SessionUser } from "@/types/auth";
 
-const OPERATOR: SessionUser = { ...TEST_USER, display_name: "Operario", role: "OPERATOR" };
+const OPERATOR: SessionUser = {
+  ...TEST_USER,
+  display_name: "Operario",
+  role: "OPERATOR",
+};
 
 interface Overrides {
   user?: SessionUser;
@@ -38,19 +42,26 @@ function mockMasters(overrides: Overrides = {}) {
     if (custom) return custom;
 
     if (url.includes("/auth/csrf")) return csrfResponse();
-    if (url.includes("/auth/me")) return sessionResponse(overrides.user ?? TEST_USER);
-    if (url.includes("/pos-categories")) return jsonResponse(200, POS_CATEGORIES);
+    if (url.includes("/auth/me"))
+      return sessionResponse(overrides.user ?? TEST_USER);
+    if (url.includes("/pos-categories"))
+      return jsonResponse(200, POS_CATEGORIES);
     if (url.includes("/categories")) return jsonResponse(200, CATEGORIES);
     if (url.includes("/units")) return jsonResponse(200, UNITS);
     if (url.includes("/products")) return jsonResponse(200, PRODUCTS_PAGE);
     if (url.includes("/partners")) return jsonResponse(200, PARTNERS_PAGE);
     if (url.includes("/inventory/locations"))
-      return jsonResponse(200, [{ id: 1, name: "Mariano Pastor", active: true }]);
-    if (url.includes("/inventory/movements")) return jsonResponse(200, MOVEMENTS_PAGE);
+      return jsonResponse(200, [
+        { id: 1, name: "Mariano Pastor", active: true },
+      ]);
+    if (url.includes("/inventory/movements"))
+      return jsonResponse(200, MOVEMENTS_PAGE);
     if (url.includes("/inventory")) return jsonResponse(200, STOCK_PAGE);
-    if (url.includes("/imports/1/preview")) return jsonResponse(200, IMPORT_PREVIEW);
+    if (url.includes("/imports/1/preview"))
+      return jsonResponse(200, IMPORT_PREVIEW);
     if (url.includes("/imports/1")) return jsonResponse(200, IMPORT_BATCH);
-    if (url.includes("/imports")) return jsonResponse(200, { items: [IMPORT_BATCH], total: 1 });
+    if (url.includes("/imports"))
+      return jsonResponse(200, { items: [IMPORT_BATCH], total: 1 });
     return errorResponse(404, "NOT_FOUND");
   });
 }
@@ -86,11 +97,15 @@ describe("Modulo de productos", () => {
     await screen.findByText("Arcilla blanca");
 
     await userEvent.click(screen.getByRole("combobox", { name: /Tipo/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Servicio" }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Servicio" }),
+    );
 
     await waitFor(() => {
       const urls = spy.mock.calls.map((call) => String(call[0]));
-      expect(urls.some((url) => url.includes("product_type=SERVICE"))).toBe(true);
+      expect(urls.some((url) => url.includes("product_type=SERVICE"))).toBe(
+        true,
+      );
     });
   });
 
@@ -122,14 +137,20 @@ describe("Modulo de productos", () => {
     renderApp(["/productos"]);
     await screen.findByText("Arcilla blanca");
 
-    expect(screen.queryByRole("button", { name: "Nuevo producto" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Nuevo producto" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Editar" }),
+    ).not.toBeInTheDocument();
   });
 
   it("el alta exige unidad salvo en un servicio y muestra referencia automatica", async () => {
     mockMasters();
     renderApp(["/productos"]);
-    await userEvent.click(await screen.findByRole("button", { name: "Nuevo producto" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Nuevo producto" }),
+    );
 
     const refInput = screen.getByLabelText(/Referencia interna/);
     expect(refInput).toBeDisabled();
@@ -140,11 +161,17 @@ describe("Modulo de productos", () => {
     expect(submit).toBeDisabled();
 
     await userEvent.click(screen.getByRole("combobox", { name: "Tipo" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Servicio" }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Servicio" }),
+    );
     await userEvent.click(screen.getByRole("combobox", { name: "Categoría" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Insumos Taller" }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Insumos Taller" }),
+    );
 
-    expect(screen.getByRole("button", { name: "Crear producto" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Crear producto" }),
+    ).toBeEnabled();
   });
 
   it("la edición muestra la referencia interna en modo solo lectura", async () => {
@@ -163,8 +190,6 @@ describe("Modulo de productos", () => {
   });
 });
 
-
-
 describe("Backend equivocado", () => {
   it("un 404 en toda la API no se muestra como 'Not Found' en ingles", async () => {
     // Reproduce el incidente del user test: la aplicacion apuntaba al backend
@@ -179,7 +204,9 @@ describe("Backend equivocado", () => {
     renderApp(["/productos"]);
 
     expect(
-      await screen.findByText(/Verifique que la aplicacion apunte al backend correcto/),
+      await screen.findByText(
+        /Verifique que la aplicacion apunte al backend correcto/,
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Not Found")).not.toBeInTheDocument();
   });
@@ -187,12 +214,16 @@ describe("Backend equivocado", () => {
   it("el inventario tampoco filtra el texto crudo del servidor", async () => {
     mockMasters({
       onRequest: (url) =>
-        url.includes("/inventory") ? errorResponse(404, "NOT_FOUND", "Not Found") : undefined,
+        url.includes("/inventory")
+          ? errorResponse(404, "NOT_FOUND", "Not Found")
+          : undefined,
     });
     renderApp(["/inventario"]);
 
     expect(
-      await screen.findByText(/Verifique que la aplicacion apunte al backend correcto/),
+      await screen.findByText(
+        /Verifique que la aplicacion apunte al backend correcto/,
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -202,7 +233,9 @@ describe("Modulo de terceros", () => {
     mockMasters();
     renderApp(["/terceros"]);
 
-    expect(await screen.findByText("Proveedor de prueba S.A.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Proveedor de prueba S.A."),
+    ).toBeInTheDocument();
     expect(screen.getByText("RUC 20999999999")).toBeInTheDocument();
     expect(screen.getByText("Proveedor")).toBeInTheDocument();
   });
@@ -213,7 +246,9 @@ describe("Modulo de terceros", () => {
     await screen.findByText("Proveedor de prueba S.A.");
 
     await userEvent.click(screen.getByRole("combobox", { name: /Rol/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Clientes" }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Clientes" }),
+    );
 
     await waitFor(() => {
       const urls = spy.mock.calls.map((call) => String(call[0]));
@@ -224,13 +259,234 @@ describe("Modulo de terceros", () => {
   it("el tipo y el numero de documento van juntos", async () => {
     mockMasters();
     renderApp(["/terceros"]);
-    await userEvent.click(await screen.findByRole("button", { name: "Nuevo tercero" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Nuevo tercero" }),
+    );
 
-    await userEvent.type(screen.getByLabelText(/Nombre o razón social/), "Cliente nuevo");
-    await userEvent.type(screen.getByLabelText(/Número de documento/), "12345678");
+    await userEvent.type(
+      screen.getByLabelText(/Nombre o razón social/),
+      "Cliente nuevo",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "12345678",
+    );
 
-    expect(await screen.findByText("El tipo y el número de documento van juntos.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Crear tercero" })).toBeDisabled();
+    expect(
+      await screen.findByText("El tipo y el número de documento van juntos."),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Crear tercero" }),
+    ).toBeDisabled();
+  });
+
+  const DNI_RESULT = {
+    document_type: "DNI",
+    document_number: "12345678",
+    full_name: "Ana Torres Diaz",
+    first_names: "Ana",
+    paternal_surname: "Torres",
+    maternal_surname: "Diaz",
+    provider: "PERU_API",
+    cache_hit: false,
+    freshness: "2026-08-24T00:00:00Z",
+  };
+
+  const RUC_RESULT = {
+    document_type: "RUC",
+    document_number: "20123456789",
+    business_name: "Ceramica Greda SAC",
+    status: "ACTIVO",
+    condition: "HABIDO",
+    address: "Av. Siempre Viva 123",
+    ubigeo: "150101",
+    department: "Lima",
+    province: "Lima",
+    district: "Lima",
+    provider: "PERU_API",
+    cache_hit: false,
+    freshness: "2026-08-24T00:00:00Z",
+  };
+
+  async function openNewPartnerWithDocumentType(type: "DNI" | "RUC") {
+    renderApp(["/terceros"]);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Nuevo tercero" }),
+    );
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /Tipo de documento/ }),
+    );
+    await userEvent.click(await screen.findByRole("option", { name: type }));
+  }
+
+  it("el boton de consulta solo aparece para DNI o RUC", async () => {
+    mockMasters();
+    await openNewPartnerWithDocumentType("DNI");
+
+    expect(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Consultar RUC" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /Tipo de documento/ }),
+    );
+    await userEvent.click(await screen.findByRole("option", { name: "CE" }));
+    expect(
+      screen.queryByRole("button", { name: "Consultar DNI" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("el boton de consulta permanece deshabilitado hasta completar el largo del documento", async () => {
+    mockMasters();
+    await openNewPartnerWithDocumentType("DNI");
+
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "1234567",
+    );
+    expect(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    ).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText(/Número de documento/), "8");
+    expect(screen.getByRole("button", { name: "Consultar DNI" })).toBeEnabled();
+  });
+
+  it("Consultar DNI autocompleta el nombre cuando esta vacio", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/identity/dni/12345678")
+          ? jsonResponse(200, DNI_RESULT)
+          : undefined,
+    });
+    await openNewPartnerWithDocumentType("DNI");
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "12345678",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+
+    expect(
+      await screen.findByText("Encontrado: Ana Torres Diaz"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Ana Torres Diaz",
+    );
+  });
+
+  it("Consultar DNI no sobrescribe un nombre que el usuario ya escribio", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/identity/dni/12345678")
+          ? jsonResponse(200, DNI_RESULT)
+          : undefined,
+    });
+    await openNewPartnerWithDocumentType("DNI");
+    await userEvent.type(
+      screen.getByLabelText(/Nombre o razón social/),
+      "Nombre escrito a mano",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "12345678",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+
+    expect(
+      await screen.findByText("Encontrado: Ana Torres Diaz"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Nombre escrito a mano",
+    );
+  });
+
+  it("Consultar RUC autocompleta razon social y direccion, y muestra la ubicacion resuelta", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/identity/ruc/20123456789")
+          ? jsonResponse(200, RUC_RESULT)
+          : undefined,
+    });
+    await openNewPartnerWithDocumentType("RUC");
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "20123456789",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar RUC" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Encontrado: Ceramica Greda SAC · Lima, Lima, Lima",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre o razón social/)).toHaveValue(
+      "Ceramica Greda SAC",
+    );
+    expect(screen.getByLabelText(/Dirección/)).toHaveValue(
+      "Av. Siempre Viva 123",
+    );
+  });
+
+  it("muestra un mensaje claro cuando el documento no se encuentra", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/identity/dni/99999999")
+          ? errorResponse(
+              404,
+              "IDENTITY_NOT_FOUND",
+              "No se encontro informacion",
+            )
+          : undefined,
+    });
+    await openNewPartnerWithDocumentType("DNI");
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "99999999",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+
+    expect(
+      await screen.findByText("No se encontro informacion para ese documento."),
+    ).toBeInTheDocument();
+  });
+
+  it("muestra un mensaje claro cuando la consulta no esta disponible", async () => {
+    mockMasters({
+      onRequest: (url) =>
+        url.includes("/identity/dni/12345678")
+          ? errorResponse(503, "IDENTITY_LOOKUP_UNAVAILABLE", "No disponible")
+          : undefined,
+    });
+    await openNewPartnerWithDocumentType("DNI");
+    await userEvent.type(
+      screen.getByLabelText(/Número de documento/),
+      "12345678",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Consultar DNI" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "La consulta no esta disponible en este momento. Intente mas tarde.",
+      ),
+    ).toBeInTheDocument();
   });
 });
 
@@ -251,7 +507,9 @@ describe("Modulo de inventario", () => {
 
     const row = screen.getByText("120.000000000000").closest("tr");
     expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).queryByRole("textbox"),
+    ).not.toBeInTheDocument();
     expect(container.querySelectorAll("input[type='number']")).toHaveLength(0);
   });
 
@@ -263,14 +521,21 @@ describe("Modulo de inventario", () => {
           : undefined,
     });
     renderApp(["/inventario"]);
-    await userEvent.click(await screen.findByRole("button", { name: "Ajustar" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Ajustar" }),
+    );
 
     const submit = screen.getByRole("button", { name: "Registrar ajuste" });
     expect(submit).toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText(/Cantidad a sumar o restar/), "-20");
+    await userEvent.type(
+      screen.getByLabelText(/Cantidad a sumar o restar/),
+      "-20",
+    );
     await userEvent.type(screen.getByLabelText(/Motivo/), "Merma de horno");
-    await userEvent.click(screen.getByRole("button", { name: "Registrar ajuste" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Registrar ajuste" }),
+    );
 
     await waitFor(() => {
       const call = spy.mock.calls.find(([url]) =>
@@ -289,17 +554,25 @@ describe("Modulo de inventario", () => {
     renderApp(["/inventario"]);
     await screen.findByText("Arcilla blanca");
 
-    expect(screen.queryByRole("button", { name: "Ajustar" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ajustar" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Historial" }),
+    ).toBeInTheDocument();
   });
 
   it("el historial muestra el movimiento que respalda el saldo", async () => {
     mockMasters();
     renderApp(["/inventario"]);
-    await userEvent.click(await screen.findByRole("button", { name: "Historial" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Historial" }),
+    );
 
     expect(await screen.findByText("Carga inicial")).toBeInTheDocument();
-    expect(screen.getByText("Importacion inicial (lote 1)")).toBeInTheDocument();
+    expect(
+      screen.getByText("Importacion inicial (lote 1)"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -308,8 +581,12 @@ describe("Modulo de importaciones", () => {
     mockMasters();
     renderApp(["/importaciones"]);
 
-    expect(await screen.findByLabelText("Archivo de maestros")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Confirmar importación/ })).not.toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("Archivo de maestros"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Confirmar importación/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("tras subir muestra el resumen y el preview sin escribir nada", async () => {
@@ -324,9 +601,14 @@ describe("Modulo de importaciones", () => {
     const file = new File(["x"], "maestros.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    await userEvent.upload(await screen.findByLabelText("Archivo de maestros"), file);
+    await userEvent.upload(
+      await screen.findByLabelText("Archivo de maestros"),
+      file,
+    );
 
-    expect(await screen.findByText("2 · Resumen del análisis")).toBeInTheDocument();
+    expect(
+      await screen.findByText("2 · Resumen del análisis"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Creaciones")).toBeInTheDocument();
     expect(
       screen.getByText(/Recetas detectadas: 3 \(9 líneas\) · importadas: 0/),
@@ -355,7 +637,9 @@ describe("Modulo de importaciones", () => {
       new File(["x"], "maestros.xlsx"),
     );
 
-    expect(await screen.findByText("ROUNDED_TO_12_DECIMALS")).toBeInTheDocument();
+    expect(
+      await screen.findByText("ROUNDED_TO_12_DECIMALS"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("(0.0169068431372549 → 0.016906843137)"),
     ).toBeInTheDocument();
@@ -374,9 +658,13 @@ describe("Modulo de importaciones", () => {
       new File(["x"], "maestros.xlsx"),
     );
 
-    const button = await screen.findByRole("button", { name: "Revisar y confirmar" });
+    const button = await screen.findByRole("button", {
+      name: "Revisar y confirmar",
+    });
     expect(button).toBeDisabled();
-    expect(screen.getByText("Quedan 1 filas por resolver.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Quedan 1 filas por resolver."),
+    ).toBeInTheDocument();
   });
 
   it("clasificar un rol no aplica solo la correccion del documento", async () => {
@@ -387,7 +675,8 @@ describe("Modulo de importaciones", () => {
         if (url.includes("/imports/master/upload") && init.method === "POST") {
           return jsonResponse(201, IMPORT_BATCH);
         }
-        if (url.includes("/imports/1/resolve")) return jsonResponse(200, IMPORT_BATCH);
+        if (url.includes("/imports/1/resolve"))
+          return jsonResponse(200, IMPORT_BATCH);
         return undefined;
       },
     });
@@ -397,12 +686,18 @@ describe("Modulo de importaciones", () => {
       new File(["x"], "maestros.xlsx"),
     );
 
-    await userEvent.click(await screen.findByRole("combobox", { name: /Clasificar/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Cliente" }));
+    await userEvent.click(
+      await screen.findByRole("combobox", { name: /Clasificar/ }),
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Cliente" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
 
     await waitFor(() => {
-      const call = spy.mock.calls.find(([url]) => String(url).includes("/imports/1/resolve"));
+      const call = spy.mock.calls.find(([url]) =>
+        String(url).includes("/imports/1/resolve"),
+      );
       expect(call).toBeDefined();
       expect(JSON.parse(String(call?.[1]?.body))).toEqual({
         resolutions: [{ row_id: 11, partner_role: "CLIENT" }],
@@ -416,7 +711,8 @@ describe("Modulo de importaciones", () => {
         if (url.includes("/imports/master/upload") && init.method === "POST") {
           return jsonResponse(201, IMPORT_BATCH);
         }
-        if (url.includes("/imports/1/resolve")) return jsonResponse(200, IMPORT_BATCH);
+        if (url.includes("/imports/1/resolve"))
+          return jsonResponse(200, IMPORT_BATCH);
         return undefined;
       },
     });
@@ -431,13 +727,19 @@ describe("Modulo de importaciones", () => {
     await userEvent.click(checkbox);
 
     await userEvent.click(screen.getByRole("combobox", { name: /Clasificar/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Cliente" }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Cliente" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
 
     await waitFor(() => {
-      const call = spy.mock.calls.find(([url]) => String(url).includes("/imports/1/resolve"));
+      const call = spy.mock.calls.find(([url]) =>
+        String(url).includes("/imports/1/resolve"),
+      );
       expect(JSON.parse(String(call?.[1]?.body))).toEqual({
-        resolutions: [{ row_id: 11, partner_role: "CLIENT", accept_suggestion: true }],
+        resolutions: [
+          { row_id: 11, partner_role: "CLIENT", accept_suggestion: true },
+        ],
       });
     });
   });
@@ -448,7 +750,8 @@ describe("Modulo de importaciones", () => {
         if (url.includes("/imports/master/upload") && init.method === "POST") {
           return jsonResponse(201, IMPORT_BATCH);
         }
-        if (url.includes("/imports/1/resolve")) return jsonResponse(200, IMPORT_BATCH);
+        if (url.includes("/imports/1/resolve"))
+          return jsonResponse(200, IMPORT_BATCH);
         return undefined;
       },
     });
@@ -458,12 +761,18 @@ describe("Modulo de importaciones", () => {
       new File(["x"], "maestros.xlsx"),
     );
 
-    await userEvent.click(await screen.findByRole("combobox", { name: /Clasificar/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Proveedor" }));
+    await userEvent.click(
+      await screen.findByRole("combobox", { name: /Clasificar/ }),
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Proveedor" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
 
     await waitFor(() => {
-      const call = spy.mock.calls.find(([url]) => String(url).includes("/imports/1/resolve"));
+      const call = spy.mock.calls.find(([url]) =>
+        String(url).includes("/imports/1/resolve"),
+      );
       expect(call).toBeDefined();
       expect(JSON.parse(String(call?.[1]?.body))).toEqual({
         resolutions: [{ row_id: 11, partner_role: "SUPPLIER" }],
