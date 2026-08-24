@@ -11,13 +11,14 @@ import { Spinner } from "@/components/Spinner";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
 import { describeError } from "@/features/settings/messages";
-import { useRecipe, useRecipes } from "@/features/recipes/useRecipes";
+import { useRecipe } from "@/features/recipes/useRecipes";
 import {
   useAdditionals,
   useOtherCosts,
   useQuotationPreview,
   useTechniques,
 } from "@/features/quotations/useQuotations";
+import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
 import { NuevoMaestroModal } from "@/features/quotations/NuevoMaestroModal";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
 import { useSession } from "@/features/auth/useSession";
@@ -46,11 +47,6 @@ export function QuotationEditor({
 }) {
   const productId = /^[1-9]\d*$/.test(value.productId) ? Number(value.productId) : null;
   const recipeId = /^[1-9]\d*$/.test(value.recipeId) ? Number(value.recipeId) : null;
-  // Las recetas NO se filtran por el producto cotizado. En el taller son de
-  // materiales preparados —pastas, barnices, esmaltes— y una pieza terminada no
-  // tiene formula propia: lo que se cotiza es el material con el que se hace.
-  // Filtrar por producto dejaba el selector vacio para cualquier pieza.
-  const recipes = useRecipes({ active: true, limit: 100 });
   const recipe = useRecipe(recipeId);
   const firingLines = useConfirmedFiringLines({
     ...(productId ? { product_id: productId } : {}),
@@ -82,10 +78,6 @@ export function QuotationEditor({
     });
   }, [onChange, otherCosts.data, value]);
 
-  const recipeOptions = (recipes.data?.items ?? []).map((item) => ({
-    value: String(item.id),
-    label: `${item.product_internal_reference} · ${item.name}`,
-  }));
   const versionRows = recipe.data?.versions ??
     (recipe.data?.current_version ? [recipe.data.current_version] : []);
   const versionOptions = versionRows
@@ -175,14 +167,18 @@ export function QuotationEditor({
         <section aria-labelledby="quote-materials" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
           <h2 id="quote-materials" className="text-sm font-semibold text-zinc-950">Materiales y receta</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <SelectField
+            <RecipeSelectField
               label="Receta"
               requirement="required"
               value={value.recipeId}
-              options={recipeOptions}
-              onChange={(recipeId) => update({ recipeId, recipeVersionId: "" })}
-              disabled={recipes.isPending}
-              placeholder={recipes.isPending ? "Cargando…" : "Elegir receta"}
+              selectedLabel={value.recipeLabel}
+              onChange={(recipeId, recipe) =>
+                update({
+                  recipeId,
+                  recipeLabel: recipe ? `${recipe.product_internal_reference} · ${recipe.name}` : "",
+                  recipeVersionId: "",
+                })
+              }
               hint="Receta del material con el que se hace la pieza."
             />
             <SelectField
@@ -243,9 +239,15 @@ export function QuotationEditor({
               </p>
             </div>
           ) : null}
-          {!recipes.isPending && recipeOptions.length === 0 ? (
+          {preview.data?.warnings.includes("RECIPE_REQUIRED") ? (
             <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              RECIPE_REQUIRED: no hay ninguna receta activa en el catálogo. Puede guardar un borrador, pero no confirmarlo.
+              RECIPE_REQUIRED: elija una receta y su versión. Puede guardar un borrador, pero no confirmarlo.
+            </p>
+          ) : null}
+          {preview.data?.warnings.includes("MATERIAL_GRAMS_PER_PIECE_REQUIRED") ? (
+            <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Indique cuántos gramos de receta lleva una pieza: sin ese dato el costo de
+              materiales no se puede calcular y la cotización no se podrá confirmar.
             </p>
           ) : null}
         </section>

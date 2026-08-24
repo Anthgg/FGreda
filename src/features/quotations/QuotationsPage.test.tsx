@@ -60,6 +60,7 @@ const preview = {
   material_grams_per_piece: "1",
   material_total_grams: "19",
   tax_percentage: "18",
+  tax_rate_source: "COMMERCIAL_SETTINGS" as const,
   tax_amount: "50.4288",
   total_with_tax: "330.5888",
   unit_price_with_tax: "17.399410526315789474",
@@ -254,5 +255,115 @@ describe("pantallas de cotizaciones", () => {
     await waitFor(() => expect(creadas).toBe(1));
     // Y queda añadida a la cotización, no solo guardada en el maestro.
     expect(await screen.findByText("Pan de oro")).toBeInTheDocument();
+  });
+});
+
+describe("selector remoto de recetas", () => {
+  /** Catálogo de 125 recetas: más de lo que cabe en una sola página. */
+  const receta = (id: number) => ({
+    id,
+    product_id: 1000 + id,
+    product_internal_reference: `LAB70${String(id).padStart(3, "0")}`,
+    name: `BARNIZ ${id}`,
+    active: true,
+    current_version_id: id,
+    current_version: null,
+    versions: [],
+    created_at: "2026-08-24T00:00:00Z",
+    updated_at: "2026-08-24T00:00:00Z",
+  });
+  const CATALOGO = Array.from({ length: 125 }, (_, i) => receta(i + 1));
+
+  function handlerConRecetas(url: string, init: RequestInit) {
+    if (url.includes("/recipes")) {
+      const u = new URL(url, "http://localhost");
+      const limit = Number(u.searchParams.get("limit") ?? "50");
+      const offset = Number(u.searchParams.get("offset") ?? "0");
+      const search = (u.searchParams.get("search") ?? "").toLowerCase();
+      const filtradas = search
+        ? CATALOGO.filter((r) => r.name.toLowerCase().includes(search))
+        : CATALOGO;
+      return jsonResponse(200, {
+        items: filtradas.slice(offset, offset + limit),
+        total: filtradas.length,
+        limit,
+        offset,
+      });
+    }
+    return quoteHandler(url, init);
+  }
+
+  it("pagina en el servidor y llega a la receta 125", async () => {
+    const user = userEvent.setup();
+    const spy = mockFetch(handlerConRecetas);
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    await user.click(screen.getByRole("combobox", { name: "Receta" }));
+
+    // Primera página: cincuenta, no el catálogo entero.
+    await screen.findByText("LAB70001 · BARNIZ 1");
+    expect(screen.queryByText("LAB70051 · BARNIZ 51")).not.toBeInTheDocument();
+    expect(
+      spy.mock.calls.some(([u]) => String(u).includes("limit=50") && String(u).includes("offset=0")),
+    ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /ver más \(50 de 125\)/i }));
+    await screen.findByText("LAB70051 · BARNIZ 51");
+    await waitFor(() =>
+      expect(spy.mock.calls.some(([u]) => String(u).includes("offset=50"))).toBe(true),
+    );
+
+    await user.click(screen.getByRole("button", { name: /ver más \(100 de 125\)/i }));
+    await waitFor(() =>
+      expect(spy.mock.calls.some(([u]) => String(u).includes("offset=100"))).toBe(true),
+    );
+
+    // La 125 existe y se puede elegir: no se asume un máximo de cien.
+    await user.click(await screen.findByText("LAB70125 · BARNIZ 125"));
+    expect(screen.getByRole("combobox", { name: "Receta" })).toHaveTextContent(
+      "LAB70125 · BARNIZ 125",
+    );
+  });
+
+  it("la búsqueda viaja al servidor", async () => {
+    const user = userEvent.setup();
+    const spy = mockFetch(handlerConRecetas);
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    await user.click(screen.getByRole("combobox", { name: "Receta" }));
+    await user.type(screen.getByLabelText(/buscar receta/i), "BARNIZ 77");
+
+    await waitFor(
+      () => expect(spy.mock.calls.some(([u]) => String(u).includes("search=BARNIZ+77"))).toBe(true),
+      { timeout: 3000 },
+    );
+  });
+
+  it("avisa de que faltan los gramos por pieza y no supone ninguno", async () => {
+    mockFetch((url, init) =>
+      url.includes("/quotations/calculate")
+        ? jsonResponse(200, {
+            ...preview,
+            material_grams_per_piece: null,
+            material_total_grams: null,
+            materials_calculated: "0",
+            warnings: ["MATERIAL_GRAMS_PER_PIECE_REQUIRED"],
+          })
+        : quoteHandler(url, init),
+    );
+    const user = userEvent.setup();
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    // Sin producto ni cantidad no hay vista previa que avisar.
+    await user.click(screen.getByRole("combobox", { name: "Producto" }));
+    await user.click(await screen.findByText("Plato palta QA"));
+    await user.type(screen.getByLabelText(/Cantidad/i), "19");
+
+    expect(
+      await screen.findByText(/cuántos gramos de receta lleva una pieza/i),
+    ).toBeInTheDocument();
   });
 });

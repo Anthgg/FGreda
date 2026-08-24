@@ -21,6 +21,8 @@ export interface QuotationDraft {
   quantity: string;
   displayDate: string;
   recipeId: string;
+  /** Etiqueta de la receta elegida: el selector remoto pagina y puede perderla. */
+  recipeLabel: string;
   recipeVersionId: string;
   firingLineId: string;
   materialsApplied: string;
@@ -47,6 +49,7 @@ export const emptyQuotationDraft: QuotationDraft = {
   quantity: "",
   displayDate: localISODate(),
   recipeId: "",
+  recipeLabel: "",
   recipeVersionId: "",
   firingLineId: "",
   materialsApplied: "",
@@ -152,10 +155,11 @@ export function quotationToDraft(quote: QuotationOut): QuotationDraft {
     quantity: String(quote.quantity),
     displayDate: quote.created_at.slice(0, 10),
     recipeId: quote.recipe_id ? String(quote.recipe_id) : "",
+    recipeLabel: "",
     recipeVersionId: quote.recipe_version_id ? String(quote.recipe_version_id) : "",
     firingLineId: quote.firing_line_id ? String(quote.firing_line_id) : "",
     materialsApplied: quote.materials_applied,
-    materialGramsPerPiece: quote.material_grams_per_piece,
+    materialGramsPerPiece: quote.material_grams_per_piece ?? "",
     techniques: quote.techniques.map((line) => ({
       techniqueId: String(line.technique_id),
       quantity: String(line.quantity),
