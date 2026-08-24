@@ -82,14 +82,22 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
         <Metric label="Costo espacio" value={money(quote.space_cost)} />
         <Metric label="Subtotal base" value={money(quote.base_commercial_cost)} />
         <Metric label="Factor comercial" value={quote.commercial_factor} />
-        <Metric label="Precio total" value={money(quote.calculated_total)} prominent />
-        <Metric label="Precio unitario" value={money(quote.calculated_unit_price)} prominent />
+        <Metric label="Precio total sin IGV" value={money(quote.calculated_total)} prominent />
+        <Metric label="Precio unitario sin IGV" value={money(quote.calculated_unit_price)} prominent />
+      </dl>
+
+      {/* La cotización se negocia neta; el documento que se entrega muestra las
+          dos cifras, y por eso el IGV se guarda calculado, no se deduce luego. */}
+      <dl className="grid gap-3 rounded-2xl border border-zinc-300 bg-zinc-50 p-4 sm:grid-cols-3">
+        <Metric label={`IGV (${formatDecimalString(quote.tax_percentage, 2)} %)`} value={money(quote.tax_amount)} />
+        <Metric label="Precio total con IGV" value={money(quote.total_with_tax)} prominent />
+        <Metric label="Precio unitario con IGV" value={money(quote.unit_price_with_tax)} prominent />
       </dl>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="rounded-2xl border border-zinc-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-zinc-950">Fuentes congeladas</h2>
-          <dl className="mt-4 grid grid-cols-2 gap-4 text-xs"><div><dt className="text-zinc-500">Receta / versión</dt><dd className="mt-1 font-medium">{quote.recipe_id ?? "—"} / {quote.recipe_version_id ?? "—"}</dd></div><div><dt className="text-zinc-500">Quema / línea</dt><dd className="mt-1 font-medium">{quote.firing_code_snapshot ?? "—"} / {quote.firing_line_id ?? "—"}</dd></div><div><dt className="text-zinc-500">Material calculado</dt><dd className="mt-1 font-medium">{money(quote.materials_calculated)}</dd></div><div><dt className="text-zinc-500">Precio vigente al calcular</dt><dd className="mt-1 font-medium">{money(quote.current_sale_price_snapshot)}</dd></div></dl>
+          <dl className="mt-4 grid grid-cols-2 gap-4 text-xs"><div><dt className="text-zinc-500">Receta / versión</dt><dd className="mt-1 font-medium">{quote.recipe_id ?? "—"} / {quote.recipe_version_id ?? "—"}</dd></div><div><dt className="text-zinc-500">Quema / línea</dt><dd className="mt-1 font-medium">{quote.firing_code_snapshot ?? "—"} / {quote.firing_line_id ?? "—"}</dd></div><div><dt className="text-zinc-500">Material calculado</dt><dd className="mt-1 font-medium">{money(quote.materials_calculated)}</dd><dd className="text-[11px] text-zinc-500">{formatDecimalString(quote.material_grams_per_piece, 2)} g/pieza · {formatDecimalString(quote.material_total_grams, 2)} g en total</dd></div><div><dt className="text-zinc-500">Precio vigente al calcular</dt><dd className="mt-1 font-medium">{money(quote.current_sale_price_snapshot)}</dd></div></dl>
         </section>
         <section className="rounded-2xl border border-zinc-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-zinc-950">Días</h2>

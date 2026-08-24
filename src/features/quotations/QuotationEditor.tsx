@@ -182,20 +182,33 @@ export function QuotationEditor({
               placeholder="Elegir versión activa"
             />
             <TextField
-              label="Costo calculado"
+              label="Material por pieza (g)"
+              value={value.materialGramsPerPiece}
+              onChange={(materialGramsPerPiece) => update({ materialGramsPerPiece })}
+              inputMode="decimal"
+              placeholder="1"
+              hint={
+                preview.data
+                  ? `${preview.data.quantity} piezas × ${formatDecimalString(preview.data.material_grams_per_piece, 2)} g = ${formatDecimalString(preview.data.material_total_grams, 2)} g de receta.`
+                  : "Gramos de receta que lleva una pieza. Vacío usa 1 g."
+              }
+            />
+            <TextField
+              label="Costo de materiales calculado"
               requirement="automatic"
               value={preview.data?.materials_calculated ?? null}
               onChange={() => undefined}
               readOnly
+              hint="Lo que cuesta esa cantidad de receta."
             />
             <TextField
-              label="Costo aplicado"
+              label="Costo de materiales a usar en el precio"
               requirement="optional"
               value={value.materialsApplied}
               onChange={(materialsApplied) => update({ materialsApplied })}
               inputMode="decimal"
               placeholder={preview.data?.materials_calculated ?? "Calculado por receta"}
-              hint={value.materialsApplied ? "Ajustado: se conservará el calculado y el aplicado." : "Vacío usa el costo calculado."}
+              hint={value.materialsApplied ? "Ajustado a mano: se conservan el calculado y el aplicado." : "Vacío usa el costo calculado de arriba."}
             />
           </div>
           {!recipes.isPending && recipeOptions.length === 0 ? (
@@ -387,8 +400,14 @@ export function QuotationEditor({
                 <SummaryMetric label="Subtotal base" value={money(preview.data.base_commercial_cost)} />
                 <SummaryMetric label="Factor comercial" value={preview.data.commercial_factor} />
                 <SummaryMetric label="Costo espacio" value={money(preview.data.space_cost)} />
-                <SummaryMetric label="Precio total" value={money(preview.data.calculated_total)} strong />
-                <SummaryMetric label="Precio unitario" value={money(preview.data.calculated_unit_price)} strong />
+                <SummaryMetric label="Precio total sin IGV" value={money(preview.data.calculated_total)} strong />
+                <SummaryMetric label="Precio unitario sin IGV" value={money(preview.data.calculated_unit_price)} strong />
+                <SummaryMetric
+                  label={`IGV (${formatDecimalString(preview.data.tax_percentage, 2)} %)`}
+                  value={money(preview.data.tax_amount)}
+                />
+                <SummaryMetric label="Precio total con IGV" value={money(preview.data.total_with_tax)} strong />
+                <SummaryMetric label="Precio unitario con IGV" value={money(preview.data.unit_price_with_tax)} strong />
               </dl>
               {preview.data.warnings.length > 0 ? (
                 <div className="mt-5 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
@@ -396,7 +415,8 @@ export function QuotationEditor({
                 </div>
               ) : null}
               <div className="mt-4 text-[10px] leading-4 text-zinc-500">
-                IGV: regla no encontrada · Descuento: regla no encontrada
+                El precio se negocia sin IGV; el impuesto se muestra aparte para el documento
+                que se entrega. No hay regla de descuento definida.
               </div>
             </>
           ) : null}

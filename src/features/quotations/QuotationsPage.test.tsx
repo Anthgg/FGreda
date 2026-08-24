@@ -56,11 +56,17 @@ const preview = {
   base_commercial_cost: "11.58",
   calculated_total: "280.16",
   calculated_unit_price: "14.745263157894736842",
+  material_grams_per_piece: "1",
+  material_total_grams: "19",
+  tax_percentage: "18",
+  tax_amount: "50.4288",
+  total_with_tax: "330.5888",
+  unit_price_with_tax: "17.399410526315789474",
   source_fingerprint: "a".repeat(64),
   warnings: ["RECIPE_REQUIRED", "FIRING_LINE_REQUIRED"],
   // El contrato los fija como literales: ninguna fuente define la posicion del
   // IGV ni la regla de descuento, y el tipo lo deja dicho.
-  igv_rule_source: "NOT_FOUND" as const,
+  igv_rule_source: "FOUND" as const,
   discount_rule_source: "NOT_FOUND" as const,
   techniques: [],
   additionals: [],
@@ -118,7 +124,7 @@ describe("pantallas de cotizaciones", () => {
     await user.click(screen.getByRole("combobox", { name: "Producto" }));
     await user.click(await screen.findByText("Plato palta QA"));
     await user.type(screen.getByLabelText(/Cantidad/i), "19");
-    await user.type(screen.getByLabelText(/Costo aplicado/i), "11.58");
+    await user.type(screen.getByLabelText(/Costo de materiales a usar en el precio/i), "11.58");
 
     await waitFor(() => {
       expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/quotations/calculate"))).toBe(true);

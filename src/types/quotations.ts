@@ -91,6 +91,8 @@ export interface QuotationCalculateIn {
   recipe_version_id?: number;
   firing_line_id?: number;
   materials_applied?: string;
+  /** Gramos de receta por pieza. Por omisión, uno. */
+  material_grams_per_piece?: string;
   techniques: TechniqueSelectionIn[];
   additionals: AdditionalSelectionIn[];
   days_adjustment: number;
@@ -170,9 +172,18 @@ export interface QuotationCalculateOut {
   base_commercial_cost: string;
   calculated_total: string;
   calculated_unit_price: string;
+  /** Gramos de receta por pieza; el costo de materiales se calcula sobre ellos. */
+  material_grams_per_piece: string;
+  material_total_grams: string;
+  /** IGV en porcentaje. El total y el unitario de arriba son netos. */
+  tax_percentage: string;
+  tax_amount: string;
+  total_with_tax: string;
+  unit_price_with_tax: string;
   source_fingerprint: string;
   warnings: string[];
-  igv_rule_source: "NOT_FOUND";
+  /** La cotización se emite sin IGV y el impuesto se añade encima. */
+  igv_rule_source: "FOUND";
   discount_rule_source: "NOT_FOUND";
   techniques: TechniqueCalculationOut[];
   additionals: AdditionalCalculationOut[];
@@ -200,6 +211,7 @@ export interface QuotationSummaryOut {
   quantity: number;
   calculated_unit_price: string;
   calculated_total: string;
+  total_with_tax: string;
   created_at: string;
 }
 

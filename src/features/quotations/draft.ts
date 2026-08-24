@@ -24,6 +24,7 @@ export interface QuotationDraft {
   recipeVersionId: string;
   firingLineId: string;
   materialsApplied: string;
+  materialGramsPerPiece: string;
   techniques: TechniqueDraft[];
   additionals: AdditionalDraft[];
   daysAdjustment: string;
@@ -49,6 +50,7 @@ export const emptyQuotationDraft: QuotationDraft = {
   recipeVersionId: "",
   firingLineId: "",
   materialsApplied: "",
+  materialGramsPerPiece: "",
   techniques: [],
   additionals: [],
   daysAdjustment: "0",
@@ -121,6 +123,9 @@ export function draftToPayload(draft: QuotationDraft): QuotationCalculateIn | nu
       ? { firing_line_id: strictPositiveInt(draft.firingLineId)! }
       : {}),
     ...(draft.materialsApplied ? { materials_applied: draft.materialsApplied } : {}),
+    ...(draft.materialGramsPerPiece
+      ? { material_grams_per_piece: draft.materialGramsPerPiece }
+      : {}),
     techniques: techniques.filter((line) => line !== null),
     additionals: additionals.filter((line) => line !== null),
     days_adjustment: daysAdjustment,
@@ -150,6 +155,7 @@ export function quotationToDraft(quote: QuotationOut): QuotationDraft {
     recipeVersionId: quote.recipe_version_id ? String(quote.recipe_version_id) : "",
     firingLineId: quote.firing_line_id ? String(quote.firing_line_id) : "",
     materialsApplied: quote.materials_applied,
+    materialGramsPerPiece: quote.material_grams_per_piece,
     techniques: quote.techniques.map((line) => ({
       techniqueId: String(line.technique_id),
       quantity: String(line.quantity),
