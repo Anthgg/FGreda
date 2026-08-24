@@ -66,22 +66,19 @@ describe("rutas protegidas y Dashboard", () => {
     expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
   });
 
-  it("muestra los modulos futuros deshabilitados en el menu y en accesos", async () => {
+  it("habilita Cotizaciones en el menu de Fase 005", async () => {
     mockFetch(() => sessionResponse());
 
     renderApp(["/"]);
 
     await screen.findByRole("heading", { name: /inicio/i });
-    // Quemas se habilita en Fase 4; Cotizaciones sigue siendo el unico futuro.
-    for (const modulo of ["Cotizaciones"]) {
-      const entradas = screen.getAllByText(modulo);
-      expect(entradas.length).toBeGreaterThan(0);
-      const disabledParent = entradas[0]?.closest("[aria-disabled='true']");
-      expect(disabledParent).toBeInTheDocument();
-    }
+    const enlaces = screen
+      .getAllByRole("link", { name: /cotizaciones/i })
+      .map((item) => item.getAttribute("href"));
+    expect(enlaces).toContain("/cotizaciones");
   });
 
-  it("los modulos de Fase 3, 3.5 y 4 son navegables desde el menu", async () => {
+  it("los modulos hasta Fase 005 son navegables desde el menu", async () => {
     mockFetch(() => sessionResponse());
 
     renderApp(["/"]);
@@ -94,6 +91,7 @@ describe("rutas protegidas y Dashboard", () => {
       ["Importaciones", "/importaciones"],
       ["Recetas", "/recetas"],
       ["Quemas", "/quemas"],
+      ["Cotizaciones", "/cotizaciones"],
     ] as const) {
       const enlaces = screen
         .getAllByRole("link", { name: new RegExp(modulo, "i") })

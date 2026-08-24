@@ -2,7 +2,7 @@
  * Menu principal previsto para todo el producto Cotizador GREDA.
  *
  * `Inicio`, `Productos`, `Terceros`, `Inventario`, `Importaciones`, `Recetas`,
- * `Quemas` y
+ * `Quemas`, `Cotizaciones` y
  * `Configuracion` estan operativos. El resto queda visible y
  * deshabilitado para fijar la estructura de navegacion: su logica de negocio
  * corresponde a fases posteriores y no se adelanta aqui.
@@ -41,7 +41,8 @@ export const NAVIGATION: readonly NavigationItem[] = [
   },
   {
     label: "Cotizaciones",
-    enabled: false,
+    to: "/cotizaciones",
+    enabled: true,
     icon: "file-text",
     description: "Crear y administrar cotizaciones de piezas y pedidos.",
   },

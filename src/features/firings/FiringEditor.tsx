@@ -38,7 +38,7 @@ import {
   formatPercentage,
   multiplyDecimalStrings,
 } from "@/features/firings/labels";
-import { NuevaPiezaModal } from "@/features/firings/NuevaPiezaModal";
+import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
 import { FIRING_PIECE_PRODUCT_TYPES } from "@/features/firings/pieceTypes";
 import { useFiringPreview } from "@/features/firings/useFirings";
 import type { FiringCalculateOut, FiringType, KilnOut } from "@/types/firings";

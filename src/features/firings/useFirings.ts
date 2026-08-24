@@ -12,6 +12,7 @@ import {
   confirmFiring,
   createFiring,
   createKiln,
+  fetchConfirmedFiringLines,
   fetchFiring,
   fetchFirings,
   fetchKiln,
@@ -67,6 +68,21 @@ export function useFirings(filters: FiringFilters) {
   return useQuery({
     queryKey: [...FIRINGS_KEY, filters],
     queryFn: () => fetchFirings(filters),
+  });
+}
+
+export const CONFIRMED_LINES_KEY = ["firing-lines"] as const;
+
+/** Líneas de quemas confirmadas, opcionalmente acotadas a un producto. */
+export function useConfirmedFiringLines(filters: {
+  product_id?: number;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  return useQuery({
+    queryKey: [...CONFIRMED_LINES_KEY, filters],
+    queryFn: () => fetchConfirmedFiringLines(filters),
   });
 }
 

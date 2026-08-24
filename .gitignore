@@ -44,3 +44,6 @@ desktop.ini
 
 # Configuracion local de herramientas de desarrollo
 .claude/
+
+# Indice local del MCP de memoria de codigo: no es fuente del proyecto.
+.codebase-memory/

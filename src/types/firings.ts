@@ -217,3 +217,29 @@ export interface FiringFilters {
   limit?: number;
   offset?: number;
 }
+
+/**
+ * Línea de una quema confirmada, tal y como la elige una cotización.
+ *
+ * Vista plana a propósito: el selector necesita el código de la hoja, la fecha
+ * y el costo ya repartido, no las sesiones ni el resto de piezas.
+ */
+export interface ConfirmedFiringLineOut {
+  id: number;
+  firing_id: number;
+  firing_code: string;
+  firing_date: string | null;
+  product_id: number | null;
+  product_internal_reference: string | null;
+  description: string;
+  quantity: number;
+  total_volume_cm3: string;
+  allocated_cost: string;
+}
+
+export interface ConfirmedFiringLinePage {
+  items: ConfirmedFiringLineOut[];
+  total: number;
+  limit: number;
+  offset: number;
+}
