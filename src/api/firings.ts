@@ -7,6 +7,7 @@
 import { apiClient } from "@/api/client";
 import { toQuery } from "@/api/masters";
 import type {
+  ConfirmedFiringLinePage,
   FiringCalculateOut,
   FiringFilters,
   FiringIn,
@@ -91,4 +92,21 @@ export function cancelFiring(id: number): Promise<FiringOut> {
  */
 export function calculateFiring(payload: FiringIn): Promise<FiringCalculateOut> {
   return apiClient.post<FiringCalculateOut>(`${FIRINGS}/calculate`, payload);
+}
+
+/**
+ * Líneas de quemas confirmadas para el cotizador.
+ *
+ * Una sola petición: listar las quemas y pedir el detalle de cada una para
+ * quedarse con una fila obligaría a traer cien documentos completos.
+ */
+export function fetchConfirmedFiringLines(filters: {
+  product_id?: number;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<ConfirmedFiringLinePage> {
+  return apiClient.get<ConfirmedFiringLinePage>(
+    "/firing-lines" + toQuery(filters as Record<string, unknown>),
+  );
 }

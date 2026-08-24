@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
 
-import { fetchFiring } from "@/api/firings";
 import {
   DatePickerField,
   ProductSelectField,
@@ -9,7 +7,7 @@ import {
   TextField,
 } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { firingKey, useFirings } from "@/features/firings/useFirings";
+import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
 import { describeError } from "@/features/settings/messages";
 import { useRecipe, useRecipes } from "@/features/recipes/useRecipes";
@@ -44,19 +42,15 @@ export function QuotationEditor({
 }) {
   const productId = /^[1-9]\d*$/.test(value.productId) ? Number(value.productId) : null;
   const recipeId = /^[1-9]\d*$/.test(value.recipeId) ? Number(value.recipeId) : null;
-  const recipes = useRecipes({
-    ...(productId ? { product_id: productId } : {}),
-    active: true,
-    limit: 100,
-  });
+  // Las recetas NO se filtran por el producto cotizado. En el taller son de
+  // materiales preparados —pastas, barnices, esmaltes— y una pieza terminada no
+  // tiene formula propia: lo que se cotiza es el material con el que se hace.
+  // Filtrar por producto dejaba el selector vacio para cualquier pieza.
+  const recipes = useRecipes({ active: true, limit: 100 });
   const recipe = useRecipe(recipeId);
-  const firings = useFirings({ status: "CONFIRMED", limit: 200, offset: 0 });
-  const firingDetails = useQueries({
-    queries: (firings.data?.items ?? []).map((item) => ({
-      queryKey: firingKey(item.id),
-      queryFn: () => fetchFiring(item.id),
-      enabled: productId !== null,
-    })),
+  const firingLines = useConfirmedFiringLines({
+    ...(productId ? { product_id: productId } : {}),
+    limit: 100,
   });
   const techniques = useTechniques(true);
   const additionals = useAdditionals(true);
@@ -90,16 +84,10 @@ export function QuotationEditor({
       value: String(item.id),
       label: `Versión ${item.version_number} · ${item.status === "ACTIVE" ? "Activa" : item.status}`,
     }));
-  const firingLineOptions = firingDetails.flatMap((query) => {
-    const firing = query.data;
-    if (!firing || !productId) return [];
-    return firing.lines
-      .filter((line) => line.id !== null && line.product_id === productId)
-      .map((line) => ({
-        value: String(line.id),
-        label: `${firing.code} · ${firing.firing_date ?? "Sin fecha"} · ${line.description} · ${money(line.allocated_cost)}`,
-      }));
-  });
+  const firingLineOptions = (firingLines.data?.items ?? []).map((line) => ({
+    value: String(line.id),
+    label: `${line.firing_code} · ${line.firing_date ?? "Sin fecha"} · ${line.description} · ${money(line.allocated_cost)}`,
+  }));
 
   const immediatePayload = useMemo(() => draftToPayload(value), [value]);
   const [previewPayload, setPreviewPayload] = useState(immediatePayload);
@@ -180,9 +168,9 @@ export function QuotationEditor({
               value={value.recipeId}
               options={recipeOptions}
               onChange={(recipeId) => update({ recipeId, recipeVersionId: "" })}
-              disabled={!productId || recipes.isPending}
+              disabled={recipes.isPending}
               placeholder={recipes.isPending ? "Cargando…" : "Elegir receta"}
-              hint={!productId ? "Primero seleccione el producto." : undefined}
+              hint="Receta del material con el que se hace la pieza."
             />
             <SelectField
               label="Versión"
@@ -210,9 +198,9 @@ export function QuotationEditor({
               hint={value.materialsApplied ? "Ajustado: se conservará el calculado y el aplicado." : "Vacío usa el costo calculado."}
             />
           </div>
-          {productId && !recipes.isPending && recipeOptions.length === 0 ? (
+          {!recipes.isPending && recipeOptions.length === 0 ? (
             <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              RECIPE_REQUIRED: este producto no tiene una receta aplicable. Puede guardar un borrador, pero no confirmarlo.
+              RECIPE_REQUIRED: no hay ninguna receta activa en el catálogo. Puede guardar un borrador, pero no confirmarlo.
             </p>
           ) : null}
         </section>
@@ -226,12 +214,12 @@ export function QuotationEditor({
               value={value.firingLineId}
               options={firingLineOptions}
               onChange={(firingLineId) => update({ firingLineId })}
-              disabled={!productId || firings.isPending || firingDetails.some((item) => item.isPending)}
+              disabled={!productId || firingLines.isPending}
               placeholder="Elegir línea compatible"
               hint="Solo se muestran líneas confirmadas del producto seleccionado."
             />
           </div>
-          {productId && !firings.isPending && !firingDetails.some((item) => item.isPending) && firingLineOptions.length === 0 ? (
+          {productId && !firingLines.isPending && firingLineOptions.length === 0 ? (
             <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               FIRING_LINE_REQUIRED: no hay una línea confirmada compatible. El borrador no podrá confirmarse.
             </p>
