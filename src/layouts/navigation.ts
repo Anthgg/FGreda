@@ -2,7 +2,7 @@
  * Menu principal previsto para todo el producto Cotizador GREDA.
  *
  * `Inicio`, `Productos`, `Terceros`, `Inventario`, `Importaciones`, `Recetas`,
- * `Quemas`, `Cotizaciones` y
+ * `Quemas`, `Cotizaciones`, `Cotizador` y
  * `Configuracion` estan operativos. El resto queda visible y
  * deshabilitado para fijar la estructura de navegacion: su logica de negocio
  * corresponde a fases posteriores y no se adelanta aqui.
@@ -38,6 +38,13 @@ export const NAVIGATION: readonly NavigationItem[] = [
     enabled: true,
     icon: "home",
     description: "Panel principal y accesos rápidos del taller.",
+  },
+  {
+    label: "Cotizador",
+    to: "/cotizador/nuevo",
+    enabled: true,
+    icon: "file-text",
+    description: "Construir cotizaciones multiproducto con simulación integral.",
   },
   {
     label: "Cotizaciones",

@@ -252,10 +252,12 @@ export interface QuotationSummaryOut {
   customer_id?: number | null;
   customer_name?: string | null;
   customer_document_number?: string | null;
-  product_id: number;
-  product_internal_reference: string;
-  product_name: string;
-  quantity: number;
+  workflow?: "LEGACY" | "COTIZADOR";
+  item_count?: number;
+  product_id: number | null;
+  product_internal_reference: string | null;
+  product_name: string | null;
+  quantity: number | null;
   calculated_unit_price: string;
   calculated_total: string;
   final_unit_cost?: string;

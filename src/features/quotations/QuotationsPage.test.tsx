@@ -107,7 +107,8 @@ describe("pantallas de cotizaciones", () => {
 
     expect(await screen.findByRole("heading", { name: "Cotizaciones." })).toBeInTheDocument();
     expect(await screen.findByText(/no hay cotizaciones/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /nueva cotización/i })).toHaveAttribute("href", "/cotizaciones/nueva");
+    expect(screen.getByRole("link", { name: /cotización heredada/i })).toHaveAttribute("href", "/cotizaciones/nueva");
+    expect(screen.getByRole("link", { name: /abrir cotizador/i })).toHaveAttribute("href", "/cotizador/nuevo");
     expect(container.querySelectorAll("select")).toHaveLength(0);
     expect(container.querySelectorAll('input[type="date"]')).toHaveLength(0);
     expect(container.firstElementChild?.querySelector(".w-full")).toBeInTheDocument();

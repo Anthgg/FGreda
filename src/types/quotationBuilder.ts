@@ -1,0 +1,124 @@
+import type {
+  AdditionalSelectionIn,
+  OtherCostSelectionIn,
+  QuotationStatus,
+  TechniqueSelectionIn,
+} from "@/types/quotations";
+
+export type QuotationWorkflow = "LEGACY" | "COTIZADOR";
+export type ProductDimension = "width" | "height" | "length" | "depth";
+
+export interface ProductDimensionCompletionIn {
+  width?: string;
+  height?: string;
+  length?: string;
+  depth?: string;
+}
+
+export interface QuotationBuilderItemIn {
+  id?: number;
+  product_id: number;
+  quantity?: number;
+  dimensions: ProductDimensionCompletionIn;
+  recipe_id?: number;
+  recipe_version_id?: number;
+  material_grams_per_piece?: string;
+  techniques: TechniqueSelectionIn[];
+  additionals: AdditionalSelectionIn[];
+  days_adjustment: number;
+  waiting_days: number;
+  other_costs?: OtherCostSelectionIn[];
+  markup_percent: string;
+  commercial_sale_unit_price?: string;
+  sort_order: number;
+}
+
+export interface QuotationBuilderDraftIn {
+  name?: string;
+  customer_id?: number;
+  kiln_id?: number;
+  items: QuotationBuilderItemIn[];
+}
+
+export interface QuotationBuilderItemOut {
+  id: number | null;
+  product_id: number;
+  product_internal_reference: string;
+  product_name: string;
+  product_type: string;
+  product_uom: string | null;
+  product_material: string | null;
+  product_grammage: string | null;
+  width: string | null;
+  height: string | null;
+  length: string | null;
+  depth: string | null;
+  editable_dimensions: ProductDimension[];
+  quantity: number | null;
+  recipe_id: number | null;
+  recipe_version_id: number | null;
+  recipe_version_fingerprint_snapshot: string | null;
+  recipe_auto_selected: boolean;
+  material_grams_per_piece: string | null;
+  kiln_id: number | null;
+  production_snapshot: Record<string, unknown>;
+  techniques: Array<Record<string, unknown>>;
+  additionals: Array<Record<string, unknown>>;
+  other_costs: Array<Record<string, unknown>>;
+  materials_calculated: string;
+  materials_applied: string;
+  firing_cost: string;
+  labor_cost: string;
+  calculated_days: number;
+  days_adjustment: number;
+  waiting_days: number;
+  total_days: number;
+  space_cost: string;
+  final_unit_cost: string;
+  final_total_cost: string;
+  markup_percent: string;
+  calculated_sale_unit_price: string;
+  suggested_commercial_unit_price: string;
+  commercial_sale_unit_price: string;
+  effective_profit_unit: string;
+  effective_profit_total: string;
+  effective_markup_percent: string;
+  commercial_subtotal: string;
+  tax_percentage_snapshot: string;
+  tax_rate_source_snapshot: string;
+  tax_amount: string;
+  source_fingerprint: string;
+  warnings: string[];
+  complete: boolean;
+  sort_order: number;
+}
+
+export interface QuotationBuilderOut {
+  id: number | null;
+  code: string | null;
+  workflow: "COTIZADOR";
+  status: QuotationStatus;
+  name: string | null;
+  customer_id: number | null;
+  customer_name_snapshot: string | null;
+  kiln_id: number | null;
+  kiln_snapshot: Record<string, unknown>;
+  production_summary: Record<string, unknown>;
+  items: QuotationBuilderItemOut[];
+  item_count: number;
+  commercial_subtotal: string;
+  tax_percentage_snapshot: string;
+  tax_rate_source_snapshot: string;
+  tax_amount: string;
+  total_with_tax: string;
+  currency_code_snapshot: string;
+  currency_symbol_snapshot: string;
+  warnings: string[];
+  complete: boolean;
+  next_step: "GENERAL_DATA" | "ITEMS" | "PRODUCTION" | "SUMMARY";
+  source_fingerprint: string;
+  created_at: string | null;
+  updated_at: string | null;
+  confirmed_at: string | null;
+  cancelled_at: string | null;
+}
