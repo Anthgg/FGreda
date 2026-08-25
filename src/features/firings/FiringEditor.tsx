@@ -559,7 +559,7 @@ export function FiringEditor({
           </p>
         ) : preview.data ? (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
               <Metric
                 label="Volumen total"
                 value={`${formatDecimalString(preview.data.total_volume_cm3, 0)} cm³`}
@@ -576,8 +576,17 @@ export function FiringEditor({
                 hint="Efectivo de la hoja"
               />
               <Metric
-                label="Costo total"
-                value={formatDecimalString(preview.data.total_cost, 2)}
+                label="Quema sin IGV"
+                value={`${preview.data.currency_symbol} ${formatDecimalString(preview.data.total_cost, 2)}`}
+                tone={preview.data.capacity_exceeded ? "alert" : "accent"}
+              />
+              <Metric
+                label={`IGV (${formatDecimalString(preview.data.tax_percentage, 2)}%)`}
+                value={`${preview.data.currency_symbol} ${formatDecimalString(preview.data.tax_amount, 2)}`}
+              />
+              <Metric
+                label="Quema con IGV"
+                value={`${preview.data.currency_symbol} ${formatDecimalString(preview.data.total_with_tax, 2)}`}
                 tone={preview.data.capacity_exceeded ? "alert" : "accent"}
               />
             </div>
@@ -613,4 +622,3 @@ export function FiringEditor({
     </div>
   );
 }
-

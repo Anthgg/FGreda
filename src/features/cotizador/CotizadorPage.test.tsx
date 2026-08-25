@@ -10,6 +10,7 @@ import {
   renderApp,
   sessionResponse,
 } from "@/test/utils";
+import { KILNS_PAGE } from "@/test/firingsFixtures";
 import type { Product } from "@/types/masters";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 
@@ -68,7 +69,13 @@ function itemOut(input: Record<string, unknown>, index: number) {
     recipe_version_fingerprint_snapshot: null,
     recipe_auto_selected: false,
     material_grams_per_piece: grams,
+    firing_id: null,
+    firing_line_id: typeof input.firing_line_id === "number" ? input.firing_line_id : null,
+    firing_code_snapshot: typeof input.firing_line_id === "number" ? "HR-2026-000001" : null,
     kiln_id: null,
+    low_kiln_id: typeof input.low_kiln_id === "number" ? input.low_kiln_id : null,
+    high_kiln_id: typeof input.high_kiln_id === "number" ? input.high_kiln_id : null,
+    factor_kiln_id: typeof input.factor_kiln_id === "number" ? input.factor_kiln_id : null,
     production_snapshot: {},
     techniques: [],
     additionals: [],
@@ -87,11 +94,17 @@ function itemOut(input: Record<string, unknown>, index: number) {
     markup_percent: String(input.markup_percent ?? "100"),
     calculated_sale_unit_price: "32.04",
     suggested_commercial_unit_price: "32.10",
+    commercial_sale_unit_price_input:
+      input.commercial_sale_unit_price === null || input.commercial_sale_unit_price === undefined
+        ? null
+        : String(input.commercial_sale_unit_price),
     commercial_sale_unit_price: String(input.commercial_sale_unit_price ?? "32.10"),
     effective_profit_unit: "16.08",
     effective_profit_total: "385.92",
     effective_markup_percent: "100.37",
     commercial_subtotal: "770.40",
+    commercial_unit_price_with_tax: "37.878",
+    commercial_total: "909.072",
     tax_percentage_snapshot: "18",
     tax_rate_source_snapshot: "COMMERCIAL_SETTINGS",
     tax_amount: "138.672",
@@ -139,6 +152,8 @@ function handler(url: string, init: RequestInit) {
   if (url.includes("/auth/me")) return sessionResponse();
   if (url.includes("/auth/csrf")) return csrfResponse();
   if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
+  if (url.includes("/kilns")) return jsonResponse(200, KILNS_PAGE);
+  if (url.includes("/firing-lines")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
   if (url.includes("/products")) return jsonResponse(200, { items: [product, secondProduct], total: 2, limit: 50, offset: 0 });
   if (url.includes("/techniques") || url.includes("/additionals") || url.includes("/other-costs")) return jsonResponse(200, { items: [], total: 0, limit: 200, offset: 0 });
   if (url.includes("/quotation-builder/preview") && init.method === "POST") {
@@ -249,6 +264,42 @@ describe("Cotizador integral", () => {
     await user.click(screen.getAllByRole("button", { name: "Quitar" })[0]!);
     expect(screen.queryAllByText("LAB50042 · Plato palta QA")).toHaveLength(0);
     expect(screen.getAllByText("LAB50043 · Bowl mediano").length).toBeGreaterThan(0);
+  });
+
+  it("configura baja, alta y factor por producto como en Costo de quema", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+
+    await screen.findByRole("heading", { name: "Nuevo cotizador." });
+    await user.click(screen.getByRole("button", { name: /Piezas/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    await user.click(screen.getByRole("combobox", { name: "Pieza terminada" }));
+    await user.click(await screen.findByText("Plato palta QA"));
+
+    await user.click(screen.getByRole("button", { name: /Producción/i }));
+    expect(screen.queryByRole("combobox", { name: /Horno para simulación/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox", { name: "Quema baja en" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
+    await user.click(screen.getByRole("combobox", { name: "Quema alta en" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-002/i }));
+    await user.click(screen.getByRole("combobox", { name: "Ocupación medida en" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
+
+    await waitFor(() => {
+      const previews = fetchSpy.mock.calls.filter(([url]) =>
+        String(url).includes("/quotation-builder/preview"),
+      );
+      const lastBody = JSON.parse(
+        String((previews.at(-1)?.[1] as RequestInit | undefined)?.body),
+      ) as { items: Array<Record<string, unknown>> };
+      expect(lastBody.items[0]).toMatchObject({
+        low_kiln_id: 1,
+        high_kiln_id: 2,
+        factor_kiln_id: 1,
+      });
+    });
   });
 
   it("reabre, confirma con versión esperada y bloquea la edición posterior", async () => {

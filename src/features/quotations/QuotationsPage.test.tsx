@@ -114,6 +114,44 @@ describe("pantallas de cotizaciones", () => {
     expect(container.firstElementChild?.querySelector(".w-full")).toBeInTheDocument();
   });
 
+  it("muestra cantidad y precio unitario del Cotizador integral", async () => {
+    const integral = {
+      id: 10,
+      code: "CTZ-2026-000009",
+      name: "Cotización unitaria Plato palta",
+      status: "CONFIRMED",
+      workflow: "COTIZADOR",
+      customer_id: 1,
+      customer_name: "Cliente Prueba Integral",
+      customer_document_number: "99988877",
+      product_id: null,
+      product_internal_reference: null,
+      product_name: "1 productos",
+      quantity: 1,
+      item_count: 1,
+      calculated_unit_price: "3829.24",
+      calculated_total: "3829.24",
+      final_unit_cost: "3829.24",
+      commercial_sale_unit_price: "459",
+      commercial_total: "541.62",
+      total_with_tax: "541.62",
+      created_at: "2026-08-25T14:00:00Z",
+    };
+    mockFetch((url, init) =>
+      url.includes("/quotations")
+        ? jsonResponse(200, { items: [integral], total: 1, limit: 25, offset: 0 })
+        : quoteHandler(url, init),
+    );
+    renderApp(["/cotizaciones"]);
+
+    const code = await screen.findByText(integral.code);
+    const row = code.closest("tr");
+    expect(row).not.toBeNull();
+    const cells = within(row!).getAllByRole("cell");
+    expect(cells[4]).toHaveTextContent("1");
+    expect(cells[6]).toHaveTextContent("S/ 459.00");
+  });
+
   it("muestra la página nueva, usa selector remoto y obtiene preview del backend", async () => {
     const user = userEvent.setup();
     const fetchSpy = mockFetch(quoteHandler);

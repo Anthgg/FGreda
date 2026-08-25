@@ -159,6 +159,11 @@ export interface FiringCalculateOut {
   total_volume_cm3: string;
   subtotal: string;
   total_cost: string;
+  tax_percentage: string;
+  tax_amount: string;
+  total_with_tax: string;
+  currency_code: string;
+  currency_symbol: string;
   occupancy_percentage: string;
   occupancy_factor: string;
   capacity_exceeded: boolean;
@@ -178,6 +183,11 @@ export interface FiringOut {
   occupancy_factor: string;
   subtotal: string;
   total_cost: string;
+  tax_percentage: string;
+  tax_amount: string;
+  total_with_tax: string;
+  currency_code: string;
+  currency_symbol: string;
   created_by_id: string | null;
   confirmed_at: string | null;
   cancelled_at: string | null;

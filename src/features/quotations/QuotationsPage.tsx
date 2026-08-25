@@ -135,7 +135,7 @@ export function QuotationsPage() {
                         <th className="px-4 py-3 font-semibold">Producto</th>
                         <th className="px-4 py-3 text-right font-semibold">Cantidad</th>
                         <th className="px-4 py-3 font-semibold">Estado</th>
-                        <th className="px-4 py-3 text-right font-semibold">Precio unitario</th>
+                        <th className="px-4 py-3 text-right font-semibold">Precio unitario sin IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Total con IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                       </tr>
@@ -167,10 +167,12 @@ export function QuotationsPage() {
                               <><span className="font-medium text-zinc-900">{quote.product_name}</span><span className="block font-mono text-[10px] text-zinc-400">{quote.product_internal_reference}</span></>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.workflow === "COTIZADOR" ? "—" : quote.quantity}</td>
+                          <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.quantity ?? "—"}</td>
                           <td className="px-4 py-3"><Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge></td>
                           <td className="px-4 py-3 text-right tabular-nums">
-                            {quote.workflow === "COTIZADOR" ? "—" : `S/ ${formatDecimalString(quote.commercial_sale_unit_price || quote.calculated_unit_price, 2)}`}
+                            {quote.commercial_sale_unit_price || quote.calculated_unit_price
+                              ? `S/ ${formatDecimalString(quote.commercial_sale_unit_price || quote.calculated_unit_price, 2)}`
+                              : "—"}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums text-zinc-950">
                             S/ {formatDecimalString(quote.workflow === "COTIZADOR" ? quote.total_with_tax : quote.commercial_total || quote.total_with_tax, 2)}

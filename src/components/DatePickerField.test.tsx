@@ -215,6 +215,11 @@ describe("DatePickerField - Selector de Fecha Controlado por React", () => {
       occupancy_factor: "1.0",
       subtotal: "50",
       total_cost: "50",
+      tax_percentage: "18",
+      tax_amount: "9",
+      total_with_tax: "59",
+      currency_code: "PEN",
+      currency_symbol: "S/",
       created_at: "2026-08-20T10:00:00Z",
       updated_at: "2026-08-20T10:00:00Z",
       confirmed_at: null,
@@ -230,4 +235,3 @@ describe("DatePickerField - Selector de Fecha Controlado por React", () => {
     expect(formatDisplayDate(draft.firing_date)).toBe("20/08/2026");
   });
 });
-

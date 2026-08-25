@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
-import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
+import { PrimaryButton, SecondaryButton, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
@@ -47,33 +47,30 @@ function numberFrom(value: unknown, fallback = "—") {
   return value === null || value === undefined ? fallback : String(value);
 }
 
-function ProductionPanel({ preview, disabled, kilnId, onKilnChange }: {
+const decimalFrom = (value: unknown, decimals = 2) =>
+  value === null || value === undefined ? "—" : formatDecimalString(String(value), decimals);
+
+function ProductionPanel({ preview }: {
   preview?: QuotationBuilderOut | undefined;
-  disabled: boolean;
-  kilnId: string;
-  onKilnChange: (value: string) => void;
 }) {
-  const kilns = useKilns({ active: true, limit: 100 });
   const summary = preview?.production_summary ?? {};
   const sessions = Array.isArray(summary.sessions) ? summary.sessions as Array<Record<string, unknown>> : [];
+  const symbol = numberFrom(summary.currency_symbol, preview?.currency_symbol_snapshot ?? "S/");
+  const taxPercentage = numberFrom(summary.tax_percentage, "0");
   return (
     <section className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_2fr]">
-        <SelectField
-          label="Horno para simulación"
-          requirement="required"
-          value={kilnId}
-          options={(kilns.data?.items ?? []).map((kiln) => ({ value: String(kiln.id), label: `${kiln.code} · ${kiln.name}` }))}
-          onChange={onKilnChange}
-          disabled={disabled}
-          placeholder="Elegir horno…"
-        />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-bold tabular-nums">{numberFrom(summary.total_volume_cm3)} cm³</p></div>
-          <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Ocupación</p><p className="font-bold tabular-nums">{numberFrom(summary.occupancy_percentage)}%</p></div>
-          <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Factor</p><p className="font-bold tabular-nums">{numberFrom(summary.occupancy_factor)}</p></div>
-          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Costo simulado</p><p className="font-bold tabular-nums text-orange-950">{money(numberFrom(summary.total_cost, "0"), preview?.currency_symbol_snapshot)}</p></div>
-        </div>
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-950">Simulación integral del lote</h2>
+        <p className="mt-1 text-xs text-zinc-500">Configure quema baja, quema alta y horno de factor en cada pieza.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-bold tabular-nums">{decimalFrom(summary.total_volume_cm3)} cm³</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Ocupación</p><p className="font-bold tabular-nums">{decimalFrom(summary.occupancy_percentage)}%</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Factor</p><p className="font-bold tabular-nums">×{decimalFrom(summary.occupancy_factor)}</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Costo base</p><p className="font-bold tabular-nums">{money(numberFrom(summary.subtotal, "0"), symbol)}</p></div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Quema sin IGV</p><p className="font-bold tabular-nums text-orange-950">{money(numberFrom(summary.total_cost, "0"), symbol)}</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">IGV ({taxPercentage}%)</p><p className="font-bold tabular-nums">{money(numberFrom(summary.tax_amount, "0"), symbol)}</p></div>
+        <div className="rounded-xl bg-zinc-950 p-3 text-white"><p className="text-[10px] uppercase text-zinc-400">Quema con IGV</p><p className="font-bold tabular-nums">{money(numberFrom(summary.total_with_tax, "0"), symbol)}</p></div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {sessions.map((session, index) => (
@@ -103,6 +100,7 @@ export function CotizadorPage() {
   const confirm = useConfirmCotizador();
   const cancel = useCancelCotizador();
   const duplicate = useDuplicateCotizador();
+  const kilns = useKilns({ active: true, limit: 100 });
   const [draft, setDraft] = useState<CotizadorDraft>(emptyCotizadorDraft);
   const [persisted, setPersisted] = useState<QuotationBuilderOut | null>(null);
   const [step, setStep] = useState(0);
@@ -235,6 +233,7 @@ export function CotizadorPage() {
               mode={currentMode}
               preview={preview?.items.find((value) => value.product_id === Number(item.productId))}
               currencySymbol={preview?.currency_symbol_snapshot}
+              kilns={kilns.data?.items ?? []}
               disabled={readOnly}
               excludedProductIds={draft.items.filter((_, itemIndex) => itemIndex !== index).map((value) => Number(value.productId)).filter(Number.isInteger)}
               onChange={(next) => changeDraft({ ...draft, items: draft.items.map((value, itemIndex) => itemIndex === index ? next : value) })}
@@ -252,7 +251,7 @@ export function CotizadorPage() {
 
       {step === 2 ? (
         <div className="space-y-4">
-          <ProductionPanel preview={preview} disabled={readOnly} kilnId={draft.kilnId} onKilnChange={(kilnId) => changeDraft({ ...draft, kilnId })} />
+          <ProductionPanel preview={preview} />
           {draft.items.map((item, index) => (
             <CotizadorItemCard
               key={item.id ?? `production-${index}`}
@@ -261,6 +260,7 @@ export function CotizadorPage() {
               mode="PRODUCTION"
               preview={preview?.items.find((value) => value.product_id === Number(item.productId))}
               currencySymbol={preview?.currency_symbol_snapshot}
+              kilns={kilns.data?.items ?? []}
               disabled={readOnly}
               excludedProductIds={[]}
               onChange={(next) => changeDraft({ ...draft, items: draft.items.map((value, itemIndex) => itemIndex === index ? next : value) })}
@@ -279,7 +279,13 @@ export function CotizadorPage() {
             <div className="rounded-xl bg-zinc-950 p-4 text-white"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Total con IGV</p><p className="mt-1 text-2xl font-bold tabular-nums">{money(preview?.total_with_tax, preview?.currency_symbol_snapshot)}</p></div>
           </div>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5">
-            <p className={`text-sm font-semibold ${preview?.complete ? "text-emerald-700" : "text-amber-700"}`}>{preview?.complete ? "Lista para confirmar" : `Borrador incompleto · siguiente: ${preview?.next_step ?? "DATOS"}`}</p>
+            <p className={`text-sm font-semibold ${status === "CONFIRMED" || preview?.complete ? "text-emerald-700" : "text-amber-700"}`}>
+              {status === "CONFIRMED"
+                ? "Cotización confirmada"
+                : preview?.complete
+                  ? "Lista para confirmar"
+                  : `Borrador incompleto · siguiente: ${preview?.next_step ?? "DATOS"}`}
+            </p>
             {canEdit && status === "DRAFT" && id ? <PrimaryButton type="button" disabled={busy || !preview?.complete || dirty} onClick={() => { const expected = persisted?.updated_at ?? query.data?.updated_at; if (expected) confirm.mutate({ id, expectedUpdatedAt: expected }, { onSuccess: syncSaved }); }}>Confirmar cotización</PrimaryButton> : null}
           </div>
         </section>
@@ -291,7 +297,7 @@ export function CotizadorPage() {
       {mutationError && !sourceChanged ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{describeError(mutationError)}</p> : null}
       {notice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p> : null}
 
-      <footer className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:px-5">
+      <footer className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:px-5">
         <div className="flex gap-2">
           <SecondaryButton disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>Anterior</SecondaryButton>
           <SecondaryButton disabled={step === STEPS.length - 1} onClick={() => setStep((value) => Math.min(STEPS.length - 1, value + 1))}>Siguiente</SecondaryButton>
