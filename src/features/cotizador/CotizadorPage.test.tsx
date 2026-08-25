@@ -290,4 +290,45 @@ describe("Cotizador integral", () => {
     await user.click(screen.getByRole("button", { name: /Datos/i }));
     expect(screen.getByLabelText(/Nombre \/ referencia/i)).toBeDisabled();
   });
+
+  it("mantiene el snapshot inmutable y reinicia el estado al navegar a un alta nueva", async () => {
+    const user = userEvent.setup();
+    const saved = builder({
+      id: 81,
+      code: "CTZ-2026-000081",
+      status: "CONFIRMED",
+      name: "Snapshot confirmado",
+      customer_id: 7,
+      customer_name_snapshot: "Restaurante Lima",
+      commercial_subtotal: "1000",
+      tax_amount: "180",
+      total_with_tax: "1180",
+      complete: true,
+      next_step: "SUMMARY",
+      created_at: "2026-08-24T12:00:00Z",
+      updated_at: "2026-08-24T12:00:00Z",
+      confirmed_at: "2026-08-24T13:00:00Z",
+    });
+    const fetchSpy = mockFetch((url, init) => {
+      if (url.includes("/quotation-builder/81") && init.method === "GET") {
+        return jsonResponse(200, saved);
+      }
+      return handler(url, init);
+    });
+    renderApp(["/cotizador/81"]);
+
+    expect(await screen.findByRole("heading", { name: "CTZ-2026-000081" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Resumen/i }));
+    expect(screen.getByText(/1180\.00/)).toBeInTheDocument();
+    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    expect(
+      fetchSpy.mock.calls.some(([url]) => String(url).includes("/quotation-builder/preview")),
+    ).toBe(false);
+
+    await user.click(screen.getByRole("link", { name: "Cotizador" }));
+    expect(await screen.findByRole("heading", { name: "Nuevo cotizador." })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nombre \/ referencia/i)).toBeEnabled();
+    expect(screen.getByLabelText(/Nombre \/ referencia/i)).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Crear borrador" })).toBeInTheDocument();
+  });
 });

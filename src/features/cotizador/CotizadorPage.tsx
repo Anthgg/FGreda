@@ -110,6 +110,23 @@ export function CotizadorPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const syncedVersion = useRef<string | null>(null);
+  const routeId = useRef<number | null>(id);
+
+  useEffect(() => {
+    if (routeId.current === id) return;
+    routeId.current = id;
+    // Crear navega de /nuevo al id devuelto después de sincronizar la
+    // respuesta. Ese caso conserva el estado recién guardado; cualquier otra
+    // transición de ruta empieza desde el registro solicitado o un alta vacía.
+    if (id !== null && persisted?.id === id) return;
+    setDraft(emptyCotizadorDraft);
+    setPersisted(null);
+    setStep(0);
+    setDirty(false);
+    setNotice(null);
+    setConfirmCancel(false);
+    syncedVersion.current = null;
+  }, [id, persisted?.id]);
 
   useEffect(() => {
     if (!query.data || syncedVersion.current === query.data.updated_at) return;
@@ -119,16 +136,21 @@ export function CotizadorPage() {
     syncedVersion.current = query.data.updated_at;
   }, [dirty, query.data]);
 
+  const status = persisted?.status ?? query.data?.status ?? "DRAFT";
   const payload = useMemo(() => cotizadorToPayload(draft), [draft]);
   const [previewPayload, setPreviewPayload] = useState(id ? null : payload);
   useEffect(() => {
+    if (status !== "DRAFT") {
+      setPreviewPayload(null);
+      return;
+    }
     if (id && !query.data && !persisted) return;
     const timer = window.setTimeout(() => setPreviewPayload(payload), 350);
     return () => window.clearTimeout(timer);
-  }, [id, payload, persisted, query.data]);
+  }, [id, payload, persisted, query.data, status]);
   const previewQuery = useCotizadorPreview(previewPayload);
-  const preview = previewQuery.data ?? persisted ?? query.data;
-  const status = persisted?.status ?? query.data?.status ?? "DRAFT";
+  const stored = persisted ?? query.data;
+  const preview = status === "DRAFT" ? previewQuery.data ?? stored : stored;
   const readOnly = !canEdit || status !== "DRAFT";
   const currentMode = STEPS[step]?.mode as CotizadorItemMode | null;
   const busy = create.isPending || update.isPending || confirm.isPending || cancel.isPending || duplicate.isPending;
