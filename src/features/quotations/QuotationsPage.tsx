@@ -178,8 +178,13 @@ export function QuotationsPage() {
                             S/ {formatDecimalString(quote.workflow === "COTIZADOR" ? quote.total_with_tax : quote.commercial_total || quote.total_with_tax, 2)}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Link to={quote.workflow === "COTIZADOR" ? `/cotizador/${quote.id}` : `/cotizaciones/${quote.id}`} className="font-medium text-zinc-700 hover:text-black hover:underline">
-                              Ver detalle
+                            <Link
+                              to={quote.workflow === "COTIZADOR" ? `/cotizador/${quote.id}` : `/cotizaciones/${quote.id}`}
+                              className="font-medium text-zinc-700 hover:text-black hover:underline"
+                            >
+                              {quote.status === "DRAFT" && quote.workflow === "COTIZADOR"
+                                ? "Continuar en Cotizador"
+                                : "Ver detalle"}
                             </Link>
                           </td>
                         </tr>

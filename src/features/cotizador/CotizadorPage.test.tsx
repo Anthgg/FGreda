@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -324,20 +324,46 @@ describe("Cotizador integral", () => {
         return jsonResponse(200, { ...saved, status: "CONFIRMED", confirmed_at: "2026-08-24T13:00:00Z" });
       }
       if (url.includes("/quotation-builder/81") && init.method === "GET") return jsonResponse(200, saved);
+      if (url.includes("/quotation-builder/pdf-preview") || url.includes("/pdf-preview")) {
+        return new Response(new Blob(["%PDF-1.4 mock preview"], { type: "application/pdf" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": 'inline; filename="CTZ-2026-000081_Restaurante_Lima.pdf"',
+          },
+        });
+      }
+      if (url.includes("/quotations/81/pdf")) {
+        return new Response(new Blob(["%PDF-1.4 mock official"], { type: "application/pdf" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": 'inline; filename="CTZ-2026-000081_Restaurante_Lima.pdf"',
+          },
+        });
+      }
       return handler(url, init);
     });
     renderApp(["/cotizador/81"]);
 
     expect(await screen.findByRole("heading", { name: "CTZ-2026-000081" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Resumen/i }));
+    await user.click(screen.getByRole("button", { name: /PDF/i }));
     const confirmButton = await screen.findByRole("button", { name: "Confirmar cotización" });
     await waitFor(() => expect(confirmButton).toBeEnabled());
     await user.click(confirmButton);
-    expect(await screen.findByText("Confirmada")).toBeInTheDocument();
+
+    // Modal de confirmacion
+    const modal = await screen.findByRole("dialog", { name: "Confirmar cotización" });
+    expect(modal).toHaveTextContent(/Al confirmar, la cotización quedará congelada y ya no podrá editarse/i);
+    const modalConfirmBtn = within(modal).getByRole("button", { name: "Confirmar cotización" });
+    await user.click(modalConfirmBtn);
+
+    expect((await screen.findAllByText("Confirmada"))[0]).toBeInTheDocument();
 
     const confirmCall = fetchSpy.mock.calls.find(([url]) => String(url).includes("/quotation-builder/81/confirm"));
     expect(JSON.parse(String((confirmCall?.[1] as RequestInit).body))).toEqual({ expected_updated_at: updatedAt });
     expect(screen.queryByRole("button", { name: /Guardar borrador/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Descargar PDF/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Datos/i }));
     expect(screen.getByLabelText(/Nombre \/ referencia/i)).toBeDisabled();
   });
@@ -381,5 +407,62 @@ describe("Cotizador integral", () => {
     expect(screen.getByLabelText(/Nombre \/ referencia/i)).toBeEnabled();
     expect(screen.getByLabelText(/Nombre \/ referencia/i)).toHaveValue("");
     expect(screen.getByRole("button", { name: "Crear borrador" })).toBeInTheDocument();
+  });
+
+  it("permite previsualizar el PDF comercial en el Paso 7 y detecta estado desactualizado si se modifican datos", async () => {
+    const user = userEvent.setup();
+    const saved = builder({
+      id: 88,
+      code: "CTZ-2026-000088",
+      status: "DRAFT",
+      name: "Borrador con PDF",
+      customer_id: 7,
+      customer_name_snapshot: "Restaurante Lima",
+      items: [itemOut({ product_id: 42, quantity: 10, markup_percent: "100", commercial_sale_unit_price: "50" }, 0)],
+      item_count: 1,
+      complete: true,
+      next_step: "SUMMARY",
+      created_at: "2026-08-24T12:00:00Z",
+      updated_at: "2026-08-24T12:00:00Z",
+    });
+
+    let pdfCallCount = 0;
+    mockFetch((url, init) => {
+      if (url.includes("/quotation-builder/88") && init.method === "GET") return jsonResponse(200, saved);
+      if (url.includes("/quotation-builder/pdf-preview") || url.includes("/pdf-preview")) {
+        pdfCallCount++;
+        return new Response(new Blob(["%PDF-1.4 mock preview"], { type: "application/pdf" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": 'inline; filename="CTZ-2026-000088_Restaurante_Lima.pdf"',
+          },
+        });
+      }
+      return handler(url, init);
+    });
+
+    renderApp(["/cotizador/88"]);
+
+    expect(await screen.findByRole("heading", { name: "CTZ-2026-000088" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /PDF/i }));
+
+    // Verifica que el iframe de previsualización se renderiza
+    expect(await screen.findByTitle("Documento Comercial de Cotización")).toBeInTheDocument();
+    expect(screen.getByText("CTZ-2026-000088_Restaurante_Lima.pdf")).toBeInTheDocument();
+    expect(pdfCallCount).toBeGreaterThanOrEqual(1);
+
+    // Modificar datos en el paso Datos y volver a PDF
+    await user.click(screen.getByRole("button", { name: /Datos/i }));
+    await user.type(screen.getByLabelText(/Nombre \/ referencia/i), " Modificado");
+
+    await user.click(screen.getByRole("button", { name: /PDF/i }));
+    expect(await screen.findByText(/Vista previa desactualizada debido a cambios recientes/i)).toBeInTheDocument();
+
+    const previousCount = pdfCallCount;
+    // Actualizar vista previa
+    await user.click(screen.getByRole("button", { name: /Actualizar vista previa/i }));
+    await waitFor(() => expect(pdfCallCount).toBeGreaterThan(previousCount));
+    expect(screen.queryByText(/Vista previa desactualizada debido a cambios recientes/i)).not.toBeInTheDocument();
   });
 });

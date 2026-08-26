@@ -66,3 +66,7 @@ export const duplicateQuotation = (id: number): Promise<QuotationOut> =>
   apiClient.post(`${QUOTATIONS}/${id}/duplicate`, {});
 export const updateQuotationProductPrice = (id: number): Promise<ProductPriceUpdateOut> =>
   apiClient.post(`${QUOTATIONS}/${id}/update-product-price`, {});
+export const fetchQuotationPdf = (
+  id: number,
+): Promise<{ blob: Blob; filename: string | null }> =>
+  apiClient.getBlobWithFilename(`${QUOTATIONS}/${id}/pdf`);

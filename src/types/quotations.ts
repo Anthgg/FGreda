@@ -236,6 +236,8 @@ export interface QuotationCalculateOut {
 export interface QuotationOut extends QuotationCalculateOut {
   id: number;
   code: string;
+  workflow?: "LEGACY" | "COTIZADOR";
+  item_count?: number;
   status: QuotationStatus;
   created_by_id: string | null;
   confirmed_at: string | null;

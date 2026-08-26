@@ -7,6 +7,7 @@ import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
 import { CotizadorItemCard, type CotizadorItemMode } from "@/features/cotizador/CotizadorItemCard";
+import { CotizadorPdfPanel } from "@/features/cotizador/CotizadorPdfPanel";
 import {
   cotizadorFromOutput,
   cotizadorToPayload,
@@ -37,6 +38,7 @@ const STEPS = [
   { label: "Costeo", mode: "COSTS" },
   { label: "Margen y precio", mode: "MARGIN" },
   { label: "Resumen", mode: "SUMMARY" },
+  { label: "PDF", mode: null },
 ] as const;
 
 const STATUS_LABEL = { DRAFT: "Borrador", CONFIRMED: "Confirmada", CANCELLED: "Anulada" } as const;
@@ -107,6 +109,8 @@ export function CotizadorPage() {
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmQuotationModal, setConfirmQuotationModal] = useState(false);
+  const [cachedPdf, setCachedPdf] = useState<{ url: string; filename: string; payloadStr: string } | null>(null);
   const syncedVersion = useRef<string | null>(null);
   const routeId = useRef<number | null>(id);
 
@@ -123,8 +127,21 @@ export function CotizadorPage() {
     setDirty(false);
     setNotice(null);
     setConfirmCancel(false);
+    setConfirmQuotationModal(false);
+    if (cachedPdf?.url) {
+      URL.revokeObjectURL(cachedPdf.url);
+      setCachedPdf(null);
+    }
     syncedVersion.current = null;
-  }, [id, persisted?.id]);
+  }, [cachedPdf?.url, id, persisted?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (cachedPdf?.url) {
+        URL.revokeObjectURL(cachedPdf.url);
+      }
+    };
+  }, [cachedPdf?.url]);
 
   useEffect(() => {
     if (!query.data || syncedVersion.current === query.data.updated_at) return;
@@ -283,16 +300,46 @@ export function CotizadorPage() {
               {status === "CONFIRMED"
                 ? "Cotización confirmada"
                 : preview?.complete
-                  ? "Lista para confirmar"
+                  ? "Lista para confirmar · Continúe al paso PDF"
                   : `Borrador incompleto · siguiente: ${preview?.next_step ?? "DATOS"}`}
             </p>
-            {canEdit && status === "DRAFT" && id ? <PrimaryButton type="button" disabled={busy || !preview?.complete || dirty} onClick={() => { const expected = persisted?.updated_at ?? query.data?.updated_at; if (expected) confirm.mutate({ id, expectedUpdatedAt: expected }, { onSuccess: syncSaved }); }}>Confirmar cotización</PrimaryButton> : null}
+            <div className="flex gap-2">
+              <PrimaryButton type="button" onClick={() => setStep(6)}>
+                Ver vista previa PDF →
+              </PrimaryButton>
+            </div>
           </div>
         </section>
       ) : null}
 
-      {previewQuery.isFetching ? <p className="text-right text-[11px] text-zinc-400">Recalculando en BGreda…</p> : null}
-      {previewQuery.isError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">No se pudo recalcular: {describeError(previewQuery.error)}</p> : null}
+      {step === 6 ? (
+        <CotizadorPdfPanel
+          draftPayload={payload}
+          preview={preview}
+          status={status}
+          isDirty={dirty}
+          canEdit={canEdit}
+          busy={busy}
+          cachedPdf={cachedPdf}
+          onPdfGenerated={(newPdf) => {
+            if (cachedPdf?.url && cachedPdf.url !== newPdf.url) {
+              URL.revokeObjectURL(cachedPdf.url);
+            }
+            setCachedPdf(newPdf);
+          }}
+          onSaveDraft={(exitAfter) => save(exitAfter)}
+          onRequestConfirm={() => {
+            if (!id) {
+              save(false);
+            } else {
+              setConfirmQuotationModal(true);
+            }
+          }}
+        />
+      ) : null}
+
+      {previewQuery.isFetching && step !== 6 ? <p className="text-right text-[11px] text-zinc-400">Recalculando en BGreda…</p> : null}
+      {previewQuery.isError && step !== 6 ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">No se pudo recalcular: {describeError(previewQuery.error)}</p> : null}
       {sourceChanged ? <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Los maestros cambiaron. Revise el nuevo preview y guarde el borrador antes de confirmar.</p> : null}
       {mutationError && !sourceChanged ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{describeError(mutationError)}</p> : null}
       {notice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p> : null}
@@ -313,6 +360,48 @@ export function CotizadorPage() {
       {confirmCancel ? (
         <div role="dialog" aria-modal="true" aria-label="Confirmar anulación" className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-base font-bold">Anular cotización</h2><p className="mt-2 text-sm text-zinc-600">La cotización conservará su historial y quedará inmutable.</p><div className="mt-5 flex justify-end gap-2"><SecondaryButton onClick={() => setConfirmCancel(false)}>Volver</SecondaryButton><PrimaryButton type="button" disabled={busy} onClick={() => id && cancel.mutate(id, { onSuccess: (saved) => { syncSaved(saved); setConfirmCancel(false); } })}>Confirmar anulación</PrimaryButton></div></div>
+        </div>
+      ) : null}
+
+      {confirmQuotationModal ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar cotización"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-base font-bold text-zinc-950">Confirmar cotización</h2>
+            <p className="text-sm text-zinc-600">
+              Al confirmar, la cotización quedará congelada y ya no podrá editarse.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <SecondaryButton onClick={() => setConfirmQuotationModal(false)}>
+                Cancelar
+              </SecondaryButton>
+              <PrimaryButton
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const expected = persisted?.updated_at ?? query.data?.updated_at;
+                  if (expected && id) {
+                    confirm.mutate(
+                      { id, expectedUpdatedAt: expected },
+                      {
+                        onSuccess: (saved) => {
+                          syncSaved(saved);
+                          setConfirmQuotationModal(false);
+                          setStep(6);
+                        },
+                      }
+                    );
+                  }
+                }}
+              >
+                {confirm.isPending ? "Confirmando…" : "Confirmar cotización"}
+              </PrimaryButton>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

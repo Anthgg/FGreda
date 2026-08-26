@@ -30,3 +30,13 @@ export const cancelQuotationBuilder = (id: number): Promise<QuotationBuilderOut>
 
 export const duplicateQuotationBuilder = (id: number): Promise<QuotationBuilderOut> =>
   apiClient.post(`${BUILDER}/${id}/duplicate`, {});
+
+export const fetchDraftPdfPreview = (
+  payload: QuotationBuilderDraftIn,
+): Promise<{ blob: Blob; filename: string | null }> =>
+  apiClient.postBlobWithFilename(`${BUILDER}/pdf-preview`, payload);
+
+export const fetchSavedDraftPdfPreview = (
+  id: number,
+): Promise<{ blob: Blob; filename: string | null }> =>
+  apiClient.getBlobWithFilename(`${BUILDER}/${id}/pdf-preview`);
