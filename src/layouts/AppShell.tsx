@@ -155,14 +155,14 @@ export function AppShell() {
   }, [mobileMenuOpen]);
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden flex flex-col lg:flex-row bg-white text-zinc-900 selection:bg-zinc-900 selection:text-white">
+    <div className="relative h-dvh w-full overflow-hidden flex flex-col lg:flex-row bg-transparent text-zinc-900 selection:bg-zinc-900 selection:text-white">
       {/* Fondo interactivo Canvas 2D atenuado para el Dashboard */}
       <GredaParticleBackground variant="dashboard" />
 
       {/* ========================================================================= */}
       {/* BARRA SUPERIOR MÓVIL (visible solo en < lg)                               */}
       {/* ========================================================================= */}
-      <header className="shrink-0 z-30 flex items-center justify-between border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md lg:hidden">
+      <header className="shrink-0 z-30 flex items-center justify-between border-b border-black/[0.04] bg-white/75 px-4 py-3 backdrop-blur-md lg:hidden">
         <div className="size-9" aria-hidden="true" />
         <div className="flex items-center justify-center">
           <img
@@ -177,7 +177,7 @@ export function AppShell() {
           onClick={() => setMobileMenuOpen(true)}
           aria-expanded={mobileMenuOpen}
           aria-label="Abrir menú principal"
-          className="flex size-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-xs hover:bg-zinc-50"
+          className="flex size-9 items-center justify-center rounded-lg border border-black/[0.06] bg-white/60 text-zinc-700 shadow-2xs hover:bg-white/90 cursor-pointer"
         >
           <MenuIcon className="size-5" />
         </button>
@@ -203,7 +203,7 @@ export function AppShell() {
           {/* Panel deslizante */}
           <div className="fixed inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col justify-between glass-sidebar p-5 shadow-2xl transition-transform duration-200">
             <div>
-              <div className="relative flex items-center justify-center pb-6 border-b border-zinc-200/80">
+              <div className="relative flex items-center justify-center pb-6 border-b border-black/[0.04]">
                 <img
                   src={gredaLogo}
                   alt="Logo de Greda"
@@ -214,7 +214,7 @@ export function AppShell() {
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
                   aria-label="Cerrar menú"
-                  className="absolute right-0 flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  className="absolute right-0 flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-800 cursor-pointer"
                 >
                   <CloseIcon className="size-5" />
                 </button>
@@ -229,12 +229,12 @@ export function AppShell() {
             </div>
 
             {/* Perfil en Drawer Móvil */}
-            <div className="border-t border-zinc-200/80 pt-4">
+            <div className="border-t border-black/[0.04] pt-4">
               {user ? (
-                <div className="mb-3 px-1">
-                  <p className="truncate text-sm font-bold text-zinc-900">{user.display_name}</p>
-                  <p className="truncate text-xs text-zinc-500">{user.email}</p>
-                  <p className="mt-0.5 text-xs text-zinc-400">
+                <div className="mb-3 px-3 py-2.5 glass-panel-inner rounded-xl">
+                  <p className="truncate text-xs font-bold text-zinc-900">{user.display_name}</p>
+                  <p className="truncate text-[11px] text-zinc-500">{user.email}</p>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
                     Rol: {ROLE_LABEL[user.role] ?? user.role}
                   </p>
                 </div>
@@ -243,7 +243,7 @@ export function AppShell() {
                 type="button"
                 onClick={handleLogout}
                 disabled={logout.isPending}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50/70 hover:text-red-700 disabled:opacity-50 cursor-pointer"
               >
                 {logout.isPending ? (
                   <Spinner className="size-4" label="Saliendo..." />
@@ -273,7 +273,7 @@ export function AppShell() {
           {/* Logo y Botón de Colapso */}
           <div
             className={[
-              "relative flex items-center pb-6 border-b border-zinc-200/60 shrink-0",
+              "relative flex items-center pb-6 border-b border-black/[0.04] shrink-0",
               collapsed ? "flex-col justify-center" : "justify-center",
             ].join(" ")}
           >
@@ -290,7 +290,7 @@ export function AppShell() {
               title={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
               aria-label={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
               className={[
-                "flex size-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors",
+                "flex size-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 transition-colors cursor-pointer",
                 collapsed ? "mt-3" : "absolute right-0",
               ].join(" ")}
             >
@@ -309,12 +309,12 @@ export function AppShell() {
         </div>
 
         {/* Perfil de Usuario Abajo */}
-        <div className="mt-auto shrink-0 border-t border-zinc-200/60 pt-4">
+        <div className="mt-auto shrink-0 border-t border-black/[0.04] pt-4">
           {user && !collapsed ? (
-            <div className="mb-3 px-1">
-              <p className="truncate text-sm font-bold text-zinc-900">{user.display_name}</p>
-              <p className="truncate text-xs text-zinc-500">{user.email}</p>
-              <p className="mt-0.5 text-xs text-zinc-400">
+            <div className="mb-3 px-3 py-2.5 glass-panel-inner rounded-xl">
+              <p className="truncate text-xs font-bold text-zinc-900">{user.display_name}</p>
+              <p className="truncate text-[11px] text-zinc-500">{user.email}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
                 Rol: {ROLE_LABEL[user.role] ?? user.role}
               </p>
             </div>
@@ -327,7 +327,7 @@ export function AppShell() {
             title={collapsed ? "Cerrar sesión" : undefined}
             aria-label="Cerrar sesión"
             className={[
-              "flex w-full items-center rounded-xl text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50",
+              "flex w-full items-center rounded-xl text-xs font-semibold text-red-600 transition-colors hover:bg-red-50/70 hover:text-red-700 disabled:opacity-50 cursor-pointer",
               collapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2",
             ].join(" ")}
           >
@@ -346,7 +346,7 @@ export function AppShell() {
       {/* ========================================================================= */}
       {/* ÁREA DE CONTENIDO PRINCIPAL                                               */}
       {/* ========================================================================= */}
-      <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-6 z-10 custom-scrollbar">
+      <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-6 z-10 custom-scrollbar bg-transparent">
         <Outlet />
       </main>
     </div>
