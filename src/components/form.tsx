@@ -14,14 +14,14 @@ export type { DatePickerFieldProps } from "@/components/DatePickerField";
 
 
 const CONTROL =
-  "w-full h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-xs " +
-  "placeholder:text-zinc-400 transition-colors focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900 " +
-  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:border-zinc-200 disabled:shadow-none disabled:opacity-60";
+  "w-full h-10 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-xs px-3 py-2 text-xs sm:text-sm text-zinc-900 shadow-2xs " +
+  "placeholder:text-zinc-400 transition-all focus:border-black focus:bg-white/80 focus:outline-hidden focus:ring-1 focus:ring-black " +
+  "disabled:cursor-not-allowed disabled:bg-white/30 disabled:text-zinc-400 disabled:border-black/[0.04] disabled:shadow-none disabled:opacity-50";
 
 const TEXTAREA_CONTROL =
-  "w-full rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-900 shadow-xs " +
-  "placeholder:text-zinc-400 transition-colors focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900 " +
-  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:border-zinc-200 disabled:shadow-none disabled:opacity-60";
+  "w-full rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-xs p-3 text-xs sm:text-sm text-zinc-900 shadow-2xs " +
+  "placeholder:text-zinc-400 transition-all focus:border-black focus:bg-white/80 focus:outline-hidden focus:ring-1 focus:ring-black " +
+  "disabled:cursor-not-allowed disabled:bg-white/30 disabled:text-zinc-400 disabled:border-black/[0.04] disabled:shadow-none disabled:opacity-50";
 
 interface FieldProps {
   label: string;
@@ -45,14 +45,14 @@ export function Field({
     <div className={className}>
       <label
         htmlFor={id}
-        className="flex items-baseline justify-between gap-2 text-xs font-medium text-zinc-700 mb-1"
+        className="flex items-baseline justify-between gap-2 text-xs font-semibold text-zinc-800 mb-1"
       >
         <span>{label}</span>
         {requirement ? (
           <span
             className={
               requirement === "required"
-                ? "text-orange-600 font-semibold"
+                ? "text-amber-700 font-semibold"
                 : "font-normal text-zinc-400"
             }
           >
@@ -66,9 +66,9 @@ export function Field({
       </label>
       <div>{children(id)}</div>
       {error ? (
-        <p className="mt-1 text-xs text-red-600">{error}</p>
+        <p className="mt-1 text-xs text-red-600 font-medium">{error}</p>
       ) : hint ? (
-        <p className="mt-1 text-xs text-zinc-400">{hint}</p>
+        <p className="mt-1 text-[11px] text-zinc-400">{hint}</p>
       ) : null}
     </div>
   );
@@ -129,7 +129,7 @@ export function TextField({
           className={[
             CONTROL,
             error ? "border-red-400 focus:border-red-500 focus:ring-red-500" : "",
-            readOnly ? "bg-zinc-50/80 cursor-default opacity-80" : "",
+            readOnly ? "bg-black/[0.02] cursor-default opacity-80" : "",
           ].join(" ")}
         />
       )}
@@ -203,9 +203,9 @@ export function FormSection({
   className?: string | undefined;
 }) {
   return (
-    <section className="border-t border-zinc-200/80 pt-6 first:border-t-0 first:pt-0">
+    <section className="border-t border-black/[0.04] pt-6 first:border-t-0 first:pt-0">
       <div className="mb-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-950">
           {title}
         </h3>
         {description ? (
@@ -235,7 +235,7 @@ export function PrimaryButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:bg-zinc-800 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 cursor-pointer ${className}`}
     >
       {children}
     </button>
@@ -260,7 +260,7 @@ export function SecondaryButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl border border-black/[0.08] bg-white/60 backdrop-blur-xs px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-zinc-800 shadow-2xs transition-all hover:bg-white/90 hover:text-zinc-950 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 cursor-pointer ${className}`}
     >
       {children}
     </button>

@@ -245,14 +245,14 @@ export function SelectField<T extends string>({
           disabled={disabled}
           onClick={toggleOpen}
           className={[
-            "w-full h-10 px-3 rounded-xl border bg-white text-sm text-left flex items-center justify-between gap-2 transition-all duration-150",
+            "w-full h-10 px-3 rounded-xl border bg-white/55 backdrop-blur-xs text-xs sm:text-sm text-left flex items-center justify-between gap-2 transition-all duration-150",
             error
               ? "border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-              : "border-zinc-200 hover:border-zinc-300 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900",
+              : "border-black/[0.08] hover:border-black/20 focus:border-black focus:ring-1 focus:ring-black",
             disabled
-              ? "bg-zinc-50 text-zinc-400 cursor-not-allowed border-zinc-200 shadow-none opacity-60"
-              : "text-zinc-900 shadow-xs cursor-pointer",
-            isOpen ? "border-zinc-900 ring-1 ring-zinc-900" : "",
+              ? "bg-white/30 text-zinc-400 cursor-not-allowed border-black/[0.04] shadow-none opacity-50"
+              : "text-zinc-900 shadow-2xs cursor-pointer",
+            isOpen ? "border-black ring-1 ring-black bg-white/80" : "",
           ].join(" ")}
         >
           <span className="truncate">
@@ -264,7 +264,7 @@ export function SelectField<T extends string>({
           <svg
             className={[
               "size-4 shrink-0 text-zinc-400 transition-transform duration-200",
-              isOpen ? "rotate-180 text-zinc-700" : "",
+              isOpen ? "rotate-180 text-zinc-800" : "",
             ].join(" ")}
             fill="none"
             stroke="currentColor"
@@ -277,9 +277,9 @@ export function SelectField<T extends string>({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled ? (
-          <div className="absolute left-0 right-0 z-40 mt-1.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 duration-100">
+          <div className="absolute left-0 right-0 z-40 mt-1.5 rounded-2xl border border-white/60 bg-white/95 backdrop-blur-xl p-1.5 shadow-2xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 duration-100">
             {showSearch ? (
-              <div className="p-1.5 border-b border-zinc-100 mb-1">
+              <div className="p-1 border-b border-black/[0.04] mb-1">
                 <div className="relative flex items-center">
                   <svg
                     className="absolute left-2.5 size-3.5 text-zinc-400"
@@ -305,7 +305,7 @@ export function SelectField<T extends string>({
                     }}
                     onKeyDown={handleKeyDown}
                     placeholder={searchPlaceholder}
-                    className="w-full h-8 pl-8 pr-3 text-xs bg-zinc-50 rounded-lg border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 focus:bg-white transition-colors"
+                    className="w-full h-8 pl-8 pr-3 text-xs bg-white/60 rounded-xl border border-black/[0.08] text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden focus:border-black focus:bg-white transition-colors"
                   />
                 </div>
               </div>
@@ -329,7 +329,7 @@ export function SelectField<T extends string>({
                         setSearch("");
                         onCreateRequested(texto);
                       }}
-                      className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+                      className="w-full rounded-xl px-3 py-2 text-left text-xs sm:text-sm font-semibold text-zinc-900 hover:bg-black/[0.04] transition-colors cursor-pointer"
                     >
                       {createLabel ? createLabel(search.trim()) : `+ Crear «${search.trim()}»`}
                     </button>
@@ -351,12 +351,12 @@ export function SelectField<T extends string>({
                       onClick={() => handleSelect(opt.value)}
                       onMouseEnter={() => setHighlightedIndex(idx)}
                       className={[
-                        "flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer select-none",
+                        "flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer select-none",
                         isSelected
-                          ? "bg-zinc-900 text-white font-medium"
+                          ? "bg-black text-white font-semibold shadow-2xs"
                           : isHighlighted
-                            ? "bg-zinc-100 text-zinc-900"
-                            : "text-zinc-700 hover:bg-zinc-50",
+                            ? "bg-black/[0.04] text-zinc-900"
+                            : "text-zinc-700 hover:bg-black/[0.03]",
                       ].join(" ")}
                     >
                       <span className="truncate">{opt.label}</span>

@@ -156,10 +156,10 @@ function SequenceCard({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="border-t border-zinc-200/80 pt-6 first:border-t-0 first:pt-0"
+      className="border-t border-black/[0.04] pt-6 first:border-t-0 first:pt-0"
     >
       <div className="flex items-baseline justify-between gap-3 mb-4">
-        <h3 className="text-sm font-semibold text-zinc-900">
+        <h3 className="text-xs font-bold text-zinc-950 uppercase tracking-wider">
           {TITULOS[sequence.sequence_type] ?? sequence.sequence_type}
         </h3>
         <span className="text-xs text-zinc-400">
@@ -212,7 +212,7 @@ function SequenceCard({
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+        <label className="flex items-center gap-2 text-xs font-medium text-zinc-700 cursor-pointer">
           <input
             type="checkbox"
             checked={draft.active}
@@ -220,13 +220,13 @@ function SequenceCard({
             disabled={disabled}
             className="size-4 rounded-md border-zinc-300 text-zinc-900 focus:ring-zinc-900"
           />
-          <span className="text-sm font-medium">Activa</span>
-          <span className="text-xs text-orange-600 font-semibold">* Obligatorio</span>
+          <span className="font-semibold">Activa</span>
+          <span className="text-xs text-amber-700 font-semibold">* Obligatorio</span>
         </label>
       </div>
 
       {creatingPattern ? (
-        <div className="mt-4 grid gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 rounded-2xl border border-black/[0.04] bg-white/60 p-4 shadow-2xs sm:grid-cols-2">
           <TextField
             label="Nombre del nuevo formato"
             requirement="required"
@@ -260,7 +260,7 @@ function SequenceCard({
             </SecondaryButton>
           </div>
           {createPattern.error ? (
-            <p role="alert" className="text-sm text-red-700 sm:col-span-2">
+            <p role="alert" className="text-xs text-red-600 sm:col-span-2">
               {describeError(createPattern.error)}
             </p>
           ) : null}
@@ -268,11 +268,11 @@ function SequenceCard({
       ) : null}
 
       {/* Banner Vista Previa */}
-      <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-4">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+      <div className="mt-4 rounded-2xl border border-black/[0.04] bg-white/40 p-4 shadow-2xs">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1">
           Vista Previa
         </span>
-        <span className="font-mono text-sm font-semibold text-zinc-900 tracking-tight">
+        <span className="font-mono text-sm font-bold text-zinc-900 tracking-tight">
           {hasErrors ? "—" : previewOf(draft, sequence)}
         </span>
         <p className="mt-1 text-xs text-zinc-400">
@@ -283,7 +283,7 @@ function SequenceCard({
       {update.error ? (
         <p
           role="alert"
-          className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          className="mt-3 rounded-2xl border border-red-200/60 bg-red-50/80 p-3 text-xs text-red-700"
         >
           {describeError(update.error)}
           {isConflict(update.error) ? " Recargue la página para ver la versión vigente." : ""}
@@ -291,7 +291,7 @@ function SequenceCard({
       ) : null}
 
       {canEdit ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <PrimaryButton disabled={!isDirty || hasErrors || update.isPending || creatingPattern}>
             {update.isPending ? <Spinner className="size-3.5" label="Guardando..." /> : "Guardar"}
           </PrimaryButton>
@@ -299,7 +299,7 @@ function SequenceCard({
             Cancelar
           </SecondaryButton>
           {isDirty ? (
-            <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+            <span className="text-xs font-semibold text-amber-800 bg-amber-50/80 border border-amber-200/60 px-2.5 py-1 rounded-full shadow-2xs">
               Cambios sin guardar
             </span>
           ) : null}
@@ -326,7 +326,7 @@ export function SequencesSection({ canEdit }: { canEdit: boolean }) {
         />
       ))}
       {!canEdit ? (
-        <p className="border-t border-zinc-200/80 pt-4 text-xs text-zinc-500">
+        <p className="border-t border-black/[0.04] pt-4 text-xs text-zinc-500">
           Solo un administrador puede modificar la numeración.
         </p>
       ) : null}

@@ -50,16 +50,16 @@ export function SettingsPage() {
     <div className="w-full space-y-6">
       {/* Encabezado Principal */}
       <header className="mb-6">
-        <TypewriterTitle text="Configuración." className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900" />
+        <TypewriterTitle text="Configuración." className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900" />
         <p className="mt-1 text-xs sm:text-sm text-zinc-500">
           Datos de empresa, parámetros comerciales y numeración de documentos.
         </p>
       </header>
 
       {/* Tarjeta Principal Glassmorphism Fluida */}
-      <div className="glass-panel rounded-2xl sm:rounded-3xl p-5 sm:p-8 w-full shadow-lg border border-white/60">
+      <div className="glass-card p-5 sm:p-8 w-full">
         {/* Navegación de Pestañas */}
-        <div className="border-b border-zinc-200/80 mb-8">
+        <div className="border-b border-black/[0.04] mb-8">
           <nav
             role="tablist"
             aria-label="Secciones de configuración"
@@ -77,10 +77,10 @@ export function SettingsPage() {
                   aria-controls={`panel-${item.id}`}
                   onClick={() => setTab(item.id)}
                   className={[
-                    "whitespace-nowrap pb-3.5 pt-1 text-sm font-medium border-b-2 transition-all duration-150 cursor-pointer",
+                    "whitespace-nowrap pb-3.5 pt-1 text-xs sm:text-sm font-semibold border-b-2 transition-all duration-150 cursor-pointer",
                     isActive
-                      ? "border-zinc-900 text-zinc-900 font-semibold"
-                      : "border-transparent text-zinc-400 hover:text-zinc-700 hover:border-zinc-300",
+                      ? "border-black text-zinc-950 font-bold"
+                      : "border-transparent text-zinc-400 hover:text-zinc-700 hover:border-black/[0.08]",
                   ].join(" ")}
                 >
                   {item.label}

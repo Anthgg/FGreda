@@ -405,14 +405,14 @@ export function ProductSelectField({
           disabled={disabled}
           onClick={toggleOpen}
           className={[
-            "w-full h-10 px-3 rounded-xl border bg-white text-sm text-left flex items-center justify-between gap-2 transition-all duration-150",
+            "w-full h-10 px-3 rounded-xl border bg-white/55 backdrop-blur-xs text-xs sm:text-sm text-left flex items-center justify-between gap-2 transition-all duration-150",
             error
               ? "border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-              : "border-zinc-200 hover:border-zinc-300 focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900",
+              : "border-black/[0.08] hover:border-black/20 focus:border-black focus:ring-1 focus:ring-black",
             disabled
-              ? "bg-zinc-50 text-zinc-400 cursor-not-allowed border-zinc-200 shadow-none opacity-60"
-              : "text-zinc-900 shadow-xs cursor-pointer",
-            isOpen ? "border-zinc-900 ring-1 ring-zinc-900" : "",
+              ? "bg-white/30 text-zinc-400 cursor-not-allowed border-black/[0.04] shadow-none opacity-50"
+              : "text-zinc-900 shadow-2xs cursor-pointer",
+            isOpen ? "border-black ring-1 ring-black bg-white/80" : "",
           ].join(" ")}
         >
           <span className="truncate">
@@ -426,7 +426,7 @@ export function ProductSelectField({
           <svg
             className={[
               "size-4 shrink-0 text-zinc-400 transition-transform duration-200",
-              isOpen ? "rotate-180 text-zinc-700" : "",
+              isOpen ? "rotate-180 text-zinc-800" : "",
             ].join(" ")}
             fill="none"
             stroke="currentColor"
@@ -439,9 +439,9 @@ export function ProductSelectField({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled ? (
-          <div className="absolute left-0 right-0 z-50 mt-1.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-2xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 duration-100 min-w-[280px]">
+          <div className="absolute left-0 right-0 z-50 mt-1.5 rounded-2xl border border-white/60 bg-white/95 backdrop-blur-xl p-1.5 shadow-2xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 duration-100 min-w-[280px]">
             {/* Buscador Integrado */}
-            <div className="p-1.5 border-b border-zinc-100 mb-1">
+            <div className="p-1 border-b border-black/[0.04] mb-1">
               <div className="relative flex items-center">
                 <svg
                   className="absolute left-2.5 size-3.5 text-zinc-400"
@@ -464,7 +464,7 @@ export function ProductSelectField({
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={searchPlaceholder}
-                  className="w-full h-8 pl-8 pr-7 text-xs bg-zinc-50 rounded-lg border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 focus:bg-white transition-colors"
+                  className="w-full h-8 pl-8 pr-7 text-xs bg-white/60 rounded-xl border border-black/[0.08] text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden focus:border-black focus:bg-white transition-colors"
                 />
                 {isFetching ? (
                   <span className="absolute right-2.5 size-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
@@ -491,7 +491,7 @@ export function ProductSelectField({
                   <button
                     type="button"
                     onClick={() => refetch()}
-                    className="inline-flex items-center px-2 py-1 text-[11px] font-medium bg-red-50 text-red-700 rounded border border-red-200 hover:bg-red-100 transition-colors"
+                    className="inline-flex items-center px-2 py-1 text-[11px] font-medium bg-red-50 text-red-700 rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
                   >
                     Reintentar
                   </button>
@@ -514,10 +514,10 @@ export function ProductSelectField({
                       onClick={handleCreateAction}
                       onMouseEnter={() => setHighlightedIndex(0)}
                       className={[
-                        "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer text-left",
+                        "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-left",
                         highlightedIndex === 0
-                          ? "bg-zinc-900 text-white border-zinc-900"
-                          : "bg-zinc-50 text-zinc-900 border-zinc-200 hover:bg-zinc-100",
+                          ? "bg-black text-white border-black"
+                          : "bg-black/[0.03] text-zinc-900 border-black/[0.08] hover:bg-black/[0.06]",
                       ].join(" ")}
                     >
                       <svg
@@ -552,12 +552,12 @@ export function ProductSelectField({
                         onClick={() => handleSelect(p)}
                         onMouseEnter={() => setHighlightedIndex(idx)}
                         className={[
-                          "flex items-center justify-between px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors cursor-pointer select-none",
+                          "flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer select-none",
                           isSelected
-                            ? "bg-zinc-900 text-white font-medium"
+                            ? "bg-black text-white font-semibold shadow-2xs"
                             : isHighlighted
-                              ? "bg-zinc-100 text-zinc-900"
-                              : "text-zinc-700 hover:bg-zinc-50",
+                              ? "bg-black/[0.04] text-zinc-900"
+                              : "text-zinc-700 hover:bg-black/[0.03]",
                         ].join(" ")}
                       >
                         <div className="flex items-baseline gap-1.5 truncate">
@@ -594,7 +594,7 @@ export function ProductSelectField({
 
                   {/* Opción Crear si no hay coincidencia exacta */}
                   {canShowCreate ? (
-                    <li className="p-1 border-t border-zinc-100 mt-1">
+                    <li className="p-1 border-t border-black/[0.04] mt-1">
                       <button
                         type="button"
                         id={`${id}-create-option`}
@@ -603,10 +603,10 @@ export function ProductSelectField({
                         onClick={handleCreateAction}
                         onMouseEnter={() => setHighlightedIndex(availableProducts.length)}
                         className={[
-                          "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer text-left",
+                          "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-left",
                           highlightedIndex === availableProducts.length
-                            ? "bg-zinc-900 text-white border-zinc-900"
-                            : "bg-zinc-50 text-zinc-900 border-zinc-200 hover:bg-zinc-100",
+                            ? "bg-black text-white border-black"
+                            : "bg-black/[0.03] text-zinc-900 border-black/[0.08] hover:bg-black/[0.06]",
                         ].join(" ")}
                       >
                         <svg
@@ -634,7 +634,7 @@ export function ProductSelectField({
                         type="button"
                         onClick={handleLoadMore}
                         disabled={isFetching}
-                        className="w-full py-1.5 text-xs text-zinc-600 bg-zinc-50 hover:bg-zinc-100 rounded-md border border-zinc-200 transition-colors flex items-center justify-center gap-1.5"
+                        className="w-full py-1.5 text-xs font-medium text-zinc-600 bg-white/60 hover:bg-white/90 rounded-xl border border-black/[0.08] transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                       >
                         {isFetching ? (
                           <>

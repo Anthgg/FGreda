@@ -124,18 +124,18 @@ export function NuevoClienteModal({
       role="dialog"
       aria-modal="true"
       aria-label="Nuevo cliente"
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-zinc-900/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/30 p-4 backdrop-blur-md"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-lg rounded-3xl border border-white/60 bg-white p-6 shadow-2xl sm:p-7">
+      <div className="relative w-full max-w-lg rounded-3xl border border-white/60 bg-white/95 p-6 shadow-2xl backdrop-blur-xl sm:p-7">
         <header className="mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-xl bg-black text-white shadow-2xs">
               <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <h3 className="text-base font-bold text-zinc-900 sm:text-lg">
+            <h3 className="text-sm font-bold text-zinc-950 uppercase tracking-wider">
               Nuevo cliente
             </h3>
           </div>
@@ -143,7 +143,7 @@ export function NuevoClienteModal({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="rounded-full border border-zinc-100 bg-white p-1.5 text-zinc-400 shadow-xs hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
+            className="rounded-full border border-black/[0.06] bg-white/60 p-1.5 text-zinc-400 shadow-2xs hover:bg-white hover:text-zinc-700 transition-colors cursor-pointer"
           >
             ✕
           </button>
@@ -183,7 +183,7 @@ export function NuevoClienteModal({
                     type="button"
                     onClick={handleLookup}
                     disabled={isLookingUp}
-                    className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                    className="inline-flex h-10 items-center justify-center rounded-xl bg-black px-3.5 text-xs font-semibold text-white shadow-2xs hover:bg-zinc-800 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {isLookingUp ? <Spinner className="size-3.5 text-white" /> : "Consultar"}
                   </button>
@@ -260,7 +260,7 @@ export function NuevoClienteModal({
             </p>
           ) : null}
 
-          <footer className="mt-6 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4">
+          <footer className="mt-6 flex items-center justify-end gap-2 border-t border-black/[0.04] pt-4">
             <SecondaryButton onClick={onClose}>Cancelar</SecondaryButton>
             <PrimaryButton type="submit" disabled={!name.trim() || createPartner.isPending}>
               {createPartner.isPending ? (

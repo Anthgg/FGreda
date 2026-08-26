@@ -69,15 +69,25 @@ function Metric({
   tone?: "neutral" | "accent" | "alert";
 }) {
   const tones = {
-    neutral: "border-zinc-200 bg-white/70",
-    accent: "border-zinc-900/15 bg-zinc-50",
-    alert: "border-red-200 bg-red-50",
+    neutral: "border-black/[0.04] bg-white/40 text-zinc-900",
+    accent: "border-black bg-black text-white",
+    alert: "border-red-200/60 bg-red-50/80 text-red-900",
+  };
+  const labelTones = {
+    neutral: "text-zinc-400",
+    accent: "text-white/70",
+    alert: "text-red-700/80",
+  };
+  const valueTones = {
+    neutral: "text-zinc-900",
+    accent: "text-white",
+    alert: "text-red-900",
   };
   return (
-    <div className={`rounded-2xl border p-3.5 shadow-xs ${tones[tone]}`}>
-      <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-bold">{label}</p>
-      <p className="mt-0.5 truncate text-base font-semibold tabular-nums text-zinc-900">{value}</p>
-      {hint ? <p className="mt-0.5 text-[10px] text-zinc-400">{hint}</p> : null}
+    <div className={`rounded-2xl border p-3.5 shadow-2xs ${tones[tone]}`}>
+      <p className={`text-[10px] uppercase tracking-wider font-semibold ${labelTones[tone]}`}>{label}</p>
+      <p className={`mt-0.5 truncate text-base font-bold tabular-nums ${valueTones[tone]}`}>{value}</p>
+      {hint ? <p className={`mt-0.5 text-[10px] ${labelTones[tone]}`}>{hint}</p> : null}
     </div>
   );
 }
@@ -202,7 +212,7 @@ export function FiringEditor({
           </h3>
         </div>
 
-        <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 flex items-start text-xs text-blue-900 gap-3">
+        <div className="bg-blue-50/60 border border-blue-200/60 rounded-2xl p-4 flex items-start text-xs text-blue-900 gap-3">
           <svg
             className="size-5 text-blue-600 shrink-0 mt-0.5"
             fill="none"
@@ -223,9 +233,9 @@ export function FiringEditor({
         </div>
 
         {value.sessions.length > 0 ? (
-          <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white/80 shadow-xs">
+          <div className="overflow-x-auto rounded-2xl border border-black/[0.04] bg-white/40 shadow-2xs">
             <table className="min-w-full text-left text-xs">
-              <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500 font-semibold border-b border-zinc-100">
+              <thead className="border-b border-black/[0.04] bg-black/[0.02] text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                 <tr>
                   <th className="px-4 py-2.5">Horno</th>
                   <th className="px-4 py-2.5">Tipo</th>
@@ -235,7 +245,7 @@ export function FiringEditor({
                   <th className="px-4 py-2.5" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100">
+              <tbody className="divide-y divide-black/[0.03]">
                 {value.sessions.map((sesion, indice) => {
                   const kiln = kilns.find((k) => k.id === sesion.kiln_id);
                   const tarifa =
@@ -246,16 +256,16 @@ export function FiringEditor({
                     (s) => s.kiln_id === sesion.kiln_id && s.firing_type === sesion.firing_type,
                   );
                   return (
-                    <tr key={sessionKey(sesion)} className="hover:bg-zinc-50/50">
+                    <tr key={sessionKey(sesion)} className="hover:bg-white/60 transition-colors">
                       <td className="px-4 py-2.5 font-medium text-zinc-900">
                         {kiln?.name ?? "—"}
                       </td>
                       <td className="px-4 py-2.5">{FIRING_TYPE_LABEL[sesion.firing_type]}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">
+                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold">
                         {tarifa ? (
                           formatDecimalString(tarifa, 2)
                         ) : (
-                          <span className="text-red-600">Sin tarifa</span>
+                          <span className="text-red-600 font-normal">Sin tarifa</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-zinc-500">
@@ -270,7 +280,7 @@ export function FiringEditor({
                         <button
                           type="button"
                           onClick={() => quitarSesion(indice)}
-                          className="text-[11px] text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline cursor-pointer"
+                          className="text-[11px] font-medium text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline cursor-pointer"
                         >
                           Quitar
                         </button>
@@ -283,7 +293,7 @@ export function FiringEditor({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap md:flex-nowrap items-end gap-3 bg-zinc-50/60 p-4 rounded-2xl border border-zinc-100 shadow-xs">
+        <div className="flex flex-wrap md:flex-nowrap items-end gap-3 rounded-2xl border border-black/[0.04] bg-white/50 p-4 shadow-2xs">
           <div className="flex-1 min-w-[200px]">
             <SelectField
               label="Horno"
@@ -315,7 +325,7 @@ export function FiringEditor({
       {/* Piezas */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
+          <h3 className="text-xs font-bold text-zinc-950 uppercase tracking-wider">
             Piezas
           </h3>
         </div>
@@ -333,10 +343,10 @@ export function FiringEditor({
               <div
                 key={linea.key}
                 className={[
-                  "rounded-2xl border p-5 shadow-xs relative space-y-4 transition-colors",
+                  "rounded-3xl border p-5 shadow-xs relative space-y-4 transition-colors backdrop-blur-md",
                   calculada?.capacity_exceeded
                     ? "border-red-300 bg-red-50/40"
-                    : "border-zinc-200 bg-white/70",
+                    : "border-white/60 bg-white/60",
                 ].join(" ")}
               >
                 {/* Fila 1: Pieza, Cantidad y Dimensiones */}
@@ -378,7 +388,7 @@ export function FiringEditor({
                   </div>
 
                   <div className="lg:col-span-5">
-                    <label className="block text-xs font-medium text-zinc-700 mb-1">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">
                       Dimensiones (cm)
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -389,7 +399,7 @@ export function FiringEditor({
                           onChange={(e) => cambiarLinea(indice, { length_cm: e.target.value })}
                           placeholder="Largo"
                           inputMode="decimal"
-                          className="w-full h-10 pl-7 pr-2 rounded-xl border border-zinc-200 bg-white text-xs sm:text-sm text-zinc-900 shadow-xs focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900"
+                          className="input-glass w-full h-10 pl-7 pr-2 rounded-xl text-xs sm:text-sm text-zinc-900 font-medium"
                         />
                         <span className="absolute left-2.5 top-2.5 text-xs font-bold text-zinc-400 select-none">
                           L
@@ -402,7 +412,7 @@ export function FiringEditor({
                           onChange={(e) => cambiarLinea(indice, { width_cm: e.target.value })}
                           placeholder="Ancho"
                           inputMode="decimal"
-                          className="w-full h-10 pl-7 pr-2 rounded-xl border border-zinc-200 bg-white text-xs sm:text-sm text-zinc-900 shadow-xs focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900"
+                          className="input-glass w-full h-10 pl-7 pr-2 rounded-xl text-xs sm:text-sm text-zinc-900 font-medium"
                         />
                         <span className="absolute left-2.5 top-2.5 text-xs font-bold text-zinc-400 select-none">
                           A
@@ -415,7 +425,7 @@ export function FiringEditor({
                           onChange={(e) => cambiarLinea(indice, { height_cm: e.target.value })}
                           placeholder="Alto"
                           inputMode="decimal"
-                          className="w-full h-10 pl-7 pr-2 rounded-xl border border-zinc-200 bg-white text-xs sm:text-sm text-zinc-900 shadow-xs focus:border-zinc-900 focus:outline-hidden focus:ring-1 focus:ring-zinc-900"
+                          className="input-glass w-full h-10 pl-7 pr-2 rounded-xl text-xs sm:text-sm text-zinc-900 font-medium"
                         />
                         <span className="absolute left-2.5 top-2.5 text-xs font-bold text-zinc-400 select-none">
                           H
@@ -426,7 +436,7 @@ export function FiringEditor({
                 </div>
 
                 {/* Fila 2: Configuración de Quema */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end bg-zinc-50/70 p-4 rounded-xl border border-zinc-100">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end bg-white/40 p-4 rounded-2xl border border-black/[0.04]">
                   <SelectField
                     label="Quema baja en"
                     value={linea.low_kiln_id === null ? SIN_HORNO : String(linea.low_kiln_id)}
@@ -474,7 +484,7 @@ export function FiringEditor({
                 </div>
 
                 {/* Fila 3: Métricas y acciones */}
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500 pt-1 border-t border-zinc-100">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500 pt-1 border-t border-black/[0.04]">
                   <span className="tabular-nums">
                     Volumen:{" "}
                     <strong className="text-zinc-800">
@@ -514,7 +524,7 @@ export function FiringEditor({
                           lines: value.lines.filter((_, i) => i !== indice),
                         })
                       }
-                      className="text-xs text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline cursor-pointer"
+                      className="text-xs font-semibold text-zinc-400 underline-offset-2 hover:text-red-600 hover:underline cursor-pointer"
                     >
                       Quitar pieza
                     </button>
@@ -542,19 +552,19 @@ export function FiringEditor({
       {/* Resumen */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
+          <h3 className="text-xs font-bold text-zinc-950 uppercase tracking-wider">
             Resumen
           </h3>
           {preview.isFetching ? <Spinner className="size-3" label="Calculando…" /> : null}
         </div>
 
         {payloadDebounced === null ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 p-6 text-center text-xs text-zinc-500 bg-zinc-50/50">
+          <div className="rounded-2xl border border-dashed border-black/[0.1] p-6 text-center text-xs text-zinc-400 bg-white/30">
             Complete al menos una sesión de horno y una pieza con sus dimensiones para ver el
             costo estimado.
           </div>
         ) : preview.isError ? (
-          <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">
+          <p role="alert" className="rounded-2xl border border-red-200/60 bg-red-50/80 p-4 text-xs text-red-700">
             {describeError(preview.error)}
           </p>
         ) : preview.data ? (
