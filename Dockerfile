@@ -37,6 +37,6 @@ COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
 
 # Script ejecutado por el entrypoint oficial de nginx antes de arrancar.
 # Corre como UID 101 (nginx) y genera runtime-config.js desde API_BASE_URL.
-COPY --chmod=755 nginx/docker-entrypoint.d/40-generate-runtime-config.sh /docker-entrypoint.d/40-generate-runtime-config.sh
+COPY nginx/docker-entrypoint.d/40-generate-runtime-config.sh /docker-entrypoint.d/40-generate-runtime-config.sh
 
 EXPOSE 8080
