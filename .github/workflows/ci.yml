@@ -95,7 +95,12 @@ jobs:
             fi
             sleep 2
           done
-          curl -fsS http://localhost:8080/ -o /dev/null
+          if ! curl -fsS http://localhost:8080/ -o /dev/null; then
+            echo "ERROR: El contenedor no respondio en el puerto 8080"
+            echo "=== DOCKER LOGS ==="
+            docker logs fgreda-ci
+            exit 1
+          fi
 
       - name: Verificar runtime-config.js — existencia y contenido
         run: |
