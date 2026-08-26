@@ -65,8 +65,8 @@ steps:
           --region=$_REGION \
           --project=$PROJECT_ID \
           --format="value(status.latestReadyRevisionName)")
-        echo "PREVIOUS_REVISION=${PREV}" > /workspace/rollback.env
-        echo "Revision anterior capturada: ${PREV}"
+        echo "PREVIOUS_REVISION=$$PREV" > /workspace/rollback.env
+        echo "Revision anterior capturada: $$PREV"
     waitFor:
       - docker-push-sha
 
@@ -103,24 +103,24 @@ steps:
       - -euc
       - |
         TAG_URL="https://p007-$SHORT_SHA---fgreda-web-ox6cywquca-tl.a.run.app"
-        echo "Smoke sobre revision con tag: $TAG_URL"
+        echo "Smoke sobre revision con tag: $$TAG_URL"
 
         # La SPA debe responder con 200
-        HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$TAG_URL/")
-        echo "  /: HTTP $HTTP_STATUS"
-        if [ "$HTTP_STATUS" != "200" ]; then
-          echo "ERROR: la SPA no responde con 200 (got $HTTP_STATUS)"
+        HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$$TAG_URL/")
+        echo "  /: HTTP $$HTTP_STATUS"
+        if [ "$$HTTP_STATUS" != "200" ]; then
+          echo "ERROR: la SPA no responde con 200 (got $$HTTP_STATUS)"
           exit 1
         fi
 
         # runtime-config.js debe existir y no estar vacio
-        BODY=$(curl -fsS --max-time 15 "$TAG_URL/runtime-config.js")
-        echo "  /runtime-config.js: $(echo "$BODY" | head -1)"
-        if ! echo "$BODY" | grep -q "__GREDA_CONFIG__"; then
+        BODY=$(curl -fsS --max-time 15 "$$TAG_URL/runtime-config.js")
+        echo "  /runtime-config.js: $$(echo "$$BODY" | head -1)"
+        if ! echo "$$BODY" | grep -q "__GREDA_CONFIG__"; then
           echo "ERROR: runtime-config.js no contiene __GREDA_CONFIG__"
           exit 1
         fi
-        if ! echo "$BODY" | grep -q "$_API_BASE_URL"; then
+        if ! echo "$$BODY" | grep -q "$_API_BASE_URL"; then
           echo "ERROR: runtime-config.js no contiene la URL esperada del backend"
           exit 1
         fi
@@ -146,7 +146,7 @@ steps:
           --filter="metadata.labels.commit-sha=$COMMIT_SHA" \
           --format="value(metadata.name)" \
           --limit=1)
-        if [ -z "$NEW_REV" ]; then
+        if [ -z "$$NEW_REV" ]; then
           NEW_REV=$(gcloud run revisions list \
             --service=$_SERVICE \
             --region=$_REGION \
@@ -155,13 +155,13 @@ steps:
             --format="value(metadata.name)" \
             --limit=1)
         fi
-        echo "Moviendo 100% de trafico a: $NEW_REV"
+        echo "Moviendo 100% de trafico a: $$NEW_REV"
         gcloud run services update-traffic $_SERVICE \
           --region=$_REGION \
           --project=$PROJECT_ID \
-          --to-revisions="$NEW_REV=100"
-        echo "NEW_REVISION=${NEW_REV}" >> /workspace/rollback.env
-        echo "Trafico actualizado: $NEW_REV = 100%"
+          --to-revisions="$$NEW_REV=100"
+        echo "NEW_REVISION=$$NEW_REV" >> /workspace/rollback.env
+        echo "Trafico actualizado: $$NEW_REV = 100%"
     waitFor:
       - smoke-tag-revision
 
@@ -175,15 +175,15 @@ steps:
       - -euc
       - |
         BASE="https://fgreda-web-303244958634.southamerica-west1.run.app"
-        echo "Smoke en produccion: $BASE"
+        echo "Smoke en produccion: $$BASE"
 
-        HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/")
-        echo "  /: HTTP $HTTP_STATUS"
-        test "$HTTP_STATUS" = "200"
+        HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$$BASE/")
+        echo "  /: HTTP $$HTTP_STATUS"
+        test "$$HTTP_STATUS" = "200"
 
-        CACHE=$(curl -sI --max-time 15 "$BASE/runtime-config.js" | tr -d '\r' | grep -i cache-control || true)
-        echo "  /runtime-config.js Cache-Control: $CACHE"
-        if ! echo "$CACHE" | grep -qi "no-store"; then
+        CACHE=$(curl -sI --max-time 15 "$$BASE/runtime-config.js" | tr -d '\r' | grep -i cache-control || true)
+        echo "  /runtime-config.js Cache-Control: $$CACHE"
+        if ! echo "$$CACHE" | grep -qi "no-store"; then
           echo "WARN: Cache-Control no incluye no-store en runtime-config.js"
         fi
 
