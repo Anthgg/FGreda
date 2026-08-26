@@ -4,7 +4,8 @@
  * Es el unico modulo autorizado a usar `fetch` (ESLint lo hace cumplir). Aqui
  * se centralizan:
  *
- * - la URL base del backend (`VITE_API_BASE_URL`),
+ * - la URL base del backend (resuelta en runtime via window.__GREDA_CONFIG__
+ *   o en desarrollo desde VITE_API_BASE_URL),
  * - `credentials: "include"` en todas las peticiones,
  * - el token CSRF, guardado **solo en memoria**,
  * - el reintento controlado ante expiracion de sesion,
@@ -14,8 +15,9 @@
  * en cookies HttpOnly que el navegador envia y el backend valida.
  */
 
-const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-const BASE_URL = RAW_BASE_URL.replace(/\/+$/, "");
+import { resolveApiBaseUrl } from "@/config";
+
+const BASE_URL = resolveApiBaseUrl();
 const API_PREFIX = "/api/v1";
 
 const DEFAULT_TIMEOUT_MS = 15_000;

@@ -1,0 +1,203 @@
+# Cloud Build — FGreda (Frontend)
+#
+# Pipeline reproducible y auditable para despliegue en Cloud Run.
+# El bundle se construye SIN incrustar la URL del backend.
+# La URL se inyecta en runtime via la variable de entorno API_BASE_URL.
+#
+# Ejecutar manualmente:
+#   gcloud builds submit --config cloudbuild.yaml .
+
+substitutions:
+  _REGION: southamerica-west1
+  _SERVICE: fgreda-web
+  _IMAGE: southamerica-west1-docker.pkg.dev/cotizador-greda/cloud-run-source-deploy/fgreda-web
+  _API_BASE_URL: https://bgreda-api-303244958634.southamerica-west1.run.app
+  _PHASE: "007"
+
+steps:
+  # ------------------------------------------------------------------
+  # 1. Construir imagen etiquetada con SHA exacto
+  #    Sin --build-arg VITE_API_BASE_URL: el bundle es generico.
+  #    La URL se inyecta al arrancar el contenedor (runtime-config.js).
+  # ------------------------------------------------------------------
+  - id: docker-build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=Dockerfile
+      - --tag=$_IMAGE:$COMMIT_SHA
+      - --tag=$_IMAGE:main-latest
+      - --label=git-sha=$COMMIT_SHA
+      - --label=repository=$REPO_NAME
+      - --label=phase=$_PHASE
+      - --cache-from=$_IMAGE:main-latest
+      - .
+
+  # ------------------------------------------------------------------
+  # 2. Publicar imagen en Artifact Registry
+  # ------------------------------------------------------------------
+  - id: docker-push-sha
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - $_IMAGE:$COMMIT_SHA
+    waitFor:
+      - docker-build
+
+  - id: docker-push-alias
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - $_IMAGE:main-latest
+    waitFor:
+      - docker-build
+
+  # ------------------------------------------------------------------
+  # 3. Capturar revision actual (para rollback)
+  # ------------------------------------------------------------------
+  - id: capture-previous-revision
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        PREV=$(gcloud run services describe $_SERVICE \
+          --region=$_REGION \
+          --project=$PROJECT_ID \
+          --format="value(status.latestReadyRevisionName)")
+        echo "PREVIOUS_REVISION=${PREV}" > /workspace/rollback.env
+        echo "Revision anterior capturada: ${PREV}"
+    waitFor:
+      - docker-push-sha
+
+  # ------------------------------------------------------------------
+  # 4. Desplegar nueva revision sin trafico todavia
+  #    API_BASE_URL se inyecta aqui como variable de entorno del contenedor.
+  # ------------------------------------------------------------------
+  - id: deploy-revision
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        gcloud run deploy $_SERVICE \
+          --image=$_IMAGE:$COMMIT_SHA \
+          --region=$_REGION \
+          --project=$PROJECT_ID \
+          --no-traffic \
+          --tag=p007-$SHORT_SHA \
+          --set-env-vars="API_BASE_URL=$_API_BASE_URL" \
+          --remove-env-vars="VITE_API_BASE_URL,VITE_API_URL" \
+          --update-labels=git-sha=$COMMIT_SHA,repository=$REPO_NAME,phase=$_PHASE
+        echo "Revision desplegada sin trafico. Tag: p007-$SHORT_SHA"
+    waitFor:
+      - capture-previous-revision
+
+  # ------------------------------------------------------------------
+  # 5. Smoke sobre revision con tag (antes de mover trafico)
+  # ------------------------------------------------------------------
+  - id: smoke-tag-revision
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        TAG_URL="https://p007-$SHORT_SHA---fgreda-web-ox6cywquca-tl.a.run.app"
+        echo "Smoke sobre revision con tag: $TAG_URL"
+
+        # La SPA debe responder con 200
+        HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$TAG_URL/")
+        echo "  /: HTTP $HTTP_STATUS"
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "ERROR: la SPA no responde con 200 (got $HTTP_STATUS)"
+          exit 1
+        fi
+
+        # runtime-config.js debe existir y no estar vacio
+        BODY=$(curl -fsS --max-time 15 "$TAG_URL/runtime-config.js")
+        echo "  /runtime-config.js: $(echo "$BODY" | head -1)"
+        if ! echo "$BODY" | grep -q "__GREDA_CONFIG__"; then
+          echo "ERROR: runtime-config.js no contiene __GREDA_CONFIG__"
+          exit 1
+        fi
+        if ! echo "$BODY" | grep -q "$_API_BASE_URL"; then
+          echo "ERROR: runtime-config.js no contiene la URL esperada del backend"
+          exit 1
+        fi
+
+        echo "Smoke pre-traffic: PASS"
+    waitFor:
+      - deploy-revision
+
+  # ------------------------------------------------------------------
+  # 6. Mover 100% del trafico a la nueva revision
+  # ------------------------------------------------------------------
+  - id: update-traffic
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        NEW_REV=$(gcloud run revisions list \
+          --service=$_SERVICE \
+          --region=$_REGION \
+          --project=$PROJECT_ID \
+          --sort-by="~metadata.creationTimestamp" \
+          --filter="metadata.labels.commit-sha=$COMMIT_SHA" \
+          --format="value(metadata.name)" \
+          --limit=1)
+        if [ -z "$NEW_REV" ]; then
+          NEW_REV=$(gcloud run revisions list \
+            --service=$_SERVICE \
+            --region=$_REGION \
+            --project=$PROJECT_ID \
+            --sort-by="~metadata.creationTimestamp" \
+            --format="value(metadata.name)" \
+            --limit=1)
+        fi
+        echo "Moviendo 100% de trafico a: $NEW_REV"
+        gcloud run services update-traffic $_SERVICE \
+          --region=$_REGION \
+          --project=$PROJECT_ID \
+          --to-revisions="$NEW_REV=100"
+        echo "NEW_REVISION=${NEW_REV}" >> /workspace/rollback.env
+        echo "Trafico actualizado: $NEW_REV = 100%"
+    waitFor:
+      - smoke-tag-revision
+
+  # ------------------------------------------------------------------
+  # 7. Smoke post-trafico (produccion real)
+  # ------------------------------------------------------------------
+  - id: smoke-production
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        BASE="https://fgreda-web-303244958634.southamerica-west1.run.app"
+        echo "Smoke en produccion: $BASE"
+
+        HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/")
+        echo "  /: HTTP $HTTP_STATUS"
+        test "$HTTP_STATUS" = "200"
+
+        CACHE=$(curl -sI --max-time 15 "$BASE/runtime-config.js" | tr -d '\r' | grep -i cache-control || true)
+        echo "  /runtime-config.js Cache-Control: $CACHE"
+        if ! echo "$CACHE" | grep -qi "no-store"; then
+          echo "WARN: Cache-Control no incluye no-store en runtime-config.js"
+        fi
+
+        echo "Smoke produccion: PASS"
+    waitFor:
+      - update-traffic
+
+# Imagen publicada
+images:
+  - $_IMAGE:$COMMIT_SHA
+  - $_IMAGE:main-latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s

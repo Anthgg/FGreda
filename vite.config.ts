@@ -22,5 +22,12 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     restoreMocks: true,
+    // VITE_API_BASE_URL se usa como fallback en tests (en lugar de runtime-config.js,
+    // que no existe en jsdom). El valor es irrelevante para las pruebas unitarias
+    // del cliente HTTP, que mockean fetch directamente.
+    env: {
+      VITE_API_BASE_URL: "http://localhost:8000",
+    },
   },
 });
+
