@@ -259,10 +259,10 @@ export function DatePickerField({
           }
         }}
         className={[
-          "w-full h-10 rounded-xl border bg-white px-3 py-2 text-sm shadow-xs flex items-center justify-between text-left transition-colors cursor-pointer",
-          error ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200",
-          isOpen ? "border-zinc-900 ring-1 ring-zinc-900" : "hover:border-zinc-300",
-          disabled ? "cursor-not-allowed bg-zinc-50 text-zinc-400 opacity-60" : "text-zinc-900",
+          "w-full h-10 rounded-xl border bg-white/55 backdrop-blur-xs px-3 py-2 text-xs sm:text-sm shadow-2xs flex items-center justify-between text-left transition-all cursor-pointer",
+          error ? "border-red-500 ring-1 ring-red-500" : "border-black/[0.08]",
+          isOpen ? "border-black ring-1 ring-black bg-white/80" : "hover:border-black/20",
+          disabled ? "cursor-not-allowed bg-white/30 text-zinc-400 opacity-50" : "text-zinc-900",
         ].join(" ")}
       >
         <span className={displayValue ? "text-zinc-900 font-medium" : "text-zinc-400"}>
@@ -272,9 +272,9 @@ export function DatePickerField({
       </button>
 
       {error ? (
-        <p className="mt-1 text-xs text-red-600">{error}</p>
+        <p className="mt-1 text-xs text-red-600 font-medium">{error}</p>
       ) : hint ? (
-        <p className="mt-1 text-xs text-zinc-400">{hint}</p>
+        <p className="mt-1 text-[11px] text-zinc-400">{hint}</p>
       ) : null}
 
       {/* Popover del Calendario */}
@@ -283,20 +283,20 @@ export function DatePickerField({
           id={popoverId}
           role="dialog"
           aria-label="Calendario de selección de fecha"
-          className="absolute left-0 z-50 mt-1.5 w-72 rounded-2xl border border-zinc-200/90 bg-white p-3.5 shadow-xl backdrop-blur-md animate-in fade-in-50 zoom-in-95 duration-100"
+          className="absolute left-0 z-50 mt-1.5 w-72 rounded-2xl border border-white/60 bg-white/95 backdrop-blur-xl p-3.5 shadow-2xl animate-in fade-in-50 zoom-in-95 duration-100"
         >
           {/* Cabecera del Mes y Botones de Navegación */}
-          <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-zinc-100">
+          <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-black/[0.04]">
             <button
               type="button"
               onClick={mesAnterior}
               aria-label="Mes anterior"
-              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
+              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-black/[0.04] transition-colors cursor-pointer"
             >
               <ChevronLeftIcon className="size-4" aria-hidden="true" />
             </button>
 
-            <span className="text-xs font-bold text-zinc-900 tracking-tight">
+            <span className="text-xs font-bold text-zinc-950 uppercase tracking-wider">
               {MESES[viewMonth - 1]} {viewYear}
             </span>
 
@@ -304,7 +304,7 @@ export function DatePickerField({
               type="button"
               onClick={mesSiguiente}
               aria-label="Mes siguiente"
-              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
+              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-black/[0.04] transition-colors cursor-pointer"
             >
               <ChevronRightIcon className="size-4" aria-hidden="true" />
             </button>
@@ -313,7 +313,7 @@ export function DatePickerField({
           {/* Días de la semana */}
           <div className="grid grid-cols-7 gap-1 text-center mb-1">
             {DIAS_SEMANA.map((dia) => (
-              <span key={dia} className="text-[11px] font-semibold text-zinc-400 py-1">
+              <span key={dia} className="text-[10px] font-semibold text-zinc-400 py-1 uppercase">
                 {dia}
               </span>
             ))}
@@ -336,12 +336,12 @@ export function DatePickerField({
                   className={[
                     "h-8 w-8 text-xs rounded-xl flex items-center justify-center transition-all cursor-pointer select-none",
                     isSelected
-                      ? "bg-zinc-900 text-white font-semibold shadow-xs"
+                      ? "bg-black text-white font-bold shadow-2xs"
                       : isToday
-                        ? "border border-zinc-900/30 font-bold text-zinc-900 hover:bg-zinc-100"
+                        ? "border border-black/30 font-bold text-zinc-950 hover:bg-black/[0.04]"
                         : item.isCurrentMonth
-                          ? "text-zinc-800 hover:bg-zinc-100 font-medium"
-                          : "text-zinc-300 hover:bg-zinc-50",
+                          ? "text-zinc-800 hover:bg-black/[0.04] font-medium"
+                          : "text-zinc-300 hover:bg-black/[0.02]",
                   ].join(" ")}
                 >
                   {item.day}
@@ -351,11 +351,11 @@ export function DatePickerField({
           </div>
 
           {/* Acciones Rápidas (Hoy / Limpiar) */}
-          <div className="flex items-center justify-between border-t border-zinc-100 pt-2.5 mt-2.5">
+          <div className="flex items-center justify-between border-t border-black/[0.04] pt-2.5 mt-2.5">
             <button
               type="button"
               onClick={seleccionarHoy}
-              className="text-xs font-semibold text-zinc-900 hover:text-zinc-600 px-2 py-1 rounded-lg hover:bg-zinc-50 transition-colors cursor-pointer"
+              className="text-xs font-semibold text-zinc-900 hover:text-zinc-600 px-2 py-1 rounded-lg hover:bg-black/[0.04] transition-colors cursor-pointer"
             >
               Hoy
             </button>
@@ -364,7 +364,7 @@ export function DatePickerField({
               <button
                 type="button"
                 onClick={limpiarFecha}
-                className="text-xs font-medium text-zinc-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-zinc-50 transition-colors cursor-pointer"
+                className="text-xs font-semibold text-zinc-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50/50 transition-colors cursor-pointer"
               >
                 Limpiar
               </button>

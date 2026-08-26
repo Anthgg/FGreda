@@ -41,7 +41,7 @@ function NuevoHorno({ onDone }: { onDone: () => void }) {
 
   return (
     <form
-      className="space-y-3 rounded-2xl border border-zinc-200 bg-white/70 p-4"
+      className="space-y-3 rounded-3xl border border-white/60 bg-white/60 p-5 shadow-xs backdrop-blur-md"
       onSubmit={(evento) => {
         evento.preventDefault();
         if (!valido) return;
@@ -57,7 +57,7 @@ function NuevoHorno({ onDone }: { onDone: () => void }) {
         );
       }}
     >
-      <h3 className="text-sm font-semibold text-zinc-900">Nuevo horno</h3>
+      <h3 className="text-xs font-bold text-zinc-950 uppercase tracking-wider">Nuevo horno</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <TextField label="Nombre" value={nombre} onChange={setNombre} requirement="required" />
         <TextField
@@ -74,7 +74,7 @@ function NuevoHorno({ onDone }: { onDone: () => void }) {
           {describeError(crear.error)}
         </p>
       ) : null}
-      <div className="flex gap-2">
+      <div className="flex gap-2 pt-1">
         <PrimaryButton disabled={!valido || crear.isPending}>
           {crear.isPending ? "Creando…" : "Crear horno"}
         </PrimaryButton>
@@ -103,25 +103,25 @@ function HistorialTarifas({ kilnId }: { kilnId: number }) {
     );
   }
   if (!rates.data?.length) {
-    return <p className="py-3 text-xs text-zinc-500">Todavía no hay tarifas registradas.</p>;
+    return <p className="py-3 text-xs text-zinc-400">Todavía no hay tarifas registradas.</p>;
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-zinc-200">
+    <div className="overflow-x-auto rounded-2xl border border-black/[0.04] bg-white/40">
       <table className="min-w-full text-left text-xs">
-        <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
+        <thead className="border-b border-black/[0.04] bg-black/[0.02] text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
           <tr>
-            <th className="px-3 py-2 font-semibold">Tipo</th>
-            <th className="px-3 py-2 text-right font-semibold">Tarifa</th>
-            <th className="px-3 py-2 font-semibold">Desde</th>
-            <th className="px-3 py-2 font-semibold">Hasta</th>
+            <th className="px-3 py-2">Tipo</th>
+            <th className="px-3 py-2 text-right">Tarifa</th>
+            <th className="px-3 py-2">Desde</th>
+            <th className="px-3 py-2">Hasta</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100">
+        <tbody className="divide-y divide-black/[0.03]">
           {rates.data.map((rate) => (
-            <tr key={rate.id}>
-              <td className="px-3 py-2">{FIRING_TYPE_LABEL[rate.firing_type]}</td>
-              <td className="px-3 py-2 text-right tabular-nums">
+            <tr key={rate.id} className="hover:bg-white/60 transition-colors">
+              <td className="px-3 py-2 font-medium text-zinc-900">{FIRING_TYPE_LABEL[rate.firing_type]}</td>
+              <td className="px-3 py-2 text-right tabular-nums font-semibold text-zinc-900">
                 {formatDecimalString(rate.rate, 2)}
               </td>
               <td className="px-3 py-2 text-zinc-500">{rate.valid_from}</td>
@@ -151,10 +151,10 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
   const fijarTarifa = useSetKilnRate(kiln.id);
 
   return (
-    <article className="space-y-4 rounded-2xl border border-zinc-200 bg-white/70 p-4">
-      <header className="flex flex-wrap items-start justify-between gap-2">
+    <article className="space-y-4 rounded-3xl border border-white/60 bg-white/60 p-5 shadow-xs backdrop-blur-md">
+      <header className="flex flex-wrap items-start justify-between gap-2 border-b border-black/[0.04] pb-3">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900">{kiln.name}</h3>
+          <h3 className="text-sm font-bold text-zinc-900">{kiln.name}</h3>
           <p className="font-mono text-[10px] text-zinc-400">{kiln.code}</p>
         </div>
         <Badge tone={kiln.active ? "positive" : "neutral"}>
@@ -163,28 +163,28 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-zinc-200 p-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Capacidad</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">
+        <div className="rounded-2xl border border-black/[0.04] bg-white/40 p-3 shadow-2xs">
+          <p className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">Capacidad</p>
+          <p className="mt-0.5 text-sm font-bold tabular-nums text-zinc-900">
             {formatDecimalString(kiln.capacity_volume_cm3, 0)} cm³
           </p>
         </div>
-        <div className="rounded-xl border border-zinc-200 p-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Quema baja</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">
+        <div className="rounded-2xl border border-black/[0.04] bg-white/40 p-3 shadow-2xs">
+          <p className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">Quema baja</p>
+          <p className="mt-0.5 text-sm font-bold tabular-nums text-zinc-900">
             {formatDecimalString(kiln.current_low_rate, 2)}
           </p>
         </div>
-        <div className="rounded-xl border border-zinc-200 p-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Quema alta</p>
-          <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">
+        <div className="rounded-2xl border border-black/[0.04] bg-white/40 p-3 shadow-2xs">
+          <p className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">Quema alta</p>
+          <p className="mt-0.5 text-sm font-bold tabular-nums text-zinc-900">
             {formatDecimalString(kiln.current_high_rate, 2)}
           </p>
         </div>
       </div>
 
       {canEdit ? (
-        <div className="grid grid-cols-1 gap-4 border-t border-zinc-100 pt-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 border-t border-black/[0.04] pt-3 lg:grid-cols-2">
           <div className="space-y-2">
             <TextField
               label="Cambiar capacidad (cm³)"
@@ -259,17 +259,17 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
       {/* Tabla de factores por tramo de ocupación */}
       {kiln.occupancy_factors.length > 0 ? (
         <details className="group">
-          <summary className="cursor-pointer text-xs font-medium text-zinc-600 hover:text-zinc-900">
+          <summary className="cursor-pointer text-xs font-semibold text-zinc-600 hover:text-zinc-900">
             Factor por ocupación ({kiln.occupancy_factors.length} tramos)
           </summary>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {kiln.occupancy_factors.map((tramo) => (
               <span
                 key={tramo.id}
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-[10px] tabular-nums text-zinc-600"
+                className="rounded-xl border border-black/[0.04] bg-white/60 px-2.5 py-1 text-[10px] tabular-nums text-zinc-600 shadow-2xs"
               >
                 {tramo.min_percentage}–{tramo.max_percentage} %{" "}
-                <strong className="text-zinc-900">
+                <strong className="text-zinc-900 font-bold">
                   ×{formatDecimalString(tramo.factor, 2)}
                 </strong>
               </span>
@@ -287,7 +287,7 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
         <button
           type="button"
           onClick={() => setVerHistorial((visible) => !visible)}
-          className="text-xs font-medium text-zinc-600 underline-offset-2 hover:text-zinc-900 hover:underline"
+          className="text-xs font-semibold text-zinc-600 underline-offset-2 hover:text-zinc-900 hover:underline cursor-pointer"
         >
           {verHistorial ? "Ocultar historial de tarifas" : "Ver historial de tarifas"}
         </button>
@@ -320,7 +320,7 @@ export function KilnsTab({ canEdit }: { canEdit: boolean }) {
           <Spinner className="size-5" label="Cargando hornos…" />
         </div>
       ) : kilns.isError ? (
-        <p role="alert" className="py-12 text-center text-sm text-red-600">
+        <p role="alert" className="py-12 text-center text-xs text-red-600">
           {describeError(kilns.error)}
         </p>
       ) : !kilns.data?.items.length ? (

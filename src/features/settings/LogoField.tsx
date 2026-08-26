@@ -69,9 +69,9 @@ export function LogoField({ logo, canEdit }: LogoFieldProps) {
   const actionError = upload.error ?? remove.error;
 
   return (
-    <section className="border-t border-zinc-200/80 pt-6">
+    <section className="border-t border-black/[0.04] pt-6">
       <div className="mb-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-950">
           Logo de Empresa
         </h3>
         <p className="mt-1 text-xs text-zinc-500">
@@ -79,9 +79,9 @@ export function LogoField({ logo, canEdit }: LogoFieldProps) {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-5">
+      <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-black/[0.04] bg-white/50 p-5 shadow-2xs">
         {/* Contenedor de Vista Previa */}
-        <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs">
+        <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 shadow-2xs">
           {isLoading ? (
             <Spinner className="size-5" />
           ) : previewUrl ? (
@@ -107,7 +107,7 @@ export function LogoField({ logo, canEdit }: LogoFieldProps) {
           {canEdit ? (
             <>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2 text-xs font-medium text-white shadow-xs transition-colors hover:bg-black cursor-pointer">
+                <label className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-zinc-800 cursor-pointer">
                   <span>{logo ? "Cambiar archivo" : "Elegir archivo"}</span>
                   <input
                     ref={inputRef}
@@ -142,7 +142,7 @@ export function LogoField({ logo, canEdit }: LogoFieldProps) {
           {actionError ? (
             <p
               role="alert"
-              className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              className="mt-3 rounded-2xl border border-red-200/60 bg-red-50/80 p-3 text-xs text-red-700"
             >
               {describeError(actionError)}
             </p>

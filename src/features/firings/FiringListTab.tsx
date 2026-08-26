@@ -148,7 +148,7 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {aviso ? (
-        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <p role="alert" className="rounded-2xl border border-red-200/60 bg-red-50/80 px-3.5 py-2.5 text-xs text-red-700">
           {aviso}
         </p>
       ) : null}
@@ -157,12 +157,12 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
         {/* Listado */}
         <section
           className={[
-            "xl:col-span-5 rounded-2xl border border-zinc-200 bg-white/70",
+            "xl:col-span-5 rounded-3xl border border-white/60 bg-white/60 shadow-xs backdrop-blur-md overflow-hidden",
             mobileDetail ? "hidden xl:block" : "block",
           ].join(" ")}
         >
-          <header className="flex items-center justify-between border-b border-zinc-100 px-4 py-2.5">
-            <h2 className="text-sm font-semibold text-zinc-900">
+          <header className="flex items-center justify-between border-b border-black/[0.04] px-4 py-3">
+            <h2 className="text-xs font-bold text-zinc-950 uppercase tracking-wider">
               Quemas{firings.data ? ` (${firings.data.total})` : ""}
             </h2>
           </header>
@@ -172,7 +172,7 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
               <Spinner className="size-5" label="Cargando quemas…" />
             </div>
           ) : firings.isError ? (
-            <p role="alert" className="py-12 text-center text-sm text-red-600">
+            <p role="alert" className="py-12 text-center text-xs text-red-600">
               {describeError(firings.error)}
             </p>
           ) : items.length === 0 ? (
@@ -181,16 +181,16 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
             <>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-xs">
-                  <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
+                  <thead className="border-b border-black/[0.04] bg-black/[0.02] text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                     <tr>
-                      <th className="px-3 py-2 font-semibold">Código</th>
-                      <th className="px-3 py-2 font-semibold">Fecha</th>
-                      <th className="px-3 py-2 font-semibold">Estado</th>
-                      <th className="px-3 py-2 text-right font-semibold">Volumen</th>
-                      <th className="px-3 py-2 text-right font-semibold">Costo</th>
+                      <th className="px-3 py-2.5">Código</th>
+                      <th className="px-3 py-2.5">Fecha</th>
+                      <th className="px-3 py-2.5">Estado</th>
+                      <th className="px-3 py-2.5 text-right">Volumen</th>
+                      <th className="px-3 py-2.5 text-right">Costo</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100">
+                  <tbody className="divide-y divide-black/[0.03]">
                     {items.map((firing) => {
                       const activa = firing.id === selectedId;
                       return (
@@ -201,34 +201,34 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
                           className={[
                             "cursor-pointer border-l-[3px] transition-colors",
                             activa
-                              ? "border-l-zinc-900 bg-zinc-50"
-                              : "border-l-transparent hover:bg-zinc-50/60",
+                              ? "border-l-black bg-white/80"
+                              : "border-l-transparent hover:bg-white/50",
                           ].join(" ")}
                         >
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2.5">
                             <button
                               type="button"
                               onClick={(evento) => {
                                 evento.stopPropagation();
                                 seleccionar(firing.id);
                               }}
-                              className="text-left font-mono text-[11px] font-medium text-zinc-900 hover:underline"
+                              className="text-left font-mono text-[11px] font-bold text-zinc-900 hover:underline cursor-pointer"
                             >
                               {firing.code}
                             </button>
                           </td>
-                          <td className="px-3 py-2 text-zinc-500">
+                          <td className="px-3 py-2.5 text-zinc-500">
                             {firing.firing_date ?? "—"}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2.5">
                             <Badge tone={FIRING_STATUS_TONE[firing.status]}>
                               {FIRING_STATUS_LABEL[firing.status]}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
+                          <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500">
                             {formatDecimalString(firing.total_volume_cm3, 0)}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-zinc-900">
+                          <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-zinc-900">
                             {formatDecimalString(firing.total_cost, 2)}
                           </td>
                         </tr>
@@ -238,7 +238,7 @@ export function FiringListTab({ canEdit }: { canEdit: boolean }) {
                 </table>
               </div>
               {firings.data ? (
-                <div className="px-4 pb-3">
+                <div className="border-t border-black/[0.04] px-4 py-2">
                   <Pagination
                     total={firings.data.total}
                     limit={firings.data.limit}
