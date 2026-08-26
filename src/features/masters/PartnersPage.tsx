@@ -22,6 +22,7 @@ import {
   useRucLookup,
 } from "@/features/identity/useIdentityLookup";
 import { describeError } from "@/features/settings/messages";
+import { useReferenceData } from "@/features/settings/useSettings";
 import {
   Badge,
   EmptyState,
@@ -46,6 +47,7 @@ import type {
   PartnerInput,
   PartnerRole,
 } from "@/types/masters";
+import type { UbigeoOption } from "@/types/settings";
 
 const PAGE_SIZE = 25;
 
@@ -61,6 +63,24 @@ const DNI_PATTERN = /^\d{8}$/;
 const RUC_PATTERN = /^\d{11}$/;
 
 type AutofillField = "name" | "address" | "ubigeo_code";
+
+function titleCase(value: string): string {
+  return value
+    .toLocaleLowerCase("es-PE")
+    .replace(/(^|\s)(\p{L})/gu, (_match, space: string, letter: string) =>
+      `${space}${letter.toLocaleUpperCase("es-PE")}`,
+    );
+}
+
+function uniqueOptions(
+  rows: UbigeoOption[],
+  codeField: "department_code" | "province_code",
+  nameField: "department_name" | "province_name",
+) {
+  return Array.from(new Map(rows.map((row) => [row[codeField], row[nameField]])).entries()).map(
+    ([value, name]) => ({ value, label: titleCase(name) }),
+  );
+}
 
 /** Solo rellena si el campo esta vacio: la consulta nunca pisa lo ya escrito. */
 function fillIfEmpty(
@@ -160,6 +180,51 @@ function PartnerForm({
 
   const dniLookup = useDniLookup();
   const rucLookup = useRucLookup();
+
+  // Selector Departamento/Provincia/Distrito sobre el catalogo INEI. El
+  // ubigeo_code final es la unica fuente que se envia al backend; los codigos
+  // "pendientes" solo existen para poder navegar Departamento -> Provincia sin
+  // que un ubigeo_code parcial (o nulo) se pueda confundir con un tercero sin
+  // ubicacion.
+  const reference = useReferenceData();
+  const allDistricts = reference.data?.districts ?? [];
+  const [pendingDepartmentCode, setPendingDepartmentCode] = useState<string | null>(null);
+  const [pendingProvinceCode, setPendingProvinceCode] = useState<string | null>(null);
+  const departmentCode = pendingDepartmentCode ?? draft.ubigeo_code?.slice(0, 2) ?? "";
+  const provinceRows = allDistricts.filter((item) => item.department_code === departmentCode);
+  const provinceCode = pendingProvinceCode ?? draft.ubigeo_code?.slice(0, 4) ?? "";
+  const districtRows = provinceRows.filter((item) => item.province_code === provinceCode);
+
+  const departmentOptions = [
+    { value: "", label: "Seleccionar departamento" },
+    ...uniqueOptions(allDistricts, "department_code", "department_name"),
+  ];
+  const provinceOptions = [
+    { value: "", label: departmentCode ? "Seleccionar provincia" : "Primero el departamento" },
+    ...uniqueOptions(provinceRows, "province_code", "province_name"),
+  ];
+  const districtOptions = [
+    { value: "", label: provinceCode ? "Seleccionar distrito" : "Primero la provincia" },
+    ...districtRows.map((item) => ({ value: item.code, label: titleCase(item.district_name) })),
+  ];
+
+  const selectDepartment = (code: string) => {
+    setPendingDepartmentCode(code);
+    setPendingProvinceCode("");
+    set("ubigeo_code", null);
+    unmarkAutofilled("ubigeo_code");
+  };
+  const selectProvince = (code: string) => {
+    setPendingProvinceCode(code);
+    set("ubigeo_code", null);
+    unmarkAutofilled("ubigeo_code");
+  };
+  const selectDistrict = (code: string) => {
+    setPendingDepartmentCode(null);
+    setPendingProvinceCode(null);
+    set("ubigeo_code", code === "" ? null : code);
+    unmarkAutofilled("ubigeo_code");
+  };
 
   const documentNumber = draft.document_number ?? "";
   const canLookupDni =
@@ -285,6 +350,31 @@ function PartnerForm({
           }}
           disabled={disabled}
           maxLength={240}
+        />
+        <SelectField
+          label="Departamento"
+          requirement="optional"
+          value={departmentCode}
+          options={departmentOptions}
+          onChange={selectDepartment}
+          disabled={disabled}
+        />
+        <SelectField
+          label="Provincia"
+          requirement="optional"
+          value={provinceCode}
+          options={provinceOptions}
+          onChange={selectProvince}
+          disabled={disabled || !departmentCode}
+        />
+        <SelectField
+          label="Distrito"
+          requirement="optional"
+          value={draft.ubigeo_code ?? ""}
+          options={districtOptions}
+          onChange={selectDistrict}
+          disabled={disabled || !provinceCode}
+          searchPlaceholder="Buscar distrito..."
         />
         <TextField
           label="Correo electrónico"

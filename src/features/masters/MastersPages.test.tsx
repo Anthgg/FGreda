@@ -13,6 +13,7 @@ import {
   STOCK_PAGE,
   UNITS,
 } from "@/test/mastersFixtures";
+import { REFERENCE_DATA } from "@/test/settingsFixtures";
 import {
   csrfResponse,
   errorResponse,
@@ -50,6 +51,8 @@ function mockMasters(overrides: Overrides = {}) {
     if (url.includes("/units")) return jsonResponse(200, UNITS);
     if (url.includes("/products")) return jsonResponse(200, PRODUCTS_PAGE);
     if (url.includes("/partners")) return jsonResponse(200, PARTNERS_PAGE);
+    if (url.includes("/settings/reference-data"))
+      return jsonResponse(200, REFERENCE_DATA);
     if (url.includes("/inventory/locations"))
       return jsonResponse(200, [
         { id: 1, name: "Mariano Pastor", active: true },
@@ -515,6 +518,48 @@ describe("Modulo de terceros", () => {
     expect(screen.getByLabelText(/Dirección/)).toHaveValue(
       "Av. Siempre Viva 123",
     );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("combobox", { name: /Distrito/ }),
+      ).toHaveTextContent("Lima");
+    });
+  });
+
+  it("permite elegir Departamento, Provincia y Distrito a mano y los envia como ubigeo_code", async () => {
+    const spy = mockMasters();
+    renderApp(["/terceros"]);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Nuevo tercero" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText(/Nombre o razón social/),
+      "Tercero con ubigeo manual",
+    );
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Departamento/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Lima" }));
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Provincia/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Lima" }));
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Distrito/ }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Miraflores" }),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Crear tercero" }),
+    );
+
+    await waitFor(() => {
+      const call = spy.mock.calls.find(
+        ([url, init]) => String(url).includes("/partners") && init?.method === "POST",
+      );
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({
+        ubigeo_code: "150122",
+      });
+    });
   });
 
   it("muestra un mensaje claro cuando el documento no se encuentra", async () => {
