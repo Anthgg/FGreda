@@ -1,5 +1,10 @@
 # =============================================================================
 # Imagen de produccion de FGreda, orientada a Google Cloud Run.
+#
+# IMPORTANTE: el bundle de Vite se construye SIN incrustar API_BASE_URL.
+# La URL del backend se inyecta en tiempo de arranque del contenedor via
+# la variable de entorno API_BASE_URL, que el script en /docker-entrypoint.d/
+# escribe en /usr/share/nginx/html/runtime-config.js.
 # =============================================================================
 
 # ---- Etapa 1: build ---------------------------------------------------------
@@ -13,12 +18,9 @@ RUN npm ci
 
 COPY . .
 
-# Vite incrusta las variables VITE_* en el bundle en tiempo de compilacion, de
-# modo que la URL del backend debe conocerse aqui. Es informacion publica: no
-# hay ningun secreto en el frontend.
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-
+# Bundle SIN API_BASE_URL incrustada en build-time.
+# La URL se resuelve en tiempo de ejecucion del navegador via runtime-config.js.
+# En desarrollo local, VITE_API_BASE_URL actua como fallback (ver src/config.ts).
 RUN npm run build
 
 # ---- Etapa 2: runtime -------------------------------------------------------
@@ -31,6 +33,10 @@ ENV PORT=8080
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 # El snippet no lleva variables: se copia tal cual, fuera de templates.
 COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
+
+# Script ejecutado por el entrypoint oficial de nginx antes de arrancar.
+# Corre como UID 101 (nginx) y genera runtime-config.js desde API_BASE_URL.
+COPY --chmod=755 nginx/docker-entrypoint.d/40-generate-runtime-config.sh /docker-entrypoint.d/40-generate-runtime-config.sh
 
 EXPOSE 8080

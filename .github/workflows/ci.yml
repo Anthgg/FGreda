@@ -59,18 +59,35 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Construir la imagen
+        # Sin --build-arg VITE_API_BASE_URL: el bundle es generico.
+        # La URL del backend se inyecta al arrancar el contenedor (runtime-config.js).
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
           load: true
           tags: fgreda:ci
-          build-args: |
-            VITE_API_BASE_URL=http://localhost:8000
 
-      - name: Arrancar el contenedor y comprobar que sirve la SPA
+      - name: Verificar que el contenedor falla sin API_BASE_URL
+        # El entrypoint debe salir con error si la variable no esta configurada.
         run: |
-          docker run -d --name fgreda-ci -p 8080:8080 -e PORT=8080 fgreda:ci
+          EXIT_CODE=0
+          docker run --rm \
+            -e PORT=8080 \
+            fgreda:ci || EXIT_CODE=$?
+          echo "Exit code sin API_BASE_URL: $EXIT_CODE"
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "ERROR: El contenedor no deberia iniciar sin API_BASE_URL"
+            exit 1
+          fi
+          echo "Fail-fast verificado: PASS"
+
+      - name: Arrancar el contenedor con API_BASE_URL y comprobar que sirve la SPA
+        run: |
+          docker run -d --name fgreda-ci -p 8080:8080 \
+            -e PORT=8080 \
+            -e API_BASE_URL=http://test-backend-ci \
+            fgreda:ci
           for intento in $(seq 1 30); do
             if curl -fsS http://localhost:8080/ -o /dev/null; then
               echo "Contenedor operativo"
@@ -78,7 +95,45 @@ jobs:
             fi
             sleep 2
           done
-          curl -fsS http://localhost:8080/ -o /dev/null
+          if ! curl -fsS http://localhost:8080/ -o /dev/null; then
+            echo "ERROR: El contenedor no respondio en el puerto 8080"
+            echo "=== DOCKER LOGS ==="
+            docker logs fgreda-ci
+            exit 1
+          fi
+
+      - name: Verificar runtime-config.js — existencia y contenido
+        run: |
+          # Debe existir y devolver 200
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/runtime-config.js)
+          echo "HTTP $HTTP_STATUS para /runtime-config.js"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: /runtime-config.js debe devolver 200 (got $HTTP_STATUS)"
+            exit 1
+          fi
+
+          # Debe contener __GREDA_CONFIG__ con la URL inyectada
+          BODY=$(curl -fsS http://localhost:8080/runtime-config.js)
+          echo "Contenido: $BODY"
+          if ! echo "$BODY" | grep -q "__GREDA_CONFIG__"; then
+            echo "ERROR: runtime-config.js no contiene __GREDA_CONFIG__"
+            exit 1
+          fi
+          if ! echo "$BODY" | grep -q "http://test-backend-ci"; then
+            echo "ERROR: runtime-config.js no contiene la URL inyectada"
+            exit 1
+          fi
+          echo "runtime-config.js: PASS"
+
+      - name: Verificar Cache-Control no-store en runtime-config.js
+        run: |
+          CACHE=$(curl -sI http://localhost:8080/runtime-config.js | tr -d '\r' | grep -i cache-control || true)
+          echo "Cache-Control: $CACHE"
+          if ! echo "$CACHE" | grep -qi "no-store"; then
+            echo "ERROR: Cache-Control debe incluir no-store para runtime-config.js"
+            exit 1
+          fi
+          echo "Cache-Control no-store: PASS"
 
       - name: Comprobar el fallback de React Router
         # Una ruta profunda inexistente en disco debe devolver la SPA, no 404.
@@ -92,7 +147,7 @@ jobs:
         # declare los suyos, asi que se verifican en las tres rutas posibles:
         # index.html, un asset con hash y el fallback de React Router.
         run: |
-          for ruta in / /assets/ /una/ruta/profunda; do
+          for ruta in / /assets/ /una/ruta/profunda /runtime-config.js; do
             cabeceras=$(curl -sI "http://localhost:8080${ruta}")
             for esperada in "x-content-type-options: nosniff" "x-frame-options: DENY" "referrer-policy: same-origin"; do
               if ! echo "$cabeceras" | tr 'A-Z' 'a-z' | grep -q "$(echo "$esperada" | tr 'A-Z' 'a-z')"; then
@@ -113,3 +168,78 @@ jobs:
       - name: Detener el contenedor
         if: always()
         run: docker rm -f fgreda-ci || true
+
+  deploy-scripts-lint:
+    name: Validar configuracion Cloud Build y scripts de deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar cloudbuild.yaml — campos requeridos
+        run: |
+          python3 - <<'PYEOF'
+          import sys
+          import yaml
+
+          configs = {
+              "cloudbuild.yaml": ["steps", "images", "options", "timeout"],
+          }
+
+          errors = []
+          for filename, required_keys in configs.items():
+              try:
+                  with open(filename, "r") as f:
+                      data = yaml.safe_load(f)
+              except FileNotFoundError:
+                  errors.append(f"{filename}: archivo no encontrado")
+                  continue
+              except yaml.YAMLError as e:
+                  errors.append(f"{filename}: YAML invalido — {e}")
+                  continue
+
+              for key in required_keys:
+                  if key not in data:
+                      errors.append(f"{filename}: falta campo requerido '{key}'")
+
+              steps = data.get("steps", [])
+              for i, step in enumerate(steps):
+                  if "name" not in step:
+                      errors.append(f"{filename}: step[{i}] sin 'name'")
+                  if "args" not in step and "entrypoint" not in step:
+                      errors.append(f"{filename}: step[{i}] sin 'args' ni 'entrypoint'")
+
+              # Verificar que NO contiene VITE_API_BASE_URL como build-arg en steps
+              raw = yaml.dump(data)
+              if "VITE_API_BASE_URL" in raw and "build-arg" in raw:
+                  errors.append(
+                      f"{filename}: contiene --build-arg VITE_API_BASE_URL. "
+                      "La URL debe inyectarse en runtime, no en build-time."
+                  )
+
+              print(f"  {filename}: OK ({len(steps)} steps)")
+
+          if errors:
+              for e in errors:
+                  print(f"ERROR: {e}", file=sys.stderr)
+              sys.exit(1)
+          print("Configuracion Cloud Build: valida")
+          PYEOF
+
+      - name: Verificar scripts de deploy — sintaxis bash
+        run: |
+          for script in scripts/deploy-frontend.sh; do
+            if [ ! -f "$script" ]; then
+              echo "ERROR: $script no encontrado"
+              exit 1
+            fi
+            bash -n "$script" && echo "  $script: sintaxis OK"
+          done
+
+      - name: Verificar 40-generate-runtime-config.sh — sintaxis sh
+        run: |
+          script="nginx/docker-entrypoint.d/40-generate-runtime-config.sh"
+          if [ ! -f "$script" ]; then
+            echo "ERROR: $script no encontrado"
+            exit 1
+          fi
+          sh -n "$script" && echo "  $script: sintaxis OK"

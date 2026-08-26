@@ -31,6 +31,15 @@ server {
         add_header Cache-Control "no-cache, must-revalidate" always;
     }
 
+    # runtime-config.js inyecta la URL del backend en tiempo de ejecucion.
+    # Nunca debe quedar cacheado: un deploy con nueva URL debe surtir efecto
+    # en el primer acceso, sin esperar a la expiracion de cache.
+    location = /runtime-config.js {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+        try_files $uri =404;
+    }
+
     # Fallback de React Router: cualquier ruta desconocida devuelve la SPA.
     location / {
         include /etc/nginx/snippets/security-headers.conf;
