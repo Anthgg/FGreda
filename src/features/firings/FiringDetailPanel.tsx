@@ -120,11 +120,11 @@ export function FiringDetailPanel({
       {congelada ? (
         <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
           Hoja confirmada. Los importes son los que se aplicaron al confirmarla; cambiar una
-          tarifa hoy no los modifica.
+          tarifa hoy no los modifica. El IGV es informativo y usa la tasa comercial vigente.
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Metric
           label="Volumen total"
           value={`${formatDecimalString(firing.total_volume_cm3, 0)} cm³`}
@@ -135,7 +135,18 @@ export function FiringDetailPanel({
           hint="Sesión más cargada"
         />
         <Metric label="Costo base" value={formatDecimalString(firing.subtotal, 2)} />
-        <Metric label="Costo total" value={formatDecimalString(firing.total_cost, 2)} />
+        <Metric
+          label="Quema sin IGV"
+          value={`${firing.currency_symbol} ${formatDecimalString(firing.total_cost, 2)}`}
+        />
+        <Metric
+          label={`IGV (${formatDecimalString(firing.tax_percentage, 2)}%)`}
+          value={`${firing.currency_symbol} ${formatDecimalString(firing.tax_amount, 2)}`}
+        />
+        <Metric
+          label="Quema con IGV"
+          value={`${firing.currency_symbol} ${formatDecimalString(firing.total_with_tax, 2)}`}
+        />
       </div>
 
       {/* Sesiones */}

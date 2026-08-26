@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
+import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
 import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
 import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
@@ -49,6 +50,8 @@ export function AppRoutes() {
           <Route path="cotizaciones/nueva" element={<NuevaCotizacionPage />} />
           <Route path="cotizaciones/:id" element={<DetalleCotizacionPage />} />
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
+          <Route path="cotizador/nuevo" element={<CotizadorPage />} />
+          <Route path="cotizador/:id" element={<CotizadorPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

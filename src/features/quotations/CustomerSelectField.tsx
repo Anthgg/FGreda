@@ -13,6 +13,7 @@ interface CustomerSelectFieldProps {
   labelValue?: string;
   onChange: (customerId: string, customerLabel: string) => void;
   disabled?: boolean;
+  requirement?: "required" | "optional";
 }
 
 export function CustomerSelectField({
@@ -20,6 +21,7 @@ export function CustomerSelectField({
   labelValue: _labelValue,
   onChange,
   disabled = false,
+  requirement = "optional",
 }: CustomerSelectFieldProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [creandoCliente, setCreandoCliente] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function CustomerSelectField({
     <>
       <SelectField
         label="Cliente"
-        requirement="optional"
+        requirement={requirement}
         value={value}
         options={options}
         onChange={(val) => {

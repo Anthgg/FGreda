@@ -70,9 +70,14 @@ export function QuotationsPage() {
           <p className="mt-1 text-xs text-zinc-500 sm:text-sm">Costos integrales, trazabilidad de clientes y precios de venta.</p>
         </div>
         {isAdmin ? (
-          <Link to="/cotizaciones/nueva" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-zinc-900 px-5 text-sm font-medium text-white shadow-xs hover:bg-black">
-            Nueva cotización
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/cotizaciones/nueva" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 shadow-xs hover:bg-zinc-50">
+              Cotización heredada
+            </Link>
+            <Link to="/cotizador/nuevo" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-orange-700 px-5 text-sm font-medium text-white shadow-xs hover:bg-orange-800">
+              Abrir Cotizador
+            </Link>
+          </div>
         ) : null}
       </header>
 
@@ -130,7 +135,7 @@ export function QuotationsPage() {
                         <th className="px-4 py-3 font-semibold">Producto</th>
                         <th className="px-4 py-3 text-right font-semibold">Cantidad</th>
                         <th className="px-4 py-3 font-semibold">Estado</th>
-                        <th className="px-4 py-3 text-right font-semibold">Precio unitario</th>
+                        <th className="px-4 py-3 text-right font-semibold">Precio unitario sin IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Total con IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                       </tr>
@@ -156,19 +161,24 @@ export function QuotationsPage() {
                           </td>
                           <td className="px-4 py-3 text-zinc-500">{quote.created_at.slice(0, 10)}</td>
                           <td className="px-4 py-3">
-                            <span className="font-medium text-zinc-900">{quote.product_name}</span>
-                            <span className="block font-mono text-[10px] text-zinc-400">{quote.product_internal_reference}</span>
+                            {quote.workflow === "COTIZADOR" ? (
+                              <><span className="font-medium text-zinc-900">{quote.item_count ?? 0} productos</span><span className="block text-[10px] text-orange-700">Cotizador integral</span></>
+                            ) : (
+                              <><span className="font-medium text-zinc-900">{quote.product_name}</span><span className="block font-mono text-[10px] text-zinc-400">{quote.product_internal_reference}</span></>
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.quantity}</td>
+                          <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.quantity ?? "—"}</td>
                           <td className="px-4 py-3"><Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge></td>
                           <td className="px-4 py-3 text-right tabular-nums">
-                            S/ {formatDecimalString(quote.commercial_sale_unit_price || quote.calculated_unit_price, 2)}
+                            {quote.commercial_sale_unit_price || quote.calculated_unit_price
+                              ? `S/ ${formatDecimalString(quote.commercial_sale_unit_price || quote.calculated_unit_price, 2)}`
+                              : "—"}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums text-zinc-950">
-                            S/ {formatDecimalString(quote.commercial_total || quote.total_with_tax, 2)}
+                            S/ {formatDecimalString(quote.workflow === "COTIZADOR" ? quote.total_with_tax : quote.commercial_total || quote.total_with_tax, 2)}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Link to={`/cotizaciones/${quote.id}`} className="font-medium text-zinc-700 hover:text-black hover:underline">
+                            <Link to={quote.workflow === "COTIZADOR" ? `/cotizador/${quote.id}` : `/cotizaciones/${quote.id}`} className="font-medium text-zinc-700 hover:text-black hover:underline">
                               Ver detalle
                             </Link>
                           </td>
