@@ -230,10 +230,11 @@ jobs:
             bash -n "$script" && echo "  $script: sintaxis OK"
           done
 
-      - name: Verificar docker-entrypoint.sh — sintaxis sh
+      - name: Verificar 40-generate-runtime-config.sh — sintaxis sh
         run: |
-          if [ ! -f "docker-entrypoint.sh" ]; then
-            echo "ERROR: docker-entrypoint.sh no encontrado"
+          script="nginx/docker-entrypoint.d/40-generate-runtime-config.sh"
+          if [ ! -f "$script" ]; then
+            echo "ERROR: $script no encontrado"
             exit 1
           fi
-          sh -n docker-entrypoint.sh && echo "  docker-entrypoint.sh: sintaxis OK"
+          sh -n "$script" && echo "  $script: sintaxis OK"

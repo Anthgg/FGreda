@@ -3,8 +3,8 @@
 #
 # IMPORTANTE: el bundle de Vite se construye SIN incrustar API_BASE_URL.
 # La URL del backend se inyecta en tiempo de arranque del contenedor via
-# la variable de entorno API_BASE_URL, que el entrypoint escribe en
-# /usr/share/nginx/html/runtime-config.js.
+# la variable de entorno API_BASE_URL, que el script en /docker-entrypoint.d/
+# escribe en /usr/share/nginx/html/runtime-config.js.
 # =============================================================================
 
 # ---- Etapa 1: build ---------------------------------------------------------
@@ -33,17 +33,10 @@ ENV PORT=8080
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 # El snippet no lleva variables: se copia tal cual, fuera de templates.
 COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
 
-# Entrypoint que genera runtime-config.js antes de arrancar nginx.
-# Corre como root para escribir runtime-config.js, luego cede a UID 101 (nginx)
-# via su-exec para que el proceso principal del contenedor no sea root.
-USER root
-RUN apk add --no-cache su-exec
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh \
-    && chown -R nginx:nginx /usr/share/nginx/html
+# Script ejecutado por el entrypoint oficial de nginx antes de arrancar.
+# Corre como UID 101 (nginx) y genera runtime-config.js desde API_BASE_URL.
+COPY --chmod=755 nginx/docker-entrypoint.d/40-generate-runtime-config.sh /docker-entrypoint.d/40-generate-runtime-config.sh
 
 EXPOSE 8080
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
