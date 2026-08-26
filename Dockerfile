@@ -39,4 +39,9 @@ COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
 # Corre como UID 101 (nginx) y genera runtime-config.js desde API_BASE_URL.
 COPY nginx/docker-entrypoint.d/40-generate-runtime-config.sh /docker-entrypoint.d/40-generate-runtime-config.sh
 
+USER root
+RUN chmod +x /docker-entrypoint.d/40-generate-runtime-config.sh \
+    && chown -R 101:101 /usr/share/nginx/html
+USER 101
+
 EXPOSE 8080
