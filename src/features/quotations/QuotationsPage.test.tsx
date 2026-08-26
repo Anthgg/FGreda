@@ -255,6 +255,31 @@ describe("pantallas de cotizaciones", () => {
     expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("update-product-price"))).toBe(true);
   });
 
+  it("permite descargar el PDF oficial de una cotización confirmada", async () => {
+    const user = userEvent.setup();
+    const confirmed = { ...draftQuote, status: "CONFIRMED" as const, confirmed_at: "2026-08-23T15:00:00Z" };
+    let pdfDownloaded = false;
+    mockFetch((url, init) => {
+      if (url.includes("/quotations/7/pdf")) {
+        pdfDownloaded = true;
+        return new Response(new Blob(["%PDF-1.4 mock official"], { type: "application/pdf" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": 'inline; filename="CTZ-2026-000007_Cliente.pdf"',
+          },
+        });
+      }
+      if (url.includes("/quotations/7")) return jsonResponse(200, confirmed);
+      return quoteHandler(url, init);
+    });
+    renderApp(["/cotizaciones/7"]);
+
+    const downloadBtn = await screen.findByRole("button", { name: "Descargar PDF" });
+    await user.click(downloadBtn);
+    await waitFor(() => expect(pdfDownloaded).toBe(true));
+  });
+
   it("permite crear una técnica desde el propio selector, sin salir del formulario", async () => {
     const user = userEvent.setup();
     let creadas = 0;

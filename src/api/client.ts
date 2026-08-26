@@ -382,4 +382,34 @@ export const apiClient = {
     const response = await execute("GET", path, undefined, { ...config, accept: "*/*" });
     return response.blob();
   },
+
+  postBlob: async (path: string, body?: unknown, config: RequestConfig = {}): Promise<Blob> => {
+    const response = await execute("POST", path, body, { ...config, accept: "application/pdf,*/*" });
+    return response.blob();
+  },
+
+  getBlobWithFilename: async (
+    path: string,
+    config: RequestConfig = {},
+  ): Promise<{ blob: Blob; filename: string | null }> => {
+    const response = await execute("GET", path, undefined, { ...config, accept: "application/pdf,*/*" });
+    const disposition = response.headers.get("content-disposition");
+    const match = disposition?.match(/filename="?([^"]+)"?/);
+    const filename = match ? (match[1] ?? null) : null;
+    const blob = await response.blob();
+    return { blob, filename };
+  },
+
+  postBlobWithFilename: async (
+    path: string,
+    body?: unknown,
+    config: RequestConfig = {},
+  ): Promise<{ blob: Blob; filename: string | null }> => {
+    const response = await execute("POST", path, body, { ...config, accept: "application/pdf,*/*" });
+    const disposition = response.headers.get("content-disposition");
+    const match = disposition?.match(/filename="?([^"]+)"?/);
+    const filename = match ? (match[1] ?? null) : null;
+    const blob = await response.blob();
+    return { blob, filename };
+  },
 };

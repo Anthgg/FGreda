@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
+import { fetchQuotationPdf } from "@/api/quotations";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
@@ -61,8 +62,28 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmPrice, setConfirmPrice] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const stale = confirm.error instanceof ApiError && confirm.error.code === "SOURCE_CHANGED";
-  const busy = confirm.isPending || cancel.isPending || duplicate.isPending || updatePrice.isPending;
+  const busy = confirm.isPending || cancel.isPending || duplicate.isPending || updatePrice.isPending || downloadingPdf;
+
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      const { blob, filename } = await fetchQuotationPdf(quote.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `cotizacion-${quote.code}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setNotice("No se pudo descargar el PDF oficial.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const mutationError = confirm.error ?? cancel.error ?? duplicate.error ?? updatePrice.error;
 
@@ -85,49 +106,64 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
             {quote.confirmed_at ? ` · Confirmada ${quote.confirmed_at.slice(0, 10)}` : ""}
           </p>
         </div>
-        {canEdit ? (
-          <div className="flex flex-wrap justify-end gap-2">
-            {quote.status === "DRAFT" ? (
-              <Link
-                to={`/cotizaciones/${quote.id}/editar`}
-                className="inline-flex min-h-10 items-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                Editar
-              </Link>
-            ) : null}
-            {quote.status === "DRAFT" ? (
-              <PrimaryButton
-                disabled={busy}
-                onClick={() => {
-                  setNotice(null);
-                  confirm.mutate({ id: quote.id });
-                }}
-              >
-                Confirmar
-              </PrimaryButton>
-            ) : null}
-            {quote.status !== "CANCELLED" ? (
-              <SecondaryButton disabled={busy} onClick={() => setConfirmCancel(true)}>
-                Anular
-              </SecondaryButton>
-            ) : null}
-            <SecondaryButton
-              disabled={busy}
-              onClick={() =>
-                duplicate.mutate(quote.id, {
-                  onSuccess: (copy) => navigate(`/cotizaciones/${copy.id}`),
-                })
-              }
-            >
-              Duplicar
+        <div className="flex flex-wrap justify-end gap-2">
+          {quote.status === "CONFIRMED" || quote.status === "CANCELLED" ? (
+            <SecondaryButton disabled={busy} onClick={handleDownloadPdf}>
+              {downloadingPdf ? "Descargando…" : "Descargar PDF"}
             </SecondaryButton>
-            {quote.status === "CONFIRMED" ? (
-              <PrimaryButton disabled={busy} onClick={() => setConfirmPrice(true)}>
-                Actualizar precio
-              </PrimaryButton>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
+          {canEdit ? (
+            <>
+              {quote.status === "DRAFT" && quote.workflow === "COTIZADOR" ? (
+                <Link
+                  to={`/cotizador/${quote.id}`}
+                  className="inline-flex min-h-10 items-center rounded-xl bg-orange-700 px-4 text-sm font-medium text-white hover:bg-orange-800"
+                >
+                  Continuar en Cotizador
+                </Link>
+              ) : null}
+              {quote.status === "DRAFT" && quote.workflow !== "COTIZADOR" ? (
+                <Link
+                  to={`/cotizaciones/${quote.id}/editar`}
+                  className="inline-flex min-h-10 items-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+                >
+                  Editar
+                </Link>
+              ) : null}
+              {quote.status === "DRAFT" ? (
+                <PrimaryButton
+                  disabled={busy}
+                  onClick={() => {
+                    setNotice(null);
+                    confirm.mutate({ id: quote.id });
+                  }}
+                >
+                  Confirmar
+                </PrimaryButton>
+              ) : null}
+              {quote.status !== "CANCELLED" ? (
+                <SecondaryButton disabled={busy} onClick={() => setConfirmCancel(true)}>
+                  Anular
+                </SecondaryButton>
+              ) : null}
+              <SecondaryButton
+                disabled={busy}
+                onClick={() =>
+                  duplicate.mutate(quote.id, {
+                    onSuccess: (copy) => navigate(copy.workflow === "COTIZADOR" ? `/cotizador/${copy.id}` : `/cotizaciones/${copy.id}`),
+                  })
+                }
+              >
+                Duplicar
+              </SecondaryButton>
+              {quote.status === "CONFIRMED" ? (
+                <PrimaryButton disabled={busy} onClick={() => setConfirmPrice(true)}>
+                  Actualizar precio
+                </PrimaryButton>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </header>
 
       {mutationError ? (

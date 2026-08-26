@@ -222,18 +222,20 @@ export function PrimaryButton({
   disabled,
   type = "submit",
   onClick,
+  className = "",
 }: {
   children: ReactNode;
   disabled?: boolean | undefined;
   type?: "submit" | "button" | undefined;
   onClick?: (() => void) | undefined;
+  className?: string | undefined;
 }) {
   return (
     <button
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -243,18 +245,22 @@ export function PrimaryButton({
 export function SecondaryButton({
   children,
   disabled,
+  type = "button",
   onClick,
+  className = "",
 }: {
   children: ReactNode;
   disabled?: boolean | undefined;
-  onClick: () => void;
+  type?: "button" | "submit" | undefined;
+  onClick?: (() => void) | undefined;
+  className?: string | undefined;
 }) {
   return (
     <button
-      type="button"
+      type={type}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+      className={`inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
