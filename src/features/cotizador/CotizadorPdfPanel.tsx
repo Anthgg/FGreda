@@ -93,9 +93,14 @@ export function CotizadorPdfPanel({
     }
   }, [draftPayload, onPdfGenerated, preview?.id, status]);
 
+  const prevStatusRef = useRef<string>(status);
+
   // Si no hay cache, o si cambio de estado/id, generar
   useEffect(() => {
-    if (!blobUrl || (status !== "DRAFT" && !lastGeneratedPayloadRef.current)) {
+    const statusChanged = prevStatusRef.current !== status;
+    prevStatusRef.current = status;
+
+    if (!blobUrl || statusChanged || (status !== "DRAFT" && !lastGeneratedPayloadRef.current)) {
       void generatePdf();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
