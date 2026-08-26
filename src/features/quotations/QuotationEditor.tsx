@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 
 import {
   DatePickerField,
@@ -21,19 +20,31 @@ import {
 import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
 import { NuevoMaestroModal } from "@/features/quotations/NuevoMaestroModal";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
+import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import { useSession } from "@/features/auth/useSession";
 import { draftToPayload, type QuotationDraft } from "@/features/quotations/draft";
 import type { AdditionalCalculationOut, TechniqueCalculationOut } from "@/types/quotations";
 
 const money = (value: string | null | undefined) => `S/ ${formatDecimalString(value, 2)}`;
 
-function SummaryMetric({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+function SummaryMetric({
+  label,
+  value,
+  strong = false,
+  subtitle,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean | undefined;
+  subtitle?: string | undefined;
+}) {
   return (
-    <div className={strong ? "border-t border-zinc-200 pt-3" : ""}>
-      <dt className="text-[11px] text-zinc-500">{label}</dt>
-      <dd className={strong ? "text-xl font-bold tabular-nums text-zinc-950" : "text-sm font-semibold tabular-nums text-zinc-900"}>
+    <div className={strong ? "border-t border-zinc-700/60 pt-3" : ""}>
+      <dt className="text-[11px] text-zinc-400">{label}</dt>
+      <dd className={strong ? "text-xl font-bold tabular-nums text-white" : "text-sm font-semibold tabular-nums text-zinc-100"}>
         {value}
       </dd>
+      {subtitle ? <p className="text-[10px] text-zinc-500 tabular-nums">{subtitle}</p> : null}
     </div>
   );
 }
@@ -108,12 +119,35 @@ export function QuotationEditor({
   );
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-6">
-        <section aria-labelledby="quote-main" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
+        {/* SECCION 1: Cliente y Datos Principales */}
+        <section aria-labelledby="quote-client" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
           <div className="mb-4">
-            <h2 id="quote-main" className="text-sm font-semibold text-zinc-950">Datos principales</h2>
-            <p className="mt-1 text-xs text-zinc-500">El código CTZ y todos los importes los determina el backend.</p>
+            <h2 id="quote-client" className="text-sm font-semibold text-zinc-950">Cliente y datos generales</h2>
+            <p className="mt-1 text-xs text-zinc-500">Asigne el cliente y el nombre o referencia de la cotización.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <CustomerSelectField
+              value={value.customerId}
+              labelValue={value.customerLabel}
+              onChange={(customerId, customerLabel) => update({ customerId, customerLabel })}
+            />
+            <TextField
+              label="Nombre / Referencia de la cotización"
+              requirement="optional"
+              value={value.name}
+              onChange={(name) => update({ name })}
+              placeholder="Ej: Pedido Especial Restaurante Lima"
+            />
+          </div>
+        </section>
+
+        {/* SECCION 2: Pieza y Dimensiones Tecnicas */}
+        <section aria-labelledby="quote-main" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
+          <div className="mb-4">
+            <h2 id="quote-main" className="text-sm font-semibold text-zinc-950">Pieza y dimensiones</h2>
+            <p className="mt-1 text-xs text-zinc-500">Seleccione la pieza terminada. Sus dimensiones técnicas se cargan automáticamente.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <ProductSelectField
@@ -137,12 +171,12 @@ export function QuotationEditor({
               }
             />
             <TextField
-              label="Cantidad"
+              label="Cantidad a cotizar"
               requirement="required"
               value={value.quantity}
               onChange={(quantity) => update({ quantity })}
               inputMode="numeric"
-              placeholder="Ej. 19"
+              placeholder="Ej. 20"
               error={value.quantity && !/^[1-9]\d*$/.test(value.quantity) ? "Ingrese un entero mayor que cero." : undefined}
             />
             <DatePickerField
@@ -154,17 +188,44 @@ export function QuotationEditor({
               hint="Se registra automáticamente al guardar la cotización."
             />
             <TextField
-              label="Precio vigente"
+              label="Precio vigente de lista"
               requirement="automatic"
-              value={preview.data?.current_sale_price_snapshot ?? null}
+              value={preview.data?.current_sale_price_snapshot ? money(preview.data.current_sale_price_snapshot) : "Sin precio previo"}
               onChange={() => undefined}
               readOnly
               disabled={!preview.data}
             />
           </div>
+
+          {/* Tarjeta de Dimensiones Tecnicas (Solo Lectura) */}
+          {preview.data ? (
+            <div className="mt-4 rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-zinc-900">Especificaciones técnicas de la pieza</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 bg-zinc-200/60 px-2 py-0.5 rounded">Solo lectura</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-zinc-600">
+                <div>
+                  <span className="block text-[10px] text-zinc-400">Material / Pasta:</span>
+                  <span className="font-medium text-zinc-900">{preview.data.product_material_snapshot || "No especificado"}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-zinc-400">Gramaje:</span>
+                  <span className="font-medium text-zinc-900">{preview.data.product_grammage_snapshot ? `${preview.data.product_grammage_snapshot} g` : "—"}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="block text-[10px] text-zinc-400">Dimensiones (Ancho × Alto × Largo × Prof.):</span>
+                  <span className="font-medium text-zinc-900">
+                    {preview.data.product_width_snapshot ?? "0"} × {preview.data.product_height_snapshot ?? "0"} × {preview.data.product_length_snapshot ?? "0"} × {preview.data.product_depth_snapshot ?? "0"} cm
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
 
-        <section aria-labelledby="quote-materials" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
+        {/* SECCION 3: Variables Productivas y Quema */}
+        <section aria-labelledby="quote-materials" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
           <h2 id="quote-materials" className="text-sm font-semibold text-zinc-950">Materiales y receta</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <RecipeSelectField
@@ -207,7 +268,7 @@ export function QuotationEditor({
             <TextField
               label="Costo de materiales calculado"
               requirement="automatic"
-              value={preview.data?.materials_calculated ?? null}
+              value={money(preview.data?.materials_calculated)}
               onChange={() => undefined}
               readOnly
               hint="Lo que cuesta esa cantidad de receta."
@@ -228,17 +289,10 @@ export function QuotationEditor({
                 Estos materiales de la receta no tienen precio, así que suman cero al costo:
               </p>
               <ul className="mt-1 list-disc pl-5">
-                {preview.data.materials_without_cost.map((material) => (
-                  <li key={material}>{material}</li>
+                {preview.data.materials_without_cost.map((mat) => (
+                  <li key={mat}>{mat}</li>
                 ))}
               </ul>
-              <p className="mt-2">
-                Ponles el costo en{" "}
-                <Link to="/productos" className="font-medium underline underline-offset-2">
-                  Productos
-                </Link>{" "}
-                y vuelve a calcular.
-              </p>
             </div>
           ) : null}
           {preview.data?.warnings.includes("RECIPE_REQUIRED") ? (
@@ -248,13 +302,13 @@ export function QuotationEditor({
           ) : null}
           {preview.data?.warnings.includes("MATERIAL_GRAMS_PER_PIECE_REQUIRED") ? (
             <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Indique cuántos gramos de receta lleva una pieza: sin ese dato el costo de
-              materiales no se puede calcular y la cotización no se podrá confirmar.
+              Indique cuántos gramos de receta lleva una pieza: sin ese dato el costo de materiales no se puede calcular.
             </p>
           ) : null}
         </section>
 
-        <section aria-labelledby="quote-firing" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
+        {/* Quema */}
+        <section aria-labelledby="quote-firing" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
           <h2 id="quote-firing" className="text-sm font-semibold text-zinc-950">Quema confirmada</h2>
           <div className="mt-4">
             <SelectField
@@ -275,7 +329,8 @@ export function QuotationEditor({
           ) : null}
         </section>
 
-        <section aria-labelledby="quote-techniques" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
+        {/* Tecnicas */}
+        <section aria-labelledby="quote-techniques" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 id="quote-techniques" className="text-sm font-semibold text-zinc-950">Técnicas</h2>
@@ -296,11 +351,15 @@ export function QuotationEditor({
               />
               <button
                 type="button"
-                className="h-10 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white disabled:opacity-40"
+                className="h-10 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white disabled:opacity-40 hover:bg-zinc-800 transition-colors"
                 disabled={!techniqueToAdd}
                 onClick={() => {
+                  if (!techniqueToAdd) return;
                   update({
-                    techniques: [...value.techniques, { techniqueId: techniqueToAdd, quantity: value.quantity || "1", appliedCost: "", appliedDays: "" }],
+                    techniques: [
+                      ...value.techniques,
+                      { techniqueId: techniqueToAdd, quantity: value.quantity || "1", appliedDays: "", appliedCost: "" },
+                    ],
                   });
                   setTechniqueToAdd("");
                 }}
@@ -310,7 +369,7 @@ export function QuotationEditor({
             </div>
           </div>
           {value.techniques.length === 0 ? (
-            <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-6 text-center text-xs text-zinc-500">No se añadieron técnicas.</p>
+            <p className="mt-4 text-xs text-zinc-400">Sin técnicas añadidas a esta cotización.</p>
           ) : (
             <div className="mt-4 space-y-3">
               {value.techniques.map((line, index) => {
@@ -319,11 +378,15 @@ export function QuotationEditor({
                 return (
                   <TechniqueRow
                     key={line.techniqueId}
-                    name={master?.name ?? calculated?.name_snapshot ?? "Técnica"}
+                    name={master?.name ?? calculated?.name_snapshot ?? `Técnica #${line.techniqueId}`}
                     line={line}
                     calculated={calculated}
-                    onChange={(next) => update({ techniques: value.techniques.map((item, position) => position === index ? next : item) })}
-                    onRemove={() => update({ techniques: value.techniques.filter((_, position) => position !== index) })}
+                    onChange={(updatedLine) =>
+                      update({
+                        techniques: value.techniques.map((item, pos) => (pos === index ? updatedLine : item)),
+                      })
+                    }
+                    onRemove={() => update({ techniques: value.techniques.filter((_, pos) => pos !== index) })}
                   />
                 );
               })}
@@ -331,11 +394,12 @@ export function QuotationEditor({
           )}
         </section>
 
-        <section aria-labelledby="quote-additionals" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
+        {/* Adicionales */}
+        <section aria-labelledby="quote-additionals" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 id="quote-additionals" className="text-sm font-semibold text-zinc-950">Adicionales y vidriado</h2>
-              <p className="mt-1 text-xs text-zinc-500">Cada línea explica la fórmula aplicada en lenguaje del taller.</p>
+              <h2 id="quote-additionals" className="text-sm font-semibold text-zinc-950">Adicionales</h2>
+              <p className="mt-1 text-xs text-zinc-500">Mano de obra y acabados adicionales.</p>
             </div>
             <div className="flex min-w-[18rem] items-end gap-2">
               <SelectField
@@ -352,10 +416,16 @@ export function QuotationEditor({
               />
               <button
                 type="button"
-                className="h-10 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white disabled:opacity-40"
+                className="h-10 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white disabled:opacity-40 hover:bg-zinc-800 transition-colors"
                 disabled={!additionalToAdd}
                 onClick={() => {
-                  update({ additionals: [...value.additionals, { additionalId: additionalToAdd, additionalQuantity: "", appliedCost: "" }] });
+                  if (!additionalToAdd) return;
+                  update({
+                    additionals: [
+                      ...value.additionals,
+                      { additionalId: additionalToAdd, additionalQuantity: "", appliedCost: "" },
+                    ],
+                  });
                   setAdditionalToAdd("");
                 }}
               >
@@ -364,7 +434,7 @@ export function QuotationEditor({
             </div>
           </div>
           {value.additionals.length === 0 ? (
-            <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-6 text-center text-xs text-zinc-500">No se añadieron adicionales.</p>
+            <p className="mt-4 text-xs text-zinc-400">Sin adicionales añadidos a esta cotización.</p>
           ) : (
             <div className="mt-4 space-y-3">
               {value.additionals.map((line, index) => {
@@ -373,11 +443,15 @@ export function QuotationEditor({
                 return (
                   <AdditionalRow
                     key={line.additionalId}
-                    name={master?.name ?? calculated?.name_snapshot ?? "Adicional"}
+                    name={master?.name ?? calculated?.name_snapshot ?? `Adicional #${line.additionalId}`}
                     line={line}
                     calculated={calculated}
-                    onChange={(next) => update({ additionals: value.additionals.map((item, position) => position === index ? next : item) })}
-                    onRemove={() => update({ additionals: value.additionals.filter((_, position) => position !== index) })}
+                    onChange={(updatedLine) =>
+                      update({
+                        additionals: value.additionals.map((item, pos) => (pos === index ? updatedLine : item)),
+                      })
+                    }
+                    onRemove={() => update({ additionals: value.additionals.filter((_, pos) => pos !== index) })}
                   />
                 );
               })}
@@ -385,12 +459,13 @@ export function QuotationEditor({
           )}
         </section>
 
-        <section aria-labelledby="quote-days" className="rounded-2xl border border-zinc-200 bg-white/80 p-5">
-          <h2 id="quote-days" className="text-sm font-semibold text-zinc-950">Días y otros gastos</h2>
+        {/* Dias y Otros Gastos */}
+        <section aria-labelledby="quote-days" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
+          <h2 id="quote-days" className="text-sm font-semibold text-zinc-950">Días y otros gastos de espacio</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <TextField label="Días calculados" requirement="automatic" value={preview.data ? String(preview.data.calculated_days) : null} onChange={() => undefined} readOnly />
-            <TextField label="Ajuste" value={value.daysAdjustment} onChange={(daysAdjustment) => update({ daysAdjustment })} inputMode="numeric" />
-            <TextField label="Espera" value={value.waitingDays} onChange={(waitingDays) => update({ waitingDays })} inputMode="numeric" />
+            <TextField label="Ajuste de días" value={value.daysAdjustment} onChange={(daysAdjustment) => update({ daysAdjustment })} inputMode="numeric" />
+            <TextField label="Días de espera" value={value.waitingDays} onChange={(waitingDays) => update({ waitingDays })} inputMode="numeric" />
             <TextField label="Días totales" requirement="automatic" value={preview.data ? String(preview.data.total_days) : null} onChange={() => undefined} readOnly />
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -402,7 +477,7 @@ export function QuotationEditor({
                   key={line.otherCostId}
                   label={master?.name ?? calculated?.name_snapshot ?? "Otro gasto"}
                   value={line.appliedUnitPrice}
-                  onChange={(appliedUnitPrice) => update({ otherCosts: value.otherCosts.map((item, position) => position === index ? { ...item, appliedUnitPrice } : item) })}
+                  onChange={(appliedUnitPrice) => update({ otherCosts: value.otherCosts.map((item, pos) => pos === index ? { ...item, appliedUnitPrice } : item) })}
                   inputMode="decimal"
                   placeholder={master?.unit_price ?? calculated?.unit_price_snapshot ?? "0"}
                   hint={`Valor maestro: ${money(master?.unit_price ?? calculated?.unit_price_snapshot)} · Aplicado: ${money(calculated?.applied_cost)}`}
@@ -410,21 +485,78 @@ export function QuotationEditor({
               );
             })}
           </div>
-          <div className="mt-5 max-w-xs">
+        </section>
+
+        {/* SECCION 4: Costeo, Ganancia y Precio Comercial */}
+        <section aria-labelledby="quote-pricing" className="rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-xs">
+          <div className="mb-4">
+            <h2 id="quote-pricing" className="text-sm font-semibold text-zinc-950">Costeo interno, ganancia y precio comercial</h2>
+            <p className="mt-1 text-xs text-zinc-500">Defina el margen objetivo y el precio de venta comercial.</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Costo interno */}
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3.5">
+              <span className="text-[11px] font-medium text-zinc-500 block">Costo interno total</span>
+              <span className="text-base font-bold text-zinc-900 tabular-nums">{money(preview.data?.final_total_cost)}</span>
+              <p className="text-[10px] text-zinc-400 mt-0.5">Unitario: {money(preview.data?.final_unit_cost)}</p>
+            </div>
+
+            {/* Margen deseado % */}
             <TextField
-              label="Factor comercial"
-              value={value.commercialFactor}
-              onChange={(commercialFactor) => update({ commercialFactor })}
+              label="Ganancia deseada (%)"
+              requirement="optional"
+              value={value.markupPercent}
+              onChange={(markupPercent) => update({ markupPercent })}
               inputMode="decimal"
-              placeholder={preview.data?.commercial_factor_default_snapshot ?? "2"}
-              hint="Vacío utiliza el valor comercial configurado."
+              placeholder="100"
+              hint={preview.data ? `Ganancia objetivo: ${money(preview.data.target_profit_unit)} / u` : "Por omisión 100% sobre costo."}
             />
+
+            {/* Precio sugerido */}
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3.5">
+              <span className="text-[11px] font-medium text-zinc-500 block">Precio comercial sugerido (a 0.50)</span>
+              <span className="text-base font-bold text-zinc-900 tabular-nums">{money(preview.data?.suggested_commercial_unit_price)}</span>
+              <p className="text-[10px] text-zinc-400 mt-0.5">Calculado: {money(preview.data?.calculated_sale_unit_price)}</p>
+            </div>
+
+            {/* Precio comercial editable */}
+            <div className="sm:col-span-2 lg:col-span-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Precio comercial unitario final (S/)"
+                  requirement="optional"
+                  value={value.commercialSaleUnitPrice}
+                  onChange={(commercialSaleUnitPrice) => update({ commercialSaleUnitPrice })}
+                  inputMode="decimal"
+                  placeholder={preview.data?.suggested_commercial_unit_price ?? "Sugerido"}
+                  hint={value.commercialSaleUnitPrice ? "Precio personalizado fijado por el usuario." : "Vacío utiliza el precio sugerido redondeado a S/ 0.50."}
+                />
+
+                {/* Ganancia efectiva en tiempo real */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 flex flex-col justify-center">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-emerald-950">Ganancia efectiva real</span>
+                    <span className="text-xs font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                      {formatDecimalString(preview.data?.effective_markup_percent, 2)} % margen
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="text-lg font-bold text-emerald-900 tabular-nums">
+                      {money(preview.data?.effective_profit_unit)}
+                    </span>
+                    <span className="text-xs text-emerald-700">/ pieza ({money(preview.data?.effective_profit_total)} total)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
 
+      {/* BARRA LATERAL DE RESUMEN COMERCIAL */}
       <aside aria-label="Resumen de la cotización" className="xl:sticky xl:top-0 xl:self-start">
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-950 p-5 text-white shadow-lg">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-white shadow-xl">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Resumen</h2>
             {preview.isFetching ? <Spinner className="size-4 text-white" label="Calculando…" /> : null}
@@ -439,17 +571,44 @@ export function QuotationEditor({
                 <SummaryMetric label="Materiales" value={money(preview.data.materials_applied)} />
                 <SummaryMetric label="Quema" value={money(preview.data.firing_cost)} />
                 <SummaryMetric label="Mano de obra" value={money(preview.data.labor_cost)} />
-                <SummaryMetric label="Subtotal base" value={money(preview.data.base_commercial_cost)} />
-                <SummaryMetric label="Factor comercial" value={preview.data.commercial_factor} />
                 <SummaryMetric label="Costo espacio" value={money(preview.data.space_cost)} />
-                <SummaryMetric label="Precio total sin IGV" value={money(preview.data.calculated_total)} strong />
-                <SummaryMetric label="Precio unitario sin IGV" value={money(preview.data.calculated_unit_price)} strong />
+                <SummaryMetric
+                  label="Costo unitario interno"
+                  value={money(preview.data.final_unit_cost || preview.data.base_commercial_cost)}
+                  subtitle={`Total: ${money(preview.data.final_total_cost || preview.data.base_commercial_cost)}`}
+                />
+                <SummaryMetric
+                  label="Margen sobre costo"
+                  value={`${formatDecimalString(preview.data.effective_markup_percent ?? preview.data.markup_percent ?? "100", 2)} %`}
+                  subtitle={preview.data.markup_percent ? `Obj: ${formatDecimalString(preview.data.markup_percent, 2)} %` : undefined}
+                />
+                <SummaryMetric
+                  label="Precio unitario neto"
+                  value={money(preview.data.commercial_sale_unit_price || preview.data.calculated_unit_price)}
+                  strong
+                />
+                <SummaryMetric
+                  label="Subtotal comercial"
+                  value={money(preview.data.commercial_subtotal || preview.data.calculated_total)}
+                  strong
+                />
                 <SummaryMetric
                   label={`IGV (${formatDecimalString(preview.data.tax_percentage, 2)} %)`}
                   value={money(preview.data.tax_amount)}
                 />
-                <SummaryMetric label="Precio total con IGV" value={money(preview.data.total_with_tax)} strong />
-                <SummaryMetric label="Precio unitario con IGV" value={money(preview.data.unit_price_with_tax)} strong />
+                <SummaryMetric
+                  label="Ganancia efectiva total"
+                  value={money(preview.data.effective_profit_total || "0")}
+                  subtitle={preview.data.effective_profit_unit ? `Unit: ${money(preview.data.effective_profit_unit)}` : undefined}
+                />
+                <div className="col-span-2">
+                  <SummaryMetric
+                    label="TOTAL COMERCIAL CON IGV"
+                    value={money(preview.data.commercial_total || preview.data.total_with_tax)}
+                    strong
+                    subtitle={`Unitario con IGV: ${money(preview.data.commercial_unit_price_with_tax || preview.data.unit_price_with_tax)}`}
+                  />
+                </div>
               </dl>
               {preview.data.warnings.length > 0 ? (
                 <div className="mt-5 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
@@ -457,15 +616,14 @@ export function QuotationEditor({
                 </div>
               ) : null}
               <div className="mt-4 text-[10px] leading-4 text-zinc-500">
-                El precio se negocia sin IGV; el impuesto se muestra aparte para el documento
-                que se entrega. No hay regla de descuento definida.
+                La cotización se emite sobre el precio comercial acordado con el cliente. El IGV se detalla para el comprobante de pago.
               </div>
             </>
           ) : null}
         </div>
       </aside>
 
-      {/* Altas rápidas: lo creado se selecciona solo, para no perder el hilo. */}
+      {/* Modales de alta rapida */}
       {creandoPieza !== null ? (
         <NuevaPiezaModal
           initialName={creandoPieza}

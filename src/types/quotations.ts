@@ -85,6 +85,8 @@ export interface OtherCostSelectionIn {
 }
 
 export interface QuotationCalculateIn {
+  name?: string | null;
+  customer_id?: number | null;
   product_id: number;
   quantity: number;
   recipe_id?: number;
@@ -99,6 +101,8 @@ export interface QuotationCalculateIn {
   waiting_days: number;
   other_costs?: OtherCostSelectionIn[];
   commercial_factor?: string;
+  markup_percent?: string | number | null;
+  commercial_sale_unit_price?: string | null;
 }
 
 export interface TechniqueCalculationOut {
@@ -146,9 +150,29 @@ export interface OtherCostCalculationOut {
 }
 
 export interface QuotationCalculateOut {
+  name?: string | null;
+  customer_id?: number | null;
+  customer_name_snapshot?: string | null;
+  customer_trade_name_snapshot?: string | null;
+  customer_document_type_snapshot?: string | null;
+  customer_document_number_snapshot?: string | null;
+  customer_address_snapshot?: string | null;
+  customer_ubigeo_snapshot?: string | null;
+  customer_email_snapshot?: string | null;
+  customer_phone_snapshot?: string | null;
   product_id: number;
   product_internal_reference: string;
   product_name: string;
+  product_name_snapshot?: string | null;
+  product_internal_reference_snapshot?: string | null;
+  product_type_snapshot?: string | null;
+  product_uom_snapshot?: string | null;
+  product_material_snapshot?: string | null;
+  product_grammage_snapshot?: string | number | null;
+  product_width_snapshot?: string | number | null;
+  product_height_snapshot?: string | number | null;
+  product_length_snapshot?: string | number | null;
+  product_depth_snapshot?: string | number | null;
   quantity: number;
   recipe_id: number | null;
   recipe_version_id: number | null;
@@ -172,6 +196,20 @@ export interface QuotationCalculateOut {
   base_commercial_cost: string;
   calculated_total: string;
   calculated_unit_price: string;
+  /** Costos puros, ganancia y precios comerciales */
+  final_unit_cost?: string;
+  final_total_cost?: string;
+  markup_percent?: string;
+  target_profit_unit?: string;
+  calculated_sale_unit_price?: string;
+  suggested_commercial_unit_price?: string;
+  commercial_sale_unit_price?: string;
+  effective_profit_unit?: string;
+  effective_profit_total?: string;
+  effective_markup_percent?: string;
+  commercial_subtotal?: string;
+  commercial_total?: string;
+  commercial_unit_price_with_tax?: string;
   /** Gramos de receta por pieza; el costo de materiales se calcula sobre ellos. */
   /** Componentes de la receta sin precio: suman cero y abaratan el material. */
   materials_without_cost: string[];
@@ -209,13 +247,20 @@ export interface QuotationOut extends QuotationCalculateOut {
 export interface QuotationSummaryOut {
   id: number;
   code: string;
+  name?: string | null;
   status: QuotationStatus;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  customer_document_number?: string | null;
   product_id: number;
   product_internal_reference: string;
   product_name: string;
   quantity: number;
   calculated_unit_price: string;
   calculated_total: string;
+  final_unit_cost?: string;
+  commercial_sale_unit_price?: string;
+  commercial_total?: string;
   total_with_tax: string;
   created_at: string;
 }
@@ -231,6 +276,7 @@ export interface QuotationFilters {
   search?: string;
   status?: QuotationStatus;
   product?: number;
+  customer?: number;
   date_from?: string;
   date_to?: string;
   limit?: number;

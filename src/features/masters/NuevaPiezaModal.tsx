@@ -42,6 +42,12 @@ export function NuevaPiezaModal({
   const [name, setName] = useState(initialName.trim());
   const [categoryId, setCategoryId] = useState("");
   const [uomCode, setUomCode] = useState("");
+  const [material, setMaterial] = useState("");
+  const [grammage, setGrammage] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+  const [length, setLength] = useState("");
+  const [depth, setDepth] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const categories = useProductCategories();
@@ -103,6 +109,12 @@ export function NuevaPiezaModal({
       sale_price: null,
       sale_tax_rate: null,
       purchase_tax_rate: null,
+      material: material.trim() || null,
+      grammage: grammage.trim() ? Number(grammage) : null,
+      width: width.trim() ? Number(width) : null,
+      height: height.trim() ? Number(height) : null,
+      length: length.trim() ? Number(length) : null,
+      depth: depth.trim() ? Number(depth) : null,
       sellable: false,
       purchasable: false,
       available_in_pos: false,
@@ -220,6 +232,63 @@ export function NuevaPiezaModal({
             }}
             placeholder="Seleccionar unidad..."
           />
+
+          <div className="border-t border-zinc-100 pt-3">
+            <h4 className="text-xs font-semibold text-zinc-900 mb-2">
+              Dimensiones técnicas y material (opcional)
+            </h4>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="Material / Pasta"
+                requirement="optional"
+                value={material}
+                onChange={setMaterial}
+                placeholder="Ej: Pasta gres blanca"
+              />
+              <TextField
+                label="Gramaje (g)"
+                requirement="optional"
+                value={grammage}
+                onChange={setGrammage}
+                placeholder="Ej: 450"
+                inputMode="decimal"
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+              <TextField
+                label="Ancho (cm)"
+                requirement="optional"
+                value={width}
+                onChange={setWidth}
+                placeholder="0"
+                inputMode="decimal"
+              />
+              <TextField
+                label="Alto (cm)"
+                requirement="optional"
+                value={height}
+                onChange={setHeight}
+                placeholder="0"
+                inputMode="decimal"
+              />
+              <TextField
+                label="Largo (cm)"
+                requirement="optional"
+                value={length}
+                onChange={setLength}
+                placeholder="0"
+                inputMode="decimal"
+              />
+              <TextField
+                label="Profundidad (cm)"
+                requirement="optional"
+                value={depth}
+                onChange={setDepth}
+                placeholder="0"
+                inputMode="decimal"
+              />
+            </div>
+          </div>
 
           {validationError ? (
             <p role="alert" className="text-xs text-red-600">

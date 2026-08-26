@@ -57,6 +57,12 @@ export interface Product {
   sale_price: string | null;
   sale_tax_rate: string | null;
   purchase_tax_rate: string | null;
+  material?: string | null;
+  grammage?: string | number | null;
+  width?: string | number | null;
+  height?: string | number | null;
+  length?: string | number | null;
+  depth?: string | number | null;
   sellable: boolean;
   purchasable: boolean;
   available_in_pos: boolean;

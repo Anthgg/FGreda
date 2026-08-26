@@ -16,6 +16,9 @@ export interface OtherCostDraft {
   appliedUnitPrice: string;
 }
 export interface QuotationDraft {
+  name: string;
+  customerId: string;
+  customerLabel: string;
   productId: string;
   productLabel: string;
   quantity: string;
@@ -33,6 +36,8 @@ export interface QuotationDraft {
   waitingDays: string;
   otherCosts: OtherCostDraft[];
   commercialFactor: string;
+  markupPercent: string;
+  commercialSaleUnitPrice: string;
 }
 
 const localISODate = () => {
@@ -44,6 +49,9 @@ const localISODate = () => {
 };
 
 export const emptyQuotationDraft: QuotationDraft = {
+  name: "",
+  customerId: "",
+  customerLabel: "",
   productId: "",
   productLabel: "",
   quantity: "",
@@ -60,6 +68,8 @@ export const emptyQuotationDraft: QuotationDraft = {
   waitingDays: "0",
   otherCosts: [],
   commercialFactor: "",
+  markupPercent: "100",
+  commercialSaleUnitPrice: "",
 };
 
 const strictPositiveInt = (value: string): number | null => {
@@ -113,7 +123,11 @@ export function draftToPayload(draft: QuotationDraft): QuotationCalculateIn | nu
     return null;
   }
 
+  const customerId = strictPositiveInt(draft.customerId);
+
   return {
+    ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
+    ...(customerId ? { customer_id: customerId } : {}),
     product_id: productId,
     quantity,
     ...(strictPositiveInt(draft.recipeId)
@@ -145,11 +159,22 @@ export function draftToPayload(draft: QuotationDraft): QuotationCalculateIn | nu
       })
       .filter((line) => line !== null),
     ...(draft.commercialFactor ? { commercial_factor: draft.commercialFactor } : {}),
+    ...(draft.markupPercent ? { markup_percent: draft.markupPercent } : {}),
+    ...(draft.commercialSaleUnitPrice
+      ? { commercial_sale_unit_price: draft.commercialSaleUnitPrice }
+      : {}),
   };
 }
 
 export function quotationToDraft(quote: QuotationOut): QuotationDraft {
+  const customerLabel = quote.customer_name_snapshot
+    ? `${quote.customer_name_snapshot}${quote.customer_document_number_snapshot ? ` (${quote.customer_document_number_snapshot})` : ""}`
+    : "";
+
   return {
+    name: quote.name ?? "",
+    customerId: quote.customer_id ? String(quote.customer_id) : "",
+    customerLabel,
     productId: String(quote.product_id),
     productLabel: `${quote.product_internal_reference} · ${quote.product_name}`,
     quantity: String(quote.quantity),
@@ -178,5 +203,7 @@ export function quotationToDraft(quote: QuotationOut): QuotationDraft {
       appliedUnitPrice: line.adjusted ? line.unit_price_snapshot : "",
     })),
     commercialFactor: quote.commercial_factor,
+    markupPercent: quote.markup_percent ?? "100",
+    commercialSaleUnitPrice: quote.commercial_sale_unit_price ?? "",
   };
 }
