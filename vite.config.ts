@@ -15,6 +15,27 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Disponible para quien quiera correr `npm run dev` con el mismo patron
+    // same-origin /api que produccion (Fase 009A.1). OJO: VITE_API_BASE_URL
+    // vacia ("") NO sirve para esto — resolveApiBaseUrl() la sigue tratando
+    // como "no configurada" y lanza (a proposito: cambiar ese fallback de
+    // desarrollo rompería el test que usa "" para simular justamente esa
+    // ausencia, ver src/test/config.test.ts). En su lugar, apunte
+    // VITE_API_BASE_URL al propio origen del dev server:
+    //
+    //   VITE_API_BASE_URL=http://localhost:5173
+    //
+    // Las llamadas resultantes (http://localhost:5173/api/v1/...) las
+    // recibe este mismo dev server, que las reenvia aqui a un backend local
+    // en :8000. No es obligatorio — VITE_API_BASE_URL apuntando directo al
+    // backend (el flujo de siempre) sigue funcionando igual y no pasa por
+    // este proxy en absoluto.
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     globals: true,

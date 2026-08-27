@@ -31,6 +31,60 @@ server {
         add_header Cache-Control "no-cache, must-revalidate" always;
     }
 
+    # Proxy same-origin hacia BGreda (Fase 009A.1, cierra D3): el navegador
+    # ve /api/v1/... en el mismo origen que el resto de la SPA, nunca el
+    # dominio del backend directamente. WebKit/Safari bloquea las cookies de
+    # sesion en llamadas cross-site al backend incluso con
+    # SameSite=None; Secure; en el mismo origen esa restriccion no aplica.
+    # BACKEND_ORIGIN (solo host, sin esquema) se sustituye en el arranque del
+    # contenedor via envsubst, igual que ${PORT}.
+    #
+    # proxy_pass SIN ruta despues del host: nginx reenvia la URI de la
+    # request tal cual (BGreda ya sirve bajo /api/v1/..., el mismo prefijo
+    # que ve el navegador) — si proxy_pass llevara una ruta, nginx la
+    # reescribiria y perderia el prefijo /api/.
+    location /api/ {
+        include /etc/nginx/snippets/security-headers.conf;
+
+        # 16 MiB: por encima del limite real del backend (imports.py,
+        # MAX_UPLOAD_BYTES = 15 MiB) para que sea el backend, no nginx,
+        # quien decida el 413 — el default de nginx (1 MiB) rechazaria en
+        # silencio subidas de Importaciones que el backend si aceptaria.
+        client_max_body_size 16m;
+
+        proxy_http_version 1.1;
+
+        # SNI correcto hacia el hostname real de Cloud Run del backend; sin
+        # esto nginx podria enviar el SNI equivocado y Cloud Run rechazar
+        # el handshake TLS.
+        proxy_ssl_server_name on;
+        proxy_pass https://${BACKEND_ORIGIN};
+        proxy_set_header Host ${BACKEND_ORIGIN};
+
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+
+        # 130s: por encima de los 120s que el cliente ya permite para
+        # operaciones largas (uploadMasterWorkbook/commitImport en
+        # src/api/masters.ts, commitRecipeImport en src/api/recipes.ts,
+        # timeoutMs: 120_000). Con 30s el proxy cortaba la conexion antes
+        # que el propio cliente, y una importacion que seguia procesando
+        # del lado del backend quedaba con un 504 confuso en vez del error
+        # real (exito, fallo, o timeout del cliente).
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    130s;
+        proxy_read_timeout    130s;
+
+        # Los 4xx/5xx de la API deben llegar tal cual al navegador (401,
+        # 403, 404, 409, 422...); nunca deben resolverse aqui como la SPA
+        # (index.html 200). Explicito aunque sea el default de nginx: es la
+        # garantia critica de este bloque, no algo que dependa de un
+        # default que otra persona podria cambiar sin darse cuenta.
+        proxy_intercept_errors off;
+    }
+
     # runtime-config.js inyecta la URL del backend en tiempo de ejecucion.
     # Nunca debe quedar cacheado: un deploy con nueva URL debe surtir efecto
     # en el primer acceso, sin esperar a la expiracion de cache.
