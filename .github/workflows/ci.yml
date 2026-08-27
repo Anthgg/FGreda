@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Matriz completa (todos los navegadores + emulacion mobile) contra
+    # produccion, una vez por semana. El job de Chromium en cada PR ya cubre
+    # el camino critico en cada cambio; esto es solo para detectar drift
+    # especifico de motor/viewport sin correrlo en cada push.
+    - cron: "0 9 * * 1"
 
 # Ningun paso lleva continue-on-error: un fallo real debe romper el pipeline.
 permissions:
@@ -243,3 +250,104 @@ jobs:
             exit 1
           fi
           sh -n "$script" && echo "  $script: sintaxis OK"
+
+  playwright-e2e:
+    name: Playwright E2E (Chromium)
+    # La suite corre contra un ambiente real (por defecto, produccion), no
+    # contra un mock. Solo se ejecuta en pull_request para no disparar
+    # trafico/datos de prueba en cada push a main.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar credenciales de prueba
+        # Sin E2E_EMAIL/E2E_PASSWORD como secrets del repo, la corrida se
+        # omite (no bloquea el PR) en vez de fallar en falso. Ninguna
+        # credencial se inventa ni se imprime.
+        id: creds
+        run: |
+          if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
+            echo "E2E_EMAIL/E2E_PASSWORD no configurados: se omite Playwright en este PR."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Instalar Chromium (Playwright)
+        if: steps.creds.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright (chromium)
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: npx playwright test --project=chromium
+
+      - name: Subir reporte HTML
+        if: always() && steps.creds.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  playwright-e2e-full-matrix:
+    name: Playwright E2E (matriz completa)
+    # Manual (workflow_dispatch) o programado semanalmente; nunca en cada PR
+    # porque cubre WebKit y emulacion mobile-ios/mobile-android ademas de
+    # Chromium/Firefox, y es mucho mas lento que el job de arriba.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile-ios, mobile-android]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar credenciales de prueba
+        id: creds
+        run: |
+          if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
+            echo "E2E_EMAIL/E2E_PASSWORD no configurados: se omite esta corrida."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Instalar navegadores (Playwright)
+        if: steps.creds.outputs.ready == 'true'
+        run: npx playwright install --with-deps
+
+      - name: "Playwright (${{ matrix.project }})"
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: npx playwright test --project=${{ matrix.project }}
+
+      - name: "Subir reporte HTML (${{ matrix.project }})"
+        if: always() && steps.creds.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: playwright-report/
+          retention-days: 7
