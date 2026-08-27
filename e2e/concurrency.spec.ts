@@ -11,10 +11,14 @@ test.describe("Concurrencia", () => {
     await page.goto("/cotizador/nuevo");
     await page.getByLabel(/nombre \/ referencia/i).fill(testName("Concurrencia-Confirmar"));
     await page.getByRole("combobox", { name: "Cliente" }).click();
-    const firstCustomer = page.getByRole("option").first();
-    // Espera a que el listado de clientes realmente cargue (fetch a
-    // /partners); sin esto, el click puede caer sobre un placeholder de
-    // "cargando" y la cotizacion queda creada sin cliente asignado.
+    // options[0] es siempre el placeholder "Sin cliente asignado"
+    // (CustomerSelectField.tsx lo antepone a la lista real); el primer
+    // cliente real es options[1]. Sin esto, el borrador quedaba creado
+    // pero SIN cliente asignado (invisible aqui porque el resto del test
+    // no depende de que haya uno, pero rompia el flujo completo de
+    // cotizador.spec.ts en cuanto D2 empezo a bloquear "Siguiente" de
+    // verdad).
+    const firstCustomer = page.getByRole("option").nth(1);
     await expect(firstCustomer).toBeVisible();
     await firstCustomer.click();
     await page.getByRole("button", { name: "Crear borrador" }).click();
@@ -46,7 +50,8 @@ test.describe("Concurrencia", () => {
     await page.goto("/cotizador/nuevo");
     await page.getByLabel(/nombre \/ referencia/i).fill(testName("Concurrencia-Guardar"));
     await page.getByRole("combobox", { name: "Cliente" }).click();
-    await page.getByRole("option").first().click();
+    // options[0] es el placeholder "Sin cliente asignado"; ver CASO B.
+    await page.getByRole("option").nth(1).click();
 
     const createButton = page.getByRole("button", { name: "Crear borrador" });
     const [firstResponse] = await Promise.all([
