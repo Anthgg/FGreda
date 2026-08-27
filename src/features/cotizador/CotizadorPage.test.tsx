@@ -178,6 +178,41 @@ function handler(url: string, init: RequestInit) {
 }
 
 describe("Cotizador integral", () => {
+  it("D2: bloquea Siguiente en Datos sin cliente y avanza al completarlo", async () => {
+    const user = userEvent.setup();
+    mockFetch((url, init) => {
+      if (url.includes("/partners")) {
+        return jsonResponse(200, {
+          items: [{ id: 7, name: "Restaurante Lima", role: "CLIENT", document_type: "RUC", document_number: "20111111111", active: true }],
+          total: 1,
+          limit: 100,
+          offset: 0,
+        });
+      }
+      return handler(url, init);
+    });
+    renderApp(["/cotizador/nuevo"]);
+    await screen.findByRole("heading", { name: "Nuevo cotizador." });
+
+    // Sin nombre ni cliente: Siguiente no debe avanzar.
+    await user.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(screen.getByRole("heading", { name: "Nuevo cotizador." })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Selecciona un cliente para continuar.");
+    expect(screen.queryByRole("button", { name: /Agregar producto/i })).not.toBeInTheDocument();
+
+    // Con nombre pero sin cliente: sigue bloqueado.
+    await user.type(screen.getByLabelText(/Nombre \/ referencia/i), "Vajilla QA");
+    await user.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(screen.getByRole("heading", { name: "Nuevo cotizador." })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Selecciona un cliente para continuar.");
+
+    // Al elegir cliente, Siguiente ya avanza a Piezas.
+    await user.click(screen.getByRole("combobox", { name: "Cliente" }));
+    await user.click(await screen.findByText("Restaurante Lima · 20111111111"));
+    await user.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(await screen.findByRole("button", { name: /Agregar producto/i })).toBeInTheDocument();
+  });
+
   it("expone seis etapas separadas de Cotizaciones y sólo solicita preview al backend", async () => {
     const fetchSpy = mockFetch(handler);
     const { container } = renderApp(["/cotizador/nuevo"]);
