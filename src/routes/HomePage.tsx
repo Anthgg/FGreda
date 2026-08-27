@@ -83,14 +83,32 @@ function formatRelativeTime(isoString: string): string {
 }
 
 /**
+ * Un Decimal serializado en "0", "0.00" o notacion cientifica ("0E-18") es una
+ * cadena no vacia: `||` lo trata como verdadero y nunca cae al siguiente campo
+ * de la cascada. Sin este chequeo numerico, una cotizacion Legacy cuyo
+ * commercial_total nunca se poblo (queda en cero) pisa un total_with_tax real
+ * y no nulo con un cero silencioso.
+ */
+function isMeaningfulTotal(value: string | undefined): value is string {
+  if (!value) return false;
+  const parsed = parseFloat(value);
+  return !isNaN(parsed) && parsed !== 0;
+}
+
+/** Total crudo (sin formatear) para cotizaciones de tipo Cotizador o Legacy. */
+function getQuoteTotalRaw(quote: QuotationSummaryOut): string {
+  if (quote.workflow === "COTIZADOR") return quote.total_with_tax;
+  if (isMeaningfulTotal(quote.commercial_total)) return quote.commercial_total;
+  if (isMeaningfulTotal(quote.total_with_tax)) return quote.total_with_tax;
+  if (isMeaningfulTotal(quote.calculated_total)) return quote.calculated_total;
+  return quote.commercial_total || quote.total_with_tax || quote.calculated_total || "0";
+}
+
+/**
  * Formato del total monetario para cotizaciones de tipo Cotizador o Legacy.
  */
 function getQuoteTotal(quote: QuotationSummaryOut): string {
-  const raw =
-    quote.workflow === "COTIZADOR"
-      ? quote.total_with_tax
-      : quote.commercial_total || quote.total_with_tax || quote.calculated_total || "0";
-  return formatDecimalString(raw, 2);
+  return formatDecimalString(getQuoteTotalRaw(quote), 2);
 }
 
 const STATUS_LABEL: Record<QuotationStatus, string> = {
@@ -142,20 +160,12 @@ export function HomePage() {
 
     // Total cotizado comercial de cotizaciones confirmadas en el mes actual
     const totalCommercialThisMonth = confirmedThisMonth.reduce((acc, q) => {
-      const val = parseFloat(
-        q.workflow === "COTIZADOR"
-          ? q.total_with_tax
-          : q.commercial_total || q.total_with_tax || q.calculated_total || "0",
-      );
+      const val = parseFloat(getQuoteTotalRaw(q));
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
 
     const totalCommercialLastMonth = confirmedLastMonth.reduce((acc, q) => {
-      const val = parseFloat(
-        q.workflow === "COTIZADOR"
-          ? q.total_with_tax
-          : q.commercial_total || q.total_with_tax || q.calculated_total || "0",
-      );
+      const val = parseFloat(getQuoteTotalRaw(q));
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
 

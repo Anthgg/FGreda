@@ -177,6 +177,43 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     expect(within(metricsSection).getByText(/S\/\s*850[.,]00/)).toBeInTheDocument();
   });
 
+  it("suma el total_with_tax de una cotizacion Legacy cuyo commercial_total nunca se poblo (0E-18)", async () => {
+    // Reproduce CTZ-2026-000001 en produccion: workflow ausente (Legacy), con
+    // commercial_total en el Decimal-cero que Python serializa como "0E-18".
+    // Antes del fix, `commercial_total || total_with_tax` tomaba "0E-18" por
+    // ser una cadena no vacia y el total real de la cotizacion desaparecia
+    // del KPI "Total cotizado (mes)".
+    const { workflow: _workflow, ...mockQuoteConfirmedWithoutWorkflow } = mockQuoteConfirmed;
+    const legacyQuoteZeroCommercial: QuotationSummaryOut = {
+      ...mockQuoteConfirmedWithoutWorkflow,
+      id: 1,
+      code: "CTZ-2026-000001",
+      customer_id: null,
+      customer_name: null,
+      commercial_total: "0E-18",
+      total_with_tax: "20267.70",
+      calculated_total: "17176.02",
+      created_at: new Date().toISOString(),
+    };
+    mockFetch((url) => {
+      if (url.includes("/quotations")) {
+        return jsonResponse(200, {
+          items: [legacyQuoteZeroCommercial],
+          total: 1,
+          limit: 100,
+          offset: 0,
+        });
+      }
+      return defaultDashboardHandler(url);
+    });
+    renderApp(["/"]);
+
+    const metricsSection = await screen.findByLabelText("Métricas del taller");
+    expect(
+      await within(metricsSection).findByText(/S\/\s*20[.,]267[.,]70/),
+    ).toBeInTheDocument();
+  });
+
   it("renderiza la tabla de cotizaciones recientes con navegación a detalle", async () => {
     mockFetch(defaultDashboardHandler);
     renderApp(["/"]);
