@@ -48,10 +48,12 @@ test.describe("Performance basica + consola limpia", () => {
       });
       page.on("pageerror", (err) => pageErrors.push(err.message));
       page.on("requestfailed", (req) => {
-        // Un abort por navegacion (SPA cambia de ruta a mitad de un fetch) no
-        // es un error real de la app.
+        // Un abort por navegacion o por un query que se cancela al
+        // desmontarse el componente (React Query) no es un error real de la
+        // app - cada motor lo reporta con su propio nombre: Chromium
+        // "ERR_ABORTED", Firefox "NS_BINDING_ABORTED", WebKit "cancelled".
         const failure = req.failure()?.errorText ?? "";
-        if (failure.includes("ERR_ABORTED")) return;
+        if (/ERR_ABORTED|NS_BINDING_ABORTED|cancelled/i.test(failure)) return;
         failedRequests.push(`${req.method()} ${req.url()} (${failure})`);
       });
       page.on("request", (req) => {
