@@ -44,9 +44,18 @@ test.describe("Cotizador E2E", () => {
     // --- Datos ---
     await page.getByLabel(/nombre \/ referencia/i).fill(testName("Cotizador"));
     await page.getByRole("combobox", { name: "Cliente" }).click();
-    const firstCustomer = page.getByRole("option").first();
+    // options[0] es siempre el placeholder "Sin cliente asignado"
+    // (CustomerSelectField.tsx lo antepone a la lista real); el primer
+    // cliente real es options[1].
+    const firstCustomer = page.getByRole("option").nth(1);
     await expect(firstCustomer).toBeVisible();
     await firstCustomer.click();
+    // Sin este click el borrador nunca se persiste (sigue mostrando "Crear
+    // borrador" en el pie durante todo el resto del wizard), y por eso
+    // "Confirmar cotizacion" queda deshabilitado para siempre en el paso
+    // PDF: no hay nada persistido que confirmar.
+    await page.getByRole("button", { name: "Crear borrador" }).click();
+    await expect(page.getByRole("button", { name: "Anular" })).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Siguiente" }).click();
 
     // --- Piezas: MULTIPRODUCT ---
@@ -127,10 +136,27 @@ test.describe("Cotizador E2E", () => {
     await page.getByRole("button", { name: /^5\s*Margen y precio/i }).click();
     await expect(page.getByText(/sugerido unitario sin igv/i).first()).toBeVisible();
 
+    // Todo lo editado desde "Crear borrador" (piezas, dimensiones, cantidad,
+    // costo de materiales, hornos) vive solo en el estado local hasta este
+    // punto. "Confirmar cotizacion" se deshabilita mientras el borrador este
+    // "dirty" (CotizadorPdfPanel.tsx: disabled={busy || !preview?.complete ||
+    // isDirty}) precisamente para impedir confirmar una simulacion que no
+    // coincide con lo ya persistido - hay que guardar antes de poder confirmar.
+    await page.getByRole("button", { name: "Guardar borrador" }).click();
+    await expect(page.getByText(/borrador guardado y recalculado/i)).toBeVisible({ timeout: 15_000 });
+
     // --- Resumen ---
     await page.getByRole("button", { name: /^6\s*Resumen/i }).click();
+    // El preview (subtotal/IGV/completo) se pide de forma asincrona al
+    // entrar al paso; leer el estado antes de que resuelva muestra el
+    // fallback "Borrador incompleto · siguiente: DATOS" (el "DATOS" es
+    // literal, `preview?.next_step ?? "DATOS"` en CotizadorPage.tsx) aunque
+    // Datos ya este completo. Se espera a que la red se asiente y a que
+    // aparezca alguno de los dos textos de estado antes de leer cual es.
+    await page.waitForLoadState("networkidle");
     const readyText = page.getByText(/lista para confirmar/i);
     const incompleteText = page.getByText(/borrador incompleto/i);
+    await expect(readyText.or(incompleteText)).toBeVisible({ timeout: 15_000 });
     const isReady = await readyText.isVisible().catch(() => false);
     if (!isReady) {
       const reason = await incompleteText.textContent().catch(() => null);
