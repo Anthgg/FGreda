@@ -21,7 +21,8 @@ substitutions:
   _API_BASE_URL: ""
   # Solo host (sin esquema): nginx antepone https:// en el location /api/.
   _BACKEND_ORIGIN: bgreda-api-303244958634.southamerica-west1.run.app
-  _PHASE: "009A1"
+  # Los labels de GCP solo aceptan minusculas/numeros/guiones.
+  _PHASE: "009a1"
 
 steps:
   # ------------------------------------------------------------------
