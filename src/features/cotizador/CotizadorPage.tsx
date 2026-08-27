@@ -111,6 +111,7 @@ export function CotizadorPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmQuotationModal, setConfirmQuotationModal] = useState(false);
   const [cachedPdf, setCachedPdf] = useState<{ url: string; filename: string; payloadStr: string } | null>(null);
+  const [showDatosRequired, setShowDatosRequired] = useState(false);
   const syncedVersion = useRef<string | null>(null);
   const routeId = useRef<number | null>(id);
 
@@ -167,6 +168,13 @@ export function CotizadorPage() {
   const stored = persisted ?? query.data;
   const preview = status === "DRAFT" ? previewQuery.data ?? stored : stored;
   const readOnly = !canEdit || status !== "DRAFT";
+  // El paso Datos es la unica fuente de nombre y cliente: nada aguas abajo
+  // (piezas, produccion, costeo...) tiene sentido sin ellos, y el backend ya
+  // bloquea la confirmacion sin cliente. Sin esta guarda la navegacion del
+  // wizard avanzaba en silencio y el usuario creia haber completado el paso.
+  const missingCustomer = !/^[1-9]\d*$/.test(draft.customerId);
+  const missingName = draft.name.trim() === "";
+  const datosComplete = !readOnly ? !missingName && !missingCustomer : true;
   const currentMode = STEPS[step]?.mode as CotizadorItemMode | null;
   const busy = create.isPending || update.isPending || confirm.isPending || cancel.isPending || duplicate.isPending;
   const mutationError = create.error ?? update.error ?? confirm.error ?? cancel.error ?? duplicate.error;
@@ -234,9 +242,14 @@ export function CotizadorPage() {
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
           <div className="mb-5"><h2 className="text-base font-semibold text-zinc-950">Datos generales</h2><p className="text-xs text-zinc-500">Identifique el pedido y asigne un cliente existente o créelo desde este flujo.</p></div>
           <div className="grid gap-5 md:grid-cols-2">
-            <TextField label="Nombre / referencia" requirement="required" value={draft.name} onChange={(name) => changeDraft({ ...draft, name })} disabled={readOnly} placeholder="Ej. Vajilla restaurante Miraflores" />
-            <CustomerSelectField value={draft.customerId} labelValue={draft.customerLabel} requirement="required" disabled={readOnly} onChange={(customerId, customerLabel) => changeDraft({ ...draft, customerId, customerLabel })} />
+            <TextField label="Nombre / referencia" requirement="required" value={draft.name} onChange={(name) => { changeDraft({ ...draft, name }); setShowDatosRequired(false); }} disabled={readOnly} placeholder="Ej. Vajilla restaurante Miraflores" />
+            <CustomerSelectField value={draft.customerId} labelValue={draft.customerLabel} requirement="required" disabled={readOnly} onChange={(customerId, customerLabel) => { changeDraft({ ...draft, customerId, customerLabel }); setShowDatosRequired(false); }} />
           </div>
+          {showDatosRequired && !datosComplete ? (
+            <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+              {missingCustomer ? "Selecciona un cliente para continuar." : "Ingresa un nombre o referencia para continuar."}
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -347,7 +360,11 @@ export function CotizadorPage() {
       <footer className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:px-5">
         <div className="flex gap-2">
           <SecondaryButton disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>Anterior</SecondaryButton>
-          <SecondaryButton disabled={step === STEPS.length - 1} onClick={() => setStep((value) => Math.min(STEPS.length - 1, value + 1))}>Siguiente</SecondaryButton>
+          <SecondaryButton disabled={step === STEPS.length - 1} onClick={() => {
+            if (step === 0 && !datosComplete) { setShowDatosRequired(true); return; }
+            setShowDatosRequired(false);
+            setStep((value) => Math.min(STEPS.length - 1, value + 1));
+          }}>Siguiente</SecondaryButton>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {canEdit && status === "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => save(true)}>Guardar y salir</SecondaryButton> : null}
