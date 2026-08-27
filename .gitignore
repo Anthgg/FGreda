@@ -47,3 +47,10 @@ desktop.ini
 
 # Indice local del MCP de memoria de codigo: no es fuente del proyecto.
 .codebase-memory/
+
+# ---- Playwright ----
+/playwright-report/
+/test-results/
+/blob-report/
+# Por si algun dia se usa storageState: nunca versionar sesiones/cookies reales.
+**/.auth/
