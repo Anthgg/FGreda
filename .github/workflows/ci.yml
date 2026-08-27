@@ -90,10 +90,16 @@ jobs:
           echo "Fail-fast verificado: PASS"
 
       - name: Arrancar el contenedor con API_BASE_URL y comprobar que sirve la SPA
+        # BACKEND_ORIGIN es obligatorio desde Fase 009A.1: nginx lo usa en
+        # location /api/ (proxy_pass https://${BACKEND_ORIGIN}), y sin el
+        # envsubst deja "${BACKEND_ORIGIN}" literal en el config — nginx no
+        # arranca (variable nginx desconocida). No hace falta que resuelva
+        # de verdad para este smoke: ningun test aqui llama a /api/.
         run: |
           docker run -d --name fgreda-ci -p 8080:8080 \
             -e PORT=8080 \
             -e API_BASE_URL=http://test-backend-ci \
+            -e BACKEND_ORIGIN=backend-ci.internal.example \
             fgreda:ci
           for intento in $(seq 1 30); do
             if curl -fsS http://localhost:8080/ -o /dev/null; then
@@ -131,6 +137,26 @@ jobs:
             exit 1
           fi
           echo "runtime-config.js: PASS"
+
+      - name: Verificar que el proxy same-origin /api/ quedo bien configurado
+        # No prueba conectividad real al backend (BACKEND_ORIGIN es un host
+        # ficticio en este job) - verifica que envsubst sustituyo la
+        # plantilla correctamente y que nginx arranco con ese location.
+        run: |
+          CONFIG=$(docker exec fgreda-ci cat /etc/nginx/conf.d/default.conf)
+          if ! echo "$CONFIG" | grep -q "location /api/"; then
+            echo "ERROR: falta el location /api/ en el nginx renderizado"
+            exit 1
+          fi
+          if ! echo "$CONFIG" | grep -q "proxy_pass https://backend-ci.internal.example"; then
+            echo "ERROR: BACKEND_ORIGIN no se sustituyo en proxy_pass"
+            exit 1
+          fi
+          if echo "$CONFIG" | grep -q '\${BACKEND_ORIGIN}'; then
+            echo "ERROR: quedo un \${BACKEND_ORIGIN} literal sin sustituir"
+            exit 1
+          fi
+          echo "Proxy /api/ same-origin: PASS"
 
       - name: Verificar Cache-Control no-store en runtime-config.js
         run: |

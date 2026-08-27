@@ -15,6 +15,18 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Disponible para quien quiera correr `npm run dev` con el mismo patron
+    // same-origin /api que produccion (Fase 009A.1): configura
+    // VITE_API_BASE_URL="" en .env.local y las llamadas relativas
+    // /api/v1/... las reenvia este proxy a un backend local en :8000. No es
+    // obligatorio - VITE_API_BASE_URL con una URL absoluta (el flujo de
+    // siempre) sigue funcionando igual y no pasa por aqui.
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     globals: true,

@@ -1,10 +1,13 @@
 /**
  * Tests del modulo de configuracion runtime.
  *
- * Verifica los tres comportamientos de resolveApiBaseUrl:
+ * Verifica los comportamientos de resolveApiBaseUrl:
  *   1. window.__GREDA_CONFIG__.API_BASE_URL tiene maxima prioridad.
- *   2. VITE_API_BASE_URL actua como fallback (desarrollo local).
- *   3. Si ninguna esta configurada, lanza error explicito.
+ *   2. Su cadena vacia "" es un valor valido ("mismo origen", Fase 009A.1),
+ *      no equivalente a "no configurada" — no cae a VITE_API_BASE_URL.
+ *   3. VITE_API_BASE_URL actua como fallback (desarrollo local) solo cuando
+ *      __GREDA_CONFIG__ no existe en absoluto.
+ *   4. Si ninguna esta configurada, lanza error explicito.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -65,14 +68,16 @@ describe("resolveApiBaseUrl", () => {
     expect(() => resolveApiBaseUrl()).toThrow("API_BASE_URL no configurada");
   });
 
-  it("cae a VITE_API_BASE_URL si __GREDA_CONFIG__ tiene API_BASE_URL vacia", async () => {
+  it("respeta API_BASE_URL vacia como 'mismo origen' y NO cae a VITE_API_BASE_URL (Fase 009A.1)", async () => {
+    // "" es un valor deliberado (proxy same-origin de nginx), no ausencia de
+    // configuracion: las rutas de la API quedan relativas al origen actual.
     window.__GREDA_CONFIG__ = { API_BASE_URL: "" };
     vi.stubEnv("VITE_API_BASE_URL", "https://fallback-backend.example.com");
 
     const { resolveApiBaseUrl } = await import("@/config");
     const url = resolveApiBaseUrl();
 
-    expect(url).toBe("https://fallback-backend.example.com");
+    expect(url).toBe("");
   });
 
   // Verificar que el ORIGINAL_META_ENV no fue mutado por los tests

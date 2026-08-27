@@ -2,7 +2,12 @@
 #
 # Pipeline reproducible y auditable para despliegue en Cloud Run.
 # El bundle se construye SIN incrustar la URL del backend.
-# La URL se inyecta en runtime via la variable de entorno API_BASE_URL.
+#
+# Desde Fase 009A.1, API_BASE_URL="" (mismo origen): el navegador llama a
+# /api/v1/... en el propio origen de fgreda-web y es nginx quien reenvia
+# /api/ al backend real (BACKEND_ORIGIN) — ver nginx/default.conf.template.
+# Esto cierra D3 (WebKit/Safari bloqueaba las cookies de sesion en llamadas
+# cross-site directas al dominio del backend).
 #
 # Ejecutar manualmente:
 #   gcloud builds submit --config cloudbuild.yaml .
@@ -11,8 +16,12 @@ substitutions:
   _REGION: southamerica-west1
   _SERVICE: fgreda-web
   _IMAGE: southamerica-west1-docker.pkg.dev/cotizador-greda/cloud-run-source-deploy/fgreda-web
-  _API_BASE_URL: https://bgreda-api-303244958634.southamerica-west1.run.app
-  _PHASE: "007"
+  # "" deliberado: mismo origen via el proxy de nginx (Fase 009A.1). Ver
+  # nginx/docker-entrypoint.d/40-generate-runtime-config.sh.
+  _API_BASE_URL: ""
+  # Solo host (sin esquema): nginx antepone https:// en el location /api/.
+  _BACKEND_ORIGIN: bgreda-api-303244958634.southamerica-west1.run.app
+  _PHASE: "009A1"
 
 steps:
   # ------------------------------------------------------------------
@@ -74,7 +83,9 @@ steps:
 
   # ------------------------------------------------------------------
   # 4. Desplegar nueva revision sin trafico todavia
-  #    API_BASE_URL se inyecta aqui como variable de entorno del contenedor.
+  #    API_BASE_URL (vacia = mismo origen) y BACKEND_ORIGIN (destino real
+  #    del proxy /api/ de nginx) se inyectan aqui como variables de entorno
+  #    del contenedor.
   # ------------------------------------------------------------------
   - id: deploy-revision
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -88,7 +99,7 @@ steps:
           --project=$PROJECT_ID \
           --no-traffic \
           --tag=p007-$SHORT_SHA \
-          --set-env-vars="API_BASE_URL=$_API_BASE_URL" \
+          --set-env-vars="^|^API_BASE_URL=$_API_BASE_URL|BACKEND_ORIGIN=$_BACKEND_ORIGIN" \
           --update-labels=git-sha=$COMMIT_SHA,repository=fgreda,phase=$_PHASE
         echo "Revision desplegada sin trafico. Tag: p007-$SHORT_SHA"
     waitFor:
@@ -114,15 +125,38 @@ steps:
           exit 1
         fi
 
-        # runtime-config.js debe existir y no estar vacio
+        # runtime-config.js debe existir y declarar API_BASE_URL="" (mismo
+        # origen, Fase 009A.1) — no la URL absoluta del backend.
         BODY=$(curl -fsS --max-time 15 "$$TAG_URL/runtime-config.js")
         echo "  /runtime-config.js: $$(echo "$$BODY" | head -1)"
         if ! echo "$$BODY" | grep -q "__GREDA_CONFIG__"; then
           echo "ERROR: runtime-config.js no contiene __GREDA_CONFIG__"
           exit 1
         fi
-        if ! echo "$$BODY" | grep -q "$_API_BASE_URL"; then
-          echo "ERROR: runtime-config.js no contiene la URL esperada del backend"
+        if ! echo "$$BODY" | grep -q '"API_BASE_URL": ""'; then
+          echo "ERROR: runtime-config.js deberia declarar API_BASE_URL vacia (mismo origen)"
+          exit 1
+        fi
+
+        # El proxy same-origin /api/ debe llegar al backend real: csrf es
+        # publico y no requiere sesion, ideal para probar el reenvio sin
+        # mutar nada. Si esto responde bien, D3 (WebKit) esta resuelto,
+        # porque el navegador ya nunca necesita golpear el dominio del
+        # backend directamente.
+        API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$$TAG_URL/api/v1/auth/csrf")
+        echo "  /api/v1/auth/csrf (via proxy nginx): HTTP $$API_STATUS"
+        if [ "$$API_STATUS" != "200" ]; then
+          echo "ERROR: el proxy same-origin /api/ no llega al backend (got $$API_STATUS)"
+          exit 1
+        fi
+
+        # La URL visible para el navegador debe ser la del propio frontend,
+        # nunca la del backend — smoke basico de que no hay una redirect a
+        # bgreda-api-*.run.app en el camino.
+        API_EFFECTIVE_URL=$(curl -s -o /dev/null -w '%{url_effective}' --max-time 15 "$$TAG_URL/api/v1/auth/csrf")
+        echo "  URL efectiva: $$API_EFFECTIVE_URL"
+        if echo "$$API_EFFECTIVE_URL" | grep -q "bgreda-api"; then
+          echo "ERROR: la request termino en el dominio del backend, no fue same-origin"
           exit 1
         fi
 
@@ -186,6 +220,13 @@ steps:
         echo "  /runtime-config.js Cache-Control: $$CACHE"
         if ! echo "$$CACHE" | grep -qi "no-store"; then
           echo "WARN: Cache-Control no incluye no-store en runtime-config.js"
+        fi
+
+        API_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$$BASE/api/v1/auth/csrf")
+        echo "  /api/v1/auth/csrf (via proxy nginx): HTTP $$API_STATUS"
+        if [ "$$API_STATUS" != "200" ]; then
+          echo "ERROR: el proxy same-origin /api/ no responde en produccion (got $$API_STATUS)"
+          exit 1
         fi
 
         echo "Smoke produccion: PASS"
