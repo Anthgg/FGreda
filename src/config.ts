@@ -14,9 +14,13 @@
  * origen no hay tal restriccion. Una URL absoluta (p. ej. en desarrollo
  * apuntando a otro backend) sigue siendo valida si hace falta.
  *
- * En desarrollo local el cliente HTTP recae en VITE_API_BASE_URL de .env.local,
- * o en el proxy de Vite dev server para /api (ver vite.config.ts) si no se
- * define ninguna de las dos.
+ * En desarrollo local el cliente HTTP recae en VITE_API_BASE_URL de
+ * .env.local — a diferencia de runtime config, aqui la cadena vacia NO
+ * significa "mismo origen": sigue tratandose como "no configurada" (ver
+ * caso 2 mas abajo) para no romper el fallback de error explicito.
+ * Para reproducir el patron same-origin en desarrollo, apunte
+ * VITE_API_BASE_URL al propio origen del dev server (p. ej.
+ * http://localhost:5173) y use su proxy para /api (ver vite.config.ts).
  *
  * IMPORTANTE: Este modulo no expone ningun secreto.
  * API_BASE_URL es una URL publica del backend (o vacia, para mismo origen).
