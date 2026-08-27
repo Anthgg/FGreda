@@ -91,15 +91,17 @@ jobs:
 
       - name: Arrancar el contenedor con API_BASE_URL y comprobar que sirve la SPA
         # BACKEND_ORIGIN es obligatorio desde Fase 009A.1: nginx lo usa en
-        # location /api/ (proxy_pass https://${BACKEND_ORIGIN}), y sin el
-        # envsubst deja "${BACKEND_ORIGIN}" literal en el config — nginx no
-        # arranca (variable nginx desconocida). No hace falta que resuelva
-        # de verdad para este smoke: ningun test aqui llama a /api/.
+        # location /api/ (proxy_pass https://${BACKEND_ORIGIN}). Con un host
+        # fijo (no una variable de nginx), proxy_pass lo resuelve por DNS al
+        # ARRANCAR — nginx no inicia si no resuelve ("host not found in
+        # upstream"), asi que hace falta un host real, aunque ningun test
+        # de este job llame a /api/ de verdad. example.com (dominio de
+        # prueba reservado por IANA, RFC 2606) siempre resuelve.
         run: |
           docker run -d --name fgreda-ci -p 8080:8080 \
             -e PORT=8080 \
             -e API_BASE_URL=http://test-backend-ci \
-            -e BACKEND_ORIGIN=backend-ci.internal.example \
+            -e BACKEND_ORIGIN=example.com \
             fgreda:ci
           for intento in $(seq 1 30); do
             if curl -fsS http://localhost:8080/ -o /dev/null; then
@@ -148,7 +150,7 @@ jobs:
             echo "ERROR: falta el location /api/ en el nginx renderizado"
             exit 1
           fi
-          if ! echo "$CONFIG" | grep -q "proxy_pass https://backend-ci.internal.example"; then
+          if ! echo "$CONFIG" | grep -q "proxy_pass https://example.com"; then
             echo "ERROR: BACKEND_ORIGIN no se sustituyo en proxy_pass"
             exit 1
           fi
