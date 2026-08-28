@@ -148,6 +148,47 @@ test.describe("Cotizador: medidas personalizadas (Fase 009B)", () => {
     await expect(page.getByRole("radio", { name: /personalizar medidas/i })).toBeChecked();
   });
 
+  test("CONFIRMED_FIRING_CUSTOM_OVERRIDE_BLOCKED: no se puede personalizar sobre una quema confirmada", async ({
+    page,
+  }) => {
+    await login(page);
+    await startDraftWithPiece(page, "Dim-FiringGuard");
+
+    // La regla de dominio: una quema CONFIRMADA es la verdad fisica
+    // historica; su costo y volumen ya no se simulan, asi que sustituir sus
+    // medidas produciria una cotizacion que muestra una pieza distinta de la
+    // que realmente cobra.
+    await page.getByRole("button", { name: /^3\s*Producción/i }).click();
+    const firingSource = page.getByRole("combobox", { name: /fuente del costo de quema/i });
+    await firingSource.click();
+    const options = page.getByRole("option");
+    // options[0] es "Simulación integrada"; una linea confirmada real, si la
+    // hay para este producto, viene despues.
+    const optionCount = await options.count();
+    test.skip(
+      optionCount < 2,
+      "No hay una linea de quema confirmada para este producto en el ambiente actual",
+    );
+    await options.nth(1).click();
+
+    await page.getByRole("button", { name: /^2\s*Piezas/i }).click();
+    await page.getByRole("radio", { name: /personalizar medidas/i }).click();
+    await page.getByLabel(/ancho \(cm\)/i).fill("50");
+    await page.getByLabel(/alto \(cm\)/i).fill("50");
+    await page.getByLabel(/largo \(cm\)/i).fill("50");
+
+    // Bloqueo explicito: la cotizacion no puede quedar completa ni confirmarse.
+    await page.getByRole("button", { name: /^6\s*Resumen/i }).click();
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/borrador incompleto/i)).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: /^7\s*PDF/i }).click();
+    const confirmButton = page.getByRole("button", { name: "Confirmar cotización", exact: true });
+    if (await confirmButton.isVisible().catch(() => false)) {
+      await expect(confirmButton).toBeDisabled();
+    }
+  });
+
   test("CASO 4 CONFIRMED_SNAPSHOT_IMMUTABLE: tras confirmar no se puede editar la medida", async ({
     page,
   }) => {
