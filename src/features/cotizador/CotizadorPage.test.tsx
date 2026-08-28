@@ -62,7 +62,12 @@ function itemOut(input: Record<string, unknown>, index: number) {
     height: dimensions.height ?? null,
     length: dimensions.length ?? String(selected.length),
     depth: dimensions.depth ?? null,
+    standard_width: String(selected.width),
+    standard_height: null,
+    standard_length: String(selected.length),
+    standard_depth: null,
     editable_dimensions: ["height", "depth"] as Array<"height" | "depth">,
+    dimensions_overridden: false,
     quantity,
     recipe_id: null,
     recipe_version_id: null,
@@ -242,7 +247,164 @@ describe("Cotizador integral", () => {
     expect(screen.getByLabelText(/Largo \(cm\)/i)).toBeDisabled();
     expect(screen.getByLabelText(/Alto \(cm\)/i)).toBeEnabled();
     expect(screen.getByLabelText(/Profundidad \(cm\)/i)).toBeEnabled();
-    expect(screen.getByText(/Sólo se habilitan datos ausentes/i)).toBeInTheDocument();
+    // Fase 009B: por defecto la linea arranca en modo estandar; el aviso de
+    // "solo se habilitan datos ausentes" se reemplazo por el badge de modo.
+    expect(screen.getByText("Medidas estándar")).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------
+  // Fase 009B — medidas personalizadas por linea de cotizacion
+  // ---------------------------------------------------------------------
+
+  /** Agrega una pieza en el paso Piezas y devuelve el helper de usuario. */
+  async function addPiece(user: ReturnType<typeof userEvent.setup>, label = "Plato palta QA") {
+    await screen.findByRole("heading", { name: "Nuevo cotizador." });
+    await user.click(screen.getByRole("button", { name: /Piezas/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    await user.click(screen.getByRole("combobox", { name: "Pieza terminada" }));
+    await user.click(await screen.findByText(label));
+  }
+
+  it("STANDARD_MODE_DEFAULT: una pieza nueva arranca en modo estándar", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await addPiece(user);
+
+    expect(screen.getByRole("radio", { name: /Usar medidas estándar/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Personalizar medidas/i })).not.toBeChecked();
+    expect(screen.getByText("Medidas estándar")).toBeInTheDocument();
+    // Las medidas que el maestro sí define quedan protegidas.
+    expect(screen.getByLabelText(/Ancho \(cm\)/i)).toBeDisabled();
+  });
+
+  it("CUSTOM_MODE_ENABLED + CUSTOM_PREFILLS_STANDARD: activar personalizar prellena con el maestro", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await addPiece(user);
+
+    await user.click(screen.getByRole("radio", { name: /Personalizar medidas/i }));
+
+    expect(screen.getByRole("radio", { name: /Personalizar medidas/i })).toBeChecked();
+    expect(screen.getByText("Medidas personalizadas")).toBeInTheDocument();
+    // Prellenado con el estandar del maestro (width=20, length=20), para que
+    // el usuario solo ajuste lo que necesita.
+    expect(screen.getByLabelText(/Ancho \(cm\)/i)).toHaveValue("20");
+    expect(screen.getByLabelText(/Largo \(cm\)/i)).toHaveValue("20");
+  });
+
+  it("CUSTOM_EDITABLE: en modo personalizado toda dimensión es editable", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await addPiece(user);
+    await user.click(screen.getByRole("radio", { name: /Personalizar medidas/i }));
+
+    // Ancho y Largo venian bloqueados por el maestro en modo estandar.
+    for (const label of [/Ancho \(cm\)/i, /Alto \(cm\)/i, /Largo \(cm\)/i, /Profundidad \(cm\)/i]) {
+      expect(screen.getByLabelText(label)).toBeEnabled();
+    }
+
+    const ancho = screen.getByLabelText(/Ancho \(cm\)/i);
+    await user.clear(ancho);
+    await user.type(ancho, "15");
+    expect(ancho).toHaveValue("15");
+  });
+
+  it("RETURN_TO_STANDARD: volver a estándar restaura exactamente el maestro", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await addPiece(user);
+
+    await user.click(screen.getByRole("radio", { name: /Personalizar medidas/i }));
+    const ancho = screen.getByLabelText(/Ancho \(cm\)/i);
+    await user.clear(ancho);
+    await user.type(ancho, "15");
+    expect(screen.getByLabelText(/Ancho \(cm\)/i)).toHaveValue("15");
+
+    await user.click(screen.getByRole("radio", { name: /Usar medidas estándar/i }));
+
+    expect(screen.getByLabelText(/Ancho \(cm\)/i)).toHaveValue("20");
+    expect(screen.getByLabelText(/Ancho \(cm\)/i)).toBeDisabled();
+    expect(screen.getByText("Medidas estándar")).toBeInTheDocument();
+  });
+
+  it("VALIDATION_REQUIRED: una dimensión <= 0 muestra error inline", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await addPiece(user);
+    await user.click(screen.getByRole("radio", { name: /Personalizar medidas/i }));
+
+    const ancho = screen.getByLabelText(/Ancho \(cm\)/i);
+    await user.clear(ancho);
+    await user.type(ancho, "0");
+    expect(await screen.findByText("Debe ser mayor que 0.")).toBeInTheDocument();
+
+    await user.clear(ancho);
+    await user.type(ancho, "-3");
+    expect(screen.getByText("Debe ser mayor que 0.")).toBeInTheDocument();
+
+    await user.clear(ancho);
+    await user.type(ancho, "15");
+    expect(screen.queryByText("Debe ser mayor que 0.")).not.toBeInTheDocument();
+  });
+
+  it("MULTIPRODUCT_INDEPENDENT: cada línea mantiene su propio modo de medidas", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await addPiece(user);
+
+    // Segunda pieza, producto distinto.
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    const selectors = screen.getAllByRole("combobox", { name: "Pieza terminada" });
+    await user.click(selectors[1]!);
+    await user.click(await screen.findByText("Bowl mediano"));
+
+    // Solo la SEGUNDA linea pasa a personalizada.
+    const customRadios = screen.getAllByRole("radio", { name: /Personalizar medidas/i });
+    expect(customRadios).toHaveLength(2);
+    await user.click(customRadios[1]!);
+
+    const standardRadios = screen.getAllByRole("radio", { name: /Usar medidas estándar/i });
+    expect(standardRadios[0]).toBeChecked();
+    expect(customRadios[1]).toBeChecked();
+    expect(customRadios[0]).not.toBeChecked();
+    expect(screen.getByText("Medidas personalizadas")).toBeInTheDocument();
+    expect(screen.getByText("Medidas estándar")).toBeInTheDocument();
+  });
+
+  it("SAVE_REOPEN_PRESERVED: el payload envía las medidas efectivas y dimensions_overridden", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+
+    // El cliente no hace falta aqui: lo que se verifica es la forma del
+    // payload de medidas, que el preview envia igual con la cotizacion aun
+    // incompleta.
+    await addPiece(user);
+    await user.click(screen.getByRole("radio", { name: /Personalizar medidas/i }));
+    const ancho = screen.getByLabelText(/Ancho \(cm\)/i);
+    await user.clear(ancho);
+    await user.type(ancho, "15");
+
+    await waitFor(() => {
+      const previewCall = [...fetchSpy.mock.calls]
+        .reverse()
+        .find(([url]) => String(url).includes("/quotation-builder/preview"));
+      expect(previewCall).toBeDefined();
+      const body = JSON.parse(String((previewCall![1] as RequestInit).body)) as {
+        items: Array<{ dimensions: Record<string, string>; dimensions_overridden: boolean }>;
+      };
+      expect(body.items[0]!.dimensions_overridden).toBe(true);
+      // En modo personalizado viajan TODAS las medidas con valor, no solo
+      // las ausentes en el maestro.
+      expect(body.items[0]!.dimensions.width).toBe("15");
+      expect(body.items[0]!.dimensions.length).toBe("20");
+    });
   });
 
   it("crea un DRAFT progresivo mediante el endpoint dedicado", async () => {

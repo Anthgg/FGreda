@@ -23,6 +23,12 @@ const DIMENSIONS = [
   ["depth", "Profundidad (cm)"],
 ] as const;
 
+/** Una dimension solo es valida si es un numero estrictamente mayor que 0. */
+const isPositive = (value: string) => {
+  const parsed = Number(value.trim().replace(",", "."));
+  return Number.isFinite(parsed) && parsed > 0;
+};
+
 const snapshotDecimal = (snapshot: Record<string, unknown>, key: string) => {
   const value = snapshot[key];
   return value === null || value === undefined ? "—" : formatDecimalString(String(value), 2);
@@ -97,6 +103,34 @@ export function CotizadorItemCard({
   const manualPriceOverridesMargin = item.commercialSaleUnitPrice.trim() !== "";
 
   const patch = (values: Partial<CotizadorItemDraft>) => onChange({ ...item, ...values });
+
+  // `name` unico por linea: sin esto, dos productos en la misma cotizacion
+  // compartirian el grupo de radios y elegir el modo en uno desmarcaria el otro.
+  const dimensionsModeName = `dimensions-mode-${item.id ?? `pos-${index}`}`;
+  const standardSummary =
+    DIMENSIONS.filter(([field]) => item.standardDimensions[field].trim())
+      .map(([field, label]) => `${label.replace(" (cm)", "")} ${item.standardDimensions[field]}`)
+      .join(" · ") || "sin medidas registradas";
+
+  const setDimensionsMode = (custom: boolean) => {
+    if (custom === item.dimensionsOverridden) return;
+    patch({
+      dimensionsOverridden: custom,
+      // Al personalizar se parte de la medida estandar (si existe) para que el
+      // usuario ajuste solo lo necesario; al volver a estandar se restaura
+      // exactamente el maestro. Un campo que el maestro no tiene conserva lo
+      // ya escrito: es el CASO C (completar un producto sin medidas) y
+      // borrarlo obligaria a reescribirlo.
+      dimensions: Object.fromEntries(
+        DIMENSIONS.map(([field]) => {
+          const master = item.standardDimensions[field];
+          if (custom) return [field, item.dimensions[field] || master];
+          return [field, master || item.dimensions[field]];
+        }),
+      ) as CotizadorItemDraft["dimensions"],
+    });
+  };
+
   const techniqueLabels = new Map((techniques.data?.items ?? []).map((value) => [String(value.id), value.name]));
   const additionalLabels = new Map((additionals.data?.items ?? []).map((value) => [String(value.id), value.name]));
   const otherCostLabels = new Map((otherCosts.data?.items ?? []).map((value) => [String(value.id), value.name]));
@@ -189,12 +223,68 @@ export function CotizadorItemCard({
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-zinc-800">Dimensiones técnicas</p>
-                <p className="text-[11px] text-zinc-500">Sólo se habilitan datos ausentes en el maestro.</p>
+                <span
+                  className={[
+                    "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                    item.dimensionsOverridden
+                      ? "bg-orange-100 text-orange-900"
+                      : "bg-zinc-100 text-zinc-600",
+                  ].join(" ")}
+                >
+                  {item.dimensionsOverridden ? "Medidas personalizadas" : "Medidas estándar"}
+                </span>
               </div>
+
+              <p className="mb-2 text-[11px] text-zinc-500">
+                Estándar del maestro:{" "}
+                <span className="font-medium tabular-nums text-zinc-700">
+                  {standardSummary}
+                </span>
+              </p>
+
+              {/* Radiogroup real (no divs con onClick): navegable con teclado
+                  y anunciado por lectores de pantalla. */}
+              <fieldset
+                className="mb-3 flex flex-wrap gap-4 border-0 p-0"
+                disabled={disabled}
+              >
+                <legend className="sr-only">Modo de medidas para esta pieza</legend>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-700">
+                  <input
+                    type="radio"
+                    name={dimensionsModeName}
+                    value="STANDARD"
+                    checked={!item.dimensionsOverridden}
+                    onChange={() => setDimensionsMode(false)}
+                    disabled={disabled}
+                    className="h-4 w-4 accent-zinc-900"
+                  />
+                  Usar medidas estándar
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-700">
+                  <input
+                    type="radio"
+                    name={dimensionsModeName}
+                    value="CUSTOM"
+                    checked={item.dimensionsOverridden}
+                    onChange={() => setDimensionsMode(true)}
+                    disabled={disabled}
+                    className="h-4 w-4 accent-orange-600"
+                  />
+                  Personalizar medidas
+                </label>
+              </fieldset>
+
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {DIMENSIONS.map(([field, label]) => {
-                  const editable = item.editableDimensions.includes(field);
+                  // Personalizado: todo editable. Estandar: solo lo que el
+                  // maestro no tiene (completar un producto sin medidas).
+                  const editable =
+                    item.dimensionsOverridden || item.editableDimensions.includes(field);
                   const requiredForProduction = field !== "depth";
+                  const value = item.dimensions[field];
+                  const invalid =
+                    editable && requiredForProduction && value.trim() !== "" && !isPositive(value);
                   return (
                     <TextField
                       key={field}
@@ -204,17 +294,20 @@ export function CotizadorItemCard({
                           ? (requiredForProduction ? "required" : "optional")
                           : "automatic"
                       }
-                      value={item.dimensions[field]}
-                      onChange={(value) => patch({ dimensions: { ...item.dimensions, [field]: value } })}
+                      value={value}
+                      onChange={(next) => patch({ dimensions: { ...item.dimensions, [field]: next } })}
                       disabled={disabled || !editable}
                       readOnly={!editable}
                       inputMode="decimal"
+                      {...(invalid ? { error: "Debe ser mayor que 0." } : {})}
                       hint={
-                        editable
-                          ? requiredForProduction
-                            ? "Se completará una sola vez en Productos."
-                            : "El Excel no usa esta medida para la quema."
-                          : "Protegido por el maestro."
+                        item.dimensionsOverridden
+                          ? "Sólo para esta cotización; el maestro no cambia."
+                          : editable
+                            ? requiredForProduction
+                              ? "El maestro no tiene esta medida."
+                              : "El Excel no usa esta medida para la quema."
+                            : "Protegido por el maestro."
                       }
                     />
                   );
