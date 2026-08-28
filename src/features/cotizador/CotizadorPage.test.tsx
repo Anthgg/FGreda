@@ -68,6 +68,8 @@ function itemOut(input: Record<string, unknown>, index: number) {
     standard_depth: null,
     editable_dimensions: ["height", "depth"] as Array<"height" | "depth">,
     dimensions_overridden: false,
+    low_kiln_selected: input["low_kiln_selected"] !== false,
+    high_kiln_selected: input["high_kiln_selected"] !== false,
     quantity,
     recipe_id: null,
     recipe_version_id: null,
@@ -402,6 +404,30 @@ describe("Cotizador integral", () => {
     await user.click(lowChecks[1]!);
     expect(lowChecks[0]).toBeChecked();
     expect(lowChecks[1]).not.toBeChecked();
+  });
+
+  it("SAVE_REOPEN: la seleccion de quemas se lee del flag, no de si quedo un horno", async () => {
+    // Regresion de la revision del PR #27: una quema que hereda el horno de
+    // cabecera no trae *_kiln_id propio; deducir la seleccion del id la
+    // apagaba en silencio al reabrir.
+    const { cotizadorFromOutput } = await import("@/features/cotizador/draft");
+    const reopened = cotizadorFromOutput(
+      builder({
+        kiln_id: 1,
+        items: [
+          {
+            ...itemOut({ product_id: 42, quantity: 10 }, 0),
+            // Hereda el horno de cabecera: sin id propio pero SI seleccionada.
+            low_kiln_id: null,
+            high_kiln_id: null,
+            low_kiln_selected: true,
+            high_kiln_selected: false,
+          },
+        ],
+      }),
+    );
+    expect(reopened.items[0]?.lowKilnSelected).toBe(true);
+    expect(reopened.items[0]?.highKilnSelected).toBe(false);
   });
 
   it("expone seis etapas separadas de Cotizaciones y sólo solicita preview al backend", async () => {

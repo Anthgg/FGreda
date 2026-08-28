@@ -197,10 +197,11 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
     materialGramsPerPiece: decimal(item.material_grams_per_piece),
     lowKilnId: decimal(item.low_kiln_id),
     highKilnId: decimal(item.high_kiln_id),
-    // Al reabrir, la seleccion se deduce de lo que el backend devolvio: un
-    // borrador de solo-baja no debe resucitar como baja+alta.
-    lowKilnSelected: item.low_kiln_id != null,
-    highKilnSelected: item.high_kiln_id != null,
+    // La seleccion viene del flag que el backend persiste, no de si quedo un
+    // horno: una quema que hereda el horno de cabecera no trae *_kiln_id
+    // propio, y deducirla del id la apagaria en silencio al reabrir.
+    lowKilnSelected: item.low_kiln_selected,
+    highKilnSelected: item.high_kiln_selected,
     factorKilnId: decimal(item.factor_kiln_id),
     techniqueIds: idsFromSnapshots(item.techniques, "technique_id"),
     techniqueQuantities: quantitiesFromSnapshots(item.techniques, "technique_id", "quantity"),

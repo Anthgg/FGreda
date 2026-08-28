@@ -110,6 +110,8 @@ describe("borrador del Cotizador", () => {
         standard_depth: "2.25",
         editable_dimensions: [],
         dimensions_overridden: false,
+        low_kiln_selected: true,
+        high_kiln_selected: true,
         quantity: 24,
         recipe_id: 5,
         recipe_version_id: 6,

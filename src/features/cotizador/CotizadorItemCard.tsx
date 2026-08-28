@@ -169,6 +169,7 @@ export function CotizadorItemCard({
   preview,
   currencySymbol = "S/",
   productionSummary,
+  headerKilnId = "",
   kilns = [],
   disabled,
   excludedProductIds,
@@ -182,6 +183,8 @@ export function CotizadorItemCard({
   currencySymbol?: string | undefined;
   /** production_summary del preview: las hornadas viven por SESION, no por item. */
   productionSummary?: Record<string, unknown> | undefined;
+  /** Horno de cabecera de la cotizacion, que una linea puede heredar. */
+  headerKilnId?: string | undefined;
   kilns?: KilnOut[] | undefined;
   disabled: boolean;
   excludedProductIds: number[];
@@ -225,10 +228,15 @@ export function CotizadorItemCard({
       kilnId: string,
     ): FiringPlanEntry | null => {
       if (!selected) return null;
+      // El horno EFECTIVO: el propio de la linea o, si la hereda, el de
+      // cabecera. Sin esto, una linea que hereda aceptaria cualquier sesion
+      // de ese tipo de quema y podria mostrar las hornadas, la ocupacion y el
+      // costo del horno de OTRO producto de la misma cotizacion.
+      const effectiveKilnId = kilnId || headerKilnId;
       const session = sessions.find(
         (value) =>
           value["firing_type"] === firingType &&
-          (!kilnId || String(value["kiln_id"]) === kilnId),
+          (!effectiveKilnId || String(value["kiln_id"]) === effectiveKilnId),
       );
       if (!session) return null;
       const batches = Number(session["batches"] ?? 1);
