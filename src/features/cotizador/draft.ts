@@ -32,6 +32,14 @@ export interface CotizadorItemDraft {
   materialGramsPerPiece: string;
   lowKilnId: string;
   highKilnId: string;
+  /**
+   * Fase 009C: quema baja y alta son INDEPENDIENTES. Existen aparte del id de
+   * horno para poder decir "quiero quema baja, con el horno de cabecera" sin
+   * repetir el id, y para que desmarcar una quema no borre el horno elegido
+   * (si el usuario se arrepiente, lo recupera tal cual).
+   */
+  lowKilnSelected: boolean;
+  highKilnSelected: boolean;
   factorKilnId: string;
   techniqueIds: string[];
   techniqueQuantities: Record<string, string>;
@@ -77,6 +85,8 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   materialGramsPerPiece: "",
   lowKilnId: "",
   highKilnId: "",
+  lowKilnSelected: true,
+  highKilnSelected: true,
   factorKilnId: "",
   techniqueIds: [],
   techniqueQuantities: {},
@@ -118,6 +128,8 @@ export function itemFromProduct(product: Product): CotizadorItemDraft {
     materialGramsPerPiece: "",
     lowKilnId: "",
     highKilnId: "",
+    lowKilnSelected: true,
+    highKilnSelected: true,
     factorKilnId: "",
     techniqueIds: [],
     techniqueQuantities: {},
@@ -185,6 +197,10 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
     materialGramsPerPiece: decimal(item.material_grams_per_piece),
     lowKilnId: decimal(item.low_kiln_id),
     highKilnId: decimal(item.high_kiln_id),
+    // Al reabrir, la seleccion se deduce de lo que el backend devolvio: un
+    // borrador de solo-baja no debe resucitar como baja+alta.
+    lowKilnSelected: item.low_kiln_id != null,
+    highKilnSelected: item.high_kiln_id != null,
     factorKilnId: decimal(item.factor_kiln_id),
     techniqueIds: idsFromSnapshots(item.techniques, "technique_id"),
     techniqueQuantities: quantitiesFromSnapshots(item.techniques, "technique_id", "quantity"),
@@ -263,8 +279,10 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         ...(item.materialGramsPerPiece.trim()
           ? { material_grams_per_piece: item.materialGramsPerPiece.trim() }
           : {}),
-        ...(lowKilnId ? { low_kiln_id: lowKilnId } : {}),
-        ...(highKilnId ? { high_kiln_id: highKilnId } : {}),
+        ...(item.lowKilnSelected && lowKilnId ? { low_kiln_id: lowKilnId } : {}),
+        ...(item.highKilnSelected && highKilnId ? { high_kiln_id: highKilnId } : {}),
+        low_kiln_selected: item.lowKilnSelected,
+        high_kiln_selected: item.highKilnSelected,
         ...(factorKilnId ? { factor_kiln_id: factorKilnId } : {}),
         techniques: item.techniqueIds.map((id, index) => ({
           technique_id: Number(id),

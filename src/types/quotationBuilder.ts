@@ -33,6 +33,12 @@ export interface QuotationBuilderItemIn {
   material_grams_per_piece?: string;
   low_kiln_id?: number;
   high_kiln_id?: number;
+  /**
+   * Fase 009C: quema baja y alta son INDEPENDIENTES. Una pieza puede
+   * necesitar solo baja, solo alta o ambas (al menos una).
+   */
+  low_kiln_selected?: boolean;
+  high_kiln_selected?: boolean;
   factor_kiln_id?: number;
   techniques: TechniqueSelectionIn[];
   additionals: AdditionalSelectionIn[];

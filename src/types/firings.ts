@@ -126,6 +126,12 @@ export interface FiringSessionOut {
   physical_occupancy_percentage: string;
   subtotal: string;
   capacity_exceeded: boolean;
+  /**
+   * Fase 009C: hornadas necesarias para esta sesion. En una hoja de quema
+   * real siempre es 1 (la hoja describe UNA hornada fisica); el Cotizador,
+   * que planifica, puede necesitar varias.
+   */
+  batches: number;
   sort_order: number;
 }
 
@@ -167,6 +173,8 @@ export interface FiringCalculateOut {
   occupancy_percentage: string;
   occupancy_factor: string;
   capacity_exceeded: boolean;
+  /** Fase 009C: suma de hornadas de todas las sesiones. */
+  total_batches: number;
   sessions: FiringSessionOut[];
   lines: FiringLineOut[];
 }

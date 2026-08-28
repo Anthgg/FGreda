@@ -133,6 +133,7 @@ export const QUEMA_CONFIRMADA: FiringOut = {
       physical_occupancy_percentage: "153.000000",
       subtotal: "90.000000",
       capacity_exceeded: true,
+      batches: 1,
       sort_order: 0,
     },
     {
@@ -147,6 +148,7 @@ export const QUEMA_CONFIRMADA: FiringOut = {
       physical_occupancy_percentage: "6.480000",
       subtotal: "996.539792",
       capacity_exceeded: false,
+      batches: 1,
       sort_order: 1,
     },
   ],
@@ -219,6 +221,7 @@ export const FIRINGS_PAGE: FiringPage = {
 };
 
 export const CALCULO: FiringCalculateOut = {
+  total_batches: 2,
   total_volume_cm3: "26010.000000",
   subtotal: "1041.384083",
   total_cost: "1249.660900",
