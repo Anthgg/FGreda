@@ -12,6 +12,14 @@ import { hasE2ECredentials, testName } from "./helpers/fixtures";
  * snapshot.
  */
 
+/** Compara una dimension por VALOR: la misma medida puede mostrarse como
+ *  "17" recien escrita o "17.000000" tras releerse de la base. */
+async function expectDimension(page: Page, label: RegExp, expected: number): Promise<void> {
+  await expect
+    .poll(async () => Number(await page.getByLabel(label).inputValue()), { timeout: 15_000 })
+    .toBe(expected);
+}
+
 /** Crea un borrador con una pieza y devuelve el codigo CTZ y el nombre. */
 async function startDraftWithPiece(page: Page, label: string): Promise<string> {
   const name = testName(label);
@@ -42,7 +50,7 @@ test.describe("Cotizador: medidas personalizadas (Fase 009B)", () => {
     await startDraftWithPiece(page, "Dim-Standard");
 
     await expect(page.getByRole("radio", { name: /usar medidas est[aá]ndar/i })).toBeChecked();
-    await expect(page.getByText("Medidas estándar")).toBeVisible();
+    await expect(page.getByText("Medidas estándar", { exact: true })).toBeVisible();
   });
 
   test("CASO 2 CUSTOM_DIMENSIONS: personalizar prellena, es editable y marca el badge", async ({
@@ -52,7 +60,7 @@ test.describe("Cotizador: medidas personalizadas (Fase 009B)", () => {
     await startDraftWithPiece(page, "Dim-Custom");
 
     await page.getByRole("radio", { name: /personalizar medidas/i }).click();
-    await expect(page.getByText("Medidas personalizadas")).toBeVisible();
+    await expect(page.getByText("Medidas personalizadas", { exact: true })).toBeVisible();
 
     const ancho = page.getByLabel(/ancho \(cm\)/i);
     await expect(ancho).toBeEnabled();
@@ -79,15 +87,21 @@ test.describe("Cotizador: medidas personalizadas (Fase 009B)", () => {
     await page.goto("/cotizaciones");
     await page.goto(url);
 
+    // El wizard siempre reabre en el paso Datos: hay que volver a Piezas
+    // para ver los campos de dimensiones.
+    await page.getByRole("button", { name: /^2\s*Piezas/i }).click();
     await expect(page.getByRole("radio", { name: /personalizar medidas/i })).toBeChecked({
       timeout: 15_000,
     });
-    await expect(page.getByLabel(/ancho \(cm\)/i)).toHaveValue("17");
-    await expect(page.getByText("Medidas personalizadas")).toBeVisible();
+    // Se compara por VALOR, no por texto: al releerse de la base la medida
+    // vuelve con la escala de la columna ("17.000000"), que es la misma
+    // medida efectiva.
+    await expectDimension(page, /ancho \(cm\)/i, 17);
+    await expect(page.getByText("Medidas personalizadas", { exact: true })).toBeVisible();
 
     // El maestro no cambio: al volver a "estandar" reaparece su valor.
     await page.getByRole("radio", { name: /usar medidas est[aá]ndar/i }).click();
-    await expect(page.getByLabel(/ancho \(cm\)/i)).toHaveValue(anchoEstandar);
+    await expectDimension(page, /ancho \(cm\)/i, Number(anchoEstandar));
     void request;
   });
 
@@ -120,8 +134,8 @@ test.describe("Cotizador: medidas personalizadas (Fase 009B)", () => {
     // Cada linea conserva su propio estado: no hay un flag global.
     await expect(customRadios.nth(0)).not.toBeChecked();
     await expect(customRadios.nth(1)).toBeChecked();
-    await expect(page.getByText("Medidas estándar")).toBeVisible();
-    await expect(page.getByText("Medidas personalizadas")).toBeVisible();
+    await expect(page.getByText("Medidas estándar", { exact: true })).toBeVisible();
+    await expect(page.getByText("Medidas personalizadas", { exact: true })).toBeVisible();
   });
 
   test("CASO 7 DUPLICATE: la copia conserva medidas efectivas y estado de override", async ({
@@ -144,7 +158,9 @@ test.describe("Cotizador: medidas personalizadas (Fase 009B)", () => {
     // Aqui se verifica lo que si es observable en la UI: el borrador guardado
     // mantiene la medida efectiva tras recargar.
     await page.reload();
-    await expect(page.getByLabel(/ancho \(cm\)/i)).toHaveValue("19", { timeout: 15_000 });
+    // Tras recargar el wizard vuelve al paso Datos.
+    await page.getByRole("button", { name: /^2\s*Piezas/i }).click();
+    await expectDimension(page, /ancho \(cm\)/i, 19);
     await expect(page.getByRole("radio", { name: /personalizar medidas/i })).toBeChecked();
   });
 
