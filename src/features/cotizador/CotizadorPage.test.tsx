@@ -68,6 +68,8 @@ function itemOut(input: Record<string, unknown>, index: number) {
     standard_depth: null,
     editable_dimensions: ["height", "depth"] as Array<"height" | "depth">,
     dimensions_overridden: false,
+    low_kiln_selected: input["low_kiln_selected"] !== false,
+    high_kiln_selected: input["high_kiln_selected"] !== false,
     quantity,
     recipe_id: null,
     recipe_version_id: null,
@@ -165,11 +167,31 @@ function handler(url: string, init: RequestInit) {
     const body = JSON.parse(String(init.body)) as { name?: string; customer_id?: number; items?: Array<Record<string, unknown>>; kiln_id?: number };
     const items = (body.items ?? []).map(itemOut);
     const complete = Boolean(body.name && body.customer_id && body.kiln_id && items.length && items.every((item) => item.complete));
+    // Fase 009C: el mock refleja la seleccion real de quemas y devuelve el
+    // plan de hornadas, para que los tests midan lo que la UI hara en
+    // produccion y no una respuesta fija.
+    const sessions = (body.items ?? []).flatMap((item) => {
+      const lowKiln = (item["low_kiln_id"] as number | undefined) ?? body.kiln_id;
+      const highKiln = (item["high_kiln_id"] as number | undefined) ?? body.kiln_id;
+      const batches = Number(item["quantity"] ?? 1) > 20 ? 3 : 1;
+      return [
+        item["low_kiln_selected"] !== false && lowKiln
+          ? { firing_type: "LOW", kiln_id: lowKiln, batches, subtotal: String(350 * batches), capacity_snapshot: "17000.000000", physical_occupancy_percentage: "42.000000" }
+          : null,
+        item["high_kiln_selected"] !== false && highKiln
+          ? { firing_type: "HIGH", kiln_id: highKiln, batches, subtotal: String(500 * batches), capacity_snapshot: "17000.000000", physical_occupancy_percentage: "42.000000" }
+          : null,
+      ].filter((value) => value !== null);
+    });
     return jsonResponse(200, builder({
       name: body.name ?? null,
       customer_id: body.customer_id ?? null,
       items,
       item_count: items.length,
+      production_summary: {
+        sessions,
+        total_batches: sessions.reduce((sum, session) => sum + session.batches, 0),
+      },
       kiln_id: body.kiln_id ?? null,
       commercial_subtotal: items.length ? "770.40" : "0",
       tax_amount: items.length ? "138.672" : "0",
@@ -216,6 +238,196 @@ describe("Cotizador integral", () => {
     await user.click(await screen.findByText("Restaurante Lima · 20111111111"));
     await user.click(screen.getByRole("button", { name: "Siguiente" }));
     expect(await screen.findByRole("button", { name: /Agregar producto/i })).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------
+  // Fase 009C — quemas opcionales, multi-hornada y dias
+  // ---------------------------------------------------------------------
+
+  /** Deja una pieza lista y abre el paso Produccion. */
+  async function openProduction(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole("heading", { name: "Nuevo cotizador." });
+    await user.click(screen.getByRole("button", { name: /Piezas/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    await user.click(screen.getByRole("combobox", { name: "Pieza terminada" }));
+    await user.click(await screen.findByText("Plato palta QA"));
+    await user.click(screen.getByRole("button", { name: /Producción/i }));
+  }
+
+  it("LOW_TOGGLE + HIGH_TOGGLE: ambas quemas arrancan marcadas y son independientes", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    const low = screen.getByRole("checkbox", { name: "Quema baja" });
+    const high = screen.getByRole("checkbox", { name: "Quema alta" });
+    expect(low).toBeChecked();
+    expect(high).toBeChecked();
+
+    // Desmarcar una NO desmarca la otra: no son mutuamente excluyentes.
+    await user.click(low);
+    expect(low).not.toBeChecked();
+    expect(high).toBeChecked();
+  });
+
+  it("LOW_ONLY: sin quema alta, su horno desaparece y el payload lo refleja", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    await user.click(screen.getByRole("checkbox", { name: "Quema alta" }));
+
+    expect(screen.getByRole("combobox", { name: "Horno de quema baja" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Horno de quema alta" })).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const previews = fetchSpy.mock.calls.filter(([url]) =>
+        String(url).includes("/quotation-builder/preview"),
+      );
+      const body = JSON.parse(
+        String((previews.at(-1)?.[1] as RequestInit | undefined)?.body),
+      ) as { items: Array<Record<string, unknown>> };
+      expect(body.items[0]).toMatchObject({
+        low_kiln_selected: true,
+        high_kiln_selected: false,
+      });
+    });
+  });
+
+  it("HIGH_ONLY: sin quema baja, su horno desaparece y el payload lo refleja", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    await user.click(screen.getByRole("checkbox", { name: "Quema baja" }));
+
+    expect(screen.queryByRole("combobox", { name: "Horno de quema baja" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Horno de quema alta" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      const previews = fetchSpy.mock.calls.filter(([url]) =>
+        String(url).includes("/quotation-builder/preview"),
+      );
+      const body = JSON.parse(
+        String((previews.at(-1)?.[1] as RequestInit | undefined)?.body),
+      ) as { items: Array<Record<string, unknown>> };
+      expect(body.items[0]).toMatchObject({
+        low_kiln_selected: false,
+        high_kiln_selected: true,
+      });
+    });
+  });
+
+  it("VALIDATION: sin ninguna quema seleccionada se avisa que hace falta al menos una", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    await user.click(screen.getByRole("checkbox", { name: "Quema baja" }));
+    await user.click(screen.getByRole("checkbox", { name: "Quema alta" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /seleccione al menos una quema/i,
+    );
+  });
+
+  it("LOW_HIGH + BATCH_COUNT_DISPLAY + COST_MULTIPLICATION + PRODUCTION_DAYS_DISPLAY", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema alta" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-002/i }));
+
+    // Con cantidad <= 20 el mock devuelve 1 hornada por quema: 2 en total,
+    // 6 dias, y el costo de cada quema es el de una sola hornada.
+    await waitFor(() => {
+      expect(screen.getAllByText("Hornadas necesarias").length).toBe(2);
+    });
+    const hornadas = screen.getAllByText("Hornadas necesarias");
+    for (const label of hornadas) {
+      expect(label.nextElementSibling).toHaveTextContent("1");
+    }
+    expect(screen.getAllByText("Tiempo")[0]?.nextElementSibling).toHaveTextContent("3 días");
+  });
+
+  it("COST_MULTIPLICATION: mas hornadas multiplican el costo y los dias", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
+    await user.click(screen.getByRole("checkbox", { name: "Quema alta" }));
+
+    // El mock devuelve 3 hornadas cuando la cantidad supera 20.
+    const cantidad = screen.getByPlaceholderText("Ej. 24");
+    await user.clear(cantidad);
+    await user.type(cantidad, "50");
+
+    await waitFor(() => {
+      expect(screen.getByText("Hornadas necesarias").nextElementSibling).toHaveTextContent("3");
+    });
+    // 350 por hornada x 3 = 1050, y 3 x 3 dias = 9.
+    expect(screen.getByText("Costo / hornada").nextElementSibling).toHaveTextContent("350");
+    expect(screen.getByText("Total de la quema").nextElementSibling).toHaveTextContent("1050");
+    expect(screen.getByText("Tiempo").nextElementSibling).toHaveTextContent("9 días");
+    expect(screen.getByText(/Total 3 hornadas/i)).toBeInTheDocument();
+  });
+
+  it("MULTIPRODUCT: cada linea mantiene su propia seleccion de quemas", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    // Segunda pieza desde el paso Piezas.
+    await user.click(screen.getByRole("button", { name: /Piezas/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    const selectors = screen.getAllByRole("combobox", { name: "Pieza terminada" });
+    await user.click(selectors[1]!);
+    await user.click(await screen.findByText("Bowl mediano"));
+    await user.click(screen.getByRole("button", { name: /Producción/i }));
+
+    const lowChecks = screen.getAllByRole("checkbox", { name: "Quema baja" });
+    expect(lowChecks).toHaveLength(2);
+
+    // Solo la segunda linea deja de usar quema baja.
+    await user.click(lowChecks[1]!);
+    expect(lowChecks[0]).toBeChecked();
+    expect(lowChecks[1]).not.toBeChecked();
+  });
+
+  it("SAVE_REOPEN: la seleccion de quemas se lee del flag, no de si quedo un horno", async () => {
+    // Regresion de la revision del PR #27: una quema que hereda el horno de
+    // cabecera no trae *_kiln_id propio; deducir la seleccion del id la
+    // apagaba en silencio al reabrir.
+    const { cotizadorFromOutput } = await import("@/features/cotizador/draft");
+    const reopened = cotizadorFromOutput(
+      builder({
+        kiln_id: 1,
+        items: [
+          {
+            ...itemOut({ product_id: 42, quantity: 10 }, 0),
+            // Hereda el horno de cabecera: sin id propio pero SI seleccionada.
+            low_kiln_id: null,
+            high_kiln_id: null,
+            low_kiln_selected: true,
+            high_kiln_selected: false,
+          },
+        ],
+      }),
+    );
+    expect(reopened.items[0]?.lowKilnSelected).toBe(true);
+    expect(reopened.items[0]?.highKilnSelected).toBe(false);
   });
 
   it("expone seis etapas separadas de Cotizaciones y sólo solicita preview al backend", async () => {
@@ -477,9 +689,11 @@ describe("Cotizador integral", () => {
     await user.click(screen.getByRole("button", { name: /Producción/i }));
     expect(screen.queryByRole("combobox", { name: /Horno para simulación/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("combobox", { name: "Quema baja en" }));
+    // Fase 009C: los hornos viven dentro del toggle de cada quema, que ya
+    // viene marcado por defecto (baja + alta, como antes de la fase).
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
     await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
-    await user.click(screen.getByRole("combobox", { name: "Quema alta en" }));
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema alta" }));
     await user.click(await screen.findByRole("option", { name: /KILN-002/i }));
     await user.click(screen.getByRole("combobox", { name: "Ocupación medida en" }));
     await user.click(await screen.findByRole("option", { name: /KILN-001/i }));

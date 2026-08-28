@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { ProductSelectField, SelectField, TextField } from "@/components/form";
+import type { SelectOption } from "@/components/form";
 import { formatDecimalString } from "@/features/firings/labels";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
@@ -33,6 +34,105 @@ const snapshotDecimal = (snapshot: Record<string, unknown>, key: string) => {
   const value = snapshot[key];
   return value === null || value === undefined ? "—" : formatDecimalString(String(value), 2);
 };
+
+/** Fase 009C: cada hornada ocupa el horno 3 dias. Debe coincidir con
+ *  DAYS_PER_FIRING_BATCH del backend, que es la autoridad del calculo. */
+const DAYS_PER_FIRING_BATCH = 3;
+
+/** Plan de una quema concreta, leido del preview que devuelve el backend. */
+interface FiringPlanEntry {
+  batches: number;
+  costPerBatch: number;
+  totalCost: number;
+  days: number;
+  capacity: string | null;
+  occupancy: string | null;
+}
+
+function FiringToggle({
+  label,
+  selected,
+  onToggle,
+  kilnValue,
+  kilnOptions,
+  onKilnChange,
+  disabled,
+  plan,
+  currencySymbol,
+}: {
+  label: string;
+  selected: boolean;
+  onToggle: (value: boolean) => void;
+  kilnValue: string;
+  kilnOptions: SelectOption[];
+  onKilnChange: (value: string) => void;
+  disabled: boolean;
+  plan: FiringPlanEntry | null;
+  currencySymbol: string | undefined;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-2xl border p-3 transition-colors",
+        selected ? "border-orange-200 bg-orange-50/40" : "border-zinc-200 bg-white",
+      ].join(" ")}
+    >
+      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-900">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(event) => onToggle(event.target.checked)}
+          disabled={disabled}
+          className="h-4 w-4 accent-orange-600"
+        />
+        {label}
+      </label>
+
+      {selected ? (
+        <div className="mt-3 space-y-2">
+          <SelectField
+            label={`Horno de ${label.toLowerCase()}`}
+            requirement="required"
+            value={kilnValue}
+            options={kilnOptions}
+            onChange={onKilnChange}
+            disabled={disabled}
+            placeholder="Elegir horno…"
+          />
+          {plan ? (
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-zinc-600">
+              {/* La capacidad del sistema es VOLUMEN en cm3, no un conteo de
+                  piezas: se muestra tal cual en vez de inventar una
+                  conversion a piezas que el backend no calcula. */}
+              <dt>Capacidad</dt>
+              <dd className="text-right tabular-nums">{plan.capacity ?? "—"} cm³</dd>
+              <dt>Ocupación</dt>
+              <dd className="text-right tabular-nums">
+                {plan.occupancy ? `${formatDecimalString(plan.occupancy, 1)} %` : "—"}
+              </dd>
+              <dt>Hornadas necesarias</dt>
+              <dd className="text-right font-semibold tabular-nums text-zinc-900">{plan.batches}</dd>
+              <dt>Costo / hornada</dt>
+              <dd className="text-right tabular-nums">
+                {money(String(plan.costPerBatch), currencySymbol)}
+              </dd>
+              <dt>Total de la quema</dt>
+              <dd className="text-right font-semibold tabular-nums text-zinc-900">
+                {money(String(plan.totalCost), currencySymbol)}
+              </dd>
+              <dt>Tiempo</dt>
+              <dd className="text-right tabular-nums">{plan.days} días</dd>
+            </dl>
+          ) : (
+            <p className="text-[11px] text-zinc-400">
+              El plan de hornadas aparece al completar cantidad y medidas.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function SelectionChips({
   ids,
@@ -68,6 +168,8 @@ export function CotizadorItemCard({
   mode,
   preview,
   currencySymbol = "S/",
+  productionSummary,
+  headerKilnId = "",
   kilns = [],
   disabled,
   excludedProductIds,
@@ -79,6 +181,10 @@ export function CotizadorItemCard({
   mode: CotizadorItemMode;
   preview?: QuotationBuilderItemOut | undefined;
   currencySymbol?: string | undefined;
+  /** production_summary del preview: las hornadas viven por SESION, no por item. */
+  productionSummary?: Record<string, unknown> | undefined;
+  /** Horno de cabecera de la cotizacion, que una linea puede heredar. */
+  headerKilnId?: string | undefined;
   kilns?: KilnOut[] | undefined;
   disabled: boolean;
   excludedProductIds: number[];
@@ -103,6 +209,63 @@ export function CotizadorItemCard({
   const manualPriceOverridesMargin = item.commercialSaleUnitPrice.trim() !== "";
 
   const patch = (values: Partial<CotizadorItemDraft>) => onChange({ ...item, ...values });
+
+  // Plan de hornadas por tipo de quema, leido del preview. El backend es la
+  // autoridad: aqui no se recalcula nada, solo se muestra lo que devolvio.
+  const firingPlan = ((): {
+    LOW: FiringPlanEntry | null;
+    HIGH: FiringPlanEntry | null;
+    totalBatches: number;
+    totalDays: number;
+    totalCost: number;
+  } => {
+    const sessions = Array.isArray(productionSummary?.["sessions"])
+      ? (productionSummary["sessions"] as Array<Record<string, unknown>>)
+      : [];
+    const entryFor = (
+      firingType: "LOW" | "HIGH",
+      selected: boolean,
+      kilnId: string,
+    ): FiringPlanEntry | null => {
+      if (!selected) return null;
+      // El horno EFECTIVO: el propio de la linea o, si la hereda, el de
+      // cabecera. Sin esto, una linea que hereda aceptaria cualquier sesion
+      // de ese tipo de quema y podria mostrar las hornadas, la ocupacion y el
+      // costo del horno de OTRO producto de la misma cotizacion.
+      const effectiveKilnId = kilnId || headerKilnId;
+      const session = sessions.find(
+        (value) =>
+          value["firing_type"] === firingType &&
+          (!effectiveKilnId || String(value["kiln_id"]) === effectiveKilnId),
+      );
+      if (!session) return null;
+      const batches = Number(session["batches"] ?? 1);
+      const total = Number(session["subtotal"] ?? 0);
+      return {
+        batches,
+        // El subtotal ya viene multiplicado por las hornadas; el costo de una
+        // sola es el que interesa mostrar junto al multiplicador.
+        costPerBatch: batches > 0 ? total / batches : total,
+        totalCost: total,
+        days: batches * DAYS_PER_FIRING_BATCH,
+        capacity: session["capacity_snapshot"] == null ? null : String(session["capacity_snapshot"]),
+        occupancy:
+          session["physical_occupancy_percentage"] == null
+            ? null
+            : String(session["physical_occupancy_percentage"]),
+      };
+    };
+    const low = entryFor("LOW", item.lowKilnSelected, item.lowKilnId);
+    const high = entryFor("HIGH", item.highKilnSelected, item.highKilnId);
+    const totalBatches = (low?.batches ?? 0) + (high?.batches ?? 0);
+    return {
+      LOW: low,
+      HIGH: high,
+      totalBatches,
+      totalDays: totalBatches * DAYS_PER_FIRING_BATCH,
+      totalCost: (low?.totalCost ?? 0) + (high?.totalCost ?? 0),
+    };
+  })();
 
   // `name` unico por linea: sin esto, dos productos en la misma cotizacion
   // compartirian el grupo de radios y elegir el modo en uno desmarcaria el otro.
@@ -390,25 +553,47 @@ export function CotizadorItemCard({
               disabled={disabled || !productId || firingLines.isPending}
               hint="Sólo aparecen líneas confirmadas del mismo producto; al elegir una se usa su cantidad real."
             />
-            {!item.firingLineId ? <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <SelectField
-                label="Quema baja en"
-                requirement="required"
-                value={item.lowKilnId}
-                options={lowKilnOptions}
-                onChange={(lowKilnId) => patch({ lowKilnId })}
-                disabled={disabled}
-                placeholder="Elegir horno…"
-              />
-              <SelectField
-                label="Quema alta en"
-                requirement="required"
-                value={item.highKilnId}
-                options={highKilnOptions}
-                onChange={(highKilnId) => patch({ highKilnId })}
-                disabled={disabled}
-                placeholder="Elegir horno…"
-              />
+            {!item.firingLineId ? <div className="mt-4 space-y-4">
+              {/* Fase 009C: baja y alta son independientes. Checkboxes reales,
+                  no radios: no son mutuamente excluyentes. */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <FiringToggle
+                  label="Quema baja"
+                  selected={item.lowKilnSelected}
+                  onToggle={(lowKilnSelected) => patch({ lowKilnSelected })}
+                  kilnValue={item.lowKilnId}
+                  kilnOptions={lowKilnOptions}
+                  onKilnChange={(lowKilnId) => patch({ lowKilnId })}
+                  disabled={disabled}
+                  plan={firingPlan.LOW}
+                  currencySymbol={currencySymbol}
+                />
+                <FiringToggle
+                  label="Quema alta"
+                  selected={item.highKilnSelected}
+                  onToggle={(highKilnSelected) => patch({ highKilnSelected })}
+                  kilnValue={item.highKilnId}
+                  kilnOptions={highKilnOptions}
+                  onKilnChange={(highKilnId) => patch({ highKilnId })}
+                  disabled={disabled}
+                  plan={firingPlan.HIGH}
+                  currencySymbol={currencySymbol}
+                />
+              </div>
+              {!item.lowKilnSelected && !item.highKilnSelected ? (
+                <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                  Seleccione al menos una quema para poder cotizar la pieza.
+                </p>
+              ) : null}
+              {firingPlan.totalBatches > 1 ? (
+                <div className="rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2 text-xs text-orange-950">
+                  <span className="font-semibold">Total {firingPlan.totalBatches} hornadas</span>
+                  {" · "}
+                  <span className="tabular-nums">{firingPlan.totalDays} días</span>
+                  {" · "}
+                  <span className="tabular-nums">{money(String(firingPlan.totalCost), currencySymbol)}</span>
+                </div>
+              ) : null}
               <SelectField
                 label="Ocupación medida en"
                 requirement="automatic"

@@ -263,6 +263,8 @@ export function CotizadorPage() {
               mode={currentMode}
               preview={preview?.items.find((value) => value.product_id === Number(item.productId))}
               currencySymbol={preview?.currency_symbol_snapshot}
+              productionSummary={preview?.production_summary}
+              headerKilnId={draft.kilnId}
               kilns={kilns.data?.items ?? []}
               disabled={readOnly}
               excludedProductIds={draft.items.filter((_, itemIndex) => itemIndex !== index).map((value) => Number(value.productId)).filter(Number.isInteger)}
@@ -290,6 +292,8 @@ export function CotizadorPage() {
               mode="PRODUCTION"
               preview={preview?.items.find((value) => value.product_id === Number(item.productId))}
               currencySymbol={preview?.currency_symbol_snapshot}
+              productionSummary={preview?.production_summary}
+              headerKilnId={draft.kilnId}
               kilns={kilns.data?.items ?? []}
               disabled={readOnly}
               excludedProductIds={[]}

@@ -33,6 +33,12 @@ export interface QuotationBuilderItemIn {
   material_grams_per_piece?: string;
   low_kiln_id?: number;
   high_kiln_id?: number;
+  /**
+   * Fase 009C: quema baja y alta son INDEPENDIENTES. Una pieza puede
+   * necesitar solo baja, solo alta o ambas (al menos una).
+   */
+  low_kiln_selected?: boolean;
+  high_kiln_selected?: boolean;
   factor_kiln_id?: number;
   techniques: TechniqueSelectionIn[];
   additionals: AdditionalSelectionIn[];
@@ -85,6 +91,13 @@ export interface QuotationBuilderItemOut {
   kiln_id: number | null;
   low_kiln_id: number | null;
   high_kiln_id: number | null;
+  /**
+   * Fase 009C: la INTENCION de quemar, independiente de con que horno. Una
+   * quema que hereda el horno de cabecera no trae *_kiln_id propio, asi que
+   * deducirla del id la apagaria en silencio al reabrir el borrador.
+   */
+  low_kiln_selected: boolean;
+  high_kiln_selected: boolean;
   factor_kiln_id: number | null;
   production_snapshot: Record<string, unknown>;
   techniques: Array<Record<string, unknown>>;
