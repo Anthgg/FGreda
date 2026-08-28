@@ -12,7 +12,16 @@ export interface CotizadorItemDraft {
   productId: string;
   productLabel: string;
   quantity: string;
+  /** Medidas EFECTIVAS de la linea: las que se cotizan y se congelan. */
   dimensions: Record<ProductDimension, string>;
+  /**
+   * Medidas del maestro vigente. Solo para la UI: permite prellenar al
+   * activar "Personalizar medidas" y restaurar exactamente al desactivarlo,
+   * sin consultar el producto por separado. Nunca se envia al backend.
+   */
+  standardDimensions: Record<ProductDimension, string>;
+  /** Fase 009B: la linea usa medidas propias en vez de las del maestro. */
+  dimensionsOverridden: boolean;
   editableDimensions: ProductDimension[];
   recipeId: string;
   recipeLabel: string;
@@ -56,6 +65,8 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   productLabel: "",
   quantity: "",
   dimensions: { width: "", height: "", length: "", depth: "" },
+  standardDimensions: { width: "", height: "", length: "", depth: "" },
+  dimensionsOverridden: false,
   editableDimensions: ["width", "height", "length", "depth"],
   recipeId: "",
   recipeLabel: "",
@@ -82,16 +93,21 @@ const decimal = (value: unknown) => (value === null || value === undefined ? "" 
 
 export function itemFromProduct(product: Product): CotizadorItemDraft {
   const fields: ProductDimension[] = ["width", "height", "length", "depth"];
+  const master = {
+    width: decimal(product.width),
+    height: decimal(product.height),
+    length: decimal(product.length),
+    depth: decimal(product.depth),
+  };
   return {
     productId: String(product.id),
     productLabel: `${product.internal_reference} · ${product.name}`,
     quantity: "",
-    dimensions: {
-      width: decimal(product.width),
-      height: decimal(product.height),
-      length: decimal(product.length),
-      depth: decimal(product.depth),
-    },
+    // Al elegir un producto se arranca SIEMPRE en modo estandar: efectivas
+    // == maestro. Personalizar es una decision explicita posterior.
+    dimensions: { ...master },
+    standardDimensions: master,
+    dimensionsOverridden: false,
     editableDimensions: fields.filter((field) => product[field] == null),
     recipeId: "",
     recipeLabel: "",
@@ -150,6 +166,13 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
       length: decimal(item.length),
       depth: decimal(item.depth),
     },
+    standardDimensions: {
+      width: decimal(item.standard_width),
+      height: decimal(item.standard_height),
+      length: decimal(item.standard_length),
+      depth: decimal(item.standard_depth),
+    },
+    dimensionsOverridden: item.dimensions_overridden,
     editableDimensions: item.editable_dimensions,
     recipeId: decimal(item.recipe_id),
     recipeLabel: item.recipe_id ? `Receta #${item.recipe_id}` : "",
@@ -202,8 +225,17 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
     items: draft.items.flatMap((item, sortOrder) => {
       const productId = positiveInt(item.productId);
       if (!productId) return [];
+      // Modo personalizado: viajan TODAS las medidas con valor, porque son
+      // la medida efectiva de esta cotizacion y deben ganarle al maestro.
+      // Modo estandar: solo viajan las que el maestro no tiene (CASO C,
+      // completar un producto sin medidas); el resto las resuelve el backend
+      // desde el maestro vigente, que es justamente lo que hace que volver a
+      // estandar restaure el valor del maestro aunque haya cambiado.
+      const dimensionFields: ProductDimension[] = item.dimensionsOverridden
+        ? ["width", "height", "length", "depth"]
+        : item.editableDimensions;
       const dimensions = Object.fromEntries(
-        item.editableDimensions
+        dimensionFields
           .filter((field) => item.dimensions[field].trim())
           .map((field) => [field, item.dimensions[field].trim()]),
       );
@@ -219,6 +251,7 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         product_id: productId,
         ...(quantity ? { quantity } : {}),
         dimensions,
+        dimensions_overridden: item.dimensionsOverridden,
         ...(recipeId ? { recipe_id: recipeId } : {}),
         ...(recipeVersionId
           ? { recipe_version_id: recipeVersionId }

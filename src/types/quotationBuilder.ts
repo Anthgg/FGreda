@@ -20,6 +20,12 @@ export interface QuotationBuilderItemIn {
   product_id: number;
   quantity?: number;
   dimensions: ProductDimensionCompletionIn;
+  /**
+   * Fase 009B: el usuario eligio "Personalizar medidas" para esta linea.
+   * Cuando es true, `dimensions` viaja completa y el backend la usa como
+   * medida efectiva sin tocar el maestro del producto.
+   */
+  dimensions_overridden?: boolean;
   recipe_id?: number;
   recipe_version_id?: number;
   firing_line_id?: number;
@@ -58,7 +64,14 @@ export interface QuotationBuilderItemOut {
   height: string | null;
   length: string | null;
   depth: string | null;
+  /** Medidas del maestro vigente, para contrastar y restaurar el estandar. */
+  standard_width: string | null;
+  standard_height: string | null;
+  standard_length: string | null;
+  standard_depth: string | null;
   editable_dimensions: ProductDimension[];
+  /** Fase 009B: la linea usa medidas propias, distintas del maestro. */
+  dimensions_overridden: boolean;
   quantity: number | null;
   recipe_id: number | null;
   recipe_version_id: number | null;
