@@ -49,6 +49,14 @@ export interface QuotationBuilderItemIn {
    */
   glazes?: GlazeSelectionItemIn[];
   glaze_unit?: GlazeUnit;
+  /**
+   * El usuario ya toco la seleccion de esmaltes de esta linea.
+   *
+   * Distingue "todavia no ha elegido" de "eligio no llevar ninguno", que en
+   * `glazes` se ven igual. Sin esto, quitar el esmalte sugerido lo haria
+   * reaparecer en el siguiente recalculo.
+   */
+  glaze_selection_touched?: boolean;
   techniques: TechniqueSelectionIn[];
   additionals: AdditionalSelectionIn[];
   days_adjustment: number;
@@ -98,6 +106,8 @@ export interface GlazeAllocationOut {
  */
 export interface GlazePlanOut {
   unit: GlazeUnit;
+  /** El plan lo propuso el backend porque el usuario aun no habia elegido. */
+  default_applied: boolean;
   estimated_glaze_percent_snapshot: string;
   piece_weight_g_snapshot: string;
   grams_per_piece: string;
@@ -162,6 +172,7 @@ export interface QuotationBuilderItemOut {
    */
   glaze_plan: GlazePlanOut | null;
   glaze_unit: GlazeUnit;
+  glaze_selection_touched: boolean;
   techniques: Array<Record<string, unknown>>;
   additionals: Array<Record<string, unknown>>;
   other_costs: Array<Record<string, unknown>>;

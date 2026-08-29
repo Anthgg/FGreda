@@ -114,6 +114,7 @@ describe("borrador del Cotizador", () => {
         high_kiln_selected: true,
         glaze_plan: null,
         glaze_unit: "g" as const,
+        glaze_selection_touched: false,
         quantity: 24,
         recipe_id: 5,
         recipe_version_id: 6,
