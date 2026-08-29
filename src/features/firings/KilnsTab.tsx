@@ -8,6 +8,17 @@
 import { useState } from "react";
 
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
+import {
+  OccupancyFactorEditor,
+  SaveFactorsButton,
+} from "@/features/firings/OccupancyFactorEditor";
+import {
+  defaultFactorRows,
+  rowsFromFactors,
+  rowsToPayload,
+  validateFactorRows,
+  type FactorRow,
+} from "@/features/firings/occupancyFactors";
 import { Spinner } from "@/components/Spinner";
 import { Badge, EmptyState } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -20,6 +31,7 @@ import {
   useCreateKiln,
   useKilnRates,
   useKilns,
+  useSetKilnOccupancyFactors,
   useSetKilnRate,
   useUpdateKiln,
 } from "@/features/firings/useFirings";
@@ -35,9 +47,17 @@ function esImporteValido(valor: string): boolean {
 function NuevoHorno({ onDone }: { onDone: () => void }) {
   const [nombre, setNombre] = useState("");
   const [capacidad, setCapacidad] = useState("");
+  const [dias, setDias] = useState("3");
+  // Los factores se piden en el alta: un horno sin ellos nace inservible.
+  const [tramos, setTramos] = useState<FactorRow[]>(defaultFactorRows);
   const crear = useCreateKiln();
 
-  const valido = nombre.trim() !== "" && esImporteValido(capacidad) && Number(capacidad) !== 0;
+  const valido =
+    nombre.trim() !== "" &&
+    esImporteValido(capacidad) &&
+    Number(capacidad) !== 0 &&
+    /^[1-9]\d*$/.test(dias.trim()) &&
+    validateFactorRows(tramos) === null;
 
   return (
     <form
@@ -46,11 +66,18 @@ function NuevoHorno({ onDone }: { onDone: () => void }) {
         evento.preventDefault();
         if (!valido) return;
         crear.mutate(
-          { name: nombre.trim(), capacity_volume_cm3: capacidad.trim() },
+          {
+            name: nombre.trim(),
+            capacity_volume_cm3: capacidad.trim(),
+            firing_days_per_batch: Number(dias),
+            occupancy_factors: rowsToPayload(tramos),
+          },
           {
             onSuccess: () => {
               setNombre("");
               setCapacidad("");
+              setDias("3");
+              setTramos(defaultFactorRows());
               onDone();
             },
           },
@@ -68,6 +95,26 @@ function NuevoHorno({ onDone }: { onDone: () => void }) {
           requirement="required"
           hint="El código lo genera el sistema."
         />
+        <TextField
+          label="Días por hornada"
+          value={dias}
+          onChange={setDias}
+          inputMode="numeric"
+          requirement="required"
+          hint="Días que el horno queda ocupado por cada hornada. Mínimo 1."
+        />
+      </div>
+      <div className="border-t border-black/[0.04] pt-3">
+        <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+          Factor por ocupación
+        </h4>
+        <div className="mt-2">
+          <OccupancyFactorEditor
+            rows={tramos}
+            onChange={setTramos}
+            disabled={crear.isPending}
+          />
+        </div>
       </div>
       {crear.isError ? (
         <p role="alert" className="text-xs text-red-600">
@@ -144,12 +191,15 @@ function HistorialTarifas({ kilnId }: { kilnId: number }) {
 function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
   const [capacidad, setCapacidad] = useState(kiln.capacity_volume_cm3);
   const [dias, setDias] = useState(String(kiln.firing_days_per_batch));
+  const [editandoFactores, setEditandoFactores] = useState(false);
+  const [tramos, setTramos] = useState<FactorRow[]>(() => rowsFromFactors(kiln.occupancy_factors));
   const [tipoTarifa, setTipoTarifa] = useState<FiringType>("LOW");
   const [importe, setImporte] = useState("");
   const [verHistorial, setVerHistorial] = useState(false);
 
   const actualizar = useUpdateKiln(kiln.id);
   const fijarTarifa = useSetKilnRate(kiln.id);
+  const guardarFactores = useSetKilnOccupancyFactors(kiln.id);
 
   return (
     <article className="space-y-4 rounded-3xl border border-white/60 bg-white/60 p-5 shadow-xs backdrop-blur-md">
@@ -311,6 +361,52 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
           configurarla.
         </p>
       )}
+
+      {canEdit ? (
+        editandoFactores ? (
+          <div className="space-y-2 rounded-2xl border border-black/[0.04] bg-white/40 p-3">
+            <OccupancyFactorEditor
+              rows={tramos}
+              onChange={setTramos}
+              disabled={guardarFactores.isPending}
+              serverError={
+                guardarFactores.isError ? describeError(guardarFactores.error) : undefined
+              }
+            />
+            <div className="flex gap-2">
+              <SaveFactorsButton
+                rows={tramos}
+                pending={guardarFactores.isPending}
+                onSave={() =>
+                  guardarFactores.mutate(rowsToPayload(tramos), {
+                    // Solo se sale del modo edición cuando el backend confirma.
+                    // Cerrarlo antes daría por guardado algo que quizá falló.
+                    onSuccess: () => setEditandoFactores(false),
+                  })
+                }
+              />
+              <SecondaryButton
+                onClick={() => {
+                  setTramos(rowsFromFactors(kiln.occupancy_factors));
+                  setEditandoFactores(false);
+                }}
+                disabled={guardarFactores.isPending}
+              >
+                Cancelar
+              </SecondaryButton>
+            </div>
+          </div>
+        ) : (
+          <SecondaryButton
+            onClick={() => {
+              setTramos(rowsFromFactors(kiln.occupancy_factors));
+              setEditandoFactores(true);
+            }}
+          >
+            {kiln.occupancy_factors.length > 0 ? "Editar factores" : "Configurar factores"}
+          </SecondaryButton>
+        )
+      ) : null}
 
       <div>
         <button
