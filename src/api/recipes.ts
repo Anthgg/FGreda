@@ -7,6 +7,8 @@
 import { apiClient } from "@/api/client";
 import { toQuery } from "@/api/masters";
 import type {
+  GlazeEstimateIn,
+  GlazeEstimateOut,
   RecipeCalculateIn,
   RecipeCalculateOut,
   RecipeCreate,
@@ -14,10 +16,14 @@ import type {
   RecipeImportPreviewOut,
   RecipeOut,
   RecipePage,
+  RecipePreparationIn,
+  RecipePreparationOut,
+  RecipePreparationPage,
   RecipeRowResolutionIn,
   RecipeUpdate,
   RecipeVersionIn,
   RecipeVersionOut,
+  UnitConversionOut,
 } from "@/types/recipes";
 
 const RECIPES = "/recipes";
@@ -105,4 +111,54 @@ export function commitRecipeImport(batchId: number): Promise<RecipeImportCommitR
     {},
     { timeoutMs: 120_000 },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Preparaciones (Fase 009D)
+// ---------------------------------------------------------------------------
+const PREPARATIONS = "/recipe-preparations";
+
+export function fetchPreparations(filters: {
+  recipe_id?: number;
+  prepared_product_id?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<RecipePreparationPage> {
+  return apiClient.get<RecipePreparationPage>(
+    PREPARATIONS + toQuery(filters as Record<string, unknown>),
+  );
+}
+
+export function fetchPreparation(id: number): Promise<RecipePreparationOut> {
+  return apiClient.get<RecipePreparationOut>(`${PREPARATIONS}/${id}`);
+}
+
+/**
+ * Registra una preparacion fisica: descuenta materia prima y da de alta el
+ * preparado, todo o nada.
+ *
+ * `idempotency_key` no es decorativa. Sin ella, un doble clic o un reintento
+ * del navegador descontaria dos veces la misma mezcla.
+ */
+export function createPreparation(payload: RecipePreparationIn): Promise<RecipePreparationOut> {
+  return apiClient.post<RecipePreparationOut>(PREPARATIONS, payload);
+}
+
+/** Convierte g <-> ml con la concentracion de un lote concreto. */
+export function convertPreparationUnits(payload: {
+  preparation_id: number;
+  value: string;
+  from_unit: "g" | "ml";
+}): Promise<UnitConversionOut> {
+  return apiClient.post<UnitConversionOut>(`${PREPARATIONS}/convert`, payload);
+}
+
+/**
+ * Cuanto esmalte estima una cotizacion y como se reparte.
+ *
+ * El porcentaje NO viaja aqui: lo pone la configuracion comercial. Estimar no
+ * mueve inventario.
+ */
+export function estimateGlaze(payload: GlazeEstimateIn): Promise<GlazeEstimateOut> {
+  return apiClient.post<GlazeEstimateOut>(`${PREPARATIONS}/glaze-estimate`, payload);
 }

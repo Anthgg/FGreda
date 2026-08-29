@@ -350,9 +350,24 @@ describe("sección comercial", () => {
     await abrirPestana(/comercial/i);
 
     expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
-    expect(screen.getByDisplayValue("18")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("15")).toBeInTheDocument();
+    expect(screen.getByLabelText(/IGV/i)).toHaveValue("18");
+    // Se busca por etiqueta y no por valor: vigencia y esmalte estimado
+    // comparten el 15 de la configuración de prueba, y `getByDisplayValue`
+    // no distinguiría cuál es cuál.
+    expect(screen.getByLabelText(/vigencia de cotización/i)).toHaveValue("15");
     expect(screen.getByDisplayValue("00219300123456789015")).toBeInTheDocument();
+  });
+
+  it("muestra el porcentaje de esmalte estimado que envía el backend", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    // 15 significa 15 %, la misma convención que el IGV. El navegador no
+    // inventa este número: viene de commercial_settings.
+    expect(await screen.findByLabelText(/esmalte estimado/i)).toHaveValue("15");
   });
 
   it("rechaza un IGV fuera de rango sin llamar al backend", async () => {

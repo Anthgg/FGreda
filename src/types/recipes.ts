@@ -195,3 +195,113 @@ export interface RecipeImportCommitResult {
   updated: number;
   skipped: number;
 }
+
+// ---------------------------------------------------------------------------
+// Preparaciones (Fase 009D)
+// ---------------------------------------------------------------------------
+
+/**
+ * Un lote realmente preparado: materia prima consumida, preparado dado de alta
+ * y costo congelado. Es un hecho fisico, no una simulacion.
+ *
+ * `solids_g_per_ml` es el puente g <-> ml de ESTE lote y de ningun otro: los
+ * mismos gramos de solidos ocupan mas mililitros si el lote lleva mas agua.
+ * Por eso la conversion no vive en la unidad de medida.
+ */
+export interface RecipePreparationOut {
+  id: number;
+  /** Lo emite el backend. El usuario no lo escribe. */
+  code: string;
+  recipe_version_id: number;
+  prepared_product_id: number;
+  prepared_product_internal_reference: string;
+  prepared_product_name: string;
+  location_id: number;
+  total_dry_weight_g: string;
+  water_amount_ml: string;
+  final_yield_ml: string;
+  solids_g_per_ml: string;
+  batch_total_cost: string;
+  unit_cost_per_ml: string;
+  status: string;
+  prepared_at: string;
+  lines: RecipePreparationLineOut[];
+}
+
+export interface RecipePreparationLineOut {
+  id: number;
+  component_product_id: number;
+  component_internal_reference: string;
+  component_name: string;
+  quantity_g: string;
+  /** Costo por gramo en el momento de preparar. Congelado. */
+  unit_cost_snapshot: string;
+  line_cost: string;
+}
+
+export interface RecipePreparationPage {
+  items: RecipePreparationOut[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface RecipePreparationIn {
+  recipe_version_id: number;
+  location_id: number;
+  total_dry_weight_g: string;
+  water_amount_ml: string;
+  /** Rendimiento REAL medido. No es peso seco + agua. */
+  final_yield_ml: string;
+  /** Impide que un reintento repita el descuento de materia prima. */
+  idempotency_key: string;
+}
+
+export interface UnitConversionOut {
+  preparation_id: number;
+  solids_g_per_ml: string;
+  value: string;
+  from_unit: string;
+  converted: string;
+  to_unit: string;
+}
+
+export interface GlazeSelectionIn {
+  preparation_id: number;
+  /** Peso relativo del reparto, no un porcentaje del peso de la pieza. */
+  share?: string;
+}
+
+export interface GlazeEstimateIn {
+  piece_weight_g: string;
+  quantity: number;
+  glazes: GlazeSelectionIn[];
+}
+
+export interface GlazeAllocationOut {
+  preparation_id: number;
+  preparation_code: string;
+  prepared_product_id: number;
+  prepared_product_internal_reference: string;
+  prepared_product_name: string;
+  share: string;
+  grams: string;
+  solids_g_per_ml: string;
+  millilitres: string;
+  unit_cost_per_ml: string;
+  estimated_cost: string;
+}
+
+/**
+ * Estimacion de esmalte para cotizar. El porcentaje viene de la configuracion
+ * comercial: el navegador no lo elige ni lo envia.
+ */
+export interface GlazeEstimateOut {
+  estimated_glaze_percent: string;
+  piece_weight_g: string;
+  quantity: number;
+  grams_per_piece: string;
+  total_estimated_grams: string;
+  allocations: GlazeAllocationOut[];
+  total_estimated_cost: string;
+}

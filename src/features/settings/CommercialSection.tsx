@@ -22,6 +22,18 @@ function validate(draft: CommercialSettingsInput): Partial<Record<string, string
       errors.tax_percent = "Debe ser un porcentaje entre 0 y 100.";
     }
   }
+  // El porcentaje de esmalte no admite vacio ni cero: cero no es "sin
+  // esmalte", es una estimacion que siempre da cero gramos y hace desaparecer
+  // el material del costo sin que nadie lo note.
+  const glaze = String(draft.estimated_glaze_percent ?? "").trim();
+  if (glaze === "") {
+    errors.estimated_glaze_percent = "Indique un porcentaje mayor que cero.";
+  } else {
+    const value = Number(glaze);
+    if (Number.isNaN(value) || value <= 0 || value > 100) {
+      errors.estimated_glaze_percent = "Debe ser un porcentaje mayor que 0 y hasta 100.";
+    }
+  }
   if (draft.quote_validity_days !== null) {
     const days = Number(draft.quote_validity_days);
     if (!Number.isInteger(days) || days < 1) {
@@ -110,7 +122,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
         <FormSection
           title="Moneda e Impuestos"
           description="Valores por defecto de las cotizaciones. El backend es quien los aplica."
-          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
         >
           <SelectField
             label="Moneda (ISO 4217)"
@@ -139,6 +151,21 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             placeholder="18"
             hint="Porcentaje, no fracción: 18 significa 18%."
             error={errors.tax_percent}
+          />
+          <TextField
+            label="Esmalte estimado (%)"
+            requirement="required"
+            value={
+              draft.estimated_glaze_percent === undefined
+                ? null
+                : String(draft.estimated_glaze_percent)
+            }
+            onChange={(value) => setField("estimated_glaze_percent", value)}
+            disabled={disabled}
+            inputMode="decimal"
+            placeholder="15"
+            hint="Porcentaje del peso de la pieza. 15 significa 15 %, no 0,15."
+            error={errors.estimated_glaze_percent}
           />
           <TextField
             label="Vigencia de cotización (días)"
