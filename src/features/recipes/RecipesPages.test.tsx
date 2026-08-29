@@ -301,12 +301,20 @@ function mockRecipesApi(overrides: {
 }
 
 describe("Recetas · estructura general", () => {
-  it("muestra las tres vistas y «Nueva receta» como acción, no como pestaña", async () => {
+  it("muestra las cuatro vistas y «Nueva receta» como acción, no como pestaña", async () => {
     mockRecipesApi();
     renderApp(["/recetas"]);
 
+    // «Preparaciones» es una pestaña aparte de «Simulador» a propósito: se
+    // parecen en pantalla y hacen cosas opuestas — una calcula sin tocar nada,
+    // la otra consume materia prima de verdad.
     const tabs = await screen.findAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Listado", "Importador", "Simulador"]);
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      "Listado",
+      "Importador",
+      "Simulador",
+      "Preparaciones",
+    ]);
     expect(screen.getByRole("button", { name: /nueva receta/i })).toBeInTheDocument();
   });
 

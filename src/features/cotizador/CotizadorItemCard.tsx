@@ -8,6 +8,7 @@ import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
 import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
 import { useAdditionals, useOtherCosts, useTechniques } from "@/features/quotations/useQuotations";
 import type { CotizadorItemDraft } from "@/features/cotizador/draft";
+import { GlazeEstimator } from "@/features/cotizador/GlazeEstimator";
 import { itemFromProduct } from "@/features/cotizador/draft";
 import type { KilnOut } from "@/types/firings";
 import type { QuotationBuilderItemOut } from "@/types/quotationBuilder";
@@ -539,6 +540,12 @@ export function CotizadorItemCard({
               placeholder="Ej. 450"
             />
           </div>
+          <GlazeEstimator
+            quantity={item.quantity}
+            disabled={disabled}
+            currencySymbol={currencySymbol}
+            onApplyGramsPerPiece={(materialGramsPerPiece) => patch({ materialGramsPerPiece })}
+          />
           <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
             <div className="mb-3">
               <p className="text-xs font-semibold text-orange-950">Ruta de quema de esta pieza</p>

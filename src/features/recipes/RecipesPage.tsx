@@ -6,6 +6,11 @@
  * - **Listado**: el catálogo productivo, lo que el taller usa a diario.
  * - **Importador**: los datos en preparación, con su propio vocabulario.
  * - **Simulador**: cálculo de un batch sobre una versión existente.
+ * - **Preparaciones**: la mezcla real, que sí consume materia prima.
+ *
+ * Simulador y Preparaciones se parecen y no deben confundirse: el primero
+ * calcula sin tocar nada, el segundo transforma el inventario. Por eso son
+ * pestañas distintas y no un interruptor dentro de la misma.
  *
  * «Nueva receta» es una acción, no una vista: por eso vive en la cabecera y no
  * como una cuarta pestaña.
@@ -19,17 +24,19 @@ import { useSession } from "@/features/auth/useSession";
 import { RecipeCatalogTab } from "@/features/recipes/RecipeCatalogTab";
 import { RecipeCreateModal } from "@/features/recipes/RecipeCreateModal";
 import { RecipeImportTab } from "@/features/recipes/RecipeImportTab";
+import { RecipePreparationsTab } from "@/features/recipes/RecipePreparationsTab";
 import { RecipeSimulatorTab } from "@/features/recipes/RecipeSimulatorTab";
 import { RecipeVersionForm } from "@/features/recipes/RecipeVersionForm";
 import { useCreateVersion } from "@/features/recipes/useRecipes";
 import type { RecipeOut } from "@/types/recipes";
 
-type TabId = "listado" | "importador" | "simulador";
+type TabId = "listado" | "importador" | "simulador" | "preparaciones";
 
 const TABS: readonly { id: TabId; label: string }[] = [
   { id: "listado", label: "Listado" },
   { id: "importador", label: "Importador" },
   { id: "simulador", label: "Simulador" },
+  { id: "preparaciones", label: "Preparaciones" },
 ];
 
 /** Formulario de nueva versión, montado solo cuando hay receta elegida. */
@@ -124,6 +131,7 @@ export function RecipesPage() {
               initialVersionId={simulatingVersionId}
             />
           ) : null}
+          {tab === "preparaciones" ? <RecipePreparationsTab canEdit={isAdmin} /> : null}
         </div>
       </div>
 

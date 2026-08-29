@@ -60,6 +60,17 @@ export interface CommercialSettings {
   /** Porcentaje, no fraccion: 18 significa 18 %. */
   tax_percent: string | number | null;
   quote_validity_days: number | null;
+  /**
+   * Fase 009D. Porcentaje del peso de la pieza que se estima de esmalte al
+   * cotizar; misma convencion que `tax_percent` (15 = 15 %). No admite nulo:
+   * la columna es NOT NULL y el Cotizador siempre necesita un porcentaje.
+   *
+   * El frontend NO decide su valor por omision. Si un backend anterior a
+   * 009D no lo devuelve, la clave viaja como `undefined` y desaparece del
+   * JSON: el backend aplica el suyo. Inventar aqui un 15 seria fijar una
+   * regla de negocio en el navegador.
+   */
+  estimated_glaze_percent: string | number;
 
   general_conditions: string | null;
   payment_notes: string | null;

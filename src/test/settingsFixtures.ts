@@ -50,6 +50,9 @@ export const COMMERCIAL_EMPTY: CommercialSettings = {
   currency_symbol: null,
   tax_percent: null,
   quote_validity_days: null,
+  // No es un valor "vacio": la columna es NOT NULL y la migracion 0015 la
+  // inicializa en 15. Un backend real nunca devuelve esto en blanco.
+  estimated_glaze_percent: "15",
   general_conditions: null,
   payment_notes: null,
   document_footer: null,

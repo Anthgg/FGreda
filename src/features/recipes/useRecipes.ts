@@ -10,9 +10,12 @@ import {
   activateRecipeVersion,
   calculateRecipe,
   commitRecipeImport,
+  createPreparation,
   createRecipe,
   createRecipeVersion,
+  estimateGlaze,
   fetchLatestRecipeBatch,
+  fetchPreparations,
   fetchRecipe,
   fetchRecipeImportPreview,
   fetchRecipes,
@@ -21,12 +24,15 @@ import {
   updateRecipe,
 } from "@/api/recipes";
 import type {
+  GlazeEstimateIn,
   RecipeCalculateIn,
   RecipeCreate,
+  RecipePreparationIn,
   RecipeRowResolutionIn,
   RecipeUpdate,
   RecipeVersionIn,
 } from "@/types/recipes";
+import { MOVEMENTS_KEY, STOCK_KEY } from "@/features/masters/useMasters";
 
 export const RECIPES_KEY = ["recipes"] as const;
 export const recipeKey = (id: number) => [...RECIPES_KEY, id] as const;
@@ -35,6 +41,8 @@ export const recipeCalcKey = (versionId: number | undefined, qty: string) =>
   ["recipe-calc", versionId, qty] as const;
 export const RECIPE_IMPORT_PREVIEW_KEY = (batchId: number) =>
   ["recipe-import-preview", batchId] as const;
+export const PREPARATIONS_KEY = ["recipe-preparations"] as const;
+export const GLAZE_ESTIMATE_KEY = ["glaze-estimate"] as const;
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -157,5 +165,54 @@ export function useCommitRecipeImport(batchId: number) {
       qc.invalidateQueries({ queryKey: RECIPES_KEY });
       qc.invalidateQueries({ queryKey: RECIPE_IMPORT_PREVIEW_KEY(batchId) });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Preparaciones (Fase 009D)
+// ---------------------------------------------------------------------------
+export function usePreparations(filters: {
+  recipe_id?: number;
+  prepared_product_id?: number;
+  limit?: number;
+  offset?: number;
+}) {
+  return useQuery({
+    queryKey: [...PREPARATIONS_KEY, filters],
+    queryFn: () => fetchPreparations(filters),
+  });
+}
+
+/**
+ * Registra una preparacion fisica.
+ *
+ * Invalida tambien saldos y movimientos: preparar consume materia prima de
+ * verdad, y dejar el inventario en pantalla con los numeros de antes es
+ * mostrar existencias que ya no estan.
+ */
+export function useCreatePreparation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: RecipePreparationIn) => createPreparation(payload),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: PREPARATIONS_KEY });
+      await qc.invalidateQueries({ queryKey: STOCK_KEY });
+      await qc.invalidateQueries({ queryKey: MOVEMENTS_KEY });
+    },
+  });
+}
+
+/**
+ * Estima el esmalte de una cotizacion.
+ *
+ * Es una consulta, no una mutacion: no escribe nada. Se pide al servidor y no
+ * se calcula aqui porque el porcentaje y la concentracion son autoridad del
+ * backend; multiplicar en el navegador daria un numero que nadie ha decidido.
+ */
+export function useGlazeEstimate(payload: GlazeEstimateIn | null) {
+  return useQuery({
+    queryKey: [...GLAZE_ESTIMATE_KEY, payload],
+    queryFn: () => estimateGlaze(payload!),
+    enabled: payload !== null,
   });
 }

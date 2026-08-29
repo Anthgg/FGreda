@@ -144,7 +144,19 @@ export interface StockBalance {
   quantity: string;
 }
 
-export type MovementType = "INITIAL_IMPORT" | "ADJUSTMENT" | "IN" | "OUT";
+/**
+ * Los dos ultimos son de Fase 009D: preparar una receta saca materia prima
+ * (`PREPARATION_OUT`) y mete el material preparado (`PREPARATION_IN`). Son
+ * tipos propios y no `IN`/`OUT` genericos para que el historial diga por que
+ * se movio el stock sin tener que leer el motivo en texto libre.
+ */
+export type MovementType =
+  | "INITIAL_IMPORT"
+  | "ADJUSTMENT"
+  | "IN"
+  | "OUT"
+  | "PREPARATION_OUT"
+  | "PREPARATION_IN";
 
 export interface StockMovement {
   id: number;
