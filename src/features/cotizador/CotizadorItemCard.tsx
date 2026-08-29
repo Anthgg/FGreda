@@ -660,7 +660,7 @@ export function CotizadorItemCard({
               <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-semibold tabular-nums">{snapshotDecimal(preview.production_snapshot, "total_volume_cm3")} cm³</p></div>
               <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Ocupación</p><p className="font-semibold tabular-nums">{snapshotDecimal(preview.production_snapshot, "occupancy_percentage")}%</p></div>
               <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Días totales</p><p className="font-semibold tabular-nums">{preview.total_days}</p></div>
-              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Quema asignada</p><p className="font-semibold tabular-nums text-orange-950">{money(preview.firing_cost, currencySymbol)}</p></div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Costo de quema asignado</p><p className="font-semibold tabular-nums text-orange-950">{money(preview.firing_cost, currencySymbol)}</p></div>
             </div>
           ) : null}
         </div>
@@ -694,7 +694,7 @@ export function CotizadorItemCard({
           </div>
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Material</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.materials_applied, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Quema</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo de quema asignado</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</p></div>
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Mano de obra</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.labor_cost, currencySymbol)}</p></div>
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Otros gastos</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.space_cost, currencySymbol)}</p></div>
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo unitario backend</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.final_unit_cost, currencySymbol)}</p></div>
@@ -735,7 +735,7 @@ export function CotizadorItemCard({
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <div><dt className="text-[10px] uppercase text-zinc-400">Cantidad</dt><dd className="font-semibold tabular-nums">{preview?.quantity ?? (item.quantity || "—")}</dd></div>
             <div><dt className="text-[10px] uppercase text-zinc-400">Costo unit.</dt><dd className="font-semibold tabular-nums">{money(preview?.final_unit_cost, currencySymbol)}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">Quema</dt><dd className="font-semibold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">Costo de quema asignado</dt><dd className="font-semibold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</dd></div>
             <div><dt className="text-[10px] uppercase text-zinc-400">Precio unit. sin IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_sale_unit_price, currencySymbol)}</dd></div>
             <div><dt className="text-[10px] uppercase text-zinc-400">Precio unit. con IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_unit_price_with_tax, currencySymbol)}</dd></div>
             <div><dt className="text-[10px] uppercase text-zinc-400">Subtotal</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_subtotal, currencySymbol)}</dd></div>

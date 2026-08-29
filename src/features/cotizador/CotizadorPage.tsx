@@ -62,8 +62,11 @@ function ProductionPanel({ preview }: {
   return (
     <section className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
       <div>
-        <h2 className="text-sm font-semibold text-zinc-950">Simulación integral del lote</h2>
-        <p className="mt-1 text-xs text-zinc-500">Configure quema baja, quema alta y horno de factor en cada pieza.</p>
+        <h2 className="text-sm font-semibold text-zinc-950">Resumen de quema del lote</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Cálculo consolidado de todos los productos incluidos en esta producción. La ocupación
+          y el factor salen del lote completo, no de cada pieza por separado.
+        </p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-bold tabular-nums">{decimalFrom(summary.total_volume_cm3)} cm³</p></div>
@@ -83,7 +86,9 @@ function ProductionPanel({ preview }: {
         ))}
       </div>
       <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
-        Simulación integrada: no crea ni confirma una quema real y no mueve inventario.
+        Estas cifras son el <strong>costo total de la quema</strong>, no el de la última pieza:
+        cada producto recibe su parte prorrateada en su propia tarjeta. La simulación no crea ni
+        confirma una quema real y no mueve inventario.
       </p>
     </section>
   );
@@ -283,7 +288,6 @@ export function CotizadorPage() {
 
       {step === 2 ? (
         <div className="space-y-4">
-          <ProductionPanel preview={preview} />
           {draft.items.map((item, index) => (
             <CotizadorItemCard
               key={item.id ?? `production-${index}`}
@@ -302,6 +306,12 @@ export function CotizadorPage() {
             />
           ))}
           {!draft.items.length ? <p className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">Agregue piezas antes de configurar la producción.</p> : null}
+          {/* El resumen va DESPUES del ultimo producto y antes de la
+              navegacion: se configura pieza por pieza hacia abajo, y el
+              resultado consolidado se lee donde termina la configuracion.
+              Arriba obligaba a subir de nuevo para ver el efecto de lo que
+              se acababa de cambiar. */}
+          {draft.items.length ? <ProductionPanel preview={preview} /> : null}
         </div>
       ) : null}
 
