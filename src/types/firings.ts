@@ -13,6 +13,18 @@ export type FiringStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
 // ---------------------------------------------------------------------------
 // Hornos
 // ---------------------------------------------------------------------------
+/**
+ * Tramo de ocupación tal y como se envía al backend.
+ *
+ * La tabla completa reemplaza a la anterior: el backend exige que empiece en
+ * 1 %, termine en 100 % y no deje huecos ni solapamientos.
+ */
+export interface KilnOccupancyFactorIn {
+  min_percentage: number;
+  max_percentage: number;
+  factor: string;
+}
+
 export interface KilnOccupancyFactorOut {
   id: number;
   kiln_id: number;
@@ -55,6 +67,11 @@ export interface KilnCreate {
   name: string;
   capacity_volume_cm3: string;
   firing_days_per_batch?: number;
+  /**
+   * Tramos iniciales. Sin ellos el horno nace inservible: una quema no puede
+   * usarlo hasta que tenga tabla de factores.
+   */
+  occupancy_factors?: KilnOccupancyFactorIn[];
   active?: boolean;
   notes?: string | null;
 }

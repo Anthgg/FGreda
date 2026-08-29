@@ -18,6 +18,7 @@ import {
   fetchKiln,
   fetchKilnRates,
   fetchKilns,
+  setKilnOccupancyFactors,
   setKilnRate,
   updateFiring,
   updateKiln,
@@ -26,6 +27,7 @@ import type {
   FiringFilters,
   FiringIn,
   KilnCreate,
+  KilnOccupancyFactorIn,
   KilnRateIn,
   KilnUpdate,
 } from "@/types/firings";
@@ -126,6 +128,21 @@ export function useUpdateKiln(id: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: KilnUpdate) => updateKiln(id, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KILNS_KEY }),
+  });
+}
+
+/**
+ * Guarda la tabla de factores de un horno.
+ *
+ * Invalida los hornos para que la ficha vuelva a leerse del backend: la
+ * respuesta trae los tramos ya normalizados y ordenados por el servidor, que
+ * es la version que debe verse, no la que quedo en el formulario.
+ */
+export function useSetKilnOccupancyFactors(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: KilnOccupancyFactorIn[]) => setKilnOccupancyFactors(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: KILNS_KEY }),
   });
 }

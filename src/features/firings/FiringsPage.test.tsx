@@ -46,7 +46,12 @@ interface Escenario {
 }
 
 /** Doble del backend con las respuestas del modulo. */
-function mockQuemas(escenario: Escenario = {}) {
+/**
+ * Handler del escenario de Quemas, expuesto aparte de `mockQuemas` para que un
+ * test pueda interceptar UNA ruta y delegar el resto sin duplicar el mock
+ * entero.
+ */
+function quemasHandler(escenario: Escenario = {}) {
   const {
     calculo = CALCULO,
     calculoError,
@@ -55,7 +60,7 @@ function mockQuemas(escenario: Escenario = {}) {
     rol = "ADMIN",
   } = escenario;
 
-  return mockFetch((url, init) => {
+  return (url: string, init: RequestInit) => {
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) {
       return sessionResponse({ ...TEST_USER, role: rol });
@@ -78,6 +83,9 @@ function mockQuemas(escenario: Escenario = {}) {
     if (/\/kilns\/\d+\/rates/.test(url)) {
       if ((init.method ?? "GET") === "POST") return jsonResponse(201, HISTORIAL_TARIFAS[0]);
       return jsonResponse(200, HISTORIAL_TARIFAS);
+    }
+    if (/\/kilns\/\d+\/occupancy-factors/.test(url)) {
+      return jsonResponse(200, HORNO_CHICO.occupancy_factors);
     }
     if (url.includes("/kilns") && (init.method ?? "GET") === "POST") {
       return jsonResponse(201, HORNO_CHICO);
@@ -132,7 +140,11 @@ function mockQuemas(escenario: Escenario = {}) {
       return jsonResponse(200, PRODUCTS_PAGE);
     }
     return errorResponse(404, "NOT_FOUND");
-  });
+  };
+}
+
+function mockQuemas(escenario: Escenario = {}) {
+  return mockFetch(quemasHandler(escenario));
 }
 
 function urls(spy: ReturnType<typeof mockFetch>): string[] {
@@ -356,6 +368,102 @@ describe("quemas: hornos y tarifas", () => {
     expect(screen.getByText(/factor por ocupación \(10 tramos\)/i)).toBeInTheDocument();
     // El tramo del caso de referencia.
     expect(screen.getAllByText(/71–80 %/).length).toBeGreaterThan(0);
+  });
+
+  it("EDIT_OCCUPANCY_FACTORS + SAVE_RELOAD: la tabla se edita y se guarda contra el backend", async () => {
+    // Antes existia PUT /kilns/{id}/occupancy-factors y NINGUNA pantalla lo
+    // llamaba: la tabla era de solo lectura y un horno sin factores no tenia
+    // forma de arreglarse desde la aplicacion.
+    const enviados: unknown[] = [];
+    mockFetch((url, init) => {
+      if (/\/kilns\/\d+\/occupancy-factors/.test(url) && init.method === "PUT") {
+        enviados.push(JSON.parse(String(init.body)));
+        return jsonResponse(200, HORNO_CHICO.occupancy_factors);
+      }
+      return quemasHandler()(url, init);
+    });
+    const user = userEvent.setup();
+    renderApp(["/quemas"]);
+
+    await user.click(await screen.findByRole("tab", { name: "Hornos y tarifas" }));
+    await screen.findByText("Horno pequeño");
+
+    await user.click(screen.getAllByRole("button", { name: /editar factores/i })[0]!);
+    await user.click(screen.getByRole("button", { name: /guardar factores/i }));
+
+    await waitFor(() => expect(enviados.length).toBe(1));
+    const tabla = enviados[0] as Array<Record<string, unknown>>;
+    // Se envia la tabla COMPLETA, de 1 a 100, como exige el backend.
+    expect(tabla[0]).toMatchObject({ min_percentage: 1 });
+    expect(tabla[tabla.length - 1]).toMatchObject({ max_percentage: 100 });
+    // Y se sale del modo edicion solo tras la confirmacion del backend.
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /guardar factores/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("API_ERROR: si el backend rechaza los factores, no se muestra falso exito", async () => {
+    mockFetch((url, init) => {
+      if (/\/kilns\/\d+\/occupancy-factors/.test(url) && init.method === "PUT") {
+        return errorResponse(422, "VALIDATION_ERROR", "Discontinuidad o solapamiento en tramos");
+      }
+      return quemasHandler()(url, init);
+    });
+    const user = userEvent.setup();
+    renderApp(["/quemas"]);
+
+    await user.click(await screen.findByRole("tab", { name: "Hornos y tarifas" }));
+    await screen.findByText("Horno pequeño");
+    await user.click(screen.getAllByRole("button", { name: /editar factores/i })[0]!);
+    await user.click(screen.getByRole("button", { name: /guardar factores/i }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // El editor sigue abierto: nada se dio por guardado.
+    expect(screen.getByRole("button", { name: /guardar factores/i })).toBeInTheDocument();
+  });
+
+  it("CREATE_KILN_WITH_FACTORS: el alta envia la tabla y no deja el horno muerto", async () => {
+    const creados: Array<Record<string, unknown>> = [];
+    mockFetch((url, init) => {
+      if (url.includes("/kilns") && init.method === "POST" && !url.includes("rates")) {
+        creados.push(JSON.parse(String(init.body)));
+        return jsonResponse(201, HORNO_CHICO);
+      }
+      return quemasHandler()(url, init);
+    });
+    const user = userEvent.setup();
+    renderApp(["/quemas"]);
+
+    await user.click(await screen.findByRole("tab", { name: "Hornos y tarifas" }));
+    await user.click(await screen.findByRole("button", { name: /nuevo horno/i }));
+
+    // El alta vive en su propio formulario; el resto de la pestana tiene
+    // campos con nombres parecidos.
+    const alta = (await screen.findByRole("heading", { name: /nuevo horno/i }))
+      .closest("form") as HTMLFormElement;
+    await user.type(within(alta).getByLabelText(/nombre/i), "Horno de prueba");
+    await user.type(within(alta).getByLabelText(/capacidad/i), "5000");
+
+    // CREATE_KILN_WITHOUT_FACTORS: sin multiplicadores el alta esta bloqueada,
+    // asi que no se puede crear un horno inservible por descuido.
+    expect(within(alta).getByRole("button", { name: /crear horno/i })).toBeDisabled();
+
+    const factores = within(alta).getAllByPlaceholderText("Ej. 1.5");
+    for (const campo of factores) await user.type(campo, "1.5");
+
+    await waitFor(() =>
+      expect(within(alta).getByRole("button", { name: /crear horno/i })).toBeEnabled(),
+    );
+    await user.click(within(alta).getByRole("button", { name: /crear horno/i }));
+
+    await waitFor(() => expect(creados.length).toBe(1));
+    const enviado = creados[0]!;
+    const tramos = enviado["occupancy_factors"] as Array<Record<string, unknown>>;
+    expect(tramos).toHaveLength(10);
+    expect(tramos[0]).toMatchObject({ min_percentage: 1, factor: "1.5" });
+    expect(tramos[9]).toMatchObject({ max_percentage: 100 });
+    // El codigo NUNCA lo manda el frontend: lo emite el backend.
+    expect(enviado).not.toHaveProperty("code");
   });
 
   it("el historial de tarifas distingue la vigente de la cerrada", async () => {

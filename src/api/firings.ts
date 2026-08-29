@@ -14,6 +14,8 @@ import type {
   FiringOut,
   FiringPage,
   KilnCreate,
+  KilnOccupancyFactorIn,
+  KilnOccupancyFactorOut,
   KilnOut,
   KilnPage,
   KilnRateIn,
@@ -46,6 +48,17 @@ export function createKiln(payload: KilnCreate): Promise<KilnOut> {
 
 export function updateKiln(id: number, payload: KilnUpdate): Promise<KilnOut> {
   return apiClient.put<KilnOut>(`${KILNS}/${id}`, payload);
+}
+
+/** Reemplaza la tabla completa de factores de ocupación de un horno. */
+export function setKilnOccupancyFactors(
+  kilnId: number,
+  payload: KilnOccupancyFactorIn[],
+): Promise<KilnOccupancyFactorOut[]> {
+  return apiClient.put<KilnOccupancyFactorOut[]>(
+    `${KILNS}/${kilnId}/occupancy-factors`,
+    payload,
+  );
 }
 
 // ---------------------------------------------------------------------------
