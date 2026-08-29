@@ -70,6 +70,8 @@ function itemOut(input: Record<string, unknown>, index: number) {
     dimensions_overridden: false,
     low_kiln_selected: input["low_kiln_selected"] !== false,
     high_kiln_selected: input["high_kiln_selected"] !== false,
+    glaze_plan: null,
+    glaze_unit: "g" as const,
     quantity,
     recipe_id: null,
     recipe_version_id: null,
@@ -83,7 +85,11 @@ function itemOut(input: Record<string, unknown>, index: number) {
     low_kiln_id: typeof input.low_kiln_id === "number" ? input.low_kiln_id : null,
     high_kiln_id: typeof input.high_kiln_id === "number" ? input.high_kiln_id : null,
     factor_kiln_id: typeof input.factor_kiln_id === "number" ? input.factor_kiln_id : null,
-    production_snapshot: {},
+    production_snapshot: {
+      total_volume_cm3: "7140.000000",
+      occupancy_percentage: "20.000000",
+      allocated_cost: "96.000000",
+    },
     techniques: [],
     additionals: [],
     other_costs: [],
@@ -197,6 +203,19 @@ function handler(url: string, init: RequestInit) {
         sessions,
         total_batches: sessions.reduce((sum, session) => sum + session.batches, 0),
         total_days: sessions.reduce((sum, session) => sum + session.days, 0),
+        // Consolidado del LOTE, tal como lo devuelve el backend. La ocupacion
+        // NO es la suma de las `physical_occupancy_percentage` de cada sesion
+        // (42 + 42 = 84): si el frontend la calculara por su cuenta mostraria
+        // otro numero y estos tests lo delatarian.
+        total_volume_cm3: String(7140 * (body.items ?? []).length),
+        occupancy_percentage: (body.items ?? []).length > 1 ? "40.000000" : "10.000000",
+        occupancy_factor: (body.items ?? []).length > 1 ? "1.400000" : "1.100000",
+        subtotal: "850.00",
+        total_cost: "1190.00",
+        tax_percentage: "18",
+        tax_amount: "214.20",
+        total_with_tax: "1404.20",
+        currency_symbol: "S/",
       },
       kiln_id: body.kiln_id ?? null,
       commercial_subtotal: items.length ? "770.40" : "0",
@@ -518,6 +537,135 @@ describe("Cotizador integral", () => {
     // Fase 009B: por defecto la linea arranca en modo estandar; el aviso de
     // "solo se habilitan datos ausentes" se reemplazo por el badge de modo.
     expect(screen.getByText("Medidas estándar")).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------
+  // Resumen de quema del lote: posicion y autoridad
+  // ---------------------------------------------------------------------
+
+  /** Deja DOS piezas configuradas y abre el paso Produccion. */
+  async function openProductionWithTwoPieces(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole("heading", { name: "Nuevo cotizador." });
+    await user.click(screen.getByRole("button", { name: /Piezas/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    await user.click(screen.getByRole("combobox", { name: "Pieza terminada" }));
+    await user.click(await screen.findByText("Plato palta QA"));
+    await user.click(screen.getByRole("button", { name: /Agregar producto/i }));
+    const selectores = screen.getAllByRole("combobox", { name: "Pieza terminada" });
+    await user.click(selectores[selectores.length - 1]!);
+    await user.click(await screen.findByText("Bowl mediano"));
+    await user.click(screen.getByRole("button", { name: /Producción/i }));
+  }
+
+  it("PRODUCTION_SUMMARY_AFTER_LAST_PRODUCT: el resumen va tras la última pieza", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProductionWithTwoPieces(user);
+
+    const resumen = await screen.findByRole("heading", { name: "Resumen de quema del lote" });
+    const tarjetas = screen.getAllByText(/^PRODUCTO \d+$/i);
+    expect(tarjetas).toHaveLength(2);
+
+    // Se configura pieza por pieza hacia abajo; el consolidado se lee donde
+    // termina la configuracion, no obligando a subir de nuevo.
+    const ultima = tarjetas[tarjetas.length - 1]!;
+    expect(
+      ultima.compareDocumentPosition(resumen) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("PRODUCTION_SUMMARY_BEFORE_NAVIGATION: el resumen va antes de los botones", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProductionWithTwoPieces(user);
+
+    const resumen = await screen.findByRole("heading", { name: "Resumen de quema del lote" });
+    const anterior = screen.getByRole("button", { name: "Anterior" });
+
+    expect(
+      resumen.compareDocumentPosition(anterior) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("BACKEND_OCCUPANCY_AUTHORITY: la ocupación consolidada es la del backend", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProductionWithTwoPieces(user);
+
+    await screen.findByRole("heading", { name: "Resumen de quema del lote" });
+
+    // El backend responde 40 % para el lote de dos piezas. Sumar las
+    // ocupaciones fisicas de las sesiones (42 + 42) daria 84, y multiplicar
+    // o promediar daria otra cosa: si el frontend calculara, esto fallaria.
+    expect(await screen.findByText("40.00%")).toBeInTheDocument();
+    expect(screen.queryByText("84.00%")).not.toBeInTheDocument();
+    expect(screen.getByText("×1.40")).toBeInTheDocument();
+  });
+
+  it("MULTIPRODUCT_KILN_SUMMARY: el total de la quema no es el de una pieza", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProductionWithTwoPieces(user);
+
+    await screen.findByRole("heading", { name: "Resumen de quema del lote" });
+
+    // Costo total de la quema, tal cual lo devuelve el backend.
+    expect(screen.getByText("S/ 1190.00")).toBeInTheDocument();
+    expect(screen.getByText("S/ 1404.20")).toBeInTheDocument();
+    // Y se dice explicitamente que no pertenece a la ultima pieza.
+    expect(screen.getByText(/costo total de la quema/i)).toBeInTheDocument();
+  });
+
+  it("PRODUCT_ASSIGNED_KILN_COST_LABEL: la pieza muestra su parte, no el total", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProductionWithTwoPieces(user);
+
+    // "Quema" a secas confundia el total del lote con la parte de la pieza.
+    // Una por pieza: cada tarjeta muestra SU parte prorrateada.
+    const etiquetas = await screen.findAllByText("Costo de quema asignado");
+    expect(etiquetas).toHaveLength(2);
+  });
+
+  it("PRODUCTION_SUMMARY_LIVE_UPDATE: cambiar la cantidad recalcula sin guardar", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProductionWithTwoPieces(user);
+    await screen.findByRole("heading", { name: "Resumen de quema del lote" });
+
+    const previosGuardados = fetchSpy.mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith("/quotation-builder") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    ).length;
+
+    const cantidades = screen.getAllByLabelText(/Cantidad a producir/i);
+    await user.type(cantidades[0]!, "30");
+
+    // Se vuelve a pedir el preview al backend...
+    await waitFor(() => {
+      const previews = fetchSpy.mock.calls.filter(([url]) =>
+        String(url).includes("/quotation-builder/preview"),
+      );
+      const body = JSON.parse(
+        String((previews.at(-1)?.[1] as RequestInit | undefined)?.body),
+      ) as { items: Array<Record<string, unknown>> };
+      expect(body.items[0]?.["quantity"]).toBe(30);
+    });
+
+    // ...sin que haya hecho falta guardar nada.
+    const guardadosDespues = fetchSpy.mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith("/quotation-builder") &&
+        (init as RequestInit | undefined)?.method === "POST",
+    ).length;
+    expect(guardadosDespues).toBe(previosGuardados);
   });
 
   // ---------------------------------------------------------------------

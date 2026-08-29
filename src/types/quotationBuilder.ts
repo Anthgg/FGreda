@@ -40,6 +40,15 @@ export interface QuotationBuilderItemIn {
   low_kiln_selected?: boolean;
   high_kiln_selected?: boolean;
   factor_kiln_id?: number;
+  /**
+   * Fase 009D. SOLO intencion: que esmalte y con que peso relativo. El
+   * navegador no manda gramos, mililitros, concentracion ni costo — todo eso
+   * lo deriva el backend del gramaje del producto y del porcentaje
+   * configurado. Si el cliente pudiera mandarlos, dos cotizaciones podrian
+   * discrepar sin que nadie lo hubiera decidido.
+   */
+  glazes?: GlazeSelectionItemIn[];
+  glaze_unit?: GlazeUnit;
   techniques: TechniqueSelectionIn[];
   additionals: AdditionalSelectionIn[];
   days_adjustment: number;
@@ -48,6 +57,53 @@ export interface QuotationBuilderItemIn {
   markup_percent: string;
   commercial_sale_unit_price?: string;
   sort_order: number;
+}
+
+export type GlazeUnit = "g" | "ml";
+
+export interface GlazeSelectionItemIn {
+  /** Lote concreto. Sin el hay gramos pero no mililitros. */
+  preparation_id?: number;
+  prepared_product_id?: number;
+  /**
+   * Peso relativo, NO porcentaje. 1 y 1 es mitad y mitad; 2 y 1 son dos
+   * tercios y un tercio. El porcentaje lo resuelve el backend.
+   */
+  share: string;
+}
+
+export interface GlazeAllocationOut {
+  prepared_product_id: number;
+  prepared_product_internal_reference: string | null;
+  prepared_product_name: string | null;
+  preparation_id: number | null;
+  preparation_code: string | null;
+  /** Lo que tecleo el usuario, literal. */
+  share: string;
+  /** Lo que ese share representa una vez resuelto contra el resto. */
+  allocation_percent: string;
+  grams: string;
+  /** `null` sin lote elegido: sin concentracion no hay conversion. */
+  millilitres: string | null;
+  solids_g_per_ml_snapshot: string | null;
+  unit_cost_per_ml_snapshot: string | null;
+  estimated_cost: string | null;
+}
+
+/**
+ * Plan tecnico de esmaltes de una linea, tal como quedo guardado.
+ *
+ * En un borrador se recalcula con la configuracion vigente; en una cotizacion
+ * confirmada es historia y no vuelve a tocarse.
+ */
+export interface GlazePlanOut {
+  unit: GlazeUnit;
+  estimated_glaze_percent_snapshot: string;
+  piece_weight_g_snapshot: string;
+  grams_per_piece: string;
+  total_estimated_solids_g: string;
+  allocations: GlazeAllocationOut[];
+  total_estimated_cost: string | null;
 }
 
 export interface QuotationBuilderDraftIn {
@@ -100,6 +156,12 @@ export interface QuotationBuilderItemOut {
   high_kiln_selected: boolean;
   factor_kiln_id: number | null;
   production_snapshot: Record<string, unknown>;
+  /**
+   * Fase 009D. El frontend consume ESTE campo tipado y nunca el JSON crudo de
+   * production_snapshot.
+   */
+  glaze_plan: GlazePlanOut | null;
+  glaze_unit: GlazeUnit;
   techniques: Array<Record<string, unknown>>;
   additionals: Array<Record<string, unknown>>;
   other_costs: Array<Record<string, unknown>>;
