@@ -1,11 +1,20 @@
 import type { Product } from "@/types/masters";
 import type {
+  GlazeSelectionItemIn,
+  GlazeUnit,
   ProductDimension,
   QuotationBuilderDraftIn,
   QuotationBuilderItemIn,
   QuotationBuilderItemOut,
   QuotationBuilderOut,
 } from "@/types/quotationBuilder";
+
+/** Un esmalte elegido para la pieza. `share` es peso relativo, no porcentaje. */
+export interface GlazeDraft {
+  preparationId: string;
+  preparedProductId: string;
+  share: string;
+}
 
 export interface CotizadorItemDraft {
   id?: number;
@@ -41,6 +50,13 @@ export interface CotizadorItemDraft {
   lowKilnSelected: boolean;
   highKilnSelected: boolean;
   factorKilnId: string;
+  /**
+   * Fase 009D: los esmaltes de la pieza y su reparto. Es lo UNICO que el
+   * navegador decide del plan; los gramos, mililitros, concentracion y costo
+   * los deriva el backend y llegan en `glazePlan`.
+   */
+  glazes: GlazeDraft[];
+  glazeUnit: GlazeUnit;
   techniqueIds: string[];
   techniqueQuantities: Record<string, string>;
   additionalIds: string[];
@@ -88,6 +104,8 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   lowKilnSelected: true,
   highKilnSelected: true,
   factorKilnId: "",
+  glazes: [],
+  glazeUnit: "g",
   techniqueIds: [],
   techniqueQuantities: {},
   additionalIds: [],
@@ -131,6 +149,8 @@ export function itemFromProduct(product: Product): CotizadorItemDraft {
     lowKilnSelected: true,
     highKilnSelected: true,
     factorKilnId: "",
+    glazes: [],
+    glazeUnit: "g",
     techniqueIds: [],
     techniqueQuantities: {},
     additionalIds: [],
@@ -203,6 +223,16 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
     lowKilnSelected: item.low_kiln_selected,
     highKilnSelected: item.high_kiln_selected,
     factorKilnId: decimal(item.factor_kiln_id),
+    // Fase 009D: se reconstruye la ELECCION (que esmalte y con que reparto),
+    // no los derivados. Los gramos y mililitros guardados son el resultado de
+    // un calculo del backend; reinyectarlos como entrada congelaria un
+    // borrador que deberia seguir la configuracion vigente.
+    glazes: (item.glaze_plan?.allocations ?? []).map((allocation) => ({
+      preparationId: decimal(allocation.preparation_id),
+      preparedProductId: decimal(allocation.prepared_product_id),
+      share: decimal(allocation.share),
+    })),
+    glazeUnit: item.glaze_unit ?? "g",
     techniqueIds: idsFromSnapshots(item.techniques, "technique_id"),
     techniqueQuantities: quantitiesFromSnapshots(item.techniques, "technique_id", "quantity"),
     additionalIds: idsFromSnapshots(item.additionals, "additional_id"),
@@ -284,6 +314,21 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         ...(item.highKilnSelected && highKilnId ? { high_kiln_id: highKilnId } : {}),
         low_kiln_selected: item.lowKilnSelected,
         high_kiln_selected: item.highKilnSelected,
+        // Solo intencion. Ni gramos, ni mililitros, ni concentracion, ni
+        // costo: eso es autoridad del backend.
+        glazes: item.glazes.flatMap((glaze): GlazeSelectionItemIn[] => {
+          const preparationId = positiveInt(glaze.preparationId);
+          const preparedProductId = positiveInt(glaze.preparedProductId);
+          if (!preparationId && !preparedProductId) return [];
+          return [
+            {
+              ...(preparationId ? { preparation_id: preparationId } : {}),
+              ...(preparedProductId ? { prepared_product_id: preparedProductId } : {}),
+              share: glaze.share.trim() || "1",
+            },
+          ];
+        }),
+        glaze_unit: item.glazeUnit,
         ...(factorKilnId ? { factor_kiln_id: factorKilnId } : {}),
         techniques: item.techniqueIds.map((id, index) => ({
           technique_id: Number(id),

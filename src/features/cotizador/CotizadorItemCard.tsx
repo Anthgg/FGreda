@@ -541,10 +541,13 @@ export function CotizadorItemCard({
             />
           </div>
           <GlazeEstimator
-            quantity={item.quantity}
+            glazes={item.glazes}
+            glazeUnit={item.glazeUnit}
+            plan={preview?.glaze_plan ?? null}
+            warnings={preview?.warnings ?? []}
             disabled={disabled}
             currencySymbol={currencySymbol}
-            onApplyGramsPerPiece={(materialGramsPerPiece) => patch({ materialGramsPerPiece })}
+            onChange={patch}
           />
           <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
             <div className="mb-3">
