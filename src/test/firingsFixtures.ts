@@ -35,6 +35,10 @@ export const HORNO_CHICO: KilnOut = {
   code: "KILN-001",
   name: "Horno pequeño",
   capacity_volume_cm3: "17000.000000",
+  // Fase 009C: el pequeño ocupa 3 días por hornada y el grande 4. Las
+  // fixtures copian los hornos reales para que las pruebas midan la
+  // diferencia entre hornos, que es justo lo que la fase corrige.
+  firing_days_per_batch: 3,
   active: true,
   notes: null,
   created_at: AHORA,
@@ -55,6 +59,7 @@ export const HORNO_GRANDE: KilnOut = {
   code: "KILN-002",
   name: "Horno grande",
   capacity_volume_cm3: "200000.000000",
+  firing_days_per_batch: 4,
   active: true,
   notes: null,
   created_at: AHORA,

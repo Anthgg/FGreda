@@ -143,6 +143,7 @@ function HistorialTarifas({ kilnId }: { kilnId: number }) {
 /** Ficha de un horno: datos, tarifas, tabla de factores e historial. */
 function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
   const [capacidad, setCapacidad] = useState(kiln.capacity_volume_cm3);
+  const [dias, setDias] = useState(String(kiln.firing_days_per_batch));
   const [tipoTarifa, setTipoTarifa] = useState<FiringType>("LOW");
   const [importe, setImporte] = useState("");
   const [verHistorial, setVerHistorial] = useState(false);
@@ -170,6 +171,14 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
           </p>
         </div>
         <div className="rounded-2xl border border-black/[0.04] bg-white/40 p-3 shadow-2xs">
+          <p className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">
+            Días / hornada
+          </p>
+          <p className="mt-0.5 text-sm font-bold tabular-nums text-zinc-900">
+            {kiln.firing_days_per_batch}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-black/[0.04] bg-white/40 p-3 shadow-2xs">
           <p className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">Quema baja</p>
           <p className="mt-0.5 text-sm font-bold tabular-nums text-zinc-900">
             {formatDecimalString(kiln.current_low_rate, 2)}
@@ -192,6 +201,16 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
               onChange={setCapacidad}
               inputMode="decimal"
             />
+            {/* La duración de una hornada es un dato del horno, no del tipo de
+                quema: baja y alta tardan lo mismo en el mismo horno. Cambiarla
+                afecta a los borradores, nunca a lo ya confirmado. */}
+            <TextField
+              label="Días por hornada"
+              value={dias}
+              onChange={setDias}
+              inputMode="numeric"
+              hint="Días que el horno queda ocupado por cada hornada. Mínimo 1."
+            />
             <div className="flex gap-2">
               <SecondaryButton
                 onClick={() =>
@@ -204,6 +223,16 @@ function FichaHorno({ kiln, canEdit }: { kiln: KilnOut; canEdit: boolean }) {
                 }
               >
                 Guardar capacidad
+              </SecondaryButton>
+              <SecondaryButton
+                onClick={() => actualizar.mutate({ firing_days_per_batch: Number(dias) })}
+                disabled={
+                  !/^[1-9]\d*$/.test(dias.trim()) ||
+                  dias.trim() === String(kiln.firing_days_per_batch) ||
+                  actualizar.isPending
+                }
+              >
+                Guardar días
               </SecondaryButton>
               <SecondaryButton
                 onClick={() => actualizar.mutate({ active: !kiln.active })}
