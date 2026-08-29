@@ -26,18 +26,6 @@ const DECIMAL = /^\d+(\.\d+)?$/;
 const esImporte = (valor: string) => DECIMAL.test(valor.trim());
 const esFactor = (valor: string) => DECIMAL.test(valor.trim()) && Number(valor) > 0;
 
-/** Código sugerido a partir del nombre, editable por si el taller usa otro. */
-function codigoSugerido(prefijo: string, nombre: string): string {
-  const limpio = nombre
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 20);
-  return limpio ? `${prefijo}-${limpio}` : "";
-}
-
 interface NuevoMaestroModalProps {
   tipo: "technique" | "additional";
   initialName: string;
@@ -54,7 +42,6 @@ export function NuevoMaestroModal({
   const esTecnica = tipo === "technique";
 
   const [name, setName] = useState(initialName.trim());
-  const [code, setCode] = useState(codigoSugerido(esTecnica ? "TEC" : "ADI", initialName));
   const [unitPrice, setUnitPrice] = useState("");
   const [tecnicaFormula, setTecnicaFormula] = useState<TechniqueFormulaType>("ONE_FACTOR");
   const [adicionalFormula, setAdicionalFormula] =
@@ -74,7 +61,6 @@ export function NuevoMaestroModal({
 
   const valido =
     name.trim() !== "" &&
-    code.trim() !== "" &&
     esImporte(unitPrice) &&
     (!necesitaFactor || esFactor(factor1)) &&
     (!necesitaFactor2 || esFactor(factor2));
@@ -86,7 +72,6 @@ export function NuevoMaestroModal({
         {
           id: undefined,
           payload: {
-            code: code.trim(),
             name: name.trim(),
             unit_price: unitPrice.trim(),
             formula_type: tecnicaFormula,
@@ -104,7 +89,6 @@ export function NuevoMaestroModal({
       {
         id: undefined,
         payload: {
-          code: code.trim(),
           name: name.trim(),
           unit_price: unitPrice.trim(),
           formula_type: adicionalFormula,
@@ -136,13 +120,6 @@ export function NuevoMaestroModal({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField label="Nombre" requirement="required" value={name} onChange={setName} />
-          <TextField
-            label="Código"
-            requirement="required"
-            value={code}
-            onChange={setCode}
-            hint="Se propone a partir del nombre."
-          />
           <TextField
             label="Precio unitario"
             requirement="required"

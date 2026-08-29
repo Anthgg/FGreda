@@ -54,9 +54,17 @@ export interface MasterPage<T> {
   offset: number;
 }
 
-export type TechniqueInput = Omit<TechniqueOut, "id" | "created_at" | "updated_at">;
-export type AdditionalInput = Omit<AdditionalOut, "id" | "created_at" | "updated_at">;
-export type OtherCostInput = Omit<OtherCostOut, "id" | "created_at" | "updated_at">;
+/**
+ * Payload de alta/edición de un maestro de costos.
+ *
+ * `code` queda fuera junto a `id` y las fechas: es identidad interna que emite
+ * el backend. Antes viajaba en el payload y el usuario lo escribía a mano en
+ * el formulario, de modo que dos instalaciones numeraban distinto y editar una
+ * técnica permitía cambiarle el código.
+ */
+export type TechniqueInput = Omit<TechniqueOut, "id" | "code" | "created_at" | "updated_at">;
+export type AdditionalInput = Omit<AdditionalOut, "id" | "code" | "created_at" | "updated_at">;
+export type OtherCostInput = Omit<OtherCostOut, "id" | "code" | "created_at" | "updated_at">;
 
 export interface TechniqueSelectionIn {
   technique_id: number;
