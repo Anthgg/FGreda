@@ -133,9 +133,10 @@ export function RecipePreparationsTab({ canEdit }: { canEdit: boolean }) {
   );
   const calc = useRecipeCalc(calcPayload);
 
-  const stock = useStock(
-    locationId ? { location_id: Number(locationId), limit: STOCK_PAGE } : { limit: 0 },
-  );
+  // Sin ubicacion no hay saldos que contrastar, y la consulta se apaga entera:
+  // `limit: 0` no es "ninguno" para el backend, es un valor fuera de rango que
+  // devuelve 422 en cada render de la pestana.
+  const stock = useStock({ location_id: Number(locationId), limit: STOCK_PAGE }, Boolean(locationId));
   const available = useMemo(() => {
     const map = new Map<number, string>();
     for (const balance of stock.data?.items ?? []) map.set(balance.product_id, balance.quantity);
