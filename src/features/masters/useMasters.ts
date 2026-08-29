@@ -122,8 +122,11 @@ export function useUpdatePartner() {
 // ---------------------------------------------------------------------------
 // Inventario
 // ---------------------------------------------------------------------------
-export function useStock(filters: { search?: string; location_id?: number; limit?: number }) {
-  return useQuery({ queryKey: [...STOCK_KEY, filters], queryFn: () => fetchStock(filters) });
+export function useStock(
+  filters: { search?: string; location_id?: number; limit?: number },
+  enabled = true,
+) {
+  return useQuery({ queryKey: [...STOCK_KEY, filters], queryFn: () => fetchStock(filters), enabled });
 }
 
 export function useLocations() {

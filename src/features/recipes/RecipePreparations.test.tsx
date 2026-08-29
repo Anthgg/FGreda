@@ -209,6 +209,20 @@ describe("Recetas · preparaciones", () => {
     expect(spy).toHaveBeenCalled();
   });
 
+  it("no pide saldos mientras no haya ubicación elegida", async () => {
+    // `limit: 0` no significa "ninguno" para el backend: está fuera de rango y
+    // devuelve 422. Sin ubicación la consulta no se lanza en absoluto.
+    const spy = mockApi();
+    renderApp(["/recetas"]);
+    await abrirPreparaciones();
+    await screen.findByRole("button", { name: /Celadón base/ });
+
+    const inventario = spy.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes("/inventory") && !url.includes("/locations"));
+    expect(inventario).toEqual([]);
+  });
+
   it("no permite confirmar sin el rendimiento medido", async () => {
     mockApi();
     renderApp(["/recetas"]);
