@@ -46,7 +46,11 @@ interface GlazeEstimatorProps {
   warnings: string[];
   disabled: boolean;
   currencySymbol: string;
-  onChange: (change: { glazes?: GlazeDraft[]; glazeUnit?: GlazeUnit }) => void;
+  onChange: (change: {
+    glazes?: GlazeDraft[];
+    glazeUnit?: GlazeUnit;
+    glazeSelectionTouched?: boolean;
+  }) => void;
 }
 
 export function GlazeEstimator({
@@ -60,13 +64,25 @@ export function GlazeEstimator({
 }: GlazeEstimatorProps) {
   const batches = usePreparations({ limit: 50, offset: 0 }, !disabled);
 
-  const chosen = new Set(
-    glazes.map((glaze) => glaze.preparationId).filter((value) => value !== ""),
+  const suggested = plan?.default_applied ?? false;
+  // Mientras el backend propone, la lista refleja SU propuesta: de lo
+  // contrario la tabla mostraria un esmalte que el formulario no nombra.
+  const visibles: GlazeDraft[] =
+    plan && plan.default_applied
+      ? plan.allocations.map((allocation) => ({
+          preparationId: String(allocation.preparation_id ?? ""),
+          preparedProductId: String(allocation.prepared_product_id),
+          share: allocation.share,
+        }))
+      : glazes;
+
+  const yaEstan = new Set(
+    visibles.map((glaze) => glaze.preparationId).filter((value) => value !== ""),
   );
   const batchOptions = [
     { value: "", label: "Añadir esmalte preparado…" },
     ...(batches.data?.items ?? [])
-      .filter((batch) => !chosen.has(String(batch.id)))
+      .filter((batch) => !yaEstan.has(String(batch.id)))
       .map((batch) => ({
         value: String(batch.id),
         label: `${batch.code} · ${batch.prepared_product_name}`,
@@ -84,28 +100,36 @@ export function GlazeEstimator({
     return batch ? `${batch.code} · ${batch.prepared_product_name}` : `#${glaze.preparationId}`;
   };
 
+  // Cualquier cambio marca la seleccion como propia del usuario. A partir de
+  // ahi el backend deja de proponer, incluso si la lista queda vacia: quitar
+  // el sugerido es una decision, y sin esta bandera reaparecería solo.
   const setShare = (preparationId: string, share: string) =>
     onChange({
-      glazes: glazes.map((glaze) =>
+      glazes: visibles.map((glaze) =>
         glaze.preparationId === preparationId ? { ...glaze, share } : glaze,
       ),
+      glazeSelectionTouched: true,
     });
 
   const remove = (preparationId: string) =>
-    onChange({ glazes: glazes.filter((glaze) => glaze.preparationId !== preparationId) });
+    onChange({
+      glazes: visibles.filter((glaze) => glaze.preparationId !== preparationId),
+      glazeSelectionTouched: true,
+    });
 
   const add = (preparationId: string) => {
     if (!preparationId) return;
     const batch = batches.data?.items.find((item) => String(item.id) === preparationId);
     onChange({
       glazes: [
-        ...glazes,
+        ...visibles,
         {
           preparationId,
           preparedProductId: batch ? String(batch.prepared_product_id) : "",
           share: "1",
         },
       ],
+      glazeSelectionTouched: true,
     });
   };
 
@@ -148,9 +172,17 @@ export function GlazeEstimator({
         />
       </div>
 
-      {glazes.length > 0 ? (
+      {suggested ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+          <strong>Sugerido por el sistema:</strong> el preparado más caro disponible. Una
+          cotización preliminar peca por arriba a propósito. Cámbielo o quítelo si no
+          corresponde; su elección manda desde ese momento.
+        </p>
+      ) : null}
+
+      {visibles.length > 0 ? (
         <ul className="space-y-2">
-          {glazes.map((glaze) => (
+          {visibles.map((glaze) => (
             <li
               key={glaze.preparationId}
               className="flex flex-wrap items-end gap-3 rounded-xl border border-sky-100 bg-white/70 px-3 py-2"

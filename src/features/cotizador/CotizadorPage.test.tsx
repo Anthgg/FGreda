@@ -72,6 +72,7 @@ function itemOut(input: Record<string, unknown>, index: number) {
     high_kiln_selected: input["high_kiln_selected"] !== false,
     glaze_plan: null,
     glaze_unit: "g" as const,
+    glaze_selection_touched: false,
     quantity,
     recipe_id: null,
     recipe_version_id: null,

@@ -81,6 +81,7 @@ const BATCHES: RecipePreparationPage = {
 /** 500 g × 15 % × 100 piezas = 7500 g, repartidos 70/30. */
 const PLAN: GlazePlanOut = {
   unit: "ml",
+  default_applied: false,
   estimated_glaze_percent_snapshot: "15.000000",
   piece_weight_g_snapshot: "500.000000000000",
   grams_per_piece: "75.000000000000",
@@ -191,9 +192,11 @@ describe("Cotizador · plan de esmaltes", () => {
     await userEvent.click(selector);
     await userEvent.click(await screen.findByRole("option", { name: /PREP-2026-000001/ }));
 
-    // Ni gramos, ni mililitros, ni concentración, ni costo.
+    // Ni gramos, ni mililitros, ni concentración, ni costo. Y la bandera,
+    // para que el backend deje de proponer.
     expect(onChange).toHaveBeenCalledWith({
       glazes: [{ preparationId: "7", preparedProductId: "5", share: "1" }],
+      glazeSelectionTouched: true,
     });
   });
 
@@ -251,6 +254,7 @@ describe("Cotizador · ida y vuelta del plan", () => {
       production_snapshot: {},
       glaze_plan: plan,
       glaze_unit: unit,
+      glaze_selection_touched: plan !== null,
       techniques: [],
       additionals: [],
       other_costs: [],
@@ -401,5 +405,79 @@ describe("Cotizador · ida y vuelta del plan", () => {
     };
 
     expect(cotizadorToPayload(draft).items[0]!.glazes).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sugerencia por defecto
+// ---------------------------------------------------------------------------
+describe("Cotizador · sugerencia del esmalte más caro", () => {
+  const SUGERIDO: GlazePlanOut = {
+    ...PLAN,
+    unit: "g",
+    default_applied: true,
+    allocations: [{ ...PLAN.allocations[0]!, share: "1", allocation_percent: "100.000000" }],
+  };
+
+  it("se distingue una sugerencia de una elección del usuario", () => {
+    mockApi();
+    renderEstimator({ plan: SUGERIDO });
+
+    expect(screen.getByText(/sugerido por el sistema/i)).toBeInTheDocument();
+    expect(screen.getByText(/su elección manda desde ese momento/i)).toBeInTheDocument();
+  });
+
+  it("un plan elegido por el usuario no se anuncia como sugerencia", () => {
+    mockApi();
+    renderEstimator({ plan: PLAN });
+
+    expect(screen.queryByText(/sugerido por el sistema/i)).not.toBeInTheDocument();
+  });
+
+  it("quitar el sugerido marca la selección como propia del usuario", async () => {
+    // Sin la bandera, el backend volvería a proponerlo en el siguiente
+    // recálculo y la línea no podría quedarse nunca sin esmalte.
+    mockApi();
+    const onChange = renderEstimator({ plan: SUGERIDO });
+
+    await userEvent.click(screen.getByRole("button", { name: /quitar/i }));
+
+    expect(onChange).toHaveBeenCalledWith({ glazes: [], glazeSelectionTouched: true });
+  });
+
+  it("añadir otro esmalte conserva el sugerido y marca la elección", async () => {
+    mockApi();
+    const onChange = renderEstimator({ plan: SUGERIDO });
+
+    const selector = await screen.findByRole("combobox", { name: /añadir esmalte/i });
+    await userEvent.click(selector);
+    await userEvent.click(await screen.findByRole("option", { name: /PREP-2026-000002/ }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      glazes: [
+        { preparationId: "7", preparedProductId: "5", share: "1" },
+        { preparationId: "8", preparedProductId: "6", share: "1" },
+      ],
+      glazeSelectionTouched: true,
+    });
+  });
+
+  it("el payload lleva la bandera para que el backend deje de proponer", () => {
+    const draft = {
+      ...emptyCotizadorDraft(),
+      items: [
+        {
+          ...emptyCotizadorItem(),
+          productId: "42",
+          quantity: "100",
+          glazes: [],
+          glazeSelectionTouched: true,
+        },
+      ],
+    };
+
+    const enviado = cotizadorToPayload(draft).items[0]!;
+    expect(enviado.glaze_selection_touched).toBe(true);
+    expect(enviado.glazes).toEqual([]);
   });
 });

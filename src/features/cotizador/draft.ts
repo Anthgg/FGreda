@@ -57,6 +57,12 @@ export interface CotizadorItemDraft {
    */
   glazes: GlazeDraft[];
   glazeUnit: GlazeUnit;
+  /**
+   * El usuario ya toco la seleccion. Mientras sea false el backend propone el
+   * preparado mas caro; en cuanto es true manda lo que el usuario eligio,
+   * incluso si eligio no llevar ninguno.
+   */
+  glazeSelectionTouched: boolean;
   techniqueIds: string[];
   techniqueQuantities: Record<string, string>;
   additionalIds: string[];
@@ -106,6 +112,7 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   factorKilnId: "",
   glazes: [],
   glazeUnit: "g",
+  glazeSelectionTouched: false,
   techniqueIds: [],
   techniqueQuantities: {},
   additionalIds: [],
@@ -151,6 +158,7 @@ export function itemFromProduct(product: Product): CotizadorItemDraft {
     factorKilnId: "",
     glazes: [],
     glazeUnit: "g",
+    glazeSelectionTouched: false,
     techniqueIds: [],
     techniqueQuantities: {},
     additionalIds: [],
@@ -233,6 +241,7 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
       share: decimal(allocation.share),
     })),
     glazeUnit: item.glaze_unit ?? "g",
+    glazeSelectionTouched: item.glaze_selection_touched ?? false,
     techniqueIds: idsFromSnapshots(item.techniques, "technique_id"),
     techniqueQuantities: quantitiesFromSnapshots(item.techniques, "technique_id", "quantity"),
     additionalIds: idsFromSnapshots(item.additionals, "additional_id"),
@@ -329,6 +338,7 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
           ];
         }),
         glaze_unit: item.glazeUnit,
+        glaze_selection_touched: item.glazeSelectionTouched,
         ...(factorKilnId ? { factor_kiln_id: factorKilnId } : {}),
         techniques: item.techniqueIds.map((id, index) => ({
           technique_id: Number(id),
