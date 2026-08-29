@@ -99,6 +99,15 @@ function defaultDashboardHandler(url: string) {
   if (url.includes("/auth/me")) return sessionResponse();
   if (url.includes("/auth/csrf")) return csrfResponse();
   if (url.includes("/quotations")) {
+    // El stub respeta `status`, como hace el backend real. Sin esto, cada
+    // contador leeria el mismo `total` y el test no distinguiria "cuenta el
+    // backend" de "cuenta la pagina".
+    if (url.includes("status=CONFIRMED")) {
+      return jsonResponse(200, { items: [mockQuoteConfirmed], total: 1, limit: 200, offset: 0 });
+    }
+    if (url.includes("status=DRAFT")) {
+      return jsonResponse(200, { items: [mockQuoteDraft], total: 1, limit: 1, offset: 0 });
+    }
     return jsonResponse(200, {
       items: [mockQuoteConfirmed, mockQuoteDraft],
       total: 2,
@@ -175,6 +184,42 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     // S/ 850.00 confirmado
     expect(within(metricsSection).getByText("Total cotizado (mes)")).toBeInTheDocument();
     expect(within(metricsSection).getByText(/S\/\s*850[.,]00/)).toBeInTheDocument();
+  });
+
+  it("los contadores salen del `total` del backend, no del tamano de la pagina", async () => {
+    // Reproduce produccion: 229 cotizaciones, de las que el endpoint devuelve
+    // como mucho una pagina. Antes se contaba `items.length` y el panel se
+    // quedaba clavado en el limite de la pagina por muchas que hubiera.
+    const page = Array.from({ length: 100 }, (_, i) => ({
+      ...mockQuoteDraft,
+      id: 1000 + i,
+      code: `CTZ-2026-00${1000 + i}`,
+    }));
+    mockFetch((url) => {
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/quotations")) {
+        if (url.includes("status=CONFIRMED")) {
+          return jsonResponse(200, { items: [], total: 0, limit: 200, offset: 0 });
+        }
+        if (url.includes("status=DRAFT")) {
+          return jsonResponse(200, { items: [mockQuoteDraft], total: 187, limit: 1, offset: 0 });
+        }
+        return jsonResponse(200, { items: page, total: 229, limit: 100, offset: 0 });
+      }
+      if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
+      if (url.includes("/inventory")) return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0, limit: 10, offset: 0 });
+      return errorResponse(404, "NOT_FOUND");
+    });
+    renderApp(["/"]);
+
+    const metricsSection = await screen.findByLabelText("Métricas del taller");
+    // 229, no 100.
+    expect(await within(metricsSection).findByText("229")).toBeInTheDocument();
+    // 187 borradores, no 1 (que es lo que trae la pagina de `limit: 1`).
+    expect(await within(metricsSection).findByText("187")).toBeInTheDocument();
+    expect(within(metricsSection).queryByText("100")).not.toBeInTheDocument();
   });
 
   it("suma el total_with_tax de una cotizacion Legacy cuyo commercial_total nunca se poblo (0E-18)", async () => {
