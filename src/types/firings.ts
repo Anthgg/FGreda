@@ -28,6 +28,12 @@ export interface KilnOut {
   name: string;
   /** Decimal como texto, en cm³. */
   capacity_volume_cm3: string;
+  /**
+   * Fase 009C: días que el horno queda ocupado por CADA hornada. Es propiedad
+   * del horno (el pequeño 3, el grande 4), no una constante: el frontend lo
+   * muestra y lo edita, pero nunca lo deduce del tamaño.
+   */
+  firing_days_per_batch: number;
   active: boolean;
   notes: string | null;
   created_at: string;
@@ -48,6 +54,7 @@ export interface KilnPage {
 export interface KilnCreate {
   name: string;
   capacity_volume_cm3: string;
+  firing_days_per_batch?: number;
   active?: boolean;
   notes?: string | null;
 }
@@ -55,6 +62,7 @@ export interface KilnCreate {
 export interface KilnUpdate {
   name?: string;
   capacity_volume_cm3?: string;
+  firing_days_per_batch?: number;
   active?: boolean;
   notes?: string | null;
 }

@@ -35,15 +35,18 @@ const snapshotDecimal = (snapshot: Record<string, unknown>, key: string) => {
   return value === null || value === undefined ? "—" : formatDecimalString(String(value), 2);
 };
 
-/** Fase 009C: cada hornada ocupa el horno 3 dias. Debe coincidir con
- *  DAYS_PER_FIRING_BATCH del backend, que es la autoridad del calculo. */
-const DAYS_PER_FIRING_BATCH = 3;
-
 /** Plan de una quema concreta, leido del preview que devuelve el backend. */
 interface FiringPlanEntry {
   batches: number;
   costPerBatch: number;
   totalCost: number;
+  /**
+   * Fase 009C: la duracion NO se calcula aqui. Cada horno tiene la suya
+   * (`kilns.firing_days_per_batch`: el pequeno 3 dias, el grande 4), asi que
+   * multiplicar por una constante en el navegador daria un numero distinto
+   * del que el backend congela al confirmar.
+   */
+  daysPerBatch: number;
   days: number;
   capacity: string | null;
   occupancy: string | null;
@@ -120,8 +123,12 @@ function FiringToggle({
               <dd className="text-right font-semibold tabular-nums text-zinc-900">
                 {money(String(plan.totalCost), currencySymbol)}
               </dd>
+              <dt>Días / hornada</dt>
+              <dd className="text-right tabular-nums">{plan.daysPerBatch}</dd>
               <dt>Tiempo</dt>
-              <dd className="text-right tabular-nums">{plan.days} días</dd>
+              <dd className="text-right font-semibold tabular-nums text-zinc-900">
+                {plan.days} días
+              </dd>
             </dl>
           ) : (
             <p className="text-[11px] text-zinc-400">
@@ -247,7 +254,8 @@ export function CotizadorItemCard({
         // sola es el que interesa mostrar junto al multiplicador.
         costPerBatch: batches > 0 ? total / batches : total,
         totalCost: total,
-        days: batches * DAYS_PER_FIRING_BATCH,
+        daysPerBatch: Number(session["days_per_batch"] ?? 0),
+        days: Number(session["days"] ?? 0),
         capacity: session["capacity_snapshot"] == null ? null : String(session["capacity_snapshot"]),
         occupancy:
           session["physical_occupancy_percentage"] == null
@@ -258,11 +266,14 @@ export function CotizadorItemCard({
     const low = entryFor("LOW", item.lowKilnSelected, item.lowKilnId);
     const high = entryFor("HIGH", item.highKilnSelected, item.highKilnId);
     const totalBatches = (low?.batches ?? 0) + (high?.batches ?? 0);
+    // Se suman los dias de cada quema, no el total de hornadas por una
+    // duracion comun: baja y alta pueden ir en hornos que tardan distinto.
+    const totalDays = (low?.days ?? 0) + (high?.days ?? 0);
     return {
       LOW: low,
       HIGH: high,
       totalBatches,
-      totalDays: totalBatches * DAYS_PER_FIRING_BATCH,
+      totalDays,
       totalCost: (low?.totalCost ?? 0) + (high?.totalCost ?? 0),
     };
   })();

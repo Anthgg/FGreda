@@ -174,12 +174,17 @@ function handler(url: string, init: RequestInit) {
       const lowKiln = (item["low_kiln_id"] as number | undefined) ?? body.kiln_id;
       const highKiln = (item["high_kiln_id"] as number | undefined) ?? body.kiln_id;
       const batches = Number(item["quantity"] ?? 1) > 20 ? 3 : 1;
+      // Fase 009C: los dias los pone el HORNO. El mock los sirve como lo hace
+      // el backend —leidos de kilns.firing_days_per_batch— para que la UI se
+      // pruebe leyendolos y no multiplicando por una constante propia.
+      const daysOf = (kilnId: number) =>
+        KILNS_PAGE.items.find((kiln) => kiln.id === kilnId)?.firing_days_per_batch ?? 0;
       return [
         item["low_kiln_selected"] !== false && lowKiln
-          ? { firing_type: "LOW", kiln_id: lowKiln, batches, subtotal: String(350 * batches), capacity_snapshot: "17000.000000", physical_occupancy_percentage: "42.000000" }
+          ? { firing_type: "LOW", kiln_id: lowKiln, batches, days_per_batch: daysOf(lowKiln), days: batches * daysOf(lowKiln), subtotal: String(350 * batches), capacity_snapshot: "17000.000000", physical_occupancy_percentage: "42.000000" }
           : null,
         item["high_kiln_selected"] !== false && highKiln
-          ? { firing_type: "HIGH", kiln_id: highKiln, batches, subtotal: String(500 * batches), capacity_snapshot: "17000.000000", physical_occupancy_percentage: "42.000000" }
+          ? { firing_type: "HIGH", kiln_id: highKiln, batches, days_per_batch: daysOf(highKiln), days: batches * daysOf(highKiln), subtotal: String(500 * batches), capacity_snapshot: "17000.000000", physical_occupancy_percentage: "42.000000" }
           : null,
       ].filter((value) => value !== null);
     });
@@ -191,6 +196,7 @@ function handler(url: string, init: RequestInit) {
       production_summary: {
         sessions,
         total_batches: sessions.reduce((sum, session) => sum + session.batches, 0),
+        total_days: sessions.reduce((sum, session) => sum + session.days, 0),
       },
       kiln_id: body.kiln_id ?? null,
       commercial_subtotal: items.length ? "770.40" : "0",
@@ -381,6 +387,56 @@ describe("Cotizador integral", () => {
     expect(screen.getByText("Total de la quema").nextElementSibling).toHaveTextContent("1050");
     expect(screen.getByText("Tiempo").nextElementSibling).toHaveTextContent("9 días");
     expect(screen.getByText(/Total 3 hornadas/i)).toBeInTheDocument();
+  });
+
+  it("KILN_DAYS: la duracion sale del horno, no de una constante del front", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    // Quema baja en el pequeno (3 dias/hornada) y alta en el grande (4).
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema alta" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-002/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Días / hornada").length).toBe(2);
+    });
+    const perBatch = screen.getAllByText("Días / hornada");
+    // El mismo numero de hornadas en cada quema, pero distinta duracion: la
+    // diferencia solo puede venir del horno.
+    expect(perBatch[0]?.nextElementSibling).toHaveTextContent("3");
+    expect(perBatch[1]?.nextElementSibling).toHaveTextContent("4");
+
+    const tiempos = screen.getAllByText("Tiempo");
+    expect(tiempos[0]?.nextElementSibling).toHaveTextContent("3 días");
+    expect(tiempos[1]?.nextElementSibling).toHaveTextContent("4 días");
+  });
+
+  it("MIXED_KILN_TOTAL_DAYS: el total suma cada quema, no multiplica las hornadas", async () => {
+    const user = userEvent.setup();
+    mockFetch(handler);
+    renderApp(["/cotizador/nuevo"]);
+    await openProduction(user);
+
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
+    await user.click(screen.getByRole("combobox", { name: "Horno de quema alta" }));
+    await user.click(await screen.findByRole("option", { name: /KILN-002/i }));
+
+    // 3 hornadas en cada quema (el mock las da cuando la cantidad supera 20).
+    const cantidad = screen.getByPlaceholderText("Ej. 24");
+    await user.clear(cantidad);
+    await user.type(cantidad, "50");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Total 6 hornadas/i)).toBeInTheDocument();
+    });
+    // 3x3 + 3x4 = 21. Multiplicar las 6 hornadas por un unico numero daria
+    // 18 o 24: ninguno corresponde a esta cotizacion.
+    expect(screen.getByText("21 días")).toBeInTheDocument();
   });
 
   it("MULTIPRODUCT: cada linea mantiene su propia seleccion de quemas", async () => {
