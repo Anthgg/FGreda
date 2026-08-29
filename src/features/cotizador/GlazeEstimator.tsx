@@ -58,7 +58,10 @@ export function GlazeEstimator({
   const [pieceWeight, setPieceWeight] = useState("");
   const [glazes, setGlazes] = useState<GlazeSelectionIn[]>([]);
 
-  const batches = usePreparations({ limit: 50, offset: 0 });
+  // Solo se piden los lotes cuando alguien abre el estimador: en una
+  // cotizacion de diez lineas, cargarlos siempre serian diez tarjetas pidiendo
+  // una lista que quiza nadie mire.
+  const batches = usePreparations({ limit: 50, offset: 0 }, open);
 
   const quantityValid = POSITIVE_INT.test(quantity.trim());
   const weightValid = isPositiveDecimal(pieceWeight);

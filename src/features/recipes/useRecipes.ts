@@ -171,15 +171,19 @@ export function useCommitRecipeImport(batchId: number) {
 // ---------------------------------------------------------------------------
 // Preparaciones (Fase 009D)
 // ---------------------------------------------------------------------------
-export function usePreparations(filters: {
-  recipe_id?: number;
-  prepared_product_id?: number;
-  limit?: number;
-  offset?: number;
-}) {
+export function usePreparations(
+  filters: {
+    recipe_id?: number;
+    prepared_product_id?: number;
+    limit?: number;
+    offset?: number;
+  },
+  enabled = true,
+) {
   return useQuery({
     queryKey: [...PREPARATIONS_KEY, filters],
     queryFn: () => fetchPreparations(filters),
+    enabled,
   });
 }
 
