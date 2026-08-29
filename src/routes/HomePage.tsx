@@ -21,7 +21,7 @@ import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
 import { usePartners, useProducts, useStock } from "@/features/masters/useMasters";
-import { useQuotations } from "@/features/quotations/useQuotations";
+import { useAllQuotations, useQuotations } from "@/features/quotations/useQuotations";
 import type { QuotationStatus, QuotationSummaryOut } from "@/types/quotations";
 
 /**
@@ -171,16 +171,16 @@ export function HomePage() {
   });
   const draftsCountQuery = useQuotations({ limit: 1, status: "DRAFT" });
 
-  // Los importes si necesitan las filas, pero solo las confirmadas del mes,
-  // que son muchas menos que el total. El filtro lo aplica el backend.
-  const confirmedThisMonthQuery = useQuotations({
-    limit: 200,
+  // Los importes si necesitan las filas. `useAllQuotations` recorre TODAS las
+  // paginas del filtro: quedarse en la primera reintroduciria el mismo
+  // truncamiento que tenian los contadores, solo que en soles y a partir de
+  // 200 confirmadas en un mes.
+  const confirmedThisMonthQuery = useAllQuotations({
     status: "CONFIRMED",
     date_from: ranges.thisFrom,
     date_to: ranges.thisTo,
   });
-  const confirmedPrevMonthQuery = useQuotations({
-    limit: 200,
+  const confirmedPrevMonthQuery = useAllQuotations({
     status: "CONFIRMED",
     date_from: ranges.prevFrom,
     date_to: ranges.prevTo,
@@ -208,8 +208,8 @@ export function HomePage() {
     const confirmedCount = monthConfirmedCount.data?.total ?? 0;
     const confirmedLastCount = prevMonthConfirmedCount.data?.total ?? 0;
 
-    const totalCommercialThisMonth = sum(confirmedThisMonthQuery.data?.items ?? []);
-    const totalCommercialLastMonth = sum(confirmedPrevMonthQuery.data?.items ?? []);
+    const totalCommercialThisMonth = sum(confirmedThisMonthQuery.data ?? []);
+    const totalCommercialLastMonth = sum(confirmedPrevMonthQuery.data ?? []);
 
     // Sin mes anterior no hay porcentaje que calcular: dividir entre cero
     // daria Infinity y la tarjeta mostraria un crecimiento inventado.
@@ -231,8 +231,8 @@ export function HomePage() {
     monthConfirmedCount.data?.total,
     prevMonthConfirmedCount.data?.total,
     draftsCountQuery.data?.total,
-    confirmedThisMonthQuery.data?.items,
-    confirmedPrevMonthQuery.data?.items,
+    confirmedThisMonthQuery.data,
+    confirmedPrevMonthQuery.data,
   ]);
 
   // Alertas calculadas a partir de datos reales existentes
