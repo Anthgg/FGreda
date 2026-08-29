@@ -21,7 +21,7 @@ import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
 import { usePartners, useProducts, useStock } from "@/features/masters/useMasters";
-import { useQuotations } from "@/features/quotations/useQuotations";
+import { useAllQuotations, useQuotations } from "@/features/quotations/useQuotations";
 import type { QuotationStatus, QuotationSummaryOut } from "@/types/quotations";
 
 /**
@@ -132,7 +132,62 @@ const STATUS_TONE: Record<QuotationStatus, "warning" | "positive" | "neutral"> =
 export function HomePage() {
   const navigate = useNavigate();
 
-  // Consultas al backend usando endpoints existentes
+  // Rangos del mes actual y del anterior, en el formato ISO que espera el
+  // backend. Se calculan una vez para no recrear las claves de consulta en
+  // cada render.
+  const ranges = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return {
+      thisFrom: iso(new Date(y, m, 1)),
+      thisTo: iso(new Date(y, m + 1, 0)),
+      prevFrom: iso(new Date(y, m - 1, 1)),
+      prevTo: iso(new Date(y, m, 0)),
+    };
+  }, []);
+
+  // Los CONTADORES los cuenta el backend, no esta pantalla.
+  //
+  // Antes se pedia una pagina de 100 cotizaciones y se contaba `items.length`:
+  // con 229 cotizaciones el panel mostraba 100, y ahi se quedaba clavado por
+  // muchas que hubiera. Ahora se pide `limit: 1` con los filtros que el
+  // endpoint ya soporta y se lee `total`, que es el numero real.
+  const monthCount = useQuotations({ limit: 1, date_from: ranges.thisFrom, date_to: ranges.thisTo });
+  const monthConfirmedCount = useQuotations({
+    limit: 1,
+    status: "CONFIRMED",
+    date_from: ranges.thisFrom,
+    date_to: ranges.thisTo,
+  });
+  const prevMonthCount = useQuotations({ limit: 1, date_from: ranges.prevFrom, date_to: ranges.prevTo });
+  const prevMonthConfirmedCount = useQuotations({
+    limit: 1,
+    status: "CONFIRMED",
+    date_from: ranges.prevFrom,
+    date_to: ranges.prevTo,
+  });
+  const draftsCountQuery = useQuotations({ limit: 1, status: "DRAFT" });
+
+  // Los importes si necesitan las filas. `useAllQuotations` recorre TODAS las
+  // paginas del filtro: quedarse en la primera reintroduciria el mismo
+  // truncamiento que tenian los contadores, solo que en soles y a partir de
+  // 200 confirmadas en un mes.
+  const confirmedThisMonthQuery = useAllQuotations({
+    status: "CONFIRMED",
+    date_from: ranges.thisFrom,
+    date_to: ranges.thisTo,
+  });
+  const confirmedPrevMonthQuery = useAllQuotations({
+    status: "CONFIRMED",
+    date_from: ranges.prevFrom,
+    date_to: ranges.prevTo,
+  });
+
+  // Lista de "cotizaciones recientes": solo se muestran las primeras filas,
+  // asi que una pagina corta basta y no participa en ningun conteo.
   const quotesQuery = useQuotations({ limit: 100 });
   const productsQuery = useProducts({ limit: 100, product_type: "FINISHED_PRODUCT" });
   const stockQuery = useStock({ limit: 50 });
@@ -142,69 +197,43 @@ export function HomePage() {
 
   // Cálculos de métricas y períodos
   const metrics = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const currentYearMonth = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
+    const sum = (rows: QuotationSummaryOut[]) =>
+      rows.reduce((acc, q) => {
+        const val = parseFloat(getQuoteTotalRaw(q));
+        return acc + (isNaN(val) ? 0 : val);
+      }, 0);
 
-    const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
-    const prevYearMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
+    const quotesCount = monthCount.data?.total ?? 0;
+    const quotesLastCount = prevMonthCount.data?.total ?? 0;
+    const confirmedCount = monthConfirmedCount.data?.total ?? 0;
+    const confirmedLastCount = prevMonthConfirmedCount.data?.total ?? 0;
 
-    const quotesThisMonth = quotes.filter((q) => q.created_at?.startsWith(currentYearMonth));
-    const quotesLastMonth = quotes.filter((q) => q.created_at?.startsWith(prevYearMonth));
+    const totalCommercialThisMonth = sum(confirmedThisMonthQuery.data ?? []);
+    const totalCommercialLastMonth = sum(confirmedPrevMonthQuery.data ?? []);
 
-    const confirmedThisMonth = quotesThisMonth.filter((q) => q.status === "CONFIRMED");
-    const confirmedLastMonth = quotesLastMonth.filter((q) => q.status === "CONFIRMED");
-
-    const allDrafts = quotes.filter((q) => q.status === "DRAFT");
-
-    // Total cotizado comercial de cotizaciones confirmadas en el mes actual
-    const totalCommercialThisMonth = confirmedThisMonth.reduce((acc, q) => {
-      const val = parseFloat(getQuoteTotalRaw(q));
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
-
-    const totalCommercialLastMonth = confirmedLastMonth.reduce((acc, q) => {
-      const val = parseFloat(getQuoteTotalRaw(q));
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
-
-    // Comparaciones porcentuales seguras
-    const quotesGrowth =
-      quotesLastMonth.length > 0
-        ? Math.round(
-            ((quotesThisMonth.length - quotesLastMonth.length) / quotesLastMonth.length) * 100,
-          )
-        : null;
-
-    const confirmedGrowth =
-      confirmedLastMonth.length > 0
-        ? Math.round(
-            ((confirmedThisMonth.length - confirmedLastMonth.length) /
-              confirmedLastMonth.length) *
-              100,
-          )
-        : null;
-
-    const totalGrowth =
-      totalCommercialLastMonth > 0
-        ? Math.round(
-            ((totalCommercialThisMonth - totalCommercialLastMonth) /
-              totalCommercialLastMonth) *
-              100,
-          )
-        : null;
+    // Sin mes anterior no hay porcentaje que calcular: dividir entre cero
+    // daria Infinity y la tarjeta mostraria un crecimiento inventado.
+    const growth = (current: number, previous: number) =>
+      previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 
     return {
-      quotesCount: quotesThisMonth.length,
-      quotesGrowth,
-      confirmedCount: confirmedThisMonth.length,
-      confirmedGrowth,
-      draftsCount: allDrafts.length,
+      quotesCount,
+      quotesGrowth: growth(quotesCount, quotesLastCount),
+      confirmedCount,
+      confirmedGrowth: growth(confirmedCount, confirmedLastCount),
+      draftsCount: draftsCountQuery.data?.total ?? 0,
       totalCotizado: totalCommercialThisMonth,
-      totalGrowth,
+      totalGrowth: growth(totalCommercialThisMonth, totalCommercialLastMonth),
     };
-  }, [quotes]);
+  }, [
+    monthCount.data?.total,
+    prevMonthCount.data?.total,
+    monthConfirmedCount.data?.total,
+    prevMonthConfirmedCount.data?.total,
+    draftsCountQuery.data?.total,
+    confirmedThisMonthQuery.data,
+    confirmedPrevMonthQuery.data,
+  ]);
 
   // Alertas calculadas a partir de datos reales existentes
   const alerts = useMemo(() => {

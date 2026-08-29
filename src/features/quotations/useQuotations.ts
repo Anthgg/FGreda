@@ -25,6 +25,7 @@ import type {
   OtherCostInput,
   QuotationCalculateIn,
   QuotationFilters,
+  QuotationSummaryOut,
   TechniqueInput,
 } from "@/types/quotations";
 
@@ -51,6 +52,49 @@ export const useQuotations = (filters: QuotationFilters) =>
   useQuery({
     queryKey: [...QUOTATIONS_KEY, filters],
     queryFn: () => fetchQuotations(filters),
+  });
+
+/** Maximo que acepta `/quotations`: `limit: int = Query(50, ge=1, le=200)`. */
+const MAX_PAGE_SIZE = 200;
+
+/**
+ * Todas las cotizaciones que cumplen un filtro, recorriendo las paginas.
+ *
+ * Existe para los IMPORTES. Un contador se resuelve leyendo `total` y ya, pero
+ * una suma necesita las filas, y el endpoint entrega como mucho 200 por
+ * pagina: pedir una sola pagina y sumarla devolveria un importe truncado en
+ * cuanto un mes pase de 200 confirmadas, que es exactamente el defecto que
+ * este proyecto ya tuvo con los contadores.
+ *
+ * No se suma en el backend porque la regla de QUE campo es el total de una
+ * cotizacion (`total_with_tax` en Cotizador, `commercial_total` en Legacy, con
+ * el caso del cero `0E-18`) vive hoy en el frontend y es materia comercial:
+ * moverla seria redefinirla, no auditarla.
+ */
+export async function fetchAllQuotations(
+  filters: QuotationFilters,
+): Promise<QuotationSummaryOut[]> {
+  const first = await fetchQuotations({ ...filters, limit: MAX_PAGE_SIZE, offset: 0 });
+  const rows = [...first.items];
+  while (rows.length < first.total) {
+    const next = await fetchQuotations({
+      ...filters,
+      limit: MAX_PAGE_SIZE,
+      offset: rows.length,
+    });
+    // Una pagina vacia con `total` mayor solo puede venir de filas borradas
+    // entre peticiones o de un backend inconsistente. Cortar aqui evita un
+    // bucle infinito que colgaria la pestana.
+    if (next.items.length === 0) break;
+    rows.push(...next.items);
+  }
+  return rows;
+}
+
+export const useAllQuotations = (filters: QuotationFilters) =>
+  useQuery({
+    queryKey: [...QUOTATIONS_KEY, "all", filters],
+    queryFn: () => fetchAllQuotations(filters),
   });
 export const useQuotation = (id: number | null) =>
   useQuery({

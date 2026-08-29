@@ -99,6 +99,15 @@ function defaultDashboardHandler(url: string) {
   if (url.includes("/auth/me")) return sessionResponse();
   if (url.includes("/auth/csrf")) return csrfResponse();
   if (url.includes("/quotations")) {
+    // El stub respeta `status`, como hace el backend real. Sin esto, cada
+    // contador leeria el mismo `total` y el test no distinguiria "cuenta el
+    // backend" de "cuenta la pagina".
+    if (url.includes("status=CONFIRMED")) {
+      return jsonResponse(200, { items: [mockQuoteConfirmed], total: 1, limit: 200, offset: 0 });
+    }
+    if (url.includes("status=DRAFT")) {
+      return jsonResponse(200, { items: [mockQuoteDraft], total: 1, limit: 1, offset: 0 });
+    }
     return jsonResponse(200, {
       items: [mockQuoteConfirmed, mockQuoteDraft],
       total: 2,
@@ -175,6 +184,92 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     // S/ 850.00 confirmado
     expect(within(metricsSection).getByText("Total cotizado (mes)")).toBeInTheDocument();
     expect(within(metricsSection).getByText(/S\/\s*850[.,]00/)).toBeInTheDocument();
+  });
+
+  it("los contadores salen del `total` del backend, no del tamano de la pagina", async () => {
+    // Reproduce produccion: 229 cotizaciones, de las que el endpoint devuelve
+    // como mucho una pagina. Antes se contaba `items.length` y el panel se
+    // quedaba clavado en el limite de la pagina por muchas que hubiera.
+    const page = Array.from({ length: 100 }, (_, i) => ({
+      ...mockQuoteDraft,
+      id: 1000 + i,
+      code: `CTZ-2026-00${1000 + i}`,
+    }));
+    mockFetch((url) => {
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/quotations")) {
+        if (url.includes("status=CONFIRMED")) {
+          return jsonResponse(200, { items: [], total: 0, limit: 200, offset: 0 });
+        }
+        if (url.includes("status=DRAFT")) {
+          return jsonResponse(200, { items: [mockQuoteDraft], total: 187, limit: 1, offset: 0 });
+        }
+        return jsonResponse(200, { items: page, total: 229, limit: 100, offset: 0 });
+      }
+      if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
+      if (url.includes("/inventory")) return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0, limit: 10, offset: 0 });
+      return errorResponse(404, "NOT_FOUND");
+    });
+    renderApp(["/"]);
+
+    const metricsSection = await screen.findByLabelText("Métricas del taller");
+    // 229, no 100.
+    expect(await within(metricsSection).findByText("229")).toBeInTheDocument();
+    // 187 borradores, no 1 (que es lo que trae la pagina de `limit: 1`).
+    expect(await within(metricsSection).findByText("187")).toBeInTheDocument();
+    expect(within(metricsSection).queryByText("100")).not.toBeInTheDocument();
+  });
+
+  it("el importe del mes recorre TODAS las paginas, no solo la primera", async () => {
+    // 250 confirmadas de S/ 10 cada una en un endpoint que entrega 200 por
+    // pagina. Quedarse en la primera daria S/ 2000: el mismo truncamiento que
+    // tenian los contadores, solo que en soles.
+    const CONFIRMED_TOTAL = 250;
+    const PAGE_SIZE = 200;
+    const confirmed = Array.from({ length: CONFIRMED_TOTAL }, (_, i) => ({
+      ...mockQuoteConfirmed,
+      id: 5000 + i,
+      code: `CTZ-2026-01${5000 + i}`,
+      commercial_total: "10.00",
+      total_with_tax: "10.00",
+      created_at: new Date().toISOString(),
+    }));
+    const pageRequests: number[] = [];
+
+    mockFetch((url) => {
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/quotations")) {
+        if (url.includes("status=CONFIRMED")) {
+          const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0);
+          pageRequests.push(offset);
+          return jsonResponse(200, {
+            items: confirmed.slice(offset, offset + PAGE_SIZE),
+            total: CONFIRMED_TOTAL,
+            limit: PAGE_SIZE,
+            offset,
+          });
+        }
+        if (url.includes("status=DRAFT")) {
+          return jsonResponse(200, { items: [], total: 0, limit: 1, offset: 0 });
+        }
+        return jsonResponse(200, { items: [], total: CONFIRMED_TOTAL, limit: 1, offset: 0 });
+      }
+      if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
+      if (url.includes("/inventory")) return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
+      if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0, limit: 10, offset: 0 });
+      return errorResponse(404, "NOT_FOUND");
+    });
+    renderApp(["/"]);
+
+    const metricsSection = await screen.findByLabelText("Métricas del taller");
+    // 250 x 10 = 2500, no 2000.
+    expect(await within(metricsSection).findByText(/S\/\s*2[.,]?500[.,]00/)).toBeInTheDocument();
+    // Y se pidieron las dos paginas del mes actual.
+    expect(pageRequests).toContain(0);
+    expect(pageRequests).toContain(PAGE_SIZE);
   });
 
   it("suma el total_with_tax de una cotizacion Legacy cuyo commercial_total nunca se poblo (0E-18)", async () => {
