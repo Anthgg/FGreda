@@ -12,10 +12,16 @@ import {
  * que "configurarla", pero no existía ninguna pantalla para hacerlo — el
  * endpoint estaba, sin nadie que lo llamara.
  *
- * Los tramos que se ofrecen por defecto son diez de 10 %, porque el backend
- * exige que la tabla empiece en 1 %, termine en 100 % y no deje huecos. Los
- * multiplicadores llegan VACÍOS a propósito: son un dato del taller y esta
- * pantalla no se los inventa.
+ * El dominio NO exige diez tramos de 10 %. Lo que el backend valida es que la
+ * tabla empiece en 1 %, termine en 100 %, cubra el rango de forma contigua sin
+ * huecos ni solapamientos, y que cada tramo lleve un factor válido. Cualquier
+ * reparto que cumpla eso vale: cuatro tramos desiguales son igual de legítimos
+ * que diez de 10 %.
+ *
+ * Los diez tramos de 10 % son solo la plantilla con la que arranca esta
+ * pantalla, por ser la forma que ya usan los hornos del taller. Se pueden
+ * añadir, quitar y redefinir. Los multiplicadores llegan VACÍOS a propósito:
+ * son un dato del taller y esta pantalla no se los inventa.
  */
 
 interface Props {

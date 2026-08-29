@@ -8,6 +8,11 @@
 
 import type { KilnOccupancyFactorIn, KilnOccupancyFactorOut } from "@/types/firings";
 
+/**
+ * Tramos con los que arranca el editor. Es una PLANTILLA DE INTERFAZ, no un
+ * requisito del dominio: el backend acepta cualquier reparto contiguo de 1 % a
+ * 100 %, con los tramos que sean y del ancho que sean.
+ */
 const DEFAULT_BRACKETS = 10;
 
 export interface FactorRow {
@@ -16,7 +21,7 @@ export interface FactorRow {
   factor: string;
 }
 
-/** Diez tramos de 10 %, con el multiplicador por rellenar. */
+/** Plantilla inicial: diez tramos de 10 %, con el multiplicador por rellenar. */
 export function defaultFactorRows(): FactorRow[] {
   return Array.from({ length: DEFAULT_BRACKETS }, (_, i) => ({
     min: String(i * 10 + 1),
