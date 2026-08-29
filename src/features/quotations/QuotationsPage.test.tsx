@@ -288,9 +288,11 @@ describe("pantallas de cotizaciones", () => {
       formula_type: "ONE_FACTOR", factor_1: "10", factor_2: null,
       active: true, notes: null, created_at: "2026-08-24", updated_at: "2026-08-24",
     };
+    const enviados: Array<Record<string, unknown>> = [];
     mockFetch((url, init) => {
       if (url.includes("/techniques") && init.method === "POST") {
         creadas += 1;
+        enviados.push(JSON.parse(String(init.body)));
         return jsonResponse(201, panDeOro);
       }
       // Tras crearla, el maestro ya la incluye: es lo que hace el backend real
@@ -312,13 +314,50 @@ describe("pantallas de cotizaciones", () => {
     await user.click(await screen.findByRole("button", { name: /crear técnica «Pan de oro»/i }));
 
     const dialogo = await screen.findByRole("dialog", { name: "Nueva técnica" });
+    // El código es identidad interna: ni se pide ni se propone. Antes este
+    // modal fabricaba uno a partir del nombre ("TEC-PAN-DE-ORO") y lo enviaba.
+    expect(within(dialogo).queryByLabelText(/código/i)).not.toBeInTheDocument();
+
     await user.type(within(dialogo).getByLabelText(/Precio unitario/i), "300");
     await user.type(within(dialogo).getByLabelText(/Factor 1/i), "10");
     await user.click(within(dialogo).getByRole("button", { name: /crear y usar/i }));
 
     await waitFor(() => expect(creadas).toBe(1));
-    // Y queda añadida a la cotización, no solo guardada en el maestro.
+    // El payload no lleva código: lo emite el backend.
+    expect(enviados[0]).not.toHaveProperty("code");
+    // Y el que se muestra es el que devolvió el backend.
     expect(await screen.findByText("Pan de oro")).toBeInTheDocument();
+  });
+
+  it("el alta de maestros de costos no pide ni envía el código interno", async () => {
+    const user = userEvent.setup();
+    const enviados: Array<Record<string, unknown>> = [];
+    mockFetch((url, init) => {
+      if (url.includes("/additionals") && init.method === "POST") {
+        enviados.push(JSON.parse(String(init.body)));
+        return jsonResponse(201, {
+          id: 77, code: "ADI-007", name: "Calado", unit_price: "20",
+          formula_type: "PIECE_QUANTITY", factor_1: "1", active: true, notes: null,
+          created_at: "2026-08-29", updated_at: "2026-08-29",
+        });
+      }
+      return quoteHandler(url, init);
+    });
+    renderApp(["/cotizaciones/nueva"]);
+
+    await screen.findByRole("heading", { name: "Nueva cotización" });
+    await user.click(screen.getByRole("combobox", { name: "Añadir adicional" }));
+    await user.type(screen.getByPlaceholderText(/buscar opción/i), "Calado");
+    await user.click(await screen.findByRole("button", { name: /crear adicional «Calado»/i }));
+
+    const dialogo = await screen.findByRole("dialog", { name: "Nuevo adicional" });
+    expect(within(dialogo).queryByLabelText(/código/i)).not.toBeInTheDocument();
+    await user.type(within(dialogo).getByLabelText(/Precio unitario/i), "20");
+    await user.type(within(dialogo).getByLabelText(/cada cuántas piezas/i), "1");
+    await user.click(within(dialogo).getByRole("button", { name: /crear y usar/i }));
+
+    await waitFor(() => expect(enviados.length).toBe(1));
+    expect(enviados[0]).not.toHaveProperty("code");
   });
 });
 
