@@ -35,6 +35,8 @@ import type {
   ImportEntity,
   ImportRow,
   ImportRowStatus,
+  ImportAction,
+  ImportStatus,
   PartnerRole,
   RowResolution,
   UnitOfMeasure,
@@ -49,6 +51,37 @@ const ENTITY_LABELS: Record<ImportEntity, string> = {
   LOCATION: "Ubicaciones",
   STOCK: "Existencias",
   RECIPE: "Recetas",
+};
+
+/**
+ * Los estados y acciones del importador, dichos en castellano.
+ *
+ * Llegan como `REVIEW_REQUIRED` o `COMMITTED`, que son nombres internos.
+ * Quien sube un Excel y ve una fila marcada `BLOCKED` no sabe si eso es grave
+ * ni que hacer; «Bloqueada» al menos se lee.
+ */
+const ROW_STATUS_LABEL: Record<ImportRowStatus, string> = {
+  READY: "Lista",
+  REVIEW_REQUIRED: "Necesita revisión",
+  RESOLVED: "Resuelta",
+  BLOCKED: "Bloqueada",
+  COMMITTED: "Aplicada",
+};
+
+const ROW_ACTION_LABEL: Record<ImportAction, string> = {
+  CREATE: "Crear",
+  UPDATE: "Actualizar",
+  SKIP: "Omitir",
+  ERROR: "Error",
+};
+
+const BATCH_STATUS_LABEL: Record<ImportStatus, string> = {
+  UPLOADED: "Subida",
+  ANALYZED: "Analizada",
+  READY: "Lista",
+  COMMITTED: "Aplicada",
+  FAILED: "Fallida",
+  CANCELLED: "Anulada",
 };
 
 const STATUS_TONES: Record<ImportRowStatus, "neutral" | "positive" | "warning" | "danger"> = {
@@ -438,9 +471,9 @@ export function ImportsPage() {
                           </span>
                         ) : null}
                       </Td>
-                      <Td muted>{row.action}</Td>
+                      <Td muted>{ROW_ACTION_LABEL[row.action]}</Td>
                       <Td>
-                        <Badge tone={STATUS_TONES[row.status]}>{row.status}</Badge>
+                        <Badge tone={STATUS_TONES[row.status]}>{ROW_STATUS_LABEL[row.status]}</Badge>
                       </Td>
                       <Td>
                         <RowIssues row={row} />
@@ -539,7 +572,7 @@ export function ImportsPage() {
                     <Td>{item.filename}</Td>
                     <Td>
                       <Badge tone={item.status === "COMMITTED" ? "positive" : "neutral"}>
-                        {item.status}
+                        {BATCH_STATUS_LABEL[item.status]}
                       </Badge>
                     </Td>
                     <Td muted>{item.created_by_name ?? "—"}</Td>
