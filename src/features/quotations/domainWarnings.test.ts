@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/api/client";
 import {
+  describeNextStep,
   describeWarning,
   describeWarnings,
   isKnownWarning,
@@ -124,5 +125,22 @@ describe("Errores del backend - Fase 009E", () => {
     // El filtro solo actua sobre jerga: no puede tragarse los mensajes buenos.
     const texto = "El lote ya fue confirmado y no admite cambios.";
     expect(describeError(apiError("CUALQUIERA", texto))).toBe(texto);
+  });
+});
+
+describe("Paso siguiente del Cotizador", () => {
+  it("los cuatro codigos del backend se dicen con el nombre de la pantalla", () => {
+    // Los pasos se llaman asi en la barra del Cotizador. `ITEMS` no aparece
+    // por ningun lado, asi que enseñarlo obliga al usuario a traducirlo.
+    expect(describeNextStep("GENERAL_DATA")).toBe("Datos");
+    expect(describeNextStep("ITEMS")).toBe("Piezas");
+    expect(describeNextStep("PRODUCTION")).toBe("Producción");
+    expect(describeNextStep("SUMMARY")).toBe("Resumen");
+  });
+
+  it("un paso desconocido o ausente no se muestra crudo", () => {
+    expect(describeNextStep("PASO_NUEVO")).toBeNull();
+    expect(describeNextStep(null)).toBeNull();
+    expect(describeNextStep(undefined)).toBeNull();
   });
 });

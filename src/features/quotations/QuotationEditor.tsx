@@ -18,6 +18,7 @@ import {
   useQuotationPreview,
   useTechniques,
 } from "@/features/quotations/useQuotations";
+import { VERSION_STATUS_LABEL } from "@/features/recipes/labels";
 import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
 import { NuevoMaestroModal } from "@/features/quotations/NuevoMaestroModal";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
@@ -96,7 +97,9 @@ export function QuotationEditor({
     .filter((item) => item.status === "ACTIVE")
     .map((item) => ({
       value: String(item.id),
-      label: `Versión ${item.version_number} · ${item.status === "ACTIVE" ? "Activa" : item.status}`,
+      // El catalogo central, no un ternario: la rama `else` enseñaba el
+      // codigo crudo (`ARCHIVED`) si alguien aflojaba el filtro de arriba.
+      label: `Versión ${item.version_number} · ${VERSION_STATUS_LABEL[item.status]}`,
     }));
   const firingLineOptions = (firingLines.data?.items ?? []).map((line) => ({
     value: String(line.id),
