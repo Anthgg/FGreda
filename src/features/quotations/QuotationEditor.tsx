@@ -9,6 +9,7 @@ import {
 import { Spinner } from "@/components/Spinner";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
+import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { describeError } from "@/features/settings/messages";
 import { useRecipe } from "@/features/recipes/useRecipes";
 import {
@@ -610,10 +611,12 @@ export function QuotationEditor({
                   />
                 </div>
               </dl>
-              {preview.data.warnings.length > 0 ? (
-                <div className="mt-5 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
-                  {preview.data.warnings.join(" · ")}
-                </div>
+              {describeWarnings(preview.data.warnings).length > 0 ? (
+                <ul className="mt-5 space-y-1 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+                  {describeWarnings(preview.data.warnings).map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
               ) : null}
               <div className="mt-4 text-[10px] leading-4 text-zinc-500">
                 La cotización se emite sobre el precio comercial acordado con el cliente. El IGV se detalla para el comprobante de pago.

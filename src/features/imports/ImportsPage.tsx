@@ -75,12 +75,12 @@ function RowIssues({ row }: { row: ImportRow }) {
     <ul className="space-y-1">
       {row.errors.map((issue, index) => (
         <li key={`e-${index}`} className="text-xs text-red-600">
-          <span className="font-mono">{issue.code}</span> · {issue.message}
+          {issue.message}
         </li>
       ))}
       {row.warnings.map((issue, index) => (
         <li key={`w-${index}`} className="text-xs text-amber-700">
-          <span className="font-mono">{issue.code}</span> · {issue.message}
+          {issue.message}
           {typeof issue.source === "string" && typeof issue.normalized === "string" ? (
             <span className="ml-1 font-mono text-zinc-500">
               ({issue.source} → {issue.normalized})

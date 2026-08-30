@@ -9,6 +9,7 @@ import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
 import { useAdditionals, useOtherCosts, useTechniques } from "@/features/quotations/useQuotations";
 import type { CotizadorItemDraft } from "@/features/cotizador/draft";
 import { GlazeEstimator } from "@/features/cotizador/GlazeEstimator";
+import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { itemFromProduct } from "@/features/cotizador/draft";
 import type { KilnOut } from "@/types/firings";
 import type { QuotationBuilderItemOut } from "@/types/quotationBuilder";
@@ -211,9 +212,12 @@ export function CotizadorItemCard({
     ...(productId ? { product_id: productId } : {}),
     limit: 100,
   });
-  const visibleWarnings = preview?.warnings.filter(
-    (code) => code !== "DISCOUNT_RULE_BLOCKED_BY_SOURCE",
-  ) ?? [];
+  // Los codigos del backend siguen siendo la autoridad; aqui solo se
+  // traducen. Nadie tiene que saber que `FIRING_REQUIRED` significa que falta
+  // elegir un horno.
+  const visibleWarnings = describeWarnings(
+    preview?.warnings.filter((code) => code !== "DISCOUNT_RULE_BLOCKED_BY_SOURCE") ?? [],
+  );
   const manualPriceOverridesMargin = item.commercialSaleUnitPrice.trim() !== "";
 
   const patch = (values: Partial<CotizadorItemDraft>) => onChange({ ...item, ...values });
@@ -741,7 +745,13 @@ export function CotizadorItemCard({
             <div><dt className="text-[10px] uppercase text-zinc-400">Subtotal</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_subtotal, currencySymbol)}</dd></div>
             <div><dt className="text-[10px] uppercase text-zinc-400">IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.tax_amount, currencySymbol)}</dd></div>
           </dl>
-          {visibleWarnings.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{visibleWarnings.join(" · ")}</p> : null}
+          {visibleWarnings.length ? (
+            <ul className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {visibleWarnings.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          ) : null}
           {preview?.production_snapshot && Object.keys(preview.production_snapshot).length ? (
             <p className="text-[11px] text-zinc-500">Volumen {snapshotDecimal(preview.production_snapshot, "total_volume_cm3")} cm³ · Ocupación {snapshotDecimal(preview.production_snapshot, "occupancy_percentage")}%</p>
           ) : null}
