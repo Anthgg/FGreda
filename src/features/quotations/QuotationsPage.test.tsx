@@ -63,6 +63,8 @@ const preview = {
   tax_rate_source: "COMMERCIAL_SETTINGS" as const,
   tax_amount: "50.4288",
   total_with_tax: "330.5888",
+  subtotal: "280.16",
+  total: "330.5888",
   unit_price_with_tax: "17.399410526315789474",
   source_fingerprint: "a".repeat(64),
   warnings: ["RECIPE_REQUIRED", "FIRING_LINE_REQUIRED"],
@@ -135,6 +137,7 @@ describe("pantallas de cotizaciones", () => {
       commercial_sale_unit_price: "459",
       commercial_total: "541.62",
       total_with_tax: "541.62",
+      total: "541.62",
       created_at: "2026-08-25T14:00:00Z",
     };
     mockFetch((url, init) =>

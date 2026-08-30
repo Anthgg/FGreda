@@ -53,6 +53,8 @@ export const COMMERCIAL_EMPTY: CommercialSettings = {
   // No es un valor "vacio": la columna es NOT NULL y la migracion 0015 la
   // inicializa en 15. Un backend real nunca devuelve esto en blanco.
   estimated_glaze_percent: "15",
+  production_factor_default: "3",
+  rounding_step: "0.50",
   general_conditions: null,
   payment_notes: null,
   document_footer: null,

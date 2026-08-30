@@ -590,7 +590,7 @@ export function QuotationEditor({
                 />
                 <SummaryMetric
                   label="Subtotal comercial"
-                  value={money(preview.data.commercial_subtotal || preview.data.calculated_total)}
+                  value={money(preview.data.subtotal)}
                   strong
                 />
                 <SummaryMetric
@@ -605,7 +605,7 @@ export function QuotationEditor({
                 <div className="col-span-2">
                   <SummaryMetric
                     label="TOTAL COMERCIAL CON IGV"
-                    value={money(preview.data.commercial_total || preview.data.total_with_tax)}
+                    value={money(preview.data.total)}
                     strong
                     subtitle={`Unitario con IGV: ${money(preview.data.commercial_unit_price_with_tax || preview.data.unit_price_with_tax)}`}
                   />

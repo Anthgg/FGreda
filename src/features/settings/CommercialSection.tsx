@@ -12,6 +12,11 @@ import {
 } from "@/features/settings/useSettings";
 import type { CommercialSettingsInput } from "@/types/settings";
 
+const ROUNDING_OPTIONS = [
+  { value: "0.50", label: "S/ 0.50" },
+  { value: "1.00", label: "S/ 1.00" },
+];
+
 /** Validación de experiencia de usuario. El backend la repite entera. */
 function validate(draft: CommercialSettingsInput): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
@@ -33,6 +38,12 @@ function validate(draft: CommercialSettingsInput): Partial<Record<string, string
     if (Number.isNaN(value) || value <= 0 || value > 100) {
       errors.estimated_glaze_percent = "Debe ser un porcentaje mayor que 0 y hasta 100.";
     }
+  }
+  // Fase 009E: el factor de PRODUCCION. El backend lo valida de nuevo; esto
+  // solo evita el viaje.
+  const factor = String(draft.production_factor_default ?? "").trim();
+  if (factor === "" || Number.isNaN(Number(factor)) || Number(factor) <= 0) {
+    errors.production_factor_default = "Debe ser un número mayor que 0.";
   }
   if (draft.quote_validity_days !== null) {
     const days = Number(draft.quote_validity_days);
@@ -93,6 +104,10 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
   };
 
   const disabled = !canEdit || update.isPending;
+  // Solo existen dos políticas de redondeo, así que es un selector y no un
+  // campo libre: un 0,25 tecleado produciría precios que no son múltiplos de
+  // nada, y el backend lo rechazaría después de que el usuario ya escribió.
+  const roundingValue = Number(draft.rounding_step) === 1 ? "1.00" : "0.50";
   const bank = draft.bank_account;
   const currencyOptions = [
     { value: "", label: "Sin moneda seleccionada" },
@@ -122,7 +137,7 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
         <FormSection
           title="Moneda e Impuestos"
           description="Valores por defecto de las cotizaciones. El backend es quien los aplica."
-          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
           <SelectField
             label="Moneda (ISO 4217)"
@@ -166,6 +181,30 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             placeholder="15"
             hint="Porcentaje del peso de la pieza. 15 significa 15 %, no 0,15."
             error={errors.estimated_glaze_percent}
+          />
+          <TextField
+            label="Factor de producción"
+            requirement="required"
+            value={
+              draft.production_factor_default === undefined
+                ? null
+                : String(draft.production_factor_default)
+            }
+            onChange={(value) => setField("production_factor_default", value)}
+            disabled={disabled}
+            inputMode="decimal"
+            placeholder="3"
+            hint="Multiplica el costo técnico antes de los costos fijos y del margen."
+            error={errors.production_factor_default}
+          />
+          <SelectField
+            label="Redondeo contractual"
+            requirement="required"
+            value={roundingValue}
+            options={ROUNDING_OPTIONS}
+            onChange={(value) => setField("rounding_step", value)}
+            disabled={disabled}
+            hint="El precio con IGV siempre sube al siguiente múltiplo."
           />
           <TextField
             label="Vigencia de cotización (días)"

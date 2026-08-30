@@ -358,6 +358,41 @@ describe("sección comercial", () => {
     expect(screen.getByDisplayValue("00219300123456789015")).toBeInTheDocument();
   });
 
+  it("muestra el factor de producción y el redondeo que envía el backend", async () => {
+    // CONFIG_FACTOR_RENDER + ROUNDING_SELECTOR_RENDER.
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    expect(await screen.findByLabelText(/factor de producción/i)).toHaveValue("3");
+    // Solo hay dos políticas, así que es un selector: un 0,25 tecleado daría
+    // precios que no son múltiplos de nada.
+    expect(screen.getByRole("combobox", { name: /redondeo contractual/i })).toHaveTextContent(
+      "S/ 0.50",
+    );
+  });
+
+  it("rechaza un factor de producción de cero sin llamar al backend", async () => {
+    // CONFIG_FACTOR_UPDATE: la validación de UX evita el viaje; el backend la
+    // repite igualmente.
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    const campo = await screen.findByLabelText(/factor de producción/i);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "0");
+
+    expect(await screen.findByText(/mayor que 0/i)).toBeInTheDocument();
+    const puts = fetchSpy.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(puts).toHaveLength(0);
+  });
+
   it("muestra el porcentaje de esmalte estimado que envía el backend", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
