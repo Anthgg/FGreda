@@ -15,6 +15,7 @@ import {
   emptyCotizadorItem,
   type CotizadorDraft,
 } from "@/features/cotizador/draft";
+import { describeNextStep } from "@/features/quotations/domainWarnings";
 import {
   useCancelCotizador,
   useConfirmCotizador,
@@ -184,6 +185,9 @@ export function CotizadorPage() {
   const missingName = draft.name.trim() === "";
   const datosComplete = !readOnly ? !missingName && !missingCustomer : true;
   const currentMode = STEPS[step]?.mode as CotizadorItemMode | null;
+  // El backend nombra el paso con su codigo interno; aqui se dice como se
+  // llama en la pantalla.
+  const nextStepLabel = describeNextStep(preview?.next_step);
   const busy = create.isPending || update.isPending || confirm.isPending || cancel.isPending || duplicate.isPending;
   const mutationError = create.error ?? update.error ?? confirm.error ?? cancel.error ?? duplicate.error;
   const sourceChanged = mutationError instanceof ApiError && mutationError.code === "QUOTATION_BUILDER_SOURCE_CHANGED";
@@ -331,7 +335,9 @@ export function CotizadorPage() {
                 ? "Cotización confirmada"
                 : preview?.complete
                   ? "Lista para confirmar · Continúe al paso PDF"
-                  : `Borrador incompleto · siguiente: ${preview?.next_step ?? "DATOS"}`}
+                  : nextStepLabel
+                    ? `Borrador incompleto · siguiente paso: ${nextStepLabel}`
+                    : "Borrador incompleto. Revise los avisos de cada producto."}
             </p>
             <div className="flex gap-2">
               <PrimaryButton type="button" onClick={() => setStep(6)}>

@@ -118,6 +118,25 @@ const CATALOG: Record<string, DomainWarning> = {
 };
 
 /**
+ * El paso que el backend señala como «lo siguiente que falta».
+ *
+ * Llega como `ITEMS`, `GENERAL_DATA`… y son nombres internos: en la pantalla
+ * los pasos se llaman Datos, Piezas, Producción y Resumen. Decirle al usuario
+ * que le falta «ITEMS» le obliga a traducir un nombre que no eligió.
+ */
+const NEXT_STEP_LABEL: Record<string, string> = {
+  GENERAL_DATA: "Datos",
+  ITEMS: "Piezas",
+  PRODUCTION: "Producción",
+  SUMMARY: "Resumen",
+};
+
+/** Nombre visible del paso, o `null` si el código no se reconoce. */
+export function describeNextStep(code: string | null | undefined): string | null {
+  return code ? (NEXT_STEP_LABEL[code] ?? null) : null;
+}
+
+/**
  * Devuelve el aviso legible de un código, o `null` si no está en el catálogo.
  *
  * `null` y no el código: enseñar `FOO_BAR_REQUIRED` sería exactamente lo que
