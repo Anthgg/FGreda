@@ -881,7 +881,7 @@ describe("Cotizador integral", () => {
 
     await user.click(screen.getByRole("button", { name: /Margen y precio/i }));
     const markups = screen.getAllByLabelText(/Markup/i);
-    const prices = screen.getAllByLabelText(/Precio comercial unitario/i);
+    const prices = screen.getAllByLabelText(/Precio neto manual/i);
     await user.clear(markups[0]!);
     await user.type(markups[0]!, "120");
     await user.clear(markups[1]!);

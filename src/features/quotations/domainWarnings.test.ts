@@ -8,12 +8,14 @@
 
 import { describe, expect, it } from "vitest";
 
+import { ApiError } from "@/api/client";
 import {
   describeWarning,
   describeWarnings,
   isKnownWarning,
   warningStep,
 } from "@/features/quotations/domainWarnings";
+import { describeError } from "@/features/settings/messages";
 
 /** Los códigos que el backend puede mandar a la UI del Cotizador. */
 const BACKEND_WARNING_CODES = [
@@ -77,5 +79,50 @@ describe("Avisos de dominio · catálogo", () => {
     // Un aviso informativo no manda a ningún sitio: un botón que no lleva a
     // ninguna parte es peor que no tener botón.
     expect(warningStep("MIXED_TAX_RATES")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Errores de la API: la otra puerta por la que puede colarse un codigo
+// ---------------------------------------------------------------------------
+
+/** Un ApiError como los que construye el cliente, sin tocar la red. */
+const apiError = (code: string, message: string) => new ApiError(code, message, 409);
+
+describe("Errores del backend - Fase 009E", () => {
+  const CODIGOS_009E = [
+    "QUOTATION_BUILDER_NOT_EDITABLE",
+    "QUOTATION_BUILDER_CONFLICT",
+    "QUOTATION_BUILDER_SOURCE_CHANGED",
+    "QUOTATION_BUILDER_INCOMPLETE",
+    "FIXED_COST_ALLOCATION_BASE_ZERO",
+    "PRODUCT_PRICE_UPDATE_NOT_ALLOWED",
+  ];
+
+  it("cada codigo nuevo tiene frase humana y ninguna repite el codigo", () => {
+    for (const code of CODIGOS_009E) {
+      const texto = describeError(apiError(code, code));
+      expect(texto).not.toContain(code);
+      expect(texto).not.toMatch(/[A-Z]{3,}_[A-Z_]{3,}/);
+      expect(texto.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("UNKNOWN_ERROR_SAFE_FALLBACK: un codigo sin mapear no se muestra crudo", () => {
+    // El backend responde a veces con el propio codigo por mensaje. Repetirlo
+    // en pantalla no le dice nada a quien esta cotizando.
+    const texto = describeError(apiError("ALGO_NUEVO_SIN_MAPEAR", "ALGO_NUEVO_SIN_MAPEAR"));
+    expect(texto).not.toContain("ALGO_NUEVO_SIN_MAPEAR");
+    expect(texto).toMatch(/Intente nuevamente/i);
+  });
+
+  it("EMPTY_ERROR_DETAILS_VISIBLE_AFTER: un mensaje vacio tampoco llega a la pantalla", () => {
+    expect(describeError(apiError("LO_QUE_SEA", "   "))).toMatch(/Intente nuevamente/i);
+  });
+
+  it("un mensaje humano del backend se respeta tal cual", () => {
+    // El filtro solo actua sobre jerga: no puede tragarse los mensajes buenos.
+    const texto = "El lote ya fue confirmado y no admite cambios.";
+    expect(describeError(apiError("CUALQUIERA", texto))).toBe(texto);
   });
 });

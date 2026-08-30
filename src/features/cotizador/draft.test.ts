@@ -58,7 +58,6 @@ describe("borrador del Cotizador", () => {
         techniqueQuantities: { "9": "10" },
         additionalIds: ["11"],
         additionalQuantities: { "11": "0.5" },
-        otherCostIds: ["13"],
         markupPercent: "125.5",
       }],
     });
@@ -75,7 +74,9 @@ describe("borrador del Cotizador", () => {
       markup_percent: "125.5",
       techniques: [{ technique_id: 9, quantity: 10, sort_order: 0 }],
       additionals: [{ additional_id: 11, additional_quantity: "0.5", sort_order: 0 }],
-      other_costs: [{ other_cost_id: 13, sort_order: 0 }],
+      // MANUAL_SELECTION_OF_AUTO_FIXED_COSTS: el borrador ya no puede
+      // mandar gastos por linea, ni siquiera reabriendo uno antiguo.
+      other_costs: [],
     });
   });
 
