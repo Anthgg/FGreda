@@ -32,6 +32,7 @@ const mockQuoteConfirmed: QuotationSummaryOut = {
   commercial_sale_unit_price: "85.00",
   commercial_total: "850.00",
   total_with_tax: "850.00",
+  total: "850.00",
   created_at: new Date().toISOString(),
 };
 
@@ -55,6 +56,7 @@ const mockQuoteDraft: QuotationSummaryOut = {
   commercial_sale_unit_price: "196.00",
   commercial_total: "980.00",
   total_with_tax: "980.00",
+  total: "980.00",
   created_at: new Date().toISOString(),
 };
 
@@ -234,6 +236,7 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
       code: `CTZ-2026-01${5000 + i}`,
       commercial_total: "10.00",
       total_with_tax: "10.00",
+      total: "10.00",
       created_at: new Date().toISOString(),
     }));
     const pageRequests: number[] = [];
@@ -272,28 +275,33 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     expect(pageRequests).toContain(PAGE_SIZE);
   });
 
-  it("suma el total_with_tax de una cotizacion Legacy cuyo commercial_total nunca se poblo (0E-18)", async () => {
-    // Reproduce CTZ-2026-000001 en produccion: workflow ausente (Legacy), con
-    // commercial_total en el Decimal-cero que Python serializa como "0E-18".
-    // Antes del fix, `commercial_total || total_with_tax` tomaba "0E-18" por
-    // ser una cadena no vacia y el total real de la cotizacion desaparecia
-    // del KPI "Total cotizado (mes)".
-    const { workflow: _workflow, ...mockQuoteConfirmedWithoutWorkflow } = mockQuoteConfirmed;
-    const legacyQuoteZeroCommercial: QuotationSummaryOut = {
-      ...mockQuoteConfirmedWithoutWorkflow,
+  it("suma el total que resuelve el backend, sin elegir entre campos", async () => {
+    // Fase 009E: el caso que motivo este test —CTZ-2026-000001, con
+    // commercial_total en el Decimal-cero que Python serializa como "0E-18"
+    // tapando un total_with_tax real— ya NO se decide aqui. Lo resuelve
+    // `_summary_total` en el backend y tiene su propia prueba alli.
+    //
+    // Lo que se comprueba ahora es lo contrario de lo que se comprobaba
+    // antes: que el dashboard NO mira los otros campos. Por eso el fixture
+    // deja los tres en cero y solo `total` trae el importe: si quedara
+    // cualquier resto de la cascada, el KPI mostraria cero.
+    const { workflow: _workflow, ...sinWorkflow } = mockQuoteConfirmed;
+    const legacyQuote: QuotationSummaryOut = {
+      ...sinWorkflow,
       id: 1,
       code: "CTZ-2026-000001",
       customer_id: null,
       customer_name: null,
       commercial_total: "0E-18",
-      total_with_tax: "20267.70",
-      calculated_total: "17176.02",
+      total_with_tax: "0E-18",
+      calculated_total: "0E-18",
+      total: "20267.70",
       created_at: new Date().toISOString(),
     };
     mockFetch((url) => {
       if (url.includes("/quotations")) {
         return jsonResponse(200, {
-          items: [legacyQuoteZeroCommercial],
+          items: [legacyQuote],
           total: 1,
           limit: 100,
           offset: 0,

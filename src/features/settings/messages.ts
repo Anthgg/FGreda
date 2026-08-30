@@ -76,9 +76,53 @@ export function describeError(error: unknown): string {
       return "No se encontro informacion para ese documento.";
     case "IDENTITY_LOOKUP_UNAVAILABLE":
       return "La consulta no esta disponible en este momento. Intente mas tarde.";
+
+    // ---- Fase 009E: costeo comercial ---------------------------------
+    // El backend ya manda estos con texto humano, pero se fijan aqui para
+    // que un cambio de redaccion alla no se lleve por delante la pantalla.
+    case "QUOTATION_BUILDER_NOT_EDITABLE":
+      return "Esta cotizacion ya no es un borrador, asi que sus precios quedaron fijados.";
+    case "QUOTATION_BUILDER_CONFLICT":
+      return (
+        "Otra persona modifico este borrador mientras usted trabajaba. " +
+        "Vuelva a cargarlo para ver los cambios."
+      );
+    case "QUOTATION_BUILDER_SOURCE_CHANGED":
+      return (
+        "Algun costo cambio desde el ultimo calculo. Guarde el recalculo antes " +
+        "de confirmar para que el precio corresponda a los costos de hoy."
+      );
+    case "QUOTATION_BUILDER_INCOMPLETE":
+      return "Faltan datos en alguna linea. Revise los avisos de cada producto.";
+    case "FIXED_COST_ALLOCATION_BASE_ZERO":
+      return (
+        "Ningun producto tiene costo, asi que no hay sobre que repartir los " +
+        "gastos fijos. Revise recetas, quemas y mano de obra."
+      );
+    case "PRODUCT_PRICE_UPDATE_NOT_ALLOWED":
+      return "No se puede cambiar el precio del maestro desde la cotizacion.";
+
     default:
-      return error.message;
+      return safeFallback(error.message);
   }
+}
+
+/**
+ * Ultimo filtro antes de la pantalla.
+ *
+ * Para casi todos los codigos el backend manda una frase util y se muestra tal
+ * cual. Pero un codigo que nadie mapeo puede llegar con el mensaje vacio o con
+ * el propio codigo por texto, y ninguna de esas dos cosas ayuda a nadie:
+ * `FIXED_COST_ALLOCATION_BASE_ZERO` no le dice al usuario que hacer. En ese
+ * caso se prefiere una frase generica y honesta.
+ */
+function safeFallback(message: string): string {
+  const texto = message.trim();
+  const pareceCodigo = /^[A-Z][A-Z0-9_]{5,}$/.test(texto);
+  if (!texto || pareceCodigo) {
+    return "No se pudo completar la operacion. Intente nuevamente.";
+  }
+  return texto;
 }
 
 /** Convierte los detalles de validacion en una linea legible. */

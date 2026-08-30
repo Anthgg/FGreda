@@ -231,6 +231,14 @@ export interface QuotationCalculateOut {
   tax_amount: string;
   total_with_tax: string;
   unit_price_with_tax: string;
+  /**
+   * Fase 009E. Los DOS importes, resueltos por el backend.
+   *
+   * Antes cada pantalla elegia entre `commercial_*` y `calculated_*` con un
+   * `||`. Cual es el importe real es una regla comercial, no presentacion.
+   */
+  subtotal: string;
+  total: string;
   source_fingerprint: string;
   warnings: string[];
   /** La cotización se emite sin IGV y el impuesto se añade encima. */
@@ -274,6 +282,15 @@ export interface QuotationSummaryOut {
   commercial_sale_unit_price?: string;
   commercial_total?: string;
   total_with_tax: string;
+  /**
+   * Fase 009E. EL total con IGV, lo resuelve el backend.
+   *
+   * Los tres campos de arriba siguen en el contrato, pero el que se muestra es
+   * este. El frontend elegia entre ellos con una cascada propia en seis
+   * sitios, y esa cascada es una regla comercial: escrita seis veces, se
+   * escribe de seis maneras y el mismo pedido vale dos importes.
+   */
+  total: string;
   created_at: string;
 }
 

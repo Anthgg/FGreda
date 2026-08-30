@@ -185,6 +185,27 @@ export interface QuotationBuilderItemOut {
   waiting_days: number;
   total_days: number;
   space_cost: string;
+  // ---- Fase 009E: el motor comercial, paso a paso -------------------
+  /** Material + quema asignada + mano de obra. SIN costos fijos. */
+  technical_cost: string;
+  production_factor: string;
+  factored_cost: string;
+  /** Parte de los costos fijos de la cotizacion que le toca a esta linea. */
+  fixed_cost_allocation: string;
+  commercial_base_cost: string;
+  commercial_base_unit_cost: string;
+  raw_net_unit: string;
+  raw_tax_unit: string;
+  raw_gross_unit: string;
+  rounding_step: string;
+  /** Lo que el CEILING contractual anadio al bruto crudo. Siempre >= 0. */
+  rounding_adjustment_unit: string;
+  final_gross_unit: string;
+  final_net_unit: string;
+  final_tax_unit: string;
+  line_total_gross: string;
+  line_total_net: string;
+  line_total_tax: string;
   final_unit_cost: string;
   final_total_cost: string;
   markup_percent: string;
@@ -225,6 +246,15 @@ export interface QuotationBuilderOut {
   tax_rate_source_snapshot: string;
   tax_amount: string;
   total_with_tax: string;
+  // ---- Fase 009E: los tres totales, sin ambiguedad -------------------
+  /** Suma de `line_total_net`. Es EL neto de la cotizacion. */
+  quotation_net_total: string;
+  quotation_tax_total: string;
+  /** Suma de `line_total_gross`. Es EL total: el que se firma. */
+  quotation_gross_total: string;
+  production_factor: string;
+  rounding_step: string;
+  total_fixed_cost: string;
   currency_code_snapshot: string;
   currency_symbol_snapshot: string;
   warnings: string[];

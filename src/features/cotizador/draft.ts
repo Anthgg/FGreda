@@ -67,7 +67,6 @@ export interface CotizadorItemDraft {
   techniqueQuantities: Record<string, string>;
   additionalIds: string[];
   additionalQuantities: Record<string, string>;
-  otherCostIds: string[];
   daysAdjustment: string;
   waitingDays: string;
   markupPercent: string;
@@ -117,7 +116,6 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   techniqueQuantities: {},
   additionalIds: [],
   additionalQuantities: {},
-  otherCostIds: [],
   daysAdjustment: "0",
   waitingDays: "0",
   markupPercent: "100",
@@ -163,8 +161,7 @@ export function itemFromProduct(product: Product): CotizadorItemDraft {
     techniqueQuantities: {},
     additionalIds: [],
     additionalQuantities: {},
-    otherCostIds: [],
-    daysAdjustment: "0",
+      daysAdjustment: "0",
     waitingDays: "0",
     markupPercent: "100",
     commercialSaleUnitPrice: "",
@@ -250,7 +247,6 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
       "additional_id",
       "additional_quantity",
     ),
-    otherCostIds: idsFromSnapshots(item.other_costs, "other_cost_id"),
     daysAdjustment: String(item.days_adjustment),
     waitingDays: String(item.waiting_days),
     markupPercent: decimal(item.markup_percent) || "100",
@@ -354,10 +350,10 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         })),
         days_adjustment: integer(item.daysAdjustment),
         waiting_days: Math.max(0, integer(item.waitingDays)),
-        other_costs: item.otherCostIds.map((id, index) => ({
-          other_cost_id: Number(id),
-          sort_order: index,
-        })),
+        // Fase 009E: los costos fijos son de la COTIZACION y el backend
+        // los aplica solo. Elegirlos por linea los cobraba una vez por
+        // producto, asi que el cliente ya no tiene voz aqui.
+        other_costs: [],
         markup_percent: item.markupPercent.trim() || "100",
         ...(item.commercialSaleUnitPrice.trim()
           ? { commercial_sale_unit_price: item.commercialSaleUnitPrice.trim() }

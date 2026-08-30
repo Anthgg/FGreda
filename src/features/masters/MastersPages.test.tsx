@@ -760,9 +760,14 @@ describe("Modulo de importaciones", () => {
       new File(["x"], "maestros.xlsx"),
     );
 
+    // El aviso explica QUE paso, no como se llama por dentro. El codigo
+    // `ROUNDED_TO_12_DECIMALS` sigue viajando en el contrato y sirve para
+    // logica y logs, pero al usuario se le ensena la frase.
     expect(
-      await screen.findByText("ROUNDED_TO_12_DECIMALS"),
+      await screen.findByText("El costo del archivo excede la escala de 12 decimales del proyecto"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("ROUNDED_TO_12_DECIMALS")).not.toBeInTheDocument();
+    // Y el dato util —lo que traia el archivo y con que se quedo— sigue ahi.
     expect(
       screen.getByText("(0.0169068431372549 → 0.016906843137)"),
     ).toBeInTheDocument();

@@ -312,7 +312,7 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
           />
           <Metric
             label="Subtotal comercial"
-            value={money(quote.commercial_subtotal || quote.calculated_total)}
+            value={money(quote.subtotal)}
             prominent
             subtitle={`Ganancia total: ${money(quote.effective_profit_total)}`}
           />
@@ -322,7 +322,7 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
           <Metric label={`IGV (${formatDecimalString(quote.tax_percentage, 2)} %)`} value={money(quote.tax_amount)} />
           <Metric
             label="TOTAL COMERCIAL CON IGV"
-            value={money(quote.commercial_total || quote.total_with_tax)}
+            value={money(quote.total)}
             prominent
           />
           <Metric

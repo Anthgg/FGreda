@@ -9,6 +9,7 @@ import {
 import { Spinner } from "@/components/Spinner";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
+import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { describeError } from "@/features/settings/messages";
 import { useRecipe } from "@/features/recipes/useRecipes";
 import {
@@ -589,7 +590,7 @@ export function QuotationEditor({
                 />
                 <SummaryMetric
                   label="Subtotal comercial"
-                  value={money(preview.data.commercial_subtotal || preview.data.calculated_total)}
+                  value={money(preview.data.subtotal)}
                   strong
                 />
                 <SummaryMetric
@@ -604,16 +605,18 @@ export function QuotationEditor({
                 <div className="col-span-2">
                   <SummaryMetric
                     label="TOTAL COMERCIAL CON IGV"
-                    value={money(preview.data.commercial_total || preview.data.total_with_tax)}
+                    value={money(preview.data.total)}
                     strong
                     subtitle={`Unitario con IGV: ${money(preview.data.commercial_unit_price_with_tax || preview.data.unit_price_with_tax)}`}
                   />
                 </div>
               </dl>
-              {preview.data.warnings.length > 0 ? (
-                <div className="mt-5 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
-                  {preview.data.warnings.join(" · ")}
-                </div>
+              {describeWarnings(preview.data.warnings).length > 0 ? (
+                <ul className="mt-5 space-y-1 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+                  {describeWarnings(preview.data.warnings).map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
               ) : null}
               <div className="mt-4 text-[10px] leading-4 text-zinc-500">
                 La cotización se emite sobre el precio comercial acordado con el cliente. El IGV se detalla para el comprobante de pago.

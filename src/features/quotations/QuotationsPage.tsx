@@ -175,7 +175,7 @@ export function QuotationsPage() {
                               : "—"}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums text-zinc-950">
-                            S/ {formatDecimalString(quote.workflow === "COTIZADOR" ? quote.total_with_tax : quote.commercial_total || quote.total_with_tax, 2)}
+                            S/ {formatDecimalString(quote.total, 2)}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link

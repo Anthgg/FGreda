@@ -83,25 +83,17 @@ function formatRelativeTime(isoString: string): string {
 }
 
 /**
- * Un Decimal serializado en "0", "0.00" o notacion cientifica ("0E-18") es una
- * cadena no vacia: `||` lo trata como verdadero y nunca cae al siguiente campo
- * de la cascada. Sin este chequeo numerico, una cotizacion Legacy cuyo
- * commercial_total nunca se poblo (queda en cero) pisa un total_with_tax real
- * y no nulo con un cero silencioso.
+ * Total crudo (sin formatear) de una cotizacion.
+ *
+ * Fase 009E: lo resuelve el BACKEND en `total`. Antes esta funcion elegia
+ * entre `commercial_total`, `total_with_tax` y `calculated_total` con una
+ * cascada propia —y la misma cascada vivia repetida en otras cinco
+ * pantallas—. Cual de los tres es el total real es una regla comercial, no
+ * una decision de presentacion: escrita seis veces, se escribe de seis
+ * maneras y el mismo pedido acaba valiendo dos importes.
  */
-function isMeaningfulTotal(value: string | undefined): value is string {
-  if (!value) return false;
-  const parsed = parseFloat(value);
-  return !isNaN(parsed) && parsed !== 0;
-}
-
-/** Total crudo (sin formatear) para cotizaciones de tipo Cotizador o Legacy. */
 function getQuoteTotalRaw(quote: QuotationSummaryOut): string {
-  if (quote.workflow === "COTIZADOR") return quote.total_with_tax;
-  if (isMeaningfulTotal(quote.commercial_total)) return quote.commercial_total;
-  if (isMeaningfulTotal(quote.total_with_tax)) return quote.total_with_tax;
-  if (isMeaningfulTotal(quote.calculated_total)) return quote.calculated_total;
-  return quote.commercial_total || quote.total_with_tax || quote.calculated_total || "0";
+  return quote.total;
 }
 
 /**

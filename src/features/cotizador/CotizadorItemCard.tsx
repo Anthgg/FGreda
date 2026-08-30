@@ -6,9 +6,10 @@ import { formatDecimalString } from "@/features/firings/labels";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
 import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
-import { useAdditionals, useOtherCosts, useTechniques } from "@/features/quotations/useQuotations";
+import { useAdditionals, useTechniques } from "@/features/quotations/useQuotations";
 import type { CotizadorItemDraft } from "@/features/cotizador/draft";
 import { GlazeEstimator } from "@/features/cotizador/GlazeEstimator";
+import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { itemFromProduct } from "@/features/cotizador/draft";
 import type { KilnOut } from "@/types/firings";
 import type { QuotationBuilderItemOut } from "@/types/quotationBuilder";
@@ -17,6 +18,19 @@ export type CotizadorItemMode = "PIECES" | "PRODUCTION" | "COSTS" | "MARGIN" | "
 
 const money = (value: string | null | undefined, symbol = "S/") =>
   `${symbol} ${formatDecimalString(value, 2)}`;
+
+/**
+ * La politica de redondeo dicha en palabras.
+ *
+ * El paso llega del backend como "0.500000". Ensenarlo crudo no dice nada: lo
+ * que el usuario necesita saber es que el precio SUBE hasta el siguiente medio
+ * sol, nunca baja. Es la diferencia con la regla anterior, que redondeaba al
+ * mas cercano y podia bajar 8,10 a 8,00.
+ */
+const roundingPolicyLabel = (step: string | null | undefined, symbol = "S/") => {
+  const paso = formatDecimalString(step, 2);
+  return paso === "—" ? "—" : `Hacia arriba a ${symbol} ${paso}`;
+};
 
 const DIMENSIONS = [
   ["width", "Ancho (cm)"],
@@ -202,18 +216,19 @@ export function CotizadorItemCard({
   const [creatingProduct, setCreatingProduct] = useState<string | null>(null);
   const [techniqueToAdd, setTechniqueToAdd] = useState("");
   const [additionalToAdd, setAdditionalToAdd] = useState("");
-  const [otherCostToAdd, setOtherCostToAdd] = useState("");
   const techniques = useTechniques(true);
   const additionals = useAdditionals(true);
-  const otherCosts = useOtherCosts(true);
   const productId = /^[1-9]\d*$/.test(item.productId) ? Number(item.productId) : null;
   const firingLines = useConfirmedFiringLines({
     ...(productId ? { product_id: productId } : {}),
     limit: 100,
   });
-  const visibleWarnings = preview?.warnings.filter(
-    (code) => code !== "DISCOUNT_RULE_BLOCKED_BY_SOURCE",
-  ) ?? [];
+  // Los codigos del backend siguen siendo la autoridad; aqui solo se
+  // traducen. Nadie tiene que saber que `FIRING_REQUIRED` significa que falta
+  // elegir un horno.
+  const visibleWarnings = describeWarnings(
+    preview?.warnings.filter((code) => code !== "DISCOUNT_RULE_BLOCKED_BY_SOURCE") ?? [],
+  );
   const manualPriceOverridesMargin = item.commercialSaleUnitPrice.trim() !== "";
 
   const patch = (values: Partial<CotizadorItemDraft>) => onChange({ ...item, ...values });
@@ -308,7 +323,6 @@ export function CotizadorItemCard({
 
   const techniqueLabels = new Map((techniques.data?.items ?? []).map((value) => [String(value.id), value.name]));
   const additionalLabels = new Map((additionals.data?.items ?? []).map((value) => [String(value.id), value.name]));
-  const otherCostLabels = new Map((otherCosts.data?.items ?? []).map((value) => [String(value.id), value.name]));
   const lowKilnOptions = kilns
     .filter((kiln) => kiln.current_low_rate !== null)
     .map((kiln) => ({ value: String(kiln.id), label: `${kiln.code} · ${kiln.name}` }));
@@ -327,14 +341,6 @@ export function CotizadorItemCard({
     })),
   ];
 
-  const addSelection = (
-    id: string,
-    key: "techniqueIds" | "additionalIds" | "otherCostIds",
-    reset: (value: string) => void,
-  ) => {
-    if (id && !item[key].includes(id)) patch({ [key]: [...item[key], id] });
-    reset("");
-  };
 
   const addTechnique = (id: string) => {
     if (id && !item.techniqueIds.includes(id)) {
@@ -687,18 +693,48 @@ export function CotizadorItemCard({
                 />
               ))}
             </div>
-            <div className="space-y-3">
-              <SelectField label="Agregar otro gasto" value={otherCostToAdd} options={(otherCosts.data?.items ?? []).filter((x) => !item.otherCostIds.includes(String(x.id))).map((x) => ({ value: String(x.id), label: x.name }))} onChange={(id) => addSelection(id, "otherCostIds", setOtherCostToAdd)} disabled={disabled} placeholder="Elegir gasto…" />
-              <SelectionChips ids={item.otherCostIds} labels={otherCostLabels} disabled={disabled} onRemove={(id) => patch({ otherCostIds: item.otherCostIds.filter((value) => value !== id) })} />
+            {/* Fase 009E: los costos fijos —alquiler, servicios, administrativo—
+                son de la COTIZACION y se aplican solos. Dejarlos ademas
+                seleccionables por linea los cobraria dos veces. */}
+            <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+              <p className="text-[11px] font-semibold text-zinc-700">Costos fijos del taller</p>
+              <p className="text-[11px] text-zinc-500">
+                Alquiler, servicios y costo administrativo se aplican automáticamente a la
+                cotización completa y se reparten entre los productos según su costo. No se
+                eligen por línea: se cobran una sola vez.
+              </p>
+              <p className="text-xs text-zinc-800">
+                Asignado a esta línea:{" "}
+                <strong className="tabular-nums">{money(preview?.fixed_cost_allocation, currencySymbol)}</strong>
+              </p>
             </div>
           </div>
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Material</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.materials_applied, currencySymbol)}</p></div>
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo de quema asignado</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</p></div>
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Mano de obra</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.labor_cost, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Otros gastos</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.space_cost, currencySymbol)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.technical_cost, currencySymbol)}</p></div>
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo unitario backend</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.final_unit_cost, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo total backend</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.final_total_cost, currencySymbol)}</p></div>
+          </div>
+
+          {/* El camino del costo, en el orden en que lo recorre el backend.
+              Nada de esto se calcula aqui: si el frontend multiplicara por el
+              factor, dos pantallas darian dos numeros para la misma pieza. */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+              De costo técnico a costo comercial base
+            </p>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.technical_cost, currencySymbol)}</p><p className="text-[10px] text-zinc-400">Material + quema + mano de obra</p></div>
+              <div><p className="text-[11px] text-zinc-500">× Factor de producción</p><p className="mt-0.5 text-sm font-bold tabular-nums">×{formatDecimalString(preview?.production_factor, 2)}</p><p className="text-[10px] text-zinc-400">Configuración → Comercial</p></div>
+              <div><p className="text-[11px] text-zinc-500">= Costo factorado</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.factored_cost, currencySymbol)}</p></div>
+              <div><p className="text-[11px] text-zinc-500">+ Costos fijos asignados</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.fixed_cost_allocation, currencySymbol)}</p><p className="text-[10px] text-zinc-400">Parte que le toca del total del lote</p></div>
+            </div>
+            <div className="mt-3 rounded-xl bg-zinc-950 p-3 text-white">
+              <p className="text-[11px] text-zinc-400">= Costo comercial base del lote</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums">{money(preview?.commercial_base_cost, currencySymbol)}</p>
+              <p className="text-[10px] text-zinc-400">Unitario: {money(preview?.commercial_base_unit_cost, currencySymbol)}</p>
+            </div>
           </div>
           {preview?.additionals.length ? (
             <div className="rounded-xl border border-zinc-200 p-3"><p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Adicionales calculados por BGreda</p>{preview.additionals.map((line, lineIndex) => <p key={lineIndex} className="flex justify-between gap-3 text-xs"><span>{String(line.name_snapshot ?? `Adicional ${lineIndex + 1}`)}</span><span className="font-semibold tabular-nums">{money(String(line.applied_cost ?? "0"), currencySymbol)}</span></p>)}</div>
@@ -707,26 +743,68 @@ export function CotizadorItemCard({
       ) : null}
 
       {mode === "MARGIN" ? (
-        <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-5">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Cantidad de piezas</p><p className="mt-1 text-base font-bold tabular-nums">{preview?.quantity ?? (item.quantity || "—")}</p></div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo unitario sin IGV</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.final_unit_cost, currencySymbol)}</p><p className="mt-1 text-[10px] text-zinc-500">Incluye la parte proporcional de la quema.</p></div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo total del lote sin IGV</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.final_total_cost, currencySymbol)}</p><p className="mt-1 text-[10px] text-zinc-500">Material, quema, mano de obra y otros gastos.</p></div>
-          <TextField label="Markup (%)" requirement="required" value={item.markupPercent} onChange={(markupPercent) => patch({ markupPercent })} disabled={disabled} inputMode="decimal" />
-          <TextField label="Precio comercial unitario" requirement="optional" value={item.commercialSaleUnitPrice} onChange={(commercialSaleUnitPrice) => patch({ commercialSaleUnitPrice })} disabled={disabled} inputMode="decimal" hint="Vacío: usa la sugerencia del backend." />
-          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[11px] text-orange-800">Sugerido unitario sin IGV</p><p className="mt-1 text-base font-bold tabular-nums text-orange-950">{money(preview?.suggested_commercial_unit_price, currencySymbol)}</p></div>
-          <div className="rounded-xl bg-zinc-950 p-3 text-white"><p className="text-[11px] text-zinc-400">Aplicado unitario sin IGV</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.commercial_sale_unit_price, currencySymbol)}</p><p className="text-[10px] text-zinc-400">Utilidad del lote: {money(preview?.effective_profit_total, currencySymbol)}</p></div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-3"><p className="text-[11px] text-zinc-500">Precio unitario con IGV</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.commercial_unit_price_with_tax, currencySymbol)}</p></div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-3"><p className="text-[11px] text-zinc-500">Subtotal del lote sin IGV</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.commercial_subtotal, currencySymbol)}</p></div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-3"><p className="text-[11px] text-zinc-500">IGV del lote</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.tax_amount, currencySymbol)}</p></div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-[11px] text-emerald-800">Total del lote con IGV</p><p className="mt-1 text-base font-bold tabular-nums text-emerald-950">{money(preview?.commercial_total, currencySymbol)}</p></div>
-          {manualPriceOverridesMargin ? (
-            <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 sm:col-span-2 lg:col-span-5">
-              <p className="text-xs text-amber-950">El precio manual {money(item.commercialSaleUnitPrice, currencySymbol)} reemplaza el precio calculado con margen.</p>
-              {!disabled ? <button type="button" className="min-h-10 rounded-lg bg-amber-900 px-4 text-xs font-semibold text-white hover:bg-amber-950" onClick={() => patch({ commercialSaleUnitPrice: "" })}>Usar precio con margen</button> : null}
+        <div className="space-y-4 p-4 sm:p-5">
+          {/* Los dos unicos campos que decide el usuario en este paso. Todo lo
+              demas de la pantalla llega calculado: si el frontend rehiciera la
+              cuenta, el precio guardado y el que se ve podrian discrepar. */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+              <p className="text-[11px] text-zinc-500">Costo comercial base unitario</p>
+              <p className="mt-1 text-base font-bold tabular-nums">{money(preview?.commercial_base_unit_cost, currencySymbol)}</p>
+              <p className="mt-1 text-[10px] text-zinc-500">Costo técnico × factor, más los costos fijos que le tocan.</p>
             </div>
-          ) : (
-            <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 sm:col-span-2 lg:col-span-5">El margen se aplica automáticamente sobre el costo unitario sin IGV; el IGV se agrega después.</p>
-          )}
+            <TextField label="Margen / markup (%)" requirement="required" value={item.markupPercent} onChange={(markupPercent) => patch({ markupPercent })} disabled={disabled} inputMode="decimal" hint="Se aplica sobre el costo comercial base." />
+            <TextField label="Precio neto manual" requirement="optional" value={item.commercialSaleUnitPrice} onChange={(commercialSaleUnitPrice) => patch({ commercialSaleUnitPrice })} disabled={disabled} inputMode="decimal" hint="Vacío: manda el margen. Si lo escribes, reemplaza al margen pero sigue pasando por el IGV y el redondeo." />
+          </div>
+
+          {/* El camino del precio, en el mismo orden que lo recorre el backend. */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Del costo base al precio de contrato</p>
+            <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div>
+                <dt className="text-[11px] text-zinc-500">Precio neto crudo</dt>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.raw_net_unit, currencySymbol)}</dd>
+                <dd className="text-[10px] text-zinc-400">Base × (1 + margen)</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] text-zinc-500">IGV aplicado</dt>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{formatDecimalString(preview?.tax_percentage_snapshot, 2)} %</dd>
+                <dd className="text-[10px] text-zinc-400">{money(preview?.raw_tax_unit, currencySymbol)}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] text-zinc-500">Bruto crudo</dt>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.raw_gross_unit, currencySymbol)}</dd>
+                <dd className="text-[10px] text-zinc-400">Antes de redondear</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] text-zinc-500">Redondeo contractual</dt>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{roundingPolicyLabel(preview?.rounding_step, currencySymbol)}</dd>
+                <dd className="text-[10px] text-zinc-400">Suma {money(preview?.rounding_adjustment_unit, currencySymbol)}</dd>
+              </div>
+            </dl>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-zinc-950 p-3 text-white">
+                <p className="text-[11px] text-zinc-400">Precio bruto final unitario</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums">{money(preview?.final_gross_unit, currencySymbol)}</p>
+              </div>
+              <div className="rounded-xl border border-zinc-200 p-3"><p className="text-[11px] text-zinc-500">Neto final reconstruido</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.final_net_unit, currencySymbol)}</p></div>
+              <div className="rounded-xl border border-zinc-200 p-3"><p className="text-[11px] text-zinc-500">IGV final reconstruido</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.final_tax_unit, currencySymbol)}</p></div>
+            </div>
+            <p className="mt-2 text-[10px] text-zinc-400">El neto y el IGV se rehacen desde el bruto ya redondeado, así que suman exactamente el precio de contrato.</p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Cantidad de piezas</p><p className="mt-1 text-base font-bold tabular-nums">{preview?.quantity ?? (item.quantity || "—")}</p></div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-3"><p className="text-[11px] text-zinc-500">Subtotal e IGV de la línea</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.line_total_net, currencySymbol)} + {money(preview?.line_total_tax, currencySymbol)}</p></div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-[11px] text-emerald-800">Total de la línea</p><p className="mt-1 text-base font-bold tabular-nums text-emerald-950">{money(preview?.line_total_gross, currencySymbol)}</p></div>
+          </div>
+
+          {manualPriceOverridesMargin ? (
+            <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs text-amber-950">El precio manual {money(item.commercialSaleUnitPrice, currencySymbol)} reemplaza al margen. Aun así pasa por el IGV y por el redondeo contractual.</p>
+              {!disabled ? <button type="button" className="min-h-10 rounded-lg bg-amber-900 px-4 text-xs font-semibold text-white hover:bg-amber-950" onClick={() => patch({ commercialSaleUnitPrice: "" })}>Volver al margen</button> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -741,7 +819,13 @@ export function CotizadorItemCard({
             <div><dt className="text-[10px] uppercase text-zinc-400">Subtotal</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_subtotal, currencySymbol)}</dd></div>
             <div><dt className="text-[10px] uppercase text-zinc-400">IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.tax_amount, currencySymbol)}</dd></div>
           </dl>
-          {visibleWarnings.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{visibleWarnings.join(" · ")}</p> : null}
+          {visibleWarnings.length ? (
+            <ul className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {visibleWarnings.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          ) : null}
           {preview?.production_snapshot && Object.keys(preview.production_snapshot).length ? (
             <p className="text-[11px] text-zinc-500">Volumen {snapshotDecimal(preview.production_snapshot, "total_volume_cm3")} cm³ · Ocupación {snapshotDecimal(preview.production_snapshot, "occupancy_percentage")}%</p>
           ) : null}
