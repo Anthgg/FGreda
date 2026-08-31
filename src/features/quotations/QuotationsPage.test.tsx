@@ -74,6 +74,10 @@ const preview = {
   discount_rule_source: "NOT_FOUND" as const,
   techniques: [],
   additionals: [],
+  currency_code_snapshot: "PEN",
+  currency_symbol_snapshot: "S/",
+  exchange_rate_snapshot: null,
+  exchange_rate_source_snapshot: null,
   other_costs: [],
 };
 const draftQuote: QuotationOut = {

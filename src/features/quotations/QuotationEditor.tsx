@@ -26,8 +26,10 @@ import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import { useSession } from "@/features/auth/useSession";
 import { draftToPayload, type QuotationDraft } from "@/features/quotations/draft";
 import type { AdditionalCalculationOut, TechniqueCalculationOut } from "@/types/quotations";
+import { formatMoney } from "@/features/quotations/money";
 
-const money = (value: string | null | undefined) => `S/ ${formatDecimalString(value, 2)}`;
+/** Via heredada: siempre en soles, que es la moneda base del sistema. */
+const money = (value: string | null | undefined) => formatMoney(value, "PEN");
 
 function SummaryMetric({
   label,

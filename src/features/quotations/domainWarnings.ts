@@ -111,6 +111,19 @@ const CATALOG: Record<string, DomainWarning> = {
       "No hay IGV configurado ni en el producto ni en Configuración → Comercial, " +
       "así que se está cotizando sin impuesto.",
   },
+  // ---- Fase 009F: moneda y tipo de cambio ---------------------------
+  EXCHANGE_RATE_REQUIRED: {
+    message: "Ingresa el tipo de cambio para cotizar en dólares.",
+    step: "DATOS",
+  },
+  INVALID_EXCHANGE_RATE: {
+    message: "El tipo de cambio debe ser mayor que 0.",
+    step: "DATOS",
+  },
+  UNSUPPORTED_CURRENCY: {
+    message: "Esta moneda no está disponible para cotizaciones.",
+    step: "DATOS",
+  },
   FIRING_LINE_REQUIRED: {
     message: "Elige la línea de quema confirmada de la que sale el costo.",
     step: "PRODUCCION",

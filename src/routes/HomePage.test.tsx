@@ -33,6 +33,9 @@ const mockQuoteConfirmed: QuotationSummaryOut = {
   commercial_total: "850.00",
   total_with_tax: "850.00",
   total: "850.00",
+  currency_code_snapshot: "PEN",
+  currency_symbol_snapshot: "S/",
+  exchange_rate_snapshot: null,
   created_at: new Date().toISOString(),
 };
 
@@ -57,6 +60,9 @@ const mockQuoteDraft: QuotationSummaryOut = {
   commercial_total: "980.00",
   total_with_tax: "980.00",
   total: "980.00",
+  currency_code_snapshot: "PEN",
+  currency_symbol_snapshot: "S/",
+  exchange_rate_snapshot: null,
   created_at: new Date().toISOString(),
 };
 
@@ -101,6 +107,16 @@ function defaultDashboardHandler(url: string) {
   if (url.includes("/auth/me")) return sessionResponse();
   if (url.includes("/auth/csrf")) return csrfResponse();
   if (url.includes("/quotations")) {
+    // Fase 009F: el agregado monetario lo hace el backend, agrupado por
+    // moneda. Va ANTES de la rama generica porque `/quotations/totals`
+    // tambien contiene «/quotations».
+    if (url.includes("/quotations/totals")) {
+      return jsonResponse(200, {
+        totals: [
+          { currency_code: "PEN", currency_symbol: "S/", total: "850.00", quotation_count: 1 },
+        ],
+      });
+    }
     // El stub respeta `status`, como hace el backend real. Sin esto, cada
     // contador leeria el mismo `total` y el test no distinguiria "cuenta el
     // backend" de "cuenta la pagina".
@@ -224,87 +240,23 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     expect(within(metricsSection).queryByText("100")).not.toBeInTheDocument();
   });
 
-  it("el importe del mes recorre TODAS las paginas, no solo la primera", async () => {
-    // 250 confirmadas de S/ 10 cada una en un endpoint que entrega 200 por
-    // pagina. Quedarse en la primera daria S/ 2000: el mismo truncamiento que
-    // tenian los contadores, solo que en soles.
-    const CONFIRMED_TOTAL = 250;
-    const PAGE_SIZE = 200;
-    const confirmed = Array.from({ length: CONFIRMED_TOTAL }, (_, i) => ({
-      ...mockQuoteConfirmed,
-      id: 5000 + i,
-      code: `CTZ-2026-01${5000 + i}`,
-      commercial_total: "10.00",
-      total_with_tax: "10.00",
-      total: "10.00",
-      created_at: new Date().toISOString(),
-    }));
-    const pageRequests: number[] = [];
-
-    mockFetch((url) => {
-      if (url.includes("/auth/me")) return sessionResponse();
-      if (url.includes("/auth/csrf")) return csrfResponse();
-      if (url.includes("/quotations")) {
-        if (url.includes("status=CONFIRMED")) {
-          const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0);
-          pageRequests.push(offset);
-          return jsonResponse(200, {
-            items: confirmed.slice(offset, offset + PAGE_SIZE),
-            total: CONFIRMED_TOTAL,
-            limit: PAGE_SIZE,
-            offset,
-          });
-        }
-        if (url.includes("status=DRAFT")) {
-          return jsonResponse(200, { items: [], total: 0, limit: 1, offset: 0 });
-        }
-        return jsonResponse(200, { items: [], total: CONFIRMED_TOTAL, limit: 1, offset: 0 });
-      }
-      if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
-      if (url.includes("/inventory")) return jsonResponse(200, { items: [], total: 0, limit: 50, offset: 0 });
-      if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0, limit: 10, offset: 0 });
-      return errorResponse(404, "NOT_FOUND");
-    });
-    renderApp(["/"]);
-
-    const metricsSection = await screen.findByLabelText("Métricas del taller");
-    // 250 x 10 = 2500, no 2000.
-    expect(await within(metricsSection).findByText(/S\/\s*2[.,]?500[.,]00/)).toBeInTheDocument();
-    // Y se pidieron las dos paginas del mes actual.
-    expect(pageRequests).toContain(0);
-    expect(pageRequests).toContain(PAGE_SIZE);
-  });
-
-  it("suma el total que resuelve el backend, sin elegir entre campos", async () => {
-    // Fase 009E: el caso que motivo este test —CTZ-2026-000001, con
-    // commercial_total en el Decimal-cero que Python serializa como "0E-18"
-    // tapando un total_with_tax real— ya NO se decide aqui. Lo resuelve
-    // `_summary_total` en el backend y tiene su propia prueba alli.
+  it("DASHBOARD_SPLIT_CURRENCY: muestra un total por moneda y ninguno combinado", async () => {
+    // Fase 009F. El test que vivia aqui comprobaba que el cliente recorriera
+    // TODAS las paginas de confirmadas para sumarlas. Esa garantia dejo de
+    // hacer falta porque la suma se movio al servidor, que es justamente el
+    // arreglo: el navegador sumaba con parseFloat —perdiendo centimos— y, en
+    // cuanto una cotizacion se emite en dolares, sumaba soles con dolares.
     //
-    // Lo que se comprueba ahora es lo contrario de lo que se comprobaba
-    // antes: que el dashboard NO mira los otros campos. Por eso el fixture
-    // deja los tres en cero y solo `total` trae el importe: si quedara
-    // cualquier resto de la cascada, el KPI mostraria cero.
-    const { workflow: _workflow, ...sinWorkflow } = mockQuoteConfirmed;
-    const legacyQuote: QuotationSummaryOut = {
-      ...sinWorkflow,
-      id: 1,
-      code: "CTZ-2026-000001",
-      customer_id: null,
-      customer_name: null,
-      commercial_total: "0E-18",
-      total_with_tax: "0E-18",
-      calculated_total: "0E-18",
-      total: "20267.70",
-      created_at: new Date().toISOString(),
-    };
+    // Lo que se comprueba ahora es mas fuerte: que el tablero pinta lo que el
+    // backend agrega, separado por moneda, y que no existe una cifra unica
+    // que las mezcle.
     mockFetch((url) => {
-      if (url.includes("/quotations")) {
+      if (url.includes("/quotations/totals")) {
         return jsonResponse(200, {
-          items: [legacyQuote],
-          total: 1,
-          limit: 100,
-          offset: 0,
+          totals: [
+            { currency_code: "PEN", currency_symbol: "S/", total: "2500.00", quotation_count: 250 },
+            { currency_code: "USD", currency_symbol: "US$", total: "950.00", quotation_count: 3 },
+          ],
         });
       }
       return defaultDashboardHandler(url);
@@ -312,9 +264,37 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     renderApp(["/"]);
 
     const metricsSection = await screen.findByLabelText("Métricas del taller");
-    expect(
-      await within(metricsSection).findByText(/S\/\s*20[.,]267[.,]70/),
-    ).toBeInTheDocument();
+    expect(await within(metricsSection).findByText(/S\/\s*2[.,]?500[.,]00/)).toBeInTheDocument();
+    expect(await within(metricsSection).findByText(/US\$\s*950[.,]00/)).toBeInTheDocument();
+    // 2500 + 950 = 3450: la cifra que existiria si alguien volviera a sumarlas.
+    expect(within(metricsSection).queryByText(/3[.,]?450/)).not.toBeInTheDocument();
+  });
+
+  it("NO_PARSEFLOAT_MONEY_AUTHORITY: no pide todas las confirmadas para sumarlas", async () => {
+    // El tablero ya no necesita las filas: pide el agregado. Si volviera a
+    // recorrer paginas para sumar, este test lo delata.
+    const urlsPedidas: string[] = [];
+    mockFetch((url) => {
+      urlsPedidas.push(url);
+      if (url.includes("/quotations/totals")) {
+        return jsonResponse(200, {
+          totals: [
+            { currency_code: "PEN", currency_symbol: "S/", total: "10.00", quotation_count: 1 },
+          ],
+        });
+      }
+      return defaultDashboardHandler(url);
+    });
+    renderApp(["/"]);
+    await screen.findByLabelText("Métricas del taller");
+
+    const paginasDeConfirmadas = urlsPedidas.filter(
+      (url) =>
+        url.includes("status=CONFIRMED") &&
+        !url.includes("/totals") &&
+        !url.includes("limit=1"),
+    );
+    expect(paginasDeConfirmadas).toEqual([]);
   });
 
   it("renderiza la tabla de cotizaciones recientes con navegación a detalle", async () => {

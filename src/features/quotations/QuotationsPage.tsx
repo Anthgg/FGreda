@@ -5,12 +5,12 @@ import { DatePickerField, ProductSelectField, SelectField } from "@/components/f
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
-import { formatDecimalString } from "@/features/firings/labels";
 import { Badge, EmptyState, Pagination, SearchInput } from "@/features/masters/MasterTable";
 import { QuotationMastersTab } from "@/features/quotations/QuotationMastersTab";
 import { useQuotations } from "@/features/quotations/useQuotations";
 import { describeError } from "@/features/settings/messages";
 import type { QuotationFilters, QuotationStatus } from "@/types/quotations";
+import { formatMoney } from "@/features/quotations/money";
 
 type TabId = "list" | "masters";
 const ALL = "ALL";
@@ -170,12 +170,20 @@ export function QuotationsPage() {
                           <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.quantity ?? "—"}</td>
                           <td className="px-4 py-3"><Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge></td>
                           <td className="px-4 py-3 text-right tabular-nums">
+                            {/* Fase 009F: la moneda es de CADA fila. Asumir una
+                                global ponia `S/` sobre importes en dolares. */}
                             {quote.commercial_sale_unit_price || quote.calculated_unit_price
-                              ? `S/ ${formatDecimalString(quote.commercial_sale_unit_price || quote.calculated_unit_price, 2)}`
+                              ? formatMoney(
+                                  quote.commercial_sale_unit_price || quote.calculated_unit_price,
+                                  quote.currency_code_snapshot,
+                                  { symbolSnapshot: quote.currency_symbol_snapshot },
+                                )
                               : "—"}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums text-zinc-950">
-                            S/ {formatDecimalString(quote.total, 2)}
+                            {formatMoney(quote.total, quote.currency_code_snapshot, {
+                              symbolSnapshot: quote.currency_symbol_snapshot,
+                            })}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link
