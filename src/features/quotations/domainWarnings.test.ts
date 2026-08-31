@@ -170,3 +170,41 @@ describe("Errores de validacion - Fase 009F", () => {
     expect(describeError(validacion(texto))).toBe(texto);
   });
 });
+
+describe("Motivos de validacion en castellano - Fase 009F", () => {
+  /** Un 422 de Pydantic con campo, tal y como llega del backend. */
+  const conCampo = (field: string, reason: string) =>
+    new ApiError("VALIDATION_ERROR", "Datos invalidos", 422, [
+      { field, reason, type: "value_error" },
+    ]);
+
+  it("traduce el motivo y nombra el campo como se llama en pantalla", () => {
+    // El caso real: «items.1.dimensions.depth: Input should be greater than 0»
+    // dejaba media frase en ingles y una ruta de JSON en una pantalla que por
+    // lo demas habla castellano.
+    const texto = describeError(
+      conCampo("items.1.dimensions.depth", "Input should be greater than 0"),
+    );
+    expect(texto).toBe("Producto 2 · Profundidad: debe ser mayor que 0");
+    expect(texto).not.toContain("items.1");
+    expect(texto).not.toContain("Input should be");
+  });
+
+  it("el indice del producto se cuenta desde uno", () => {
+    // El usuario ve «Producto 1» y «Producto 2»; el payload cuenta desde cero.
+    const texto = describeError(conCampo("items.0.quantity", "Field required"));
+    expect(texto).toBe("Producto 1 · Cantidad: es obligatorio");
+  });
+
+  it("un campo de cabecera no inventa un producto", () => {
+    expect(describeError(conCampo("exchange_rate", "Input should be greater than 0"))).toBe(
+      "Tipo de cambio: debe ser mayor que 0",
+    );
+  });
+
+  it("un campo desconocido se calla en vez de enseñar la ruta", () => {
+    const texto = describeError(conCampo("algo.raro.interno", "Field required"));
+    expect(texto).not.toContain("algo.raro.interno");
+    expect(texto).toBe("es obligatorio");
+  });
+});
