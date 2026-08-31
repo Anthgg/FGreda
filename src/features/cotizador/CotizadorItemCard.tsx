@@ -496,7 +496,7 @@ export function CotizadorItemCard({
                           : editable
                             ? requiredForProduction
                               ? "El maestro no tiene esta medida."
-                              : "El Excel no usa esta medida para la quema."
+                              : "No interviene en el cálculo de la quema."
                             : "Protegido por el maestro."
                       }
                     />
@@ -530,7 +530,11 @@ export function CotizadorItemCard({
               disabled={disabled}
               inputMode="decimal"
               placeholder="Ej. 11.58"
-              hint="Si el Excel ya fija el costo, reemplaza receta y gramos."
+              // Deuda: este campo reemplaza el calculo del backend. Se
+              // retira en 009H, cuando las recetas que faltan esten
+              // cargadas: quitarlo antes dejaria en cero el material de
+              // las lineas que no tienen receta ni gramos.
+              hint="Reemplaza el cálculo por receta y gramos. Déjalo vacío para que lo calcule BGreda."
             />
             <RecipeSelectField
               label="Receta"
@@ -697,7 +701,7 @@ export function CotizadorItemCard({
                   })}
                   disabled={disabled}
                   inputMode="decimal"
-                  hint="El Excel usa 0.5 para número de moldes y 1 para cada vidriado."
+                  hint="Cantidad con la que se aplica este adicional."
                 />
               ))}
             </div>
