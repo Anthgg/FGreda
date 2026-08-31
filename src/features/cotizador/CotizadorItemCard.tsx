@@ -13,11 +13,16 @@ import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { itemFromProduct } from "@/features/cotizador/draft";
 import type { KilnOut } from "@/types/firings";
 import type { QuotationBuilderItemOut } from "@/types/quotationBuilder";
+import { formatMoney } from "@/features/quotations/money";
 
 export type CotizadorItemMode = "PIECES" | "PRODUCTION" | "COSTS" | "MARGIN" | "SUMMARY";
 
-const money = (value: string | null | undefined, symbol = "S/") =>
-  `${symbol} ${formatDecimalString(value, 2)}`;
+/** Importes de la moneda de EMISION. Los costos internos usan `soles`. */
+const money = (value: string | null | undefined, code: string | null | undefined = "PEN") =>
+  formatMoney(value, code);
+
+/** Costos internos: siempre en soles aunque se cotice en dolares. */
+const soles = (value: string | null | undefined) => formatMoney(value, "PEN");
 
 /**
  * La politica de redondeo dicha en palabras.
@@ -27,9 +32,12 @@ const money = (value: string | null | undefined, symbol = "S/") =>
  * sol, nunca baja. Es la diferencia con la regla anterior, que redondeaba al
  * mas cercano y podia bajar 8,10 a 8,00.
  */
-const roundingPolicyLabel = (step: string | null | undefined, symbol = "S/") => {
+const roundingPolicyLabel = (
+  step: string | null | undefined,
+  code: string | null | undefined = "PEN",
+) => {
   const paso = formatDecimalString(step, 2);
-  return paso === "—" ? "—" : `Hacia arriba a ${symbol} ${paso}`;
+  return paso === "—" ? "—" : `Hacia arriba a ${formatMoney(step, code)}`;
 };
 
 const DIMENSIONS = [
@@ -76,7 +84,7 @@ function FiringToggle({
   onKilnChange,
   disabled,
   plan,
-  currencySymbol,
+  currencyCode,
 }: {
   label: string;
   selected: boolean;
@@ -86,7 +94,7 @@ function FiringToggle({
   onKilnChange: (value: string) => void;
   disabled: boolean;
   plan: FiringPlanEntry | null;
-  currencySymbol: string | undefined;
+  currencyCode: string | undefined;
 }) {
   return (
     <div
@@ -132,11 +140,11 @@ function FiringToggle({
               <dd className="text-right font-semibold tabular-nums text-zinc-900">{plan.batches}</dd>
               <dt>Costo / hornada</dt>
               <dd className="text-right tabular-nums">
-                {money(String(plan.costPerBatch), currencySymbol)}
+                {money(String(plan.costPerBatch), currencyCode)}
               </dd>
               <dt>Total de la quema</dt>
               <dd className="text-right font-semibold tabular-nums text-zinc-900">
-                {money(String(plan.totalCost), currencySymbol)}
+                {money(String(plan.totalCost), currencyCode)}
               </dd>
               <dt>Días / hornada</dt>
               <dd className="text-right tabular-nums">{plan.daysPerBatch}</dd>
@@ -189,7 +197,7 @@ export function CotizadorItemCard({
   index,
   mode,
   preview,
-  currencySymbol = "S/",
+  currencyCode = "PEN",
   productionSummary,
   headerKilnId = "",
   kilns = [],
@@ -202,7 +210,8 @@ export function CotizadorItemCard({
   index: number;
   mode: CotizadorItemMode;
   preview?: QuotationBuilderItemOut | undefined;
-  currencySymbol?: string | undefined;
+  /** Moneda de EMISION. Los costos internos se muestran siempre en soles. */
+  currencyCode?: string | undefined;
   /** production_summary del preview: las hornadas viven por SESION, no por item. */
   productionSummary?: Record<string, unknown> | undefined;
   /** Horno de cabecera de la cotizacion, que una linea puede heredar. */
@@ -337,7 +346,7 @@ export function CotizadorItemCard({
     { value: "", label: "Simulación integrada" },
     ...(firingLines.data?.items ?? []).map((line) => ({
       value: String(line.id),
-      label: `${line.firing_code} · ${line.firing_date ?? "Sin fecha"} · ${money(line.allocated_cost, currencySymbol)}`,
+      label: `${line.firing_code} · ${line.firing_date ?? "Sin fecha"} · ${money(line.allocated_cost, currencyCode)}`,
     })),
   ];
 
@@ -552,7 +561,6 @@ export function CotizadorItemCard({
             plan={preview?.glaze_plan ?? null}
             warnings={preview?.warnings ?? []}
             disabled={disabled}
-            currencySymbol={currencySymbol}
             onChange={patch}
           />
           <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
@@ -593,7 +601,7 @@ export function CotizadorItemCard({
                   onKilnChange={(lowKilnId) => patch({ lowKilnId })}
                   disabled={disabled}
                   plan={firingPlan.LOW}
-                  currencySymbol={currencySymbol}
+                  currencyCode={currencyCode}
                 />
                 <FiringToggle
                   label="Quema alta"
@@ -604,7 +612,7 @@ export function CotizadorItemCard({
                   onKilnChange={(highKilnId) => patch({ highKilnId })}
                   disabled={disabled}
                   plan={firingPlan.HIGH}
-                  currencySymbol={currencySymbol}
+                  currencyCode={currencyCode}
                 />
               </div>
               {!item.lowKilnSelected && !item.highKilnSelected ? (
@@ -618,7 +626,7 @@ export function CotizadorItemCard({
                   {" · "}
                   <span className="tabular-nums">{firingPlan.totalDays} días</span>
                   {" · "}
-                  <span className="tabular-nums">{money(String(firingPlan.totalCost), currencySymbol)}</span>
+                  <span className="tabular-nums">{money(String(firingPlan.totalCost), currencyCode)}</span>
                 </div>
               ) : null}
               <SelectField
@@ -666,7 +674,7 @@ export function CotizadorItemCard({
               <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-semibold tabular-nums">{snapshotDecimal(preview.production_snapshot, "total_volume_cm3")} cm³</p></div>
               <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Ocupación</p><p className="font-semibold tabular-nums">{snapshotDecimal(preview.production_snapshot, "occupancy_percentage")}%</p></div>
               <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Días totales</p><p className="font-semibold tabular-nums">{preview.total_days}</p></div>
-              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Costo de quema asignado</p><p className="font-semibold tabular-nums text-orange-950">{money(preview.firing_cost, currencySymbol)}</p></div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Costo de quema asignado</p><p className="font-semibold tabular-nums text-orange-950">{money(preview.firing_cost, currencyCode)}</p></div>
             </div>
           ) : null}
         </div>
@@ -705,16 +713,16 @@ export function CotizadorItemCard({
               </p>
               <p className="text-xs text-zinc-800">
                 Asignado a esta línea:{" "}
-                <strong className="tabular-nums">{money(preview?.fixed_cost_allocation, currencySymbol)}</strong>
+                <strong className="tabular-nums">{soles(preview?.fixed_cost_allocation)}</strong>
               </p>
             </div>
           </div>
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Material</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.materials_applied, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo de quema asignado</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Mano de obra</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.labor_cost, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.technical_cost, currencySymbol)}</p></div>
-            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo unitario backend</p><p className="mt-1 text-base font-bold tabular-nums">{money(preview?.final_unit_cost, currencySymbol)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Material</p><p className="mt-1 text-sm font-bold tabular-nums">{soles(preview?.materials_applied)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo de quema asignado</p><p className="mt-1 text-sm font-bold tabular-nums">{soles(preview?.firing_cost)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Mano de obra</p><p className="mt-1 text-sm font-bold tabular-nums">{soles(preview?.labor_cost)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-1 text-sm font-bold tabular-nums">{soles(preview?.technical_cost)}</p></div>
+            <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Costo unitario backend</p><p className="mt-1 text-base font-bold tabular-nums">{soles(preview?.final_unit_cost)}</p></div>
           </div>
 
           {/* El camino del costo, en el orden en que lo recorre el backend.
@@ -725,19 +733,19 @@ export function CotizadorItemCard({
               De costo técnico a costo comercial base
             </p>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <div><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.technical_cost, currencySymbol)}</p><p className="text-[10px] text-zinc-400">Material + quema + mano de obra</p></div>
+              <div><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-0.5 text-sm font-bold tabular-nums">{soles(preview?.technical_cost)}</p><p className="text-[10px] text-zinc-400">Material + quema + mano de obra</p></div>
               <div><p className="text-[11px] text-zinc-500">× Factor de producción</p><p className="mt-0.5 text-sm font-bold tabular-nums">×{formatDecimalString(preview?.production_factor, 2)}</p><p className="text-[10px] text-zinc-400">Configuración → Comercial</p></div>
-              <div><p className="text-[11px] text-zinc-500">= Costo factorado</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.factored_cost, currencySymbol)}</p></div>
-              <div><p className="text-[11px] text-zinc-500">+ Costos fijos asignados</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.fixed_cost_allocation, currencySymbol)}</p><p className="text-[10px] text-zinc-400">Parte que le toca del total del lote</p></div>
+              <div><p className="text-[11px] text-zinc-500">= Costo factorado</p><p className="mt-0.5 text-sm font-bold tabular-nums">{soles(preview?.factored_cost)}</p></div>
+              <div><p className="text-[11px] text-zinc-500">+ Costos fijos asignados</p><p className="mt-0.5 text-sm font-bold tabular-nums">{soles(preview?.fixed_cost_allocation)}</p><p className="text-[10px] text-zinc-400">Parte que le toca del total del lote</p></div>
             </div>
             <div className="mt-3 rounded-xl bg-zinc-950 p-3 text-white">
               <p className="text-[11px] text-zinc-400">= Costo comercial base del lote</p>
-              <p className="mt-0.5 text-base font-bold tabular-nums">{money(preview?.commercial_base_cost, currencySymbol)}</p>
-              <p className="text-[10px] text-zinc-400">Unitario: {money(preview?.commercial_base_unit_cost, currencySymbol)}</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums">{soles(preview?.commercial_base_cost)}</p>
+              <p className="text-[10px] text-zinc-400">Unitario: {soles(preview?.commercial_base_unit_cost)}</p>
             </div>
           </div>
           {preview?.additionals.length ? (
-            <div className="rounded-xl border border-zinc-200 p-3"><p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Adicionales calculados por BGreda</p>{preview.additionals.map((line, lineIndex) => <p key={lineIndex} className="flex justify-between gap-3 text-xs"><span>{String(line.name_snapshot ?? `Adicional ${lineIndex + 1}`)}</span><span className="font-semibold tabular-nums">{money(String(line.applied_cost ?? "0"), currencySymbol)}</span></p>)}</div>
+            <div className="rounded-xl border border-zinc-200 p-3"><p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Adicionales calculados por BGreda</p>{preview.additionals.map((line, lineIndex) => <p key={lineIndex} className="flex justify-between gap-3 text-xs"><span>{String(line.name_snapshot ?? `Adicional ${lineIndex + 1}`)}</span><span className="font-semibold tabular-nums">{money(String(line.applied_cost ?? "0"), currencyCode)}</span></p>)}</div>
           ) : null}
         </div>
       ) : null}
@@ -750,7 +758,7 @@ export function CotizadorItemCard({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <p className="text-[11px] text-zinc-500">Costo comercial base unitario</p>
-              <p className="mt-1 text-base font-bold tabular-nums">{money(preview?.commercial_base_unit_cost, currencySymbol)}</p>
+              <p className="mt-1 text-base font-bold tabular-nums">{soles(preview?.commercial_base_unit_cost)}</p>
               <p className="mt-1 text-[10px] text-zinc-500">Costo técnico × factor, más los costos fijos que le tocan.</p>
             </div>
             <TextField label="Margen / markup (%)" requirement="required" value={item.markupPercent} onChange={(markupPercent) => patch({ markupPercent })} disabled={disabled} inputMode="decimal" hint="Se aplica sobre el costo comercial base." />
@@ -763,45 +771,45 @@ export function CotizadorItemCard({
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div>
                 <dt className="text-[11px] text-zinc-500">Precio neto crudo</dt>
-                <dd className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.raw_net_unit, currencySymbol)}</dd>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.raw_net_unit, currencyCode)}</dd>
                 <dd className="text-[10px] text-zinc-400">Base × (1 + margen)</dd>
               </div>
               <div>
                 <dt className="text-[11px] text-zinc-500">IGV aplicado</dt>
                 <dd className="mt-0.5 text-sm font-bold tabular-nums">{formatDecimalString(preview?.tax_percentage_snapshot, 2)} %</dd>
-                <dd className="text-[10px] text-zinc-400">{money(preview?.raw_tax_unit, currencySymbol)}</dd>
+                <dd className="text-[10px] text-zinc-400">{money(preview?.raw_tax_unit, currencyCode)}</dd>
               </div>
               <div>
                 <dt className="text-[11px] text-zinc-500">Bruto crudo</dt>
-                <dd className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.raw_gross_unit, currencySymbol)}</dd>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.raw_gross_unit, currencyCode)}</dd>
                 <dd className="text-[10px] text-zinc-400">Antes de redondear</dd>
               </div>
               <div>
                 <dt className="text-[11px] text-zinc-500">Redondeo contractual</dt>
-                <dd className="mt-0.5 text-sm font-bold tabular-nums">{roundingPolicyLabel(preview?.rounding_step, currencySymbol)}</dd>
-                <dd className="text-[10px] text-zinc-400">Suma {money(preview?.rounding_adjustment_unit, currencySymbol)}</dd>
+                <dd className="mt-0.5 text-sm font-bold tabular-nums">{roundingPolicyLabel(preview?.rounding_step, currencyCode)}</dd>
+                <dd className="text-[10px] text-zinc-400">Suma {money(preview?.rounding_adjustment_unit, currencyCode)}</dd>
               </div>
             </dl>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl bg-zinc-950 p-3 text-white">
                 <p className="text-[11px] text-zinc-400">Precio bruto final unitario</p>
-                <p className="mt-0.5 text-lg font-bold tabular-nums">{money(preview?.final_gross_unit, currencySymbol)}</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums">{money(preview?.final_gross_unit, currencyCode)}</p>
               </div>
-              <div className="rounded-xl border border-zinc-200 p-3"><p className="text-[11px] text-zinc-500">Neto final reconstruido</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.final_net_unit, currencySymbol)}</p></div>
-              <div className="rounded-xl border border-zinc-200 p-3"><p className="text-[11px] text-zinc-500">IGV final reconstruido</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.final_tax_unit, currencySymbol)}</p></div>
+              <div className="rounded-xl border border-zinc-200 p-3"><p className="text-[11px] text-zinc-500">Neto final reconstruido</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.final_net_unit, currencyCode)}</p></div>
+              <div className="rounded-xl border border-zinc-200 p-3"><p className="text-[11px] text-zinc-500">IGV final reconstruido</p><p className="mt-0.5 text-sm font-bold tabular-nums">{money(preview?.final_tax_unit, currencyCode)}</p></div>
             </div>
             <p className="mt-2 text-[10px] text-zinc-400">El neto y el IGV se rehacen desde el bruto ya redondeado, así que suman exactamente el precio de contrato.</p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Cantidad de piezas</p><p className="mt-1 text-base font-bold tabular-nums">{preview?.quantity ?? (item.quantity || "—")}</p></div>
-            <div className="rounded-xl border border-zinc-200 bg-white p-3"><p className="text-[11px] text-zinc-500">Subtotal e IGV de la línea</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.line_total_net, currencySymbol)} + {money(preview?.line_total_tax, currencySymbol)}</p></div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-[11px] text-emerald-800">Total de la línea</p><p className="mt-1 text-base font-bold tabular-nums text-emerald-950">{money(preview?.line_total_gross, currencySymbol)}</p></div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-3"><p className="text-[11px] text-zinc-500">Subtotal e IGV de la línea</p><p className="mt-1 text-sm font-bold tabular-nums">{money(preview?.line_total_net, currencyCode)} + {money(preview?.line_total_tax, currencyCode)}</p></div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-[11px] text-emerald-800">Total de la línea</p><p className="mt-1 text-base font-bold tabular-nums text-emerald-950">{money(preview?.line_total_gross, currencyCode)}</p></div>
           </div>
 
           {manualPriceOverridesMargin ? (
             <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
-              <p className="text-xs text-amber-950">El precio manual {money(item.commercialSaleUnitPrice, currencySymbol)} reemplaza al margen. Aun así pasa por el IGV y por el redondeo contractual.</p>
+              <p className="text-xs text-amber-950">El precio manual {money(item.commercialSaleUnitPrice, currencyCode)} reemplaza al margen. Aun así pasa por el IGV y por el redondeo contractual.</p>
               {!disabled ? <button type="button" className="min-h-10 rounded-lg bg-amber-900 px-4 text-xs font-semibold text-white hover:bg-amber-950" onClick={() => patch({ commercialSaleUnitPrice: "" })}>Volver al margen</button> : null}
             </div>
           ) : null}
@@ -812,12 +820,12 @@ export function CotizadorItemCard({
         <div className="space-y-4 p-4 sm:p-5">
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <div><dt className="text-[10px] uppercase text-zinc-400">Cantidad</dt><dd className="font-semibold tabular-nums">{preview?.quantity ?? (item.quantity || "—")}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">Costo unit.</dt><dd className="font-semibold tabular-nums">{money(preview?.final_unit_cost, currencySymbol)}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">Costo de quema asignado</dt><dd className="font-semibold tabular-nums">{money(preview?.firing_cost, currencySymbol)}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">Precio unit. sin IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_sale_unit_price, currencySymbol)}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">Precio unit. con IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_unit_price_with_tax, currencySymbol)}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">Subtotal</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_subtotal, currencySymbol)}</dd></div>
-            <div><dt className="text-[10px] uppercase text-zinc-400">IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.tax_amount, currencySymbol)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">Costo unit.</dt><dd className="font-semibold tabular-nums">{soles(preview?.final_unit_cost)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">Costo de quema asignado</dt><dd className="font-semibold tabular-nums">{soles(preview?.firing_cost)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">Precio unit. sin IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_sale_unit_price, currencyCode)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">Precio unit. con IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_unit_price_with_tax, currencyCode)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">Subtotal</dt><dd className="font-semibold tabular-nums">{money(preview?.commercial_subtotal, currencyCode)}</dd></div>
+            <div><dt className="text-[10px] uppercase text-zinc-400">IGV</dt><dd className="font-semibold tabular-nums">{money(preview?.tax_amount, currencyCode)}</dd></div>
           </dl>
           {visibleWarnings.length ? (
             <ul className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">

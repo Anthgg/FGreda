@@ -137,7 +137,6 @@ function renderEstimator(overrides: Partial<Parameters<typeof GlazeEstimator>[0]
       plan={null}
       warnings={[]}
       disabled={false}
-      currencySymbol="S/"
       onChange={onChange}
       {...overrides}
     />,
@@ -258,6 +257,9 @@ describe("Cotizador · ida y vuelta del plan", () => {
       fixed_cost_allocation: "0",
       commercial_base_cost: "0",
       commercial_base_unit_cost: "0",
+      currency_code_snapshot: "PEN",
+      exchange_rate_snapshot: null,
+      raw_net_unit_base: "0",
       raw_net_unit: "0",
       raw_tax_unit: "0",
       raw_gross_unit: "0",
@@ -327,6 +329,8 @@ describe("Cotizador · ida y vuelta del plan", () => {
       total_with_tax: "0",
       currency_code_snapshot: "PEN",
       currency_symbol_snapshot: "S/",
+      exchange_rate_snapshot: null,
+      exchange_rate_source_snapshot: null,
       warnings: [],
       complete: true,
       next_step: "SUMMARY",

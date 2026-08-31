@@ -14,6 +14,7 @@ import type {
   QuotationPage,
   TechniqueInput,
   TechniqueOut,
+  QuotationTotalsOut,
 } from "@/types/quotations";
 
 const QUOTATIONS = "/quotations";
@@ -45,6 +46,11 @@ export const calculateQuotation = (
   apiClient.post(`${QUOTATIONS}/calculate`, payload);
 export const fetchQuotations = (filters: QuotationFilters): Promise<QuotationPage> =>
   apiClient.get(QUOTATIONS + toQuery(filters as Record<string, unknown>));
+/** Totales por moneda. El backend es la autoridad de la agregacion. */
+export const fetchQuotationTotals = (
+  filters: QuotationFilters,
+): Promise<QuotationTotalsOut> =>
+  apiClient.get(`${QUOTATIONS}/totals` + toQuery(filters as Record<string, unknown>));
 export const fetchQuotation = (id: number): Promise<QuotationOut> =>
   apiClient.get(`${QUOTATIONS}/${id}`);
 export const createQuotation = (payload: QuotationCalculateIn): Promise<QuotationOut> =>

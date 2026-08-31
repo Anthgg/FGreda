@@ -18,11 +18,11 @@ import {
 } from "@/components/icons";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
-import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
 import { usePartners, useProducts, useStock } from "@/features/masters/useMasters";
-import { useAllQuotations, useQuotations } from "@/features/quotations/useQuotations";
-import type { QuotationStatus, QuotationSummaryOut } from "@/types/quotations";
+import { useQuotationTotals, useQuotations } from "@/features/quotations/useQuotations";
+import type { QuotationStatus, } from "@/types/quotations";
+import { formatMoney } from "@/features/quotations/money";
 
 /**
  * Formatea una fecha ISO a formato legible dd/mm/aaaa.
@@ -80,27 +80,6 @@ function formatRelativeTime(isoString: string): string {
   } catch {
     return "Reciente";
   }
-}
-
-/**
- * Total crudo (sin formatear) de una cotizacion.
- *
- * Fase 009E: lo resuelve el BACKEND en `total`. Antes esta funcion elegia
- * entre `commercial_total`, `total_with_tax` y `calculated_total` con una
- * cascada propia —y la misma cascada vivia repetida en otras cinco
- * pantallas—. Cual de los tres es el total real es una regla comercial, no
- * una decision de presentacion: escrita seis veces, se escribe de seis
- * maneras y el mismo pedido acaba valiendo dos importes.
- */
-function getQuoteTotalRaw(quote: QuotationSummaryOut): string {
-  return quote.total;
-}
-
-/**
- * Formato del total monetario para cotizaciones de tipo Cotizador o Legacy.
- */
-function getQuoteTotal(quote: QuotationSummaryOut): string {
-  return formatDecimalString(getQuoteTotalRaw(quote), 2);
 }
 
 const STATUS_LABEL: Record<QuotationStatus, string> = {
@@ -167,15 +146,14 @@ export function HomePage() {
   // paginas del filtro: quedarse en la primera reintroduciria el mismo
   // truncamiento que tenian los contadores, solo que en soles y a partir de
   // 200 confirmadas en un mes.
-  const confirmedThisMonthQuery = useAllQuotations({
+  // Fase 009F: el backend agrega en Decimal y separado por moneda. Antes se
+  // traian TODAS las confirmadas del mes para sumarlas aqui con parseFloat, y
+  // eso hacia dos cosas mal a la vez: perdia centimos y, en cuanto una
+  // cotizacion se emite en dolares, sumaba soles con dolares.
+  const totalsThisMonth = useQuotationTotals({
     status: "CONFIRMED",
     date_from: ranges.thisFrom,
     date_to: ranges.thisTo,
-  });
-  const confirmedPrevMonthQuery = useAllQuotations({
-    status: "CONFIRMED",
-    date_from: ranges.prevFrom,
-    date_to: ranges.prevTo,
   });
 
   // Lista de "cotizaciones recientes": solo se muestran las primeras filas,
@@ -189,19 +167,10 @@ export function HomePage() {
 
   // Cálculos de métricas y períodos
   const metrics = useMemo(() => {
-    const sum = (rows: QuotationSummaryOut[]) =>
-      rows.reduce((acc, q) => {
-        const val = parseFloat(getQuoteTotalRaw(q));
-        return acc + (isNaN(val) ? 0 : val);
-      }, 0);
-
     const quotesCount = monthCount.data?.total ?? 0;
     const quotesLastCount = prevMonthCount.data?.total ?? 0;
     const confirmedCount = monthConfirmedCount.data?.total ?? 0;
     const confirmedLastCount = prevMonthConfirmedCount.data?.total ?? 0;
-
-    const totalCommercialThisMonth = sum(confirmedThisMonthQuery.data ?? []);
-    const totalCommercialLastMonth = sum(confirmedPrevMonthQuery.data ?? []);
 
     // Sin mes anterior no hay porcentaje que calcular: dividir entre cero
     // daria Infinity y la tarjeta mostraria un crecimiento inventado.
@@ -214,8 +183,9 @@ export function HomePage() {
       confirmedCount,
       confirmedGrowth: growth(confirmedCount, confirmedLastCount),
       draftsCount: draftsCountQuery.data?.total ?? 0,
-      totalCotizado: totalCommercialThisMonth,
-      totalGrowth: growth(totalCommercialThisMonth, totalCommercialLastMonth),
+      // Una lista por moneda, no un numero. No hay «total cotizado» a secas
+      // cuando hay dos monedas: la cifra combinada no significaria nada.
+      totalsByCurrency: totalsThisMonth.data?.totals ?? [],
     };
   }, [
     monthCount.data?.total,
@@ -223,8 +193,7 @@ export function HomePage() {
     monthConfirmedCount.data?.total,
     prevMonthConfirmedCount.data?.total,
     draftsCountQuery.data?.total,
-    confirmedThisMonthQuery.data,
-    confirmedPrevMonthQuery.data,
+    totalsThisMonth.data?.totals,
   ]);
 
   // Alertas calculadas a partir de datos reales existentes
@@ -454,7 +423,13 @@ export function HomePage() {
           </div>
         </Link>
 
-        {/* KPI 4: Total cotizado (mes) */}
+        {/* KPI 4: Total cotizado (mes), por moneda.
+
+            No hay un «total cotizado» a secas cuando hay dos monedas. Sumar
+            soles con dolares da un numero impecable aritmeticamente e inutil
+            financieramente, y convertir exigiria decidir con QUE tasa —¿la de
+            hoy?, ¿la de cada cotizacion?—, que es una decision de negocio que
+            nadie ha tomado. Separar no la necesita. */}
         <div className="rounded-2xl border border-white/60 bg-white/60 p-4 sm:p-5 shadow-xs backdrop-blur-md transition-all duration-150 hover:bg-white/75 flex flex-col justify-between">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-700 border border-purple-500/25 shrink-0">
@@ -462,28 +437,34 @@ export function HomePage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-medium text-zinc-500 truncate">Total cotizado (mes)</p>
-              <p className="text-2xl font-bold text-zinc-900 tracking-tight mt-0.5">
-                {quotesQuery.isPending
-                  ? "…"
-                  : `S/ ${metrics.totalCotizado.toLocaleString("es-PE", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}`}
-              </p>
+              {totalsThisMonth.isPending ? (
+                <p className="text-2xl font-bold text-zinc-900 tracking-tight mt-0.5">…</p>
+              ) : metrics.totalsByCurrency.length === 0 ? (
+                <p className="text-2xl font-bold text-zinc-900 tracking-tight mt-0.5">
+                  {formatMoney("0", "PEN")}
+                </p>
+              ) : (
+                <div className="mt-0.5 space-y-0.5">
+                  {metrics.totalsByCurrency.map((fila) => (
+                    <p
+                      key={fila.currency_code}
+                      className="text-xl font-bold text-zinc-900 tracking-tight tabular-nums"
+                    >
+                      {formatMoney(fila.total, fila.currency_code, {
+                        symbolSnapshot: fila.currency_symbol,
+                      })}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-black/[0.03] text-[11px] text-zinc-400">
-            {metrics.totalGrowth !== null ? (
-              <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
-                <TrendingUpIcon className="size-3" />
-                {metrics.totalGrowth >= 0
-                  ? `+${metrics.totalGrowth}%`
-                  : `${metrics.totalGrowth}%`}{" "}
-                vs mes anterior
-              </span>
-            ) : (
-              <span>total confirmado</span>
-            )}
+            <span>
+              {metrics.totalsByCurrency.length > 1
+                ? "confirmado, por moneda"
+                : "total confirmado"}
+            </span>
           </div>
         </div>
       </section>
@@ -554,7 +535,9 @@ export function HomePage() {
                             {formatDate(quote.created_at)}
                           </td>
                           <td className="py-3 text-right font-semibold tabular-nums text-zinc-900 whitespace-nowrap">
-                            S/ {getQuoteTotal(quote)}
+                            {formatMoney(quote.total, quote.currency_code_snapshot, {
+                              symbolSnapshot: quote.currency_symbol_snapshot,
+                            })}
                           </td>
                           <td className="py-3 text-center">
                             <Badge tone={STATUS_TONE[quote.status]}>

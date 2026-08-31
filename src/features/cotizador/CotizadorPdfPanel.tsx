@@ -5,7 +5,7 @@ import { fetchDraftPdfPreview } from "@/api/quotationBuilder";
 import { fetchQuotationPdf } from "@/api/quotations";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { formatDecimalString } from "@/features/firings/labels";
+import { formatMoney } from "@/features/quotations/money";
 import { Badge } from "@/features/masters/MasterTable";
 import type { QuotationBuilderDraftIn, QuotationBuilderOut } from "@/types/quotationBuilder";
 
@@ -24,8 +24,8 @@ interface CotizadorPdfPanelProps {
 
 const STATUS_LABEL = { DRAFT: "Borrador", CONFIRMED: "Confirmada", CANCELLED: "Anulada" } as const;
 const STATUS_TONE = { DRAFT: "warning", CONFIRMED: "positive", CANCELLED: "neutral" } as const;
-const money = (value: string | number | null | undefined, symbol = "S/") =>
-  `${symbol} ${formatDecimalString(value !== null && value !== undefined ? String(value) : "0", 2)}`;
+const money = (value: string | number | null | undefined, code: string | null | undefined = "PEN") =>
+  formatMoney(value !== null && value !== undefined ? String(value) : "0", code);
 
 export function CotizadorPdfPanel({
   draftPayload,
@@ -132,7 +132,8 @@ export function CotizadorPdfPanel({
     window.open(blobUrl, "_blank", "noopener,noreferrer");
   };
 
-  const symbol = preview?.currency_symbol_snapshot ?? "S/";
+  // El CODIGO manda; el simbolo es presentacion y lo resuelve el formatter.
+  const currency = preview?.currency_code_snapshot ?? "PEN";
   const itemCount = preview?.items?.length ?? draftPayload.items?.length ?? 0;
 
   return (
@@ -237,15 +238,15 @@ export function CotizadorPdfPanel({
             <div className="space-y-2 rounded-xl bg-zinc-50 p-3.5 text-xs">
               <div className="flex justify-between text-zinc-600">
                 <span>Subtotal comercial:</span>
-                <span className="font-medium tabular-nums">{money(preview?.commercial_subtotal, symbol)}</span>
+                <span className="font-medium tabular-nums">{money(preview?.commercial_subtotal, currency)}</span>
               </div>
               <div className="flex justify-between text-zinc-600">
                 <span>IGV ({preview?.tax_percentage_snapshot ?? "18"}%):</span>
-                <span className="font-medium tabular-nums">{money(preview?.tax_amount, symbol)}</span>
+                <span className="font-medium tabular-nums">{money(preview?.tax_amount, currency)}</span>
               </div>
               <div className="flex justify-between border-t border-zinc-200 pt-2 text-sm font-bold text-zinc-950">
                 <span>Total:</span>
-                <span className="tabular-nums">{money(preview?.total_with_tax, symbol)}</span>
+                <span className="tabular-nums">{money(preview?.total_with_tax, currency)}</span>
               </div>
             </div>
 

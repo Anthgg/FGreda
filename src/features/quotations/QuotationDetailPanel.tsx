@@ -14,6 +14,7 @@ import {
 } from "@/features/quotations/useQuotations";
 import { describeError } from "@/features/settings/messages";
 import type { QuotationOut, QuotationStatus } from "@/types/quotations";
+import { exchangeRateLabel, formatMoney } from "@/features/quotations/money";
 
 const statusLabel: Record<QuotationStatus, string> = {
   DRAFT: "Borrador",
@@ -25,7 +26,12 @@ const statusTone: Record<QuotationStatus, "warning" | "positive" | "neutral"> = 
   CONFIRMED: "positive",
   CANCELLED: "neutral",
 };
-const money = (value: string | null | undefined) => `S/ ${formatDecimalString(value, 2)}`;
+/** El detalle usa la moneda congelada de la cotizacion, no una global. */
+const money = (value: string | null | undefined, code?: string | null, symbol?: string | null) =>
+  formatMoney(value, code, { symbolSnapshot: symbol ?? null });
+
+/** Costos internos del taller: siempre en soles, aunque se emita en USD. */
+const soles = (value: string | null | undefined) => formatMoney(value, "PEN");
 
 function Metric({
   label,
@@ -199,7 +205,7 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
       {confirmPrice ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
           <span>
-            Actualizar el precio vigente de {money(quote.current_sale_price_snapshot)} a {money(quote.commercial_sale_unit_price || quote.calculated_unit_price)}. El costo del producto no cambiará.
+            Actualizar el precio vigente de {money(quote.current_sale_price_snapshot, quote.currency_code_snapshot, quote.currency_symbol_snapshot)} a {money(quote.commercial_sale_unit_price || quote.calculated_unit_price)}. El costo del producto no cambiará.
           </span>
           <div className="flex gap-2">
             <SecondaryButton onClick={() => setConfirmPrice(false)}>Volver</SecondaryButton>
@@ -290,14 +296,14 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
         <h2 className="text-sm font-semibold text-zinc-950 mb-4">Desglose de costeo y precios comerciales</h2>
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label="Materiales aplicados" value={money(quote.materials_applied)} />
-          <Metric label="Quema confirmada" value={money(quote.firing_cost)} />
-          <Metric label="Mano de obra" value={money(quote.labor_cost)} />
-          <Metric label="Costo de espacio" value={money(quote.space_cost)} />
+          <Metric label="Materiales aplicados" value={soles(quote.materials_applied)} />
+          <Metric label="Quema confirmada" value={soles(quote.firing_cost)} />
+          <Metric label="Mano de obra" value={soles(quote.labor_cost)} />
+          <Metric label="Costo de espacio" value={soles(quote.space_cost)} />
           <Metric
             label="Costo total interno"
-            value={money(quote.final_total_cost || quote.base_commercial_cost)}
-            subtitle={`Unitario: ${money(quote.final_unit_cost)}`}
+            value={soles(quote.final_total_cost || quote.base_commercial_cost)}
+            subtitle={`Unitario: ${soles(quote.final_unit_cost)}`}
           />
           <Metric
             label="Margen sobre costo"
@@ -308,21 +314,33 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
             label="Precio comercial unitario"
             value={money(quote.commercial_sale_unit_price || quote.calculated_unit_price)}
             prominent
-            subtitle={`Sugerido: ${money(quote.suggested_commercial_unit_price)}`}
+            subtitle={`Sugerido: ${money(quote.suggested_commercial_unit_price, quote.currency_code_snapshot, quote.currency_symbol_snapshot)}`}
           />
           <Metric
             label="Subtotal comercial"
-            value={money(quote.subtotal)}
+            value={money(quote.subtotal, quote.currency_code_snapshot, quote.currency_symbol_snapshot)}
             prominent
-            subtitle={`Ganancia total: ${money(quote.effective_profit_total)}`}
+            subtitle={`Ganancia total: ${money(quote.effective_profit_total, quote.currency_code_snapshot, quote.currency_symbol_snapshot)}`}
           />
         </dl>
 
+        {/* Fase 009F: la moneda se dice. Y si hay tasa, se dice cual: la
+            CONGELADA de esta cotizacion, no la de hoy. */}
         <dl className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-3">
-          <Metric label={`IGV (${formatDecimalString(quote.tax_percentage, 2)} %)`} value={money(quote.tax_amount)} />
+          <Metric label="Moneda" value={quote.currency_code_snapshot} />
+          {quote.exchange_rate_snapshot ? (
+            <Metric
+              label="Tipo de cambio"
+              value={exchangeRateLabel(quote.exchange_rate_snapshot) ?? "—"}
+            />
+          ) : null}
+        </dl>
+
+        <dl className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-3">
+          <Metric label={`IGV (${formatDecimalString(quote.tax_percentage, 2)} %)`} value={money(quote.tax_amount, quote.currency_code_snapshot, quote.currency_symbol_snapshot)} />
           <Metric
             label="TOTAL COMERCIAL CON IGV"
-            value={money(quote.total)}
+            value={money(quote.total, quote.currency_code_snapshot, quote.currency_symbol_snapshot)}
             prominent
           />
           <Metric
@@ -354,7 +372,7 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
             </div>
             <div>
               <dt className="text-zinc-500">Precio vigente al calcular</dt>
-              <dd className="mt-1 font-medium">{money(quote.current_sale_price_snapshot)}</dd>
+              <dd className="mt-1 font-medium">{money(quote.current_sale_price_snapshot, quote.currency_code_snapshot, quote.currency_symbol_snapshot)}</dd>
             </div>
           </dl>
         </section>

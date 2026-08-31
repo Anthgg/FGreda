@@ -260,6 +260,11 @@ export interface QuotationOut extends QuotationCalculateOut {
   cancelled_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Fase 009F. La moneda y la tasa CONGELADAS de esta cotizacion. */
+  currency_code_snapshot: string;
+  currency_symbol_snapshot: string;
+  exchange_rate_snapshot: string | null;
+  exchange_rate_source_snapshot: string | null;
 }
 
 export interface QuotationSummaryOut {
@@ -292,6 +297,10 @@ export interface QuotationSummaryOut {
    */
   total: string;
   created_at: string;
+  /** Fase 009F. La moneda de ESTA fila; el listado no asume una global. */
+  currency_code_snapshot: string;
+  currency_symbol_snapshot: string;
+  exchange_rate_snapshot: string | null;
 }
 
 export interface QuotationPage {
@@ -318,4 +327,24 @@ export interface ProductPriceUpdateOut {
   old_price: string | null;
   new_price: string;
   updated_at: string;
+}
+
+
+/** Lo cotizado en UNA moneda. Nunca se mezcla con otra. */
+export interface QuotationCurrencyTotal {
+  currency_code: string;
+  currency_symbol: string;
+  total: string;
+  quotation_count: number;
+}
+
+/**
+ * Totales cotizados, separados por moneda.
+ *
+ * Los suma el backend en Decimal. El navegador no agrega dinero: `parseFloat`
+ * sobre importes en cadena pierde centimos, y sumar soles con dolares da un
+ * numero impecable aritmeticamente e inutil financieramente.
+ */
+export interface QuotationTotalsOut {
+  totals: QuotationCurrencyTotal[];
 }

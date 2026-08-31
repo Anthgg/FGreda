@@ -121,6 +121,10 @@ export interface QuotationBuilderDraftIn {
   customer_id?: number;
   kiln_id?: number;
   items: QuotationBuilderItemIn[];
+  /** Fase 009F. Moneda de emision elegida para ESTA cotizacion. */
+  currency_code?: "PEN" | "USD";
+  /** Cuantos soles vale un dolar. Obligatoria con USD, prohibida con PEN. */
+  exchange_rate?: string;
 }
 
 export interface QuotationBuilderItemOut {
@@ -194,6 +198,11 @@ export interface QuotationBuilderItemOut {
   fixed_cost_allocation: string;
   commercial_base_cost: string;
   commercial_base_unit_cost: string;
+  /** Moneda y tasa efectivas: son las de la cotizacion, no de la linea. */
+  currency_code_snapshot: string;
+  exchange_rate_snapshot: string | null;
+  /** Neto unitario ANTES de convertir, siempre en PEN. */
+  raw_net_unit_base: string;
   raw_net_unit: string;
   raw_tax_unit: string;
   raw_gross_unit: string;
@@ -257,6 +266,9 @@ export interface QuotationBuilderOut {
   total_fixed_cost: string;
   currency_code_snapshot: string;
   currency_symbol_snapshot: string;
+  /** Fase 009F. Cuantos soles vale un dolar. Nulo si se emite en PEN. */
+  exchange_rate_snapshot: string | null;
+  exchange_rate_source_snapshot: string | null;
   warnings: string[];
   complete: boolean;
   next_step: "GENERAL_DATA" | "ITEMS" | "PRODUCTION" | "SUMMARY";

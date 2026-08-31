@@ -78,6 +78,10 @@ export interface CotizadorDraft {
   customerId: string;
   customerLabel: string;
   kilnId: string;
+  /** Fase 009F. Moneda en la que se EMITE. Los costos siguen en soles. */
+  currencyCode: "PEN" | "USD";
+  /** Cuantos soles vale un dolar. Vacio cuando se cotiza en soles. */
+  exchangeRate: string;
   items: CotizadorItemDraft[];
 }
 
@@ -86,6 +90,8 @@ export const emptyCotizadorDraft = (): CotizadorDraft => ({
   customerId: "",
   customerLabel: "",
   kilnId: "",
+  currencyCode: "PEN",
+  exchangeRate: "",
   items: [],
 });
 
@@ -260,6 +266,9 @@ export function cotizadorFromOutput(value: QuotationBuilderOut): CotizadorDraft 
     customerId: decimal(value.customer_id),
     customerLabel: value.customer_name_snapshot ?? "",
     kilnId: decimal(value.kiln_id),
+    // La moneda vuelve del backend; el frontend no la deduce del simbolo.
+    currencyCode: value.currency_code_snapshot === "USD" ? "USD" : "PEN",
+    exchangeRate: decimal(value.exchange_rate_snapshot),
     items: value.items.map(itemFromOutput),
   };
 }
@@ -274,6 +283,12 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
     ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
     ...(customerId ? { customer_id: customerId } : {}),
     ...(kilnId ? { kiln_id: kilnId } : {}),
+    currency_code: draft.currencyCode,
+    // La tasa solo viaja con USD. Mandarla con PEN es un 422: en soles no
+    // hay conversion que declarar, y el backend lo rechaza a proposito.
+    ...(draft.currencyCode === "USD" && draft.exchangeRate.trim()
+      ? { exchange_rate: draft.exchangeRate.trim() }
+      : {}),
     items: draft.items.flatMap((item, sortOrder) => {
       const productId = positiveInt(item.productId);
       if (!productId) return [];

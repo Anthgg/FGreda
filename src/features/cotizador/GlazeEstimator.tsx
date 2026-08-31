@@ -31,6 +31,7 @@ import type { GlazeDraft } from "@/features/cotizador/draft";
 import { formatDecimal } from "@/features/recipes/formatDecimal";
 import { usePreparations } from "@/features/recipes/useRecipes";
 import type { GlazePlanOut, GlazeUnit } from "@/types/quotationBuilder";
+import { formatMoney } from "@/features/quotations/money";
 
 const UNIT_OPTIONS = [
   { value: "g", label: "Gramos de sólidos (g)" },
@@ -45,7 +46,7 @@ interface GlazeEstimatorProps {
   /** Avisos de la línea; los del esmalte se explican aquí. */
   warnings: string[];
   disabled: boolean;
-  currencySymbol: string;
+  /** Sin moneda: el costo del esmalte es un costo interno, siempre en soles. */
   onChange: (change: {
     glazes?: GlazeDraft[];
     glazeUnit?: GlazeUnit;
@@ -59,7 +60,6 @@ export function GlazeEstimator({
   plan,
   warnings,
   disabled,
-  currencySymbol,
   onChange,
 }: GlazeEstimatorProps) {
   const batches = usePreparations({ limit: 50, offset: 0 }, !disabled);
@@ -292,7 +292,7 @@ export function GlazeEstimator({
                       <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
                         {allocation.estimated_cost === null
                           ? "—"
-                          : `${currencySymbol} ${formatDecimal(allocation.estimated_cost, 2)}`}
+                          : formatMoney(allocation.estimated_cost, "PEN")}
                       </td>
                     </tr>
                   ))}

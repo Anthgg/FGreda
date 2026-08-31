@@ -12,6 +12,7 @@ import {
   fetchAdditionals,
   fetchOtherCosts,
   fetchQuotation,
+  fetchQuotationTotals,
   fetchQuotations,
   fetchTechniques,
   updateAdditional,
@@ -96,6 +97,13 @@ export const useAllQuotations = (filters: QuotationFilters) =>
     queryKey: [...QUOTATIONS_KEY, "all", filters],
     queryFn: () => fetchAllQuotations(filters),
   });
+/** Totales por moneda, calculados en el servidor. */
+export const useQuotationTotals = (filters: QuotationFilters) =>
+  useQuery({
+    queryKey: [...QUOTATIONS_KEY, "totals", filters],
+    queryFn: () => fetchQuotationTotals(filters),
+  });
+
 export const useQuotation = (id: number | null) =>
   useQuery({
     queryKey: quotationKey(id!),
