@@ -144,3 +144,29 @@ describe("Paso siguiente del Cotizador", () => {
     expect(describeNextStep(undefined)).toBeNull();
   });
 });
+
+describe("Errores de validacion - Fase 009F", () => {
+  /** Un 422 de Pydantic, tal y como llega del backend. */
+  const validacion = (reason: string) =>
+    new ApiError("VALIDATION_ERROR", "Datos invalidos", 422, [{ field: "", reason, type: "value_error" }]);
+
+  it("un codigo dentro de un motivo de validacion se traduce", () => {
+    // El smoke en produccion encontro «No se pudo recalcular: Value error,
+    // EXCHANGE_RATE_REQUIRED» debajo del aviso humano: el codigo se colaba
+    // por la puerta lateral del error de recalculo.
+    const texto = describeError(validacion("Value error, EXCHANGE_RATE_REQUIRED"));
+    expect(texto).not.toContain("EXCHANGE_RATE_REQUIRED");
+    expect(texto).toMatch(/tipo de cambio para cotizar en dólares/i);
+  });
+
+  it("un codigo desconocido dentro de un motivo tampoco se muestra", () => {
+    const texto = describeError(validacion("Value error, ALGO_QUE_NO_EXISTE"));
+    expect(texto).not.toContain("ALGO_QUE_NO_EXISTE");
+    expect(texto).toMatch(/Revisa el formulario/i);
+  });
+
+  it("un motivo escrito para personas se respeta", () => {
+    const texto = "El valor debe ser mayor que cero";
+    expect(describeError(validacion(texto))).toBe(texto);
+  });
+});

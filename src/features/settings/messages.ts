@@ -6,6 +6,7 @@
  */
 
 import { ApiError, ErrorCode } from "@/api/client";
+import { describeWarning } from "@/features/quotations/domainWarnings";
 
 export const CONFLICT_CODE = "SETTINGS_VERSION_CONFLICT";
 
@@ -116,6 +117,15 @@ export function describeError(error: unknown): string {
  * `FIXED_COST_ALLOCATION_BASE_ZERO` no le dice al usuario que hacer. En ese
  * caso se prefiere una frase generica y honesta.
  */
+function safeFallbackOrNull(message: string): string | null {
+  const texto = message.trim();
+  // «Value error, X» es envoltura de Pydantic: sin la X util, no dice nada.
+  const sinEnvoltura = texto.replace(/^Value error,\s*/i, "").trim();
+  if (!sinEnvoltura) return null;
+  if (/^[A-Z][A-Z0-9_]{5,}$/.test(sinEnvoltura)) return null;
+  return sinEnvoltura;
+}
+
 function safeFallback(message: string): string {
   const texto = message.trim();
   const pareceCodigo = /^[A-Z][A-Z0-9_]{5,}$/.test(texto);
@@ -127,12 +137,33 @@ function safeFallback(message: string): string {
 
 /** Convierte los detalles de validacion en una linea legible. */
 function describeValidation(error: ApiError): string {
-  if (!error.details.length) return error.message;
-  return error.details
-    .map((detail) =>
-      detail.field ? `${detail.field}: ${detail.reason}` : detail.reason,
-    )
-    .join(". ");
+  if (!error.details.length) return safeFallback(error.message);
+  const legibles = error.details.map(describeDetail).filter((texto) => texto !== null);
+  if (!legibles.length) {
+    return "Faltan datos o hay valores fuera de rango. Revisa el formulario.";
+  }
+  return legibles.join(". ");
+}
+
+/**
+ * Un motivo de validacion, dicho en castellano.
+ *
+ * Pydantic devuelve el texto de la excepcion, y cuando el backend valida con
+ * `raise ValueError("EXCHANGE_RATE_REQUIRED")` ese texto llega como
+ * «Value error, EXCHANGE_RATE_REQUIRED». Concatenarlo tal cual metia el codigo
+ * en pantalla por una puerta lateral: el aviso humano ya estaba puesto, pero
+ * el error del recalculo lo enseñaba igual justo debajo.
+ *
+ * Se busca el codigo dentro del texto y se traduce con el mismo catalogo
+ * central que el resto; si no se reconoce, se descarta.
+ */
+function describeDetail(detail: { field?: string | null; reason: string }): string | null {
+  const codigo = detail.reason.match(/[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+/)?.[0];
+  const traducido = codigo ? describeWarning(codigo) : null;
+  if (traducido) return traducido;
+  const limpio = safeFallbackOrNull(detail.reason);
+  if (limpio === null) return null;
+  return detail.field ? `${detail.field}: ${limpio}` : limpio;
 }
 
 /** True cuando el error se debe a una edicion concurrente. */
