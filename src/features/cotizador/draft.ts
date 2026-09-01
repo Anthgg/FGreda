@@ -1,11 +1,20 @@
 import type { Product } from "@/types/masters";
 import type {
+  GlazeSelectionItemIn,
+  GlazeUnit,
   ProductDimension,
   QuotationBuilderDraftIn,
   QuotationBuilderItemIn,
   QuotationBuilderItemOut,
   QuotationBuilderOut,
 } from "@/types/quotationBuilder";
+
+/** Un esmalte elegido para la pieza. `share` es peso relativo, no porcentaje. */
+export interface GlazeDraft {
+  preparationId: string;
+  preparedProductId: string;
+  share: string;
+}
 
 export interface CotizadorItemDraft {
   id?: number;
@@ -41,11 +50,23 @@ export interface CotizadorItemDraft {
   lowKilnSelected: boolean;
   highKilnSelected: boolean;
   factorKilnId: string;
+  /**
+   * Fase 009D: los esmaltes de la pieza y su reparto. Es lo UNICO que el
+   * navegador decide del plan; los gramos, mililitros, concentracion y costo
+   * los deriva el backend y llegan en `glazePlan`.
+   */
+  glazes: GlazeDraft[];
+  glazeUnit: GlazeUnit;
+  /**
+   * El usuario ya toco la seleccion. Mientras sea false el backend propone el
+   * preparado mas caro; en cuanto es true manda lo que el usuario eligio,
+   * incluso si eligio no llevar ninguno.
+   */
+  glazeSelectionTouched: boolean;
   techniqueIds: string[];
   techniqueQuantities: Record<string, string>;
   additionalIds: string[];
   additionalQuantities: Record<string, string>;
-  otherCostIds: string[];
   daysAdjustment: string;
   waitingDays: string;
   markupPercent: string;
@@ -57,6 +78,10 @@ export interface CotizadorDraft {
   customerId: string;
   customerLabel: string;
   kilnId: string;
+  /** Fase 009F. Moneda en la que se EMITE. Los costos siguen en soles. */
+  currencyCode: "PEN" | "USD";
+  /** Cuantos soles vale un dolar. Vacio cuando se cotiza en soles. */
+  exchangeRate: string;
   items: CotizadorItemDraft[];
 }
 
@@ -65,6 +90,8 @@ export const emptyCotizadorDraft = (): CotizadorDraft => ({
   customerId: "",
   customerLabel: "",
   kilnId: "",
+  currencyCode: "PEN",
+  exchangeRate: "",
   items: [],
 });
 
@@ -88,11 +115,13 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   lowKilnSelected: true,
   highKilnSelected: true,
   factorKilnId: "",
+  glazes: [],
+  glazeUnit: "g",
+  glazeSelectionTouched: false,
   techniqueIds: [],
   techniqueQuantities: {},
   additionalIds: [],
   additionalQuantities: {},
-  otherCostIds: [],
   daysAdjustment: "0",
   waitingDays: "0",
   markupPercent: "100",
@@ -131,12 +160,14 @@ export function itemFromProduct(product: Product): CotizadorItemDraft {
     lowKilnSelected: true,
     highKilnSelected: true,
     factorKilnId: "",
+    glazes: [],
+    glazeUnit: "g",
+    glazeSelectionTouched: false,
     techniqueIds: [],
     techniqueQuantities: {},
     additionalIds: [],
     additionalQuantities: {},
-    otherCostIds: [],
-    daysAdjustment: "0",
+      daysAdjustment: "0",
     waitingDays: "0",
     markupPercent: "100",
     commercialSaleUnitPrice: "",
@@ -203,6 +234,17 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
     lowKilnSelected: item.low_kiln_selected,
     highKilnSelected: item.high_kiln_selected,
     factorKilnId: decimal(item.factor_kiln_id),
+    // Fase 009D: se reconstruye la ELECCION (que esmalte y con que reparto),
+    // no los derivados. Los gramos y mililitros guardados son el resultado de
+    // un calculo del backend; reinyectarlos como entrada congelaria un
+    // borrador que deberia seguir la configuracion vigente.
+    glazes: (item.glaze_plan?.allocations ?? []).map((allocation) => ({
+      preparationId: decimal(allocation.preparation_id),
+      preparedProductId: decimal(allocation.prepared_product_id),
+      share: decimal(allocation.share),
+    })),
+    glazeUnit: item.glaze_unit ?? "g",
+    glazeSelectionTouched: item.glaze_selection_touched ?? false,
     techniqueIds: idsFromSnapshots(item.techniques, "technique_id"),
     techniqueQuantities: quantitiesFromSnapshots(item.techniques, "technique_id", "quantity"),
     additionalIds: idsFromSnapshots(item.additionals, "additional_id"),
@@ -211,7 +253,6 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
       "additional_id",
       "additional_quantity",
     ),
-    otherCostIds: idsFromSnapshots(item.other_costs, "other_cost_id"),
     daysAdjustment: String(item.days_adjustment),
     waitingDays: String(item.waiting_days),
     markupPercent: decimal(item.markup_percent) || "100",
@@ -225,6 +266,9 @@ export function cotizadorFromOutput(value: QuotationBuilderOut): CotizadorDraft 
     customerId: decimal(value.customer_id),
     customerLabel: value.customer_name_snapshot ?? "",
     kilnId: decimal(value.kiln_id),
+    // La moneda vuelve del backend; el frontend no la deduce del simbolo.
+    currencyCode: value.currency_code_snapshot === "USD" ? "USD" : "PEN",
+    exchangeRate: decimal(value.exchange_rate_snapshot),
     items: value.items.map(itemFromOutput),
   };
 }
@@ -239,6 +283,12 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
     ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
     ...(customerId ? { customer_id: customerId } : {}),
     ...(kilnId ? { kiln_id: kilnId } : {}),
+    currency_code: draft.currencyCode,
+    // La tasa solo viaja con USD. Mandarla con PEN es un 422: en soles no
+    // hay conversion que declarar, y el backend lo rechaza a proposito.
+    ...(draft.currencyCode === "USD" && draft.exchangeRate.trim()
+      ? { exchange_rate: draft.exchangeRate.trim() }
+      : {}),
     items: draft.items.flatMap((item, sortOrder) => {
       const productId = positiveInt(item.productId);
       if (!productId) return [];
@@ -284,6 +334,22 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         ...(item.highKilnSelected && highKilnId ? { high_kiln_id: highKilnId } : {}),
         low_kiln_selected: item.lowKilnSelected,
         high_kiln_selected: item.highKilnSelected,
+        // Solo intencion. Ni gramos, ni mililitros, ni concentracion, ni
+        // costo: eso es autoridad del backend.
+        glazes: item.glazes.flatMap((glaze): GlazeSelectionItemIn[] => {
+          const preparationId = positiveInt(glaze.preparationId);
+          const preparedProductId = positiveInt(glaze.preparedProductId);
+          if (!preparationId && !preparedProductId) return [];
+          return [
+            {
+              ...(preparationId ? { preparation_id: preparationId } : {}),
+              ...(preparedProductId ? { prepared_product_id: preparedProductId } : {}),
+              share: glaze.share.trim() || "1",
+            },
+          ];
+        }),
+        glaze_unit: item.glazeUnit,
+        glaze_selection_touched: item.glazeSelectionTouched,
         ...(factorKilnId ? { factor_kiln_id: factorKilnId } : {}),
         techniques: item.techniqueIds.map((id, index) => ({
           technique_id: Number(id),
@@ -299,10 +365,10 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         })),
         days_adjustment: integer(item.daysAdjustment),
         waiting_days: Math.max(0, integer(item.waitingDays)),
-        other_costs: item.otherCostIds.map((id, index) => ({
-          other_cost_id: Number(id),
-          sort_order: index,
-        })),
+        // Fase 009E: los costos fijos son de la COTIZACION y el backend
+        // los aplica solo. Elegirlos por linea los cobraba una vez por
+        // producto, asi que el cliente ya no tiene voz aqui.
+        other_costs: [],
         markup_percent: item.markupPercent.trim() || "100",
         ...(item.commercialSaleUnitPrice.trim()
           ? { commercial_sale_unit_price: item.commercialSaleUnitPrice.trim() }

@@ -71,6 +71,14 @@ export interface CommercialSettings {
    * regla de negocio en el navegador.
    */
   estimated_glaze_percent: string | number;
+  /**
+   * Fase 009E. Factor de PRODUCCION por defecto: multiplica el costo tecnico
+   * antes de los costos fijos y del margen. NO es `default_quotation_factor`,
+   * que se deriva del markup — son dos pasos distintos del costeo.
+   */
+  production_factor_default: string | number;
+  /** Paso del redondeo contractual. Solo 0,50 o 1,00. */
+  rounding_step: string | number;
 
   general_conditions: string | null;
   payment_notes: string | null;

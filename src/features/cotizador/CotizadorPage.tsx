@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
-import { PrimaryButton, SecondaryButton, TextField } from "@/components/form";
+import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
@@ -15,6 +15,7 @@ import {
   emptyCotizadorItem,
   type CotizadorDraft,
 } from "@/features/cotizador/draft";
+import { describeNextStep } from "@/features/quotations/domainWarnings";
 import {
   useCancelCotizador,
   useConfirmCotizador,
@@ -32,6 +33,7 @@ import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import { canMarkPaid, describePayment, paymentDate, paymentTone } from "@/features/quotations/payment";
 import { describeError } from "@/features/settings/messages";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
+import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
 
 const STEPS = [
   { label: "Datos", mode: null },
@@ -45,7 +47,8 @@ const STEPS = [
 
 const STATUS_LABEL = { DRAFT: "Borrador", CONFIRMED: "Confirmada", CANCELLED: "Anulada" } as const;
 const STATUS_TONE = { DRAFT: "warning", CONFIRMED: "positive", CANCELLED: "neutral" } as const;
-const money = (value: string | null | undefined, symbol = "S/") => `${symbol} ${formatDecimalString(value, 2)}`;
+const money = (value: string | null | undefined, code: string | null | undefined = "PEN") =>
+  formatMoney(value, code);
 
 function numberFrom(value: unknown, fallback = "—") {
   return value === null || value === undefined ? fallback : String(value);
@@ -59,33 +62,43 @@ function ProductionPanel({ preview }: {
 }) {
   const summary = preview?.production_summary ?? {};
   const sessions = Array.isArray(summary.sessions) ? summary.sessions as Array<Record<string, unknown>> : [];
-  const symbol = numberFrom(summary.currency_symbol, preview?.currency_symbol_snapshot ?? "S/");
+  // El resumen de HORNADAS es produccion, no comercio: siempre en soles.
+  // Convertirlo daria a entender que el costo del taller cambia al elegir
+  // otra moneda de emision, y no cambia.
   const taxPercentage = numberFrom(summary.tax_percentage, "0");
   return (
     <section className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
       <div>
-        <h2 className="text-sm font-semibold text-zinc-950">Simulación integral del lote</h2>
-        <p className="mt-1 text-xs text-zinc-500">Configure quema baja, quema alta y horno de factor en cada pieza.</p>
+        <h2 className="text-sm font-semibold text-zinc-950">Resumen de quema del lote</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Cálculo consolidado de todos los productos incluidos en esta producción. La ocupación
+          y el factor salen del lote completo, no de cada pieza por separado.
+        </p>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      {/* Siete columnas solo caben de verdad en pantalla ancha. A 1024 px
+          partian cada importe en dos lineas ("S/" arriba, la cifra abajo);
+          cuatro columnas ahi lo mantienen legible sin agrandar las tarjetas. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-bold tabular-nums">{decimalFrom(summary.total_volume_cm3)} cm³</p></div>
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Ocupación</p><p className="font-bold tabular-nums">{decimalFrom(summary.occupancy_percentage)}%</p></div>
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Factor</p><p className="font-bold tabular-nums">×{decimalFrom(summary.occupancy_factor)}</p></div>
-        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Costo base</p><p className="font-bold tabular-nums">{money(numberFrom(summary.subtotal, "0"), symbol)}</p></div>
-        <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Quema sin IGV</p><p className="font-bold tabular-nums text-orange-950">{money(numberFrom(summary.total_cost, "0"), symbol)}</p></div>
-        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">IGV ({taxPercentage}%)</p><p className="font-bold tabular-nums">{money(numberFrom(summary.tax_amount, "0"), symbol)}</p></div>
-        <div className="rounded-xl bg-zinc-950 p-3 text-white"><p className="text-[10px] uppercase text-zinc-400">Quema con IGV</p><p className="font-bold tabular-nums">{money(numberFrom(summary.total_with_tax, "0"), symbol)}</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Costo base</p><p className="font-bold tabular-nums">{money(numberFrom(summary.subtotal, "0"), "PEN")}</p></div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Quema sin IGV</p><p className="font-bold tabular-nums text-orange-950">{money(numberFrom(summary.total_cost, "0"), "PEN")}</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">IGV ({taxPercentage}%)</p><p className="font-bold tabular-nums">{money(numberFrom(summary.tax_amount, "0"), "PEN")}</p></div>
+        <div className="rounded-xl bg-zinc-950 p-3 text-white"><p className="text-[10px] uppercase text-zinc-400">Quema con IGV</p><p className="font-bold tabular-nums">{money(numberFrom(summary.total_with_tax, "0"), "PEN")}</p></div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {sessions.map((session, index) => (
           <div key={`${numberFrom(session.firing_type)}-${index}`} className="rounded-xl border border-zinc-200 p-4">
-            <div className="flex justify-between gap-3"><p className="text-xs font-bold text-zinc-900">Quema {session.firing_type === "LOW" ? "baja" : "alta"}</p><p className="text-xs font-semibold tabular-nums">{money(numberFrom(session.subtotal, "0"), preview?.currency_symbol_snapshot)}</p></div>
+            <div className="flex justify-between gap-3"><p className="text-xs font-bold text-zinc-900">Quema {session.firing_type === "LOW" ? "baja" : "alta"}</p><p className="text-xs font-semibold tabular-nums">{money(numberFrom(session.subtotal, "0"), "PEN")}</p></div>
             <p className="mt-1 text-[11px] text-zinc-500">{numberFrom(session.kiln_code)} · Ocupación física {numberFrom(session.physical_occupancy_percentage)}%</p>
           </div>
         ))}
       </div>
       <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
-        Simulación integrada: no crea ni confirma una quema real y no mueve inventario.
+        Estas cifras son el <strong>costo total de la quema</strong>, no el de la última pieza:
+        cada producto recibe su parte prorrateada en su propia tarjeta. La simulación no crea ni
+        confirma una quema real y no mueve inventario.
       </p>
     </section>
   );
@@ -180,6 +193,9 @@ export function CotizadorPage() {
   const missingName = draft.name.trim() === "";
   const datosComplete = !readOnly ? !missingName && !missingCustomer : true;
   const currentMode = STEPS[step]?.mode as CotizadorItemMode | null;
+  // El backend nombra el paso con su codigo interno; aqui se dice como se
+  // llama en la pantalla.
+  const nextStepLabel = describeNextStep(preview?.next_step);
   const busy = create.isPending || update.isPending || confirm.isPending || cancel.isPending || duplicate.isPending;
   const mutationError = create.error ?? update.error ?? confirm.error ?? cancel.error ?? duplicate.error;
   const sourceChanged = mutationError instanceof ApiError && mutationError.code === "QUOTATION_BUILDER_SOURCE_CHANGED";
@@ -258,7 +274,53 @@ export function CotizadorPage() {
           <div className="grid gap-5 md:grid-cols-2">
             <TextField label="Nombre / referencia" requirement="required" value={draft.name} onChange={(name) => { changeDraft({ ...draft, name }); setShowDatosRequired(false); }} disabled={readOnly} placeholder="Ej. Vajilla restaurante Miraflores" />
             <CustomerSelectField value={draft.customerId} labelValue={draft.customerLabel} requirement="required" disabled={readOnly} onChange={(customerId, customerLabel) => { changeDraft({ ...draft, customerId, customerLabel }); setShowDatosRequired(false); }} />
+            {/* Fase 009F. La moneda es de ESTA cotizacion, no de Configuracion.
+                Cambiarla no toca los costos: el backend recalcula el precio
+                desde el costo en soles, que es la moneda base del taller. */}
+            <SelectField
+              label="Moneda"
+              requirement="required"
+              value={draft.currencyCode}
+              options={CURRENCY_OPTIONS}
+              disabled={readOnly}
+              onChange={(currencyCode: string) =>
+                changeDraft({
+                  ...draft,
+                  currencyCode: currencyCode === "USD" ? "USD" : "PEN",
+                  // Volver a soles descarta la tasa: guardarla describiria una
+                  // conversion que ya no ocurre, y el backend la rechaza.
+                  exchangeRate: currencyCode === "USD" ? draft.exchangeRate : "",
+                })
+              }
+            />
+            {draft.currencyCode === "USD" ? (
+              <TextField
+                label="Tipo de cambio"
+                requirement="required"
+                value={draft.exchangeRate}
+                onChange={(exchangeRate) => changeDraft({ ...draft, exchangeRate })}
+                disabled={readOnly}
+                inputMode="decimal"
+                placeholder="3.75"
+                // Se dice la direccion entera: el numero solo no aclara si hay
+                // que multiplicar o dividir, y esa duda cuadruplica precios.
+                hint={
+                  exchangeRateLabel(draft.exchangeRate.trim() || null) ??
+                  "Cuántos soles vale un dólar. Ejemplo: 1 USD = S/ 3.75"
+                }
+              />
+            ) : null}
           </div>
+          {draft.currencyCode === "USD" && !draft.exchangeRate.trim() ? (
+            <p role="alert" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+              Ingresa el tipo de cambio para cotizar en dólares.
+            </p>
+          ) : null}
+          {draft.currencyCode === "USD" && draft.exchangeRate.trim() && !(Number(draft.exchangeRate) > 0) ? (
+            <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+              El tipo de cambio debe ser mayor que 0.
+            </p>
+          ) : null}
           {showDatosRequired && !datosComplete ? (
             <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
               {missingCustomer ? "Selecciona un cliente para continuar." : "Ingresa un nombre o referencia para continuar."}
@@ -276,7 +338,7 @@ export function CotizadorPage() {
               index={index}
               mode={currentMode}
               preview={preview?.items.find((value) => value.product_id === Number(item.productId))}
-              currencySymbol={preview?.currency_symbol_snapshot}
+              currencyCode={preview?.currency_code_snapshot}
               productionSummary={preview?.production_summary}
               headerKilnId={draft.kilnId}
               kilns={kilns.data?.items ?? []}
@@ -297,7 +359,6 @@ export function CotizadorPage() {
 
       {step === 2 ? (
         <div className="space-y-4">
-          <ProductionPanel preview={preview} />
           {draft.items.map((item, index) => (
             <CotizadorItemCard
               key={item.id ?? `production-${index}`}
@@ -305,7 +366,7 @@ export function CotizadorPage() {
               index={index}
               mode="PRODUCTION"
               preview={preview?.items.find((value) => value.product_id === Number(item.productId))}
-              currencySymbol={preview?.currency_symbol_snapshot}
+              currencyCode={preview?.currency_code_snapshot}
               productionSummary={preview?.production_summary}
               headerKilnId={draft.kilnId}
               kilns={kilns.data?.items ?? []}
@@ -316,15 +377,38 @@ export function CotizadorPage() {
             />
           ))}
           {!draft.items.length ? <p className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">Agregue piezas antes de configurar la producción.</p> : null}
+          {/* El resumen va DESPUES del ultimo producto y antes de la
+              navegacion: se configura pieza por pieza hacia abajo, y el
+              resultado consolidado se lee donde termina la configuracion.
+              Arriba obligaba a subir de nuevo para ver el efecto de lo que
+              se acababa de cambiar. */}
+          {draft.items.length ? <ProductionPanel preview={preview} /> : null}
         </div>
       ) : null}
 
       {step === 5 ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
+          {/* Fase 009F: la moneda se dice, no se deduce del simbolo. Con USD
+              tambien se dice la tasa, porque sin ella el documento afirma
+              dolares sin decir a cuanto. */}
+          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-zinc-400">Moneda</p>
+              <p className="text-sm font-semibold text-zinc-900">{preview?.currency_code_snapshot ?? "PEN"}</p>
+            </div>
+            {preview?.exchange_rate_snapshot ? (
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-400">Tipo de cambio</p>
+                <p className="text-sm font-semibold text-zinc-900">
+                  {exchangeRateLabel(preview.exchange_rate_snapshot)}
+                </p>
+              </div>
+            ) : null}
+          </div>
           <div className="grid gap-4 sm:grid-cols-3">
-            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Subtotal comercial</p><p className="mt-1 text-lg font-bold tabular-nums">{money(preview?.commercial_subtotal, preview?.currency_symbol_snapshot)}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">IGV</p><p className="mt-1 text-lg font-bold tabular-nums">{money(preview?.tax_amount, preview?.currency_symbol_snapshot)}</p></div>
-            <div className="rounded-xl bg-zinc-950 p-4 text-white"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Total con IGV</p><p className="mt-1 text-2xl font-bold tabular-nums">{money(preview?.total_with_tax, preview?.currency_symbol_snapshot)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Subtotal comercial</p><p className="mt-1 text-lg font-bold tabular-nums">{money(preview?.commercial_subtotal, preview?.currency_code_snapshot)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">IGV</p><p className="mt-1 text-lg font-bold tabular-nums">{money(preview?.tax_amount, preview?.currency_code_snapshot)}</p></div>
+            <div className="rounded-xl bg-zinc-950 p-4 text-white"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Total con IGV</p><p className="mt-1 text-2xl font-bold tabular-nums">{money(preview?.total_with_tax, preview?.currency_code_snapshot)}</p></div>
           </div>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5">
             <p className={`text-sm font-semibold ${status === "CONFIRMED" || preview?.complete ? "text-emerald-700" : "text-amber-700"}`}>
@@ -332,7 +416,9 @@ export function CotizadorPage() {
                 ? "Cotización confirmada"
                 : preview?.complete
                   ? "Lista para confirmar · Continúe al paso PDF"
-                  : `Borrador incompleto · siguiente: ${preview?.next_step ?? "DATOS"}`}
+                  : nextStepLabel
+                    ? `Borrador incompleto · siguiente paso: ${nextStepLabel}`
+                    : "Borrador incompleto. Revise los avisos de cada producto."}
             </p>
             <div className="flex gap-2">
               <PrimaryButton type="button" onClick={() => setStep(6)}>

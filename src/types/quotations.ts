@@ -242,6 +242,14 @@ export interface QuotationCalculateOut {
   tax_amount: string;
   total_with_tax: string;
   unit_price_with_tax: string;
+  /**
+   * Fase 009E. Los DOS importes, resueltos por el backend.
+   *
+   * Antes cada pantalla elegia entre `commercial_*` y `calculated_*` con un
+   * `||`. Cual es el importe real es una regla comercial, no presentacion.
+   */
+  subtotal: string;
+  total: string;
   source_fingerprint: string;
   warnings: string[];
   /** La cotización se emite sin IGV y el impuesto se añade encima. */
@@ -263,6 +271,11 @@ export interface QuotationOut extends QuotationCalculateOut {
   cancelled_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Fase 009F. La moneda y la tasa CONGELADAS de esta cotizacion. */
+  currency_code_snapshot: string;
+  currency_symbol_snapshot: string;
+  exchange_rate_snapshot: string | null;
+  exchange_rate_source_snapshot: string | null;
 }
 
 export interface QuotationSummaryOut {
@@ -286,12 +299,25 @@ export interface QuotationSummaryOut {
   commercial_total?: string;
   total_with_tax: string;
   /**
-   * Eje de cobro, independiente de `status`. `null` = el sistema no lo
-   * registró; no es lo mismo que `UNPAID`. Opcional porque un backend
-   * anterior a 009H no lo envía.
+   * Fase 009E. EL total con IGV, lo resuelve el backend.
+   *
+   * Los tres campos de arriba siguen en el contrato, pero el que se muestra es
+   * este. El frontend elegia entre ellos con una cascada propia en seis
+   * sitios, y esa cascada es una regla comercial: escrita seis veces, se
+   * escribe de seis maneras y el mismo pedido vale dos importes.
+   */
+  total: string;
+  /**
+   * Fase 009H. Eje de cobro, independiente de `status`. `null` = el sistema no
+   * lo registró; no es lo mismo que `UNPAID`. Opcional porque un backend
+   * anterior a 009H no envía el campo.
    */
   payment_status?: QuotationPaymentStatus | null;
   created_at: string;
+  /** Fase 009F. La moneda de ESTA fila; el listado no asume una global. */
+  currency_code_snapshot: string;
+  currency_symbol_snapshot: string;
+  exchange_rate_snapshot: string | null;
 }
 
 export interface QuotationPage {
@@ -318,4 +344,24 @@ export interface ProductPriceUpdateOut {
   old_price: string | null;
   new_price: string;
   updated_at: string;
+}
+
+
+/** Lo cotizado en UNA moneda. Nunca se mezcla con otra. */
+export interface QuotationCurrencyTotal {
+  currency_code: string;
+  currency_symbol: string;
+  total: string;
+  quotation_count: number;
+}
+
+/**
+ * Totales cotizados, separados por moneda.
+ *
+ * Los suma el backend en Decimal. El navegador no agrega dinero: `parseFloat`
+ * sobre importes en cadena pierde centimos, y sumar soles con dolares da un
+ * numero impecable aritmeticamente e inutil financieramente.
+ */
+export interface QuotationTotalsOut {
+  totals: QuotationCurrencyTotal[];
 }

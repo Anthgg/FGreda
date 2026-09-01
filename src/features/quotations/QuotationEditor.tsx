@@ -9,6 +9,7 @@ import {
 import { Spinner } from "@/components/Spinner";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
+import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { describeError } from "@/features/settings/messages";
 import { useRecipe } from "@/features/recipes/useRecipes";
 import {
@@ -17,6 +18,7 @@ import {
   useQuotationPreview,
   useTechniques,
 } from "@/features/quotations/useQuotations";
+import { VERSION_STATUS_LABEL } from "@/features/recipes/labels";
 import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
 import { NuevoMaestroModal } from "@/features/quotations/NuevoMaestroModal";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
@@ -24,8 +26,10 @@ import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import { useSession } from "@/features/auth/useSession";
 import { draftToPayload, type QuotationDraft } from "@/features/quotations/draft";
 import type { AdditionalCalculationOut, TechniqueCalculationOut } from "@/types/quotations";
+import { formatMoney } from "@/features/quotations/money";
 
-const money = (value: string | null | undefined) => `S/ ${formatDecimalString(value, 2)}`;
+/** Via heredada: siempre en soles, que es la moneda base del sistema. */
+const money = (value: string | null | undefined) => formatMoney(value, "PEN");
 
 function SummaryMetric({
   label,
@@ -95,7 +99,9 @@ export function QuotationEditor({
     .filter((item) => item.status === "ACTIVE")
     .map((item) => ({
       value: String(item.id),
-      label: `Versión ${item.version_number} · ${item.status === "ACTIVE" ? "Activa" : item.status}`,
+      // El catalogo central, no un ternario: la rama `else` enseñaba el
+      // codigo crudo (`ARCHIVED`) si alguien aflojaba el filtro de arriba.
+      label: `Versión ${item.version_number} · ${VERSION_STATUS_LABEL[item.status]}`,
     }));
   const firingLineOptions = (firingLines.data?.items ?? []).map((line) => ({
     value: String(line.id),
@@ -589,7 +595,7 @@ export function QuotationEditor({
                 />
                 <SummaryMetric
                   label="Subtotal comercial"
-                  value={money(preview.data.commercial_subtotal || preview.data.calculated_total)}
+                  value={money(preview.data.subtotal)}
                   strong
                 />
                 <SummaryMetric
@@ -604,16 +610,18 @@ export function QuotationEditor({
                 <div className="col-span-2">
                   <SummaryMetric
                     label="TOTAL COMERCIAL CON IGV"
-                    value={money(preview.data.commercial_total || preview.data.total_with_tax)}
+                    value={money(preview.data.total)}
                     strong
                     subtitle={`Unitario con IGV: ${money(preview.data.commercial_unit_price_with_tax || preview.data.unit_price_with_tax)}`}
                   />
                 </div>
               </dl>
-              {preview.data.warnings.length > 0 ? (
-                <div className="mt-5 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
-                  {preview.data.warnings.join(" · ")}
-                </div>
+              {describeWarnings(preview.data.warnings).length > 0 ? (
+                <ul className="mt-5 space-y-1 rounded-xl border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+                  {describeWarnings(preview.data.warnings).map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
               ) : null}
               <div className="mt-4 text-[10px] leading-4 text-zinc-500">
                 La cotización se emite sobre el precio comercial acordado con el cliente. El IGV se detalla para el comprobante de pago.
