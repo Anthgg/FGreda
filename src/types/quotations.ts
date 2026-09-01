@@ -307,6 +307,12 @@ export interface QuotationSummaryOut {
    * escribe de seis maneras y el mismo pedido vale dos importes.
    */
   total: string;
+  /**
+   * Fase 009H. Eje de cobro, independiente de `status`. `null` = el sistema no
+   * lo registró; no es lo mismo que `UNPAID`. Opcional porque un backend
+   * anterior a 009H no envía el campo.
+   */
+  payment_status?: QuotationPaymentStatus | null;
   created_at: string;
   /** Fase 009F. La moneda de ESTA fila; el listado no asume una global. */
   currency_code_snapshot: string;

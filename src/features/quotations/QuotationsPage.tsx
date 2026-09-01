@@ -6,6 +6,7 @@ import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
 import { Badge, EmptyState, Pagination, SearchInput } from "@/features/masters/MasterTable";
+import { describePayment, paymentTone } from "@/features/quotations/payment";
 import { QuotationMastersTab } from "@/features/quotations/QuotationMastersTab";
 import { useQuotations } from "@/features/quotations/useQuotations";
 import { describeError } from "@/features/settings/messages";
@@ -135,6 +136,7 @@ export function QuotationsPage() {
                         <th className="px-4 py-3 font-semibold">Producto</th>
                         <th className="px-4 py-3 text-right font-semibold">Cantidad</th>
                         <th className="px-4 py-3 font-semibold">Estado</th>
+                        <th className="px-4 py-3 font-semibold">Pago</th>
                         <th className="px-4 py-3 text-right font-semibold">Precio unitario sin IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Total con IGV</th>
                         <th className="px-4 py-3 text-right font-semibold">Acciones</th>
@@ -169,6 +171,11 @@ export function QuotationsPage() {
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums font-medium">{quote.quantity ?? "—"}</td>
                           <td className="px-4 py-3"><Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge></td>
+                          {/* Eje aparte del estado: una anulada puede estar
+                              pagada. El valor viene del backend tal cual; nulo
+                              se dice «Sin registro de pago» y NO «Pendiente»,
+                              porque de las históricas no se sabe. */}
+                          <td className="px-4 py-3"><Badge tone={paymentTone(quote.payment_status)}>{describePayment(quote.payment_status)}</Badge></td>
                           <td className="px-4 py-3 text-right tabular-nums">
                             {/* Fase 009F: la moneda es de CADA fila. Asumir una
                                 global ponia `S/` sobre importes en dolares. */}
