@@ -149,7 +149,77 @@ describe("pantallas de cotizaciones", () => {
     expect(row).not.toBeNull();
     const cells = within(row!).getAllByRole("cell");
     expect(cells[4]).toHaveTextContent("1");
-    expect(cells[6]).toHaveTextContent("S/ 459.00");
+    // 009H inserto la columna «Pago» tras «Estado», asi que el precio unitario
+    // se corrio de la 6 a la 7.
+    expect(cells[5]).toHaveTextContent("Confirmada");
+    expect(cells[6]).toHaveTextContent("Sin registro de pago");
+    expect(cells[7]).toHaveTextContent("S/ 459.00");
+  });
+
+  const conPago = (payment_status: "UNPAID" | "PAID" | null, status = "CONFIRMED") => ({
+    id: 11,
+    code: "CTZ-2026-000011",
+    name: "Cotización con eje de pago",
+    status,
+    workflow: "COTIZADOR",
+    customer_id: 1,
+    customer_name: "Cliente Prueba Integral",
+    customer_document_number: "99988877",
+    product_id: null,
+    product_internal_reference: null,
+    product_name: "1 productos",
+    quantity: 1,
+    item_count: 1,
+    calculated_unit_price: "100",
+    calculated_total: "100",
+    final_unit_cost: "100",
+    commercial_sale_unit_price: "100",
+    commercial_total: "118",
+    total_with_tax: "118",
+    payment_status,
+    created_at: "2026-09-01T14:00:00Z",
+  });
+
+  const filaDe = async (fila: Record<string, unknown>) => {
+    mockFetch((url, init) =>
+      url.includes("/quotations")
+        ? jsonResponse(200, { items: [fila], total: 1, limit: 25, offset: 0 })
+        : quoteHandler(url, init),
+    );
+    renderApp(["/cotizaciones"]);
+    const code = await screen.findByText(fila.code as string);
+    return within(code.closest("tr")!).getAllByRole("cell");
+  };
+
+  it("FRONTEND_DOES_NOT_INFER_UNPAID_FROM_CONFIRMED: confirmada sin registro no es pendiente", async () => {
+    // La distinción central de 009H. Una confirmada anterior a esta fase llega
+    // con el eje en nulo, y decir «Pendiente de pago» afirmaría una deuda que
+    // nadie comprobó. El estado comercial NO permite deducir el cobro.
+    const cells = await filaDe(conPago(null));
+
+    expect(cells[5]).toHaveTextContent("Confirmada");
+    expect(cells[6]).toHaveTextContent("Sin registro de pago");
+    expect(cells[6]).not.toHaveTextContent("Pendiente de pago");
+  });
+
+  it("LIST_PAYMENT_STATUS: una impaga conocida se dice pendiente", async () => {
+    const cells = await filaDe(conPago("UNPAID"));
+    expect(cells[6]).toHaveTextContent("Pendiente de pago");
+    expect(cells[6]).not.toHaveTextContent("Sin registro");
+  });
+
+  it("LIST_PAYMENT_STATUS: una cobrada se dice pagada", async () => {
+    const cells = await filaDe(conPago("PAID"));
+    expect(cells[6]).toHaveTextContent("Pagada");
+  });
+
+  it("LIST_CANCELLED_PAID_SHOWS_BOTH_AXES: anulada y pagada conviven", async () => {
+    // El caso que justifica que el pago sea un eje aparte: el dinero entró y
+    // después se anuló. Los dos hechos tienen que verse a la vez.
+    const cells = await filaDe(conPago("PAID", "CANCELLED"));
+
+    expect(cells[5]).toHaveTextContent("Anulada");
+    expect(cells[6]).toHaveTextContent("Pagada");
   });
 
   it("muestra la página nueva, usa selector remoto y obtiene preview del backend", async () => {

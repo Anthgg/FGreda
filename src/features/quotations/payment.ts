@@ -9,15 +9,17 @@ import type { QuotationPaymentStatus, QuotationStatus } from "@/types/quotations
  * Traducir `null` a «Pendiente» le pondría a cotizaciones antiguas una
  * afirmación que nadie hizo.
  */
-export function describePayment(status: QuotationPaymentStatus | null): string {
+export function describePayment(status: QuotationPaymentStatus | null | undefined): string {
   if (status === "PAID") return "Pagada";
   if (status === "UNPAID") return "Pendiente de pago";
+  // `undefined` llega cuando responde un backend anterior a 009H, que no
+  // conoce el campo. Dice lo mismo que `null`: el sistema no tiene el dato.
   return "Sin registro de pago";
 }
 
 /** Tono visual, siguiendo el vocabulario de insignias que ya usa el módulo. */
 export function paymentTone(
-  status: QuotationPaymentStatus | null,
+  status: QuotationPaymentStatus | null | undefined,
 ): "positive" | "warning" | "neutral" {
   if (status === "PAID") return "positive";
   if (status === "UNPAID") return "warning";

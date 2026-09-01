@@ -285,6 +285,12 @@ export interface QuotationSummaryOut {
   commercial_sale_unit_price?: string;
   commercial_total?: string;
   total_with_tax: string;
+  /**
+   * Eje de cobro, independiente de `status`. `null` = el sistema no lo
+   * registró; no es lo mismo que `UNPAID`. Opcional porque un backend
+   * anterior a 009H no lo envía.
+   */
+  payment_status?: QuotationPaymentStatus | null;
   created_at: string;
 }
 
