@@ -1,6 +1,17 @@
 /** Contratos del Cotizador integral. Todos los decimales viajan como texto. */
 
 export type QuotationStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
+
+/**
+ * Si la cotización se cobró. Es un eje APARTE del estado comercial: una
+ * anulada puede estar pagada y una confirmada puede seguir sin cobrarse.
+ *
+ * `null` es un tercer caso con significado propio —el pago no lo registró el
+ * sistema, cierto de todo lo anterior a 009H— y NO equivale a `UNPAID`. En
+ * pantalla se dicen distinto a propósito: «Sin registro de pago» no es lo
+ * mismo que «Pendiente de pago».
+ */
+export type QuotationPaymentStatus = "UNPAID" | "PAID";
 export type TechniqueFormulaType = "ONE_FACTOR" | "TWO_FACTORS";
 export type AdditionalFormulaType =
   | "PIECE_QUANTITY"

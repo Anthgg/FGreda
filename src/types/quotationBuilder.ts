@@ -1,6 +1,7 @@
 import type {
   AdditionalSelectionIn,
   OtherCostSelectionIn,
+  QuotationPaymentStatus,
   QuotationStatus,
   TechniqueSelectionIn,
 } from "@/types/quotations";
@@ -162,4 +163,7 @@ export interface QuotationBuilderOut {
   updated_at: string | null;
   confirmed_at: string | null;
   cancelled_at: string | null;
+  /** `null` = el pago no lo registró el sistema. No es lo mismo que UNPAID. */
+  payment_status: QuotationPaymentStatus | null;
+  paid_at: string | null;
 }

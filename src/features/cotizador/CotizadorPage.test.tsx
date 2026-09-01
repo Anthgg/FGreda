@@ -151,6 +151,8 @@ function builder(overrides: Partial<QuotationBuilderOut> = {}): QuotationBuilder
     updated_at: null,
     confirmed_at: null,
     cancelled_at: null,
+    payment_status: null,
+    paid_at: null,
     ...overrides,
   };
 }

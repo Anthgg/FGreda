@@ -6,6 +6,7 @@ import {
   createQuotationBuilder,
   duplicateQuotationBuilder,
   fetchQuotationBuilder,
+  markQuotationBuilderPaid,
   previewQuotationBuilder,
   updateQuotationBuilder,
 } from "@/api/quotationBuilder";
@@ -66,6 +67,11 @@ export const useConfirmCotizador = () => {
 export const useCancelCotizador = () => {
   const invalidate = useInvalidateCotizador();
   return useMutation({ mutationFn: cancelQuotationBuilder, onSuccess: (data) => invalidate(data.id) });
+};
+
+export const useMarkCotizadorPaid = () => {
+  const invalidate = useInvalidateCotizador();
+  return useMutation({ mutationFn: markQuotationBuilderPaid, onSuccess: (data) => invalidate(data.id) });
 };
 
 export const useDuplicateCotizador = () => {

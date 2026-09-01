@@ -224,6 +224,8 @@ describe("DatePickerField - Selector de Fecha Controlado por React", () => {
       updated_at: "2026-08-20T10:00:00Z",
       confirmed_at: null,
       cancelled_at: null,
+      payment_status: null,
+      paid_at: null,
       created_by_id: "usr-1",
       sessions: [],
       lines: [],
