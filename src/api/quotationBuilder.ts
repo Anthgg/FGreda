@@ -31,6 +31,10 @@ export const cancelQuotationBuilder = (id: number): Promise<QuotationBuilderOut>
 export const duplicateQuotationBuilder = (id: number): Promise<QuotationBuilderOut> =>
   apiClient.post(`${BUILDER}/${id}/duplicate`, {});
 
+/** Registra el cobro. El backend decide si la transición es legal. */
+export const markQuotationBuilderPaid = (id: number): Promise<QuotationBuilderOut> =>
+  apiClient.post(`${BUILDER}/${id}/mark-paid`, {});
+
 export const fetchDraftPdfPreview = (
   payload: QuotationBuilderDraftIn,
 ): Promise<{ blob: Blob; filename: string | null }> =>

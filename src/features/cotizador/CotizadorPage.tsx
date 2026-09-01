@@ -23,12 +23,14 @@ import {
   useCotizadorPreview,
   useCreateCotizador,
   useDuplicateCotizador,
+  useMarkCotizadorPaid,
   useUpdateCotizador,
 } from "@/features/cotizador/useCotizador";
 import { useKilns } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
 import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
+import { canMarkPaid, describePayment, paymentDate, paymentTone } from "@/features/quotations/payment";
 import { describeError } from "@/features/settings/messages";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
@@ -115,6 +117,7 @@ export function CotizadorPage() {
   const confirm = useConfirmCotizador();
   const cancel = useCancelCotizador();
   const duplicate = useDuplicateCotizador();
+  const markPaid = useMarkCotizadorPaid();
   const kilns = useKilns({ active: true, limit: 100 });
   const [draft, setDraft] = useState<CotizadorDraft>(emptyCotizadorDraft);
   const [persisted, setPersisted] = useState<QuotationBuilderOut | null>(null);
@@ -122,6 +125,7 @@ export function CotizadorPage() {
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmPaid, setConfirmPaid] = useState(false);
   const [confirmQuotationModal, setConfirmQuotationModal] = useState(false);
   const [cachedPdf, setCachedPdf] = useState<{ url: string; filename: string; payloadStr: string } | null>(null);
   const [showDatosRequired, setShowDatosRequired] = useState(false);
@@ -236,6 +240,16 @@ export function CotizadorPage() {
           <div className="flex flex-wrap items-center gap-3">
             <TypewriterTitle text={persisted?.code ?? "Nuevo cotizador."} className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl" />
             <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+            {/* El cobro es un eje aparte: una anulada puede estar pagada, así
+                que las dos insignias conviven en vez de sustituirse. En un
+                borrador no se muestra nada, porque todavía no hay nada que
+                cobrar. */}
+            {persisted && status !== "DRAFT" ? (
+              <Badge tone={paymentTone(persisted.payment_status)}>
+                {describePayment(persisted.payment_status)}
+                {paymentDate(persisted.paid_at) ? ` · ${paymentDate(persisted.paid_at)}` : ""}
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-1 max-w-2xl text-xs text-zinc-500 sm:text-sm">Cotización multiproducto con simulación de producción y cálculo comercial gobernados por BGreda.</p>
         </div>
@@ -460,13 +474,23 @@ export function CotizadorPage() {
           {canEdit && status === "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => save(true)}>Guardar y salir</SecondaryButton> : null}
           {canEdit && status === "DRAFT" ? <PrimaryButton type="button" disabled={busy} onClick={() => save(false)}>{busy ? "Guardando…" : id ? "Guardar borrador" : "Crear borrador"}</PrimaryButton> : null}
           {canEdit && id && status !== "CANCELLED" ? <SecondaryButton disabled={busy} onClick={() => setConfirmCancel(true)}>Anular</SecondaryButton> : null}
+          {canEdit && id && persisted && canMarkPaid(status, persisted.payment_status) ? <SecondaryButton disabled={busy} onClick={() => setConfirmPaid(true)}>Marcar como pagada</SecondaryButton> : null}
           {canEdit && id && status !== "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => duplicate.mutate(id, { onSuccess: (copy) => navigate(`/cotizador/${copy.id}`) })}>Duplicar</SecondaryButton> : null}
         </div>
       </footer>
 
       {confirmCancel ? (
         <div role="dialog" aria-modal="true" aria-label="Confirmar anulación" className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-base font-bold">Anular cotización</h2><p className="mt-2 text-sm text-zinc-600">La cotización conservará su historial y quedará inmutable.</p><div className="mt-5 flex justify-end gap-2"><SecondaryButton onClick={() => setConfirmCancel(false)}>Volver</SecondaryButton><PrimaryButton type="button" disabled={busy} onClick={() => id && cancel.mutate(id, { onSuccess: (saved) => { syncSaved(saved); setConfirmCancel(false); } })}>Confirmar anulación</PrimaryButton></div></div>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-base font-bold">Anular cotización</h2><p className="mt-2 text-sm text-zinc-600">La cotización conservará su historial y quedará inmutable.</p>{persisted?.payment_status === "PAID" ? <p className="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">La cotización está registrada como pagada. Anularla no revierte el pago.</p> : null}<div className="mt-5 flex justify-end gap-2"><SecondaryButton onClick={() => setConfirmCancel(false)}>Volver</SecondaryButton><PrimaryButton type="button" disabled={busy} onClick={() => id && cancel.mutate(id, { onSuccess: (saved) => { syncSaved(saved); setConfirmCancel(false); } })}>Confirmar anulación</PrimaryButton></div></div>
+        </div>
+      ) : null}
+
+      {confirmPaid ? (
+        <div role="dialog" aria-modal="true" aria-label="Confirmar pago" className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4">
+          {/* El texto dice sólo lo que la acción hace. No descuenta material,
+              no genera producción y no emite factura: prometerlo aquí sería
+              hacer creer que ocurrió algo que no ocurre. */}
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-base font-bold">Marcar como pagada</h2><p className="mt-2 text-sm text-zinc-600">Esta acción registrará la cotización como pagada y guardará la fecha de pago.</p><div className="mt-5 flex justify-end gap-2"><SecondaryButton onClick={() => setConfirmPaid(false)}>Volver</SecondaryButton><PrimaryButton type="button" disabled={busy} onClick={() => id && markPaid.mutate(id, { onSuccess: (saved) => { syncSaved(saved); setConfirmPaid(false); } })}>Confirmar pago</PrimaryButton></div></div>
         </div>
       ) : null}
 

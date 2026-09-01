@@ -208,6 +208,8 @@ describe("borrador del Cotizador", () => {
       updated_at: "2026-08-24T12:00:00Z",
       confirmed_at: null,
       cancelled_at: null,
+      payment_status: null,
+      paid_at: null,
     } satisfies QuotationBuilderOut;
 
     const draft = cotizadorFromOutput(output);
