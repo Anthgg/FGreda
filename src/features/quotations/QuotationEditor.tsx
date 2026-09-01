@@ -465,7 +465,7 @@ export function QuotationEditor({
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <TextField label="Días calculados" requirement="automatic" value={preview.data ? String(preview.data.calculated_days) : null} onChange={() => undefined} readOnly />
             <TextField label="Ajuste de días" value={value.daysAdjustment} onChange={(daysAdjustment) => update({ daysAdjustment })} inputMode="numeric" />
-            <TextField label="Días de espera" value={value.waitingDays} onChange={(waitingDays) => update({ waitingDays })} inputMode="numeric" />
+            <TextField label="Días adicionales" value={value.waitingDays} onChange={(waitingDays) => update({ waitingDays })} inputMode="numeric" />
             <TextField label="Días totales" requirement="automatic" value={preview.data ? String(preview.data.total_days) : null} onChange={() => undefined} readOnly />
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">

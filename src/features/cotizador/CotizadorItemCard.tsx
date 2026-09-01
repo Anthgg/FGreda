@@ -630,7 +630,7 @@ export function CotizadorItemCard({
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             <TextField label="Ajuste de días" value={item.daysAdjustment} onChange={(daysAdjustment) => patch({ daysAdjustment })} disabled={disabled} inputMode="numeric" />
-            <TextField label="Días de espera" value={item.waitingDays} onChange={(waitingDays) => patch({ waitingDays })} disabled={disabled} inputMode="numeric" />
+            <TextField label="Días adicionales" value={item.waitingDays} onChange={(waitingDays) => patch({ waitingDays })} disabled={disabled} inputMode="numeric" />
             <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[11px] text-zinc-500">Dimensiones resueltas</p><p className="mt-1 text-sm font-semibold tabular-nums">{item.dimensions.width || "—"} × {item.dimensions.length || "—"} × {item.dimensions.height || "—"} cm</p><p className="text-[10px] text-zinc-400">Sólo lectura en Producción</p></div>
           </div>
           <div className="space-y-3">
