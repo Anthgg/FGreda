@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { fetchProductionOrderDocument } from "@/api/production";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { capabilitiesFor } from "@/features/auth/capabilities";
 import { useSession } from "@/features/auth/useSession";
 import { Badge, EmptyState } from "@/features/masters/MasterTable";
 import {
@@ -79,13 +80,27 @@ export function ProductionOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const orderId = /^[1-9]\d*$/.test(id ?? "") ? Number(id) : null;
   const { data: user } = useSession();
-  const isAdmin = user?.role === "ADMIN";
+  // Fase 009J. El taller arranca y completa; anular sigue siendo de quien
+  // administra. La autoridad es el backend: esto solo evita ofrecer algo que
+  // se sabe que va a responder 403.
+  const puede = capabilitiesFor(user?.role);
 
   const order = useProductionOrder(orderId);
   const start = useStartProductionOrder();
   const complete = useCompleteProductionOrder();
   const cancel = useCancelProductionOrder();
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documento, setDocumento] = useState<{ url: string; filename: string } | null>(null);
+  const [cargandoDocumento, setCargandoDocumento] = useState(false);
+  // Se guarda en una ref además del estado para poder revocar la URL al
+  // desmontar sin que el efecto dependa del propio documento y se reejecute.
+  const urlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    };
+  }, []);
 
   if (orderId === null) return <EmptyState message="La orden indicada no es válida." />;
   if (order.isPending) {
@@ -112,17 +127,25 @@ export function ProductionOrderDetailPage() {
   const enCurso = start.isPending || complete.isPending || cancel.isPending;
   const errorTransicion = start.error ?? complete.error ?? cancel.error;
 
-  async function abrirDocumento(): Promise<void> {
+  async function verDocumento(): Promise<void> {
+    // Se muestra AQUÍ dentro y no con `window.open`.
+    //
+    // Abrir una pestaña después de un `await` ya no cuenta como gesto del
+    // usuario, así que el navegador lo bloquea como si fuera un anuncio: el
+    // botón parecía no hacer nada y el QR no había forma de verlo. Es el mismo
+    // patrón que ya usa el panel de PDF del Cotizador.
     setDocumentError(null);
+    setCargandoDocumento(true);
     try {
-      const { blob } = await fetchProductionOrderDocument(orderId!);
+      const { blob, filename } = await fetchProductionOrderDocument(orderId!);
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener");
-      // Se libera en el siguiente ciclo: revocarla de inmediato dejaría la
-      // pestaña recién abierta sin nada que mostrar.
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      urlRef.current = url;
+      setDocumento({ url, filename: filename ?? "orden-de-produccion.pdf" });
     } catch (error) {
       setDocumentError(describeError(error));
+    } finally {
+      setCargandoDocumento(false);
     }
   }
 
@@ -149,10 +172,10 @@ export function ProductionOrderDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <SecondaryButton type="button" onClick={() => void abrirDocumento()}>
-            Hoja de taller (PDF)
+          <SecondaryButton type="button" disabled={cargandoDocumento} onClick={() => void verDocumento()}>
+            {cargandoDocumento ? "Generando…" : documento ? "Actualizar hoja" : "Hoja de taller (PDF)"}
           </SecondaryButton>
-          {isAdmin && canStart(data.status, readiness.ready) ? (
+          {puede.arrancarProduccion && canStart(data.status, readiness.ready) ? (
             <PrimaryButton
               type="button"
               disabled={enCurso}
@@ -161,7 +184,7 @@ export function ProductionOrderDetailPage() {
               {start.isPending ? "Arrancando…" : "Arrancar producción"}
             </PrimaryButton>
           ) : null}
-          {isAdmin && canComplete(data.status) ? (
+          {puede.completarProduccion && canComplete(data.status) ? (
             <PrimaryButton
               type="button"
               disabled={enCurso}
@@ -170,7 +193,7 @@ export function ProductionOrderDetailPage() {
               {complete.isPending ? "Cerrando…" : "Marcar completada"}
             </PrimaryButton>
           ) : null}
-          {isAdmin && canCancel(data.status) ? (
+          {puede.anularProduccion && canCancel(data.status) ? (
             <SecondaryButton
               type="button"
               disabled={enCurso}
@@ -234,6 +257,44 @@ export function ProductionOrderDetailPage() {
               ) : null}
             </>
           )}
+        </section>
+      ) : null}
+
+      {documento ? (
+        <section className="glass-panel rounded-2xl border border-white/60 p-4 shadow-sm sm:rounded-3xl sm:p-6">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900">Hoja de taller</h2>
+              <p className="text-xs text-zinc-500">
+                El QR de arriba a la derecha abre esta orden al escanearlo.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {/* Estos dos SÍ pueden abrir y descargar: actúan sobre un blob
+                  que ya está en memoria, así que son un gesto directo del
+                  usuario y el navegador no los bloquea. */}
+              <a
+                href={documento.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-9 items-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-xs hover:bg-zinc-50"
+              >
+                ↗ Abrir pestaña
+              </a>
+              <a
+                href={documento.url}
+                download={documento.filename}
+                className="inline-flex min-h-9 items-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-xs hover:bg-zinc-50"
+              >
+                ⬇ Descargar
+              </a>
+            </div>
+          </div>
+          <iframe
+            src={documento.url}
+            title={`Hoja de taller ${data.code}`}
+            className="h-[70vh] w-full rounded-xl border border-zinc-200 bg-white"
+          />
         </section>
       ) : null}
 

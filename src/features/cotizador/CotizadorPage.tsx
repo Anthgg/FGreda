@@ -480,7 +480,7 @@ export function CotizadorPage() {
           {/* Fase 009I. No se consulta el estado de cobro: producir y cobrar
               son ejes distintos, y exigir el pago aqui pararia el taller por
               una gestion administrativa. */}
-          {id ? <ProductionOrderAction quotationId={id} status={status} canEdit={canEdit} disabled={busy} /> : null}
+          {id ? <ProductionOrderAction quotationId={id} status={status} disabled={busy} /> : null}
         </div>
       </footer>
 
