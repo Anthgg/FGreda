@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
-import gredaLogo from "@/assets/greda-frame-1.png";
+import { CompanyLogo } from "@/components/CompanyLogo";
 import { GredaParticleBackground } from "@/components/GredaParticleBackground";
 import {
   BoxesIcon,
@@ -165,12 +165,7 @@ export function AppShell() {
       <header className="shrink-0 z-30 flex items-center justify-between border-b border-black/[0.04] bg-white/75 px-4 py-3 backdrop-blur-md lg:hidden">
         <div className="size-9" aria-hidden="true" />
         <div className="flex items-center justify-center">
-          <img
-            src={gredaLogo}
-            alt="Logo de Greda"
-            className="size-8 select-none object-contain"
-            draggable={false}
-          />
+          <CompanyLogo className="size-9 select-none object-contain" />
         </div>
         <button
           type="button"
@@ -204,12 +199,7 @@ export function AppShell() {
           <div className="fixed inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col justify-between glass-sidebar p-5 shadow-2xl transition-transform duration-200">
             <div>
               <div className="relative flex items-center justify-center pb-6 border-b border-black/[0.04]">
-                <img
-                  src={gredaLogo}
-                  alt="Logo de Greda"
-                  className="size-8 select-none object-contain"
-                  draggable={false}
-                />
+                <CompanyLogo className="size-12 select-none object-contain" />
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
@@ -277,11 +267,14 @@ export function AppShell() {
               collapsed ? "flex-col justify-center" : "justify-center",
             ].join(" ")}
           >
-            <img
-              src={gredaLogo}
-              alt="Logo de Greda"
-              className="size-8 shrink-0 select-none object-contain transition-transform duration-200 hover:scale-105"
-              draggable={false}
+            {/* Desplegada la barra mide 256 px: un logo de 32 se perdia.
+                Plegada baja a 72 px y el logo tiene que caber sin empujar al
+                boton de plegado. */}
+            <CompanyLogo
+              className={[
+                "shrink-0 select-none object-contain transition-all duration-200 hover:scale-105",
+                collapsed ? "size-9" : "size-16",
+              ].join(" ")}
             />
 
             <button
