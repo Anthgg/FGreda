@@ -2,7 +2,7 @@
  * Menu principal previsto para todo el producto Cotizador GREDA.
  *
  * `Inicio`, `Productos`, `Terceros`, `Inventario`, `Importaciones`, `Recetas`,
- * `Quemas`, `Cotizaciones`, `Cotizador` y
+ * `Quemas`, `Produccion`, `Cotizaciones`, `Cotizador` y
  * `Configuracion` estan operativos. El resto queda visible y
  * deshabilitado para fijar la estructura de navegacion: su logica de negocio
  * corresponde a fases posteriores y no se adelanta aqui.
@@ -87,6 +87,13 @@ export const NAVIGATION: readonly NavigationItem[] = [
     enabled: true,
     icon: "flask",
     description: "Preparaciones y composiciones de pastas y esmaltes.",
+  },
+  {
+    label: "Producción",
+    to: "/produccion",
+    enabled: true,
+    icon: "boxes",
+    description: "Órdenes de fabricación y consumo de material preparado.",
   },
   {
     label: "Quemas",
