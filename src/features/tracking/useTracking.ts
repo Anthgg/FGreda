@@ -14,6 +14,10 @@ export const useTracking = () =>
     // que merezca insistir.
     retry: false,
     staleTime: 30_000,
+    // La produccion puede cambiar mientras la persona conserva esta pantalla
+    // abierta. React Query vuelve a consultar sin recargar y se detiene cuando
+    // la pestana queda en segundo plano.
+    refetchInterval: 30_000,
   });
 
 /**

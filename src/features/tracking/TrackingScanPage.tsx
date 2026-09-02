@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
-import { Spinner } from "@/components/Spinner";
+import { ApiError } from "@/api/client";
 import { resolveTracking } from "@/api/tracking";
+import { Spinner } from "@/components/Spinner";
 import { TRACKING_KEY } from "@/features/tracking/useTracking";
 import { TrackingShell } from "@/features/tracking/TrackingShell";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -46,15 +47,28 @@ export function TrackingScanPage() {
   if (resolver.isSuccess) return <Navigate to="/seguimiento" replace />;
 
   if (resolver.isError) {
+    const noExiste = resolver.error instanceof ApiError && resolver.error.status === 404;
     return (
       <TrackingShell>
         <p className="text-sm font-medium text-zinc-900">
-          Ese código no corresponde a ninguna orden.
+          {noExiste
+            ? "Ese código no corresponde a ninguna orden."
+            : "No pudimos abrir el seguimiento."}
         </p>
         <p className="mt-2 text-sm text-zinc-600">
-          Vuelve a escanear el código de la hoja. Si el problema sigue, pide en el taller que
-          comprueben la orden.
+          {noExiste
+            ? "Vuelve a escanear el código de la hoja. Si el problema sigue, pide en el taller que comprueben la orden."
+            : "Comprueba tu conexión y vuelve a intentarlo. El código no ha sido rechazado."}
         </p>
+        {!noExiste ? (
+          <button
+            type="button"
+            onClick={() => resolver.mutate(token)}
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 shadow-xs hover:bg-zinc-50"
+          >
+            Reintentar
+          </button>
+        ) : null}
       </TrackingShell>
     );
   }

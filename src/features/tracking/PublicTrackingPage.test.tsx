@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { errorResponse, jsonResponse, mockFetch, renderApp } from "@/test/utils";
@@ -181,5 +182,33 @@ describe("el token del QR", () => {
     // Ni el código del backend ni el número de estado en pantalla.
     expect(screen.queryByText(/TRACKING_NOT_FOUND/)).not.toBeInTheDocument();
     expect(screen.queryByText(/404/)).not.toBeInTheDocument();
+  });
+
+  it("distingue un fallo temporal de un código inválido y permite reintentar", async () => {
+    let intentos = 0;
+    mockFetch((url) => {
+      if (url.includes("/tracking/production-orders/scan/")) {
+        intentos += 1;
+        return intentos === 1
+          ? errorResponse(503, "SERVICE_UNAVAILABLE")
+          : jsonResponse(200, SEGUIMIENTO);
+      }
+      if (url.includes("/tracking/production-orders/current/internal-link")) {
+        return errorResponse(401, "AUTH_NOT_AUTHENTICATED");
+      }
+      if (url.includes("/tracking/production-orders/current")) {
+        return jsonResponse(200, SEGUIMIENTO);
+      }
+      throw new Error(`llamada inesperada: ${url}`);
+    });
+
+    renderApp(["/seguimiento/token-valido"]);
+
+    expect(await screen.findByText(/no pudimos abrir el seguimiento/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no corresponde a ninguna orden/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /reintentar/i }));
+    expect(await screen.findByText("OP-2026-000002")).toBeInTheDocument();
+    expect(intentos).toBe(2);
   });
 });

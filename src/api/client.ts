@@ -33,12 +33,6 @@ const NO_REFRESH_PATHS = [
   "/auth/login",
   "/auth/logout",
   "/auth/csrf",
-  // Fase 009I.1. El seguimiento publico lo abre casi siempre alguien SIN
-  // cuenta. Su unico endpoint que responde 401 —el puente hacia la vista
-  // interna— lo hace de forma normal y esperada, no porque una sesion haya
-  // caducado, asi que intentar renovarla solo anadiria una peticion de token
-  // CSRF y un refresh fallido a cada visita anonima.
-  "/tracking",
 ];
 
 export const CSRF_HEADER = "X-CSRF-Token";
@@ -130,6 +124,10 @@ function isMutating(method: HttpMethod): boolean {
 }
 
 function allowsRefresh(path: string): boolean {
+  // La superficie publica no necesita sesion. La unica excepcion es el puente
+  // a la orden interna: si un trabajador conserva refresh cookie, su sesion
+  // debe poder renovarse antes de decidir si se muestra el enlace.
+  if (path.startsWith("/tracking/") && !path.endsWith("/current/internal-link")) return false;
   return !NO_REFRESH_PATHS.some((exempt) => path.startsWith(exempt));
 }
 
