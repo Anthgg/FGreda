@@ -28,7 +28,18 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * Rutas que nunca deben disparar un refresh automatico. Sin esta lista, un 401
  * de `/auth/refresh` provocaria un bucle infinito de renovacion.
  */
-const NO_REFRESH_PATHS = ["/auth/refresh", "/auth/login", "/auth/logout", "/auth/csrf"];
+const NO_REFRESH_PATHS = [
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/logout",
+  "/auth/csrf",
+  // Fase 009I.1. El seguimiento publico lo abre casi siempre alguien SIN
+  // cuenta. Su unico endpoint que responde 401 —el puente hacia la vista
+  // interna— lo hace de forma normal y esperada, no porque una sesion haya
+  // caducado, asi que intentar renovarla solo anadiria una peticion de token
+  // CSRF y un refresh fallido a cada visita anonima.
+  "/tracking",
+];
 
 export const CSRF_HEADER = "X-CSRF-Token";
 
