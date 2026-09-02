@@ -672,14 +672,23 @@ describe("Modulo de inventario", () => {
     });
   });
 
-  it("el OPERATOR consulta pero no ajusta", async () => {
+  it("el OPERATOR ajusta existencia porque es trabajo de taller", async () => {
+    // Fase 009J. Antes esta prueba exigia lo contrario, y era correcta
+    // entonces: hasta 009I la regla del sistema era «todo lo que persiste es
+    // de ADMIN». Se reescribe en vez de borrarse porque la afirmacion sigue
+    // siendo interesante, solo que ahora dice otra cosa.
+    //
+    // El material que consume una orden de produccion sale de una preparacion,
+    // y la preparacion sale de materia prima que alguien carga. Un operario
+    // que puede gastar barniz pero no reponerlo tiene que ir a buscar a un
+    // administrador a mitad de la fabricacion.
     mockMasters({ user: OPERATOR });
     renderApp(["/inventario"]);
     await screen.findByText("Arcilla blanca");
 
     expect(
-      screen.queryByRole("button", { name: "Ajustar" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Ajustar" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Historial" }),
     ).toBeInTheDocument();

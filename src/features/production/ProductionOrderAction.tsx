@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 
 import { SecondaryButton, SelectField } from "@/components/form";
 import { PrimaryButton } from "@/components/form";
+import { capabilitiesFor } from "@/features/auth/capabilities";
+import { useSession } from "@/features/auth/useSession";
 import { useLocations } from "@/features/masters/useMasters";
 import {
   useCreateProductionOrder,
@@ -14,7 +16,6 @@ import type { QuotationStatus } from "@/types/quotations";
 interface Props {
   quotationId: number;
   status: QuotationStatus;
-  canEdit: boolean;
   disabled?: boolean;
 }
 
@@ -29,7 +30,12 @@ interface Props {
  * Si la cotización ya tiene orden, se ofrece abrirla y no crear otra: una
  * cotización tiene como mucho una, y el backend lo impone en la base.
  */
-export function ProductionOrderAction({ quotationId, status, canEdit, disabled }: Props) {
+export function ProductionOrderAction({ quotationId, status, disabled }: Props) {
+  // Ya no recibe el `canEdit` del Cotizador: aquel significaba «puede editar la
+  // cotizacion», que es permiso comercial. Crear la orden es de taller, y desde
+  // 009J son cosas distintas: un operario no edita el documento y si fabrica.
+  const { data: user } = useSession();
+  const puede = capabilitiesFor(user?.role);
   const existente = useProductionOrderForQuotation(status === "CONFIRMED" ? quotationId : null);
   const locations = useLocations();
   const create = useCreateProductionOrder();
@@ -60,7 +66,7 @@ export function ProductionOrderAction({ quotationId, status, canEdit, disabled }
     );
   }
 
-  if (!canEdit || existente.isPending) return null;
+  if (!puede.crearOrdenProduccion || existente.isPending) return null;
 
   return (
     <>

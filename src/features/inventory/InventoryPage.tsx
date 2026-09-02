@@ -11,6 +11,7 @@ import { useState } from "react";
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
+import { capabilitiesFor } from "@/features/auth/capabilities";
 import { useSession } from "@/features/auth/useSession";
 import { describeError } from "@/features/settings/messages";
 import {
@@ -108,7 +109,8 @@ function AdjustmentForm({
 
 export function InventoryPage() {
   const { data: user } = useSession();
-  const isAdmin = user?.role === "ADMIN";
+  // Fase 009J. Ajustar existencia es del taller; abrir un almacen, no.
+  const isAdmin = capabilitiesFor(user?.role).ajustarInventario;
 
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
