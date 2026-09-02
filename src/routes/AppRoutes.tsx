@@ -20,6 +20,8 @@ import { NuevaCotizacionPage } from "@/features/quotations/NuevaCotizacionPage";
 import { QuotationsPage } from "@/features/quotations/QuotationsPage";
 import { RecipesPage } from "@/features/recipes/RecipesPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { PublicTrackingPage } from "@/features/tracking/PublicTrackingPage";
+import { TrackingScanPage } from "@/features/tracking/TrackingScanPage";
 import { AppShell } from "@/layouts/AppShell";
 import { HomePage } from "@/routes/HomePage";
 import { NotFoundPage } from "@/routes/NotFoundPage";
@@ -27,8 +29,18 @@ import { NotFoundPage } from "@/routes/NotFoundPage";
 /**
  * Mapa de rutas.
  *
- * Todo lo que no sea el login vive detras de `ProtectedRoute`, que consulta al
- * backend antes de renderizar.
+ * Casi todo vive detras de `ProtectedRoute`, que consulta al backend antes de
+ * renderizar. Las dos excepciones son deliberadas: el login y el SEGUIMIENTO
+ * PUBLICO de produccion (Fase 009I.1), al que se llega escaneando el QR de una
+ * hoja de taller.
+ *
+ * El seguimiento esta fuera de la sesion porque quien escanea normalmente no
+ * tiene cuenta —quien lleva la pieza al horno, quien pregunta por su encargo—.
+ * Hasta 009J acababa en el login y el QR impreso no servia para nada.
+ *
+ * Que sea publico no lo hace inseguro: la autoridad sigue siendo el backend,
+ * que bajo `/api/v1/tracking` no expone ni una escritura ni un dato interno.
+ * Estas dos rutas no pueden mutar nada porque no hay nada que llamar.
  */
 export function AppRoutes() {
   return (
@@ -36,6 +48,17 @@ export function AppRoutes() {
       <Route element={<PublicOnlyRoute />}>
         <Route path="/login" element={<LoginPage />} />
       </Route>
+
+      {/* Publicas, sin sesion. Fuera del AppShell a proposito: no hay menu, ni
+          inventario, ni nombre de usuario que ensenar a quien solo quiere
+          saber como va su pieza.
+
+          `/seguimiento/:token` va ANTES que `/seguimiento`: React Router
+          resuelve por especificidad, pero el orden escrito deja claro que la
+          primera existe para durar un instante y reemplazarse por la segunda,
+          que es donde el token ya no esta en la direccion. */}
+      <Route path="/seguimiento/:token" element={<TrackingScanPage />} />
+      <Route path="/seguimiento" element={<PublicTrackingPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>

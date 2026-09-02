@@ -28,7 +28,12 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * Rutas que nunca deben disparar un refresh automatico. Sin esta lista, un 401
  * de `/auth/refresh` provocaria un bucle infinito de renovacion.
  */
-const NO_REFRESH_PATHS = ["/auth/refresh", "/auth/login", "/auth/logout", "/auth/csrf"];
+const NO_REFRESH_PATHS = [
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/logout",
+  "/auth/csrf",
+];
 
 export const CSRF_HEADER = "X-CSRF-Token";
 
@@ -119,6 +124,10 @@ function isMutating(method: HttpMethod): boolean {
 }
 
 function allowsRefresh(path: string): boolean {
+  // La superficie publica no necesita sesion. La unica excepcion es el puente
+  // a la orden interna: si un trabajador conserva refresh cookie, su sesion
+  // debe poder renovarse antes de decidir si se muestra el enlace.
+  if (path.startsWith("/tracking/") && !path.endsWith("/current/internal-link")) return false;
   return !NO_REFRESH_PATHS.some((exempt) => path.startsWith(exempt));
 }
 
