@@ -6,6 +6,8 @@
  * tampoco. Ese reparto lo decide el backend, no estas pantallas.
  */
 
+import type { QuotationPaymentStatus } from "@/types/quotations";
+
 export type ProductionOrderStatus = "CREATED" | "STARTED" | "COMPLETED" | "CANCELLED";
 
 /**
@@ -88,6 +90,16 @@ export interface ProductionOrder extends ProductionOrderSummary {
   /** Identificador opaco del QR. Ni el id ni el código. */
   qr_token: string;
   quotation_customer_name: string | null;
+  /**
+   * Fase 009H.1. Si la cotización de origen consta cobrada.
+   *
+   * Viaja para poder DECIR por qué no se puede arrancar, no para decidirlo: el
+   * backend rechaza el arranque aunque el botón llegara a aparecer.
+   *
+   * `null` significa «no consta» —lo anterior a 009H—, que no es «impagada»
+   * pero tampoco sirve para arrancar: hace falta `PAID`.
+   */
+  quotation_payment_status: QuotationPaymentStatus | null;
   lines: ProductionOrderLine[];
   readiness: ProductionReadiness;
 }

@@ -13,6 +13,7 @@ import type {
   ProductionReadinessCode,
   ReadinessIssue,
 } from "@/types/production";
+import type { QuotationPaymentStatus } from "@/types/quotations";
 
 const STATUS_LABEL: Record<ProductionOrderStatus, string> = {
   CREATED: "Creada",
@@ -113,14 +114,35 @@ export function stockIssues(issues: ReadinessIssue[]): ReadinessIssue[] {
 }
 
 /**
+ * Si la cotización de origen consta cobrada. Fase 009H.1.
+ *
+ * Sólo `PAID` habilita. `null` significa «no consta» —lo anterior a 009H— y no
+ * es lo mismo que impagada, pero tampoco sirve para arrancar: para gastar
+ * material tiene que haber un cobro registrado.
+ */
+export function estaCobrada(payment: QuotationPaymentStatus | null): boolean {
+  return payment === "PAID";
+}
+
+/**
  * Si procede ofrecer cada acción.
  *
  * Esto NO es la autoridad: el backend rechaza cualquier transición ilegal
  * aunque el botón llegara a aparecer. Aquí sólo se evita ofrecer algo que se
  * sabe que va a fallar.
+ *
+ * Arrancar pide tres cosas y son independientes: el estado de la orden, que
+ * haya material y que la cotización esté cobrada. La tercera la añadió 009H.1,
+ * y se pasa aparte en vez de meterla en `ready` a propósito: la disponibilidad
+ * mide MATERIAL, y mezclarle una condición administrativa haría que la
+ * pantalla dijese «falta material» cuando lo que falta es una factura.
  */
-export function canStart(status: ProductionOrderStatus, ready: boolean): boolean {
-  return status === "CREATED" && ready;
+export function canStart(
+  status: ProductionOrderStatus,
+  ready: boolean,
+  payment: QuotationPaymentStatus | null,
+): boolean {
+  return status === "CREATED" && ready && estaCobrada(payment);
 }
 
 export function canComplete(status: ProductionOrderStatus): boolean {

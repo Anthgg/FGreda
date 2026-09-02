@@ -4,6 +4,7 @@ import {
   canCancel,
   canComplete,
   canStart,
+  estaCobrada,
   describeIssue,
   describeShortfall,
   describeStatus,
@@ -122,12 +123,29 @@ describe("reparto de los avisos", () => {
 });
 
 describe("qué acciones se ofrecen", () => {
-  it("arrancar sólo se ofrece si está creada Y hay material", () => {
-    expect(canStart("CREATED", true)).toBe(true);
-    expect(canStart("CREATED", false)).toBe(false);
-    expect(canStart("STARTED", true)).toBe(false);
-    expect(canStart("COMPLETED", true)).toBe(false);
-    expect(canStart("CANCELLED", true)).toBe(false);
+  it("arrancar pide estar creada, tener material Y estar cobrada", () => {
+    expect(canStart("CREATED", true, "PAID")).toBe(true);
+    expect(canStart("CREATED", false, "PAID")).toBe(false);
+    expect(canStart("STARTED", true, "PAID")).toBe(false);
+    expect(canStart("COMPLETED", true, "PAID")).toBe(false);
+    expect(canStart("CANCELLED", true, "PAID")).toBe(false);
+  });
+
+  it("sin cobrar no se ofrece arrancar aunque sobre material", () => {
+    // Fase 009H.1. La disponibilidad mide MATERIAL; el cobro es otro eje, y
+    // mezclarlos haría que la pantalla dijese «falta material» cuando lo que
+    // falta es una factura.
+    expect(canStart("CREATED", true, "UNPAID")).toBe(false);
+    expect(canStart("CREATED", true, null)).toBe(false);
+  });
+
+  it("«no consta» no es «pagada»", () => {
+    // El nulo es el tercer caso del eje: lo anterior a 009H, de lo que no se
+    // registró el cobro. No equivale a impagada, pero tampoco alcanza para
+    // gastar material: hace falta un cobro registrado.
+    expect(estaCobrada("PAID")).toBe(true);
+    expect(estaCobrada("UNPAID")).toBe(false);
+    expect(estaCobrada(null)).toBe(false);
   });
 
   it("completar sólo tras arrancar", () => {

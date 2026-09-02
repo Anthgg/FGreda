@@ -18,6 +18,7 @@ import {
   issuesForLine,
   statusTone,
   stockIssues,
+  estaCobrada,
 } from "@/features/production/readiness";
 import {
   useCancelProductionOrder,
@@ -124,6 +125,11 @@ export function ProductionOrderDetailPage() {
   const data = order.data;
   const { readiness } = data;
   const generales = stockIssues(readiness.issues);
+  // Se avisa sólo cuando el cobro es lo ÚNICO que falta. Si además falta
+  // material, el panel de disponibilidad ya explica lo suyo y dos avisos a la
+  // vez hacen que no se lea ninguno.
+  const faltaCobrar =
+    data.status === "CREATED" && readiness.ready && !estaCobrada(data.quotation_payment_status);
   const enCurso = start.isPending || complete.isPending || cancel.isPending;
   const errorTransicion = start.error ?? complete.error ?? cancel.error;
 
@@ -175,7 +181,7 @@ export function ProductionOrderDetailPage() {
           <SecondaryButton type="button" disabled={cargandoDocumento} onClick={() => void verDocumento()}>
             {cargandoDocumento ? "Generando…" : documento ? "Actualizar hoja" : "Hoja de taller (PDF)"}
           </SecondaryButton>
-          {puede.arrancarProduccion && canStart(data.status, readiness.ready) ? (
+          {puede.arrancarProduccion && canStart(data.status, readiness.ready, data.quotation_payment_status) ? (
             <PrimaryButton
               type="button"
               disabled={enCurso}
@@ -232,6 +238,26 @@ export function ProductionOrderDetailPage() {
           </Dato>
         </dl>
       </section>
+
+      {/* Fase 009H.1. Va ANTES de la disponibilidad porque es lo que de verdad
+          impide arrancar: enseñar «hay material» sin decir que falta el cobro
+          dejaría a quien está en el taller buscando un problema de almacén que
+          no existe. Y dice a dónde ir, porque quien fabrica no cobra. */}
+      {faltaCobrar ? (
+        <section className="glass-panel rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm sm:rounded-3xl sm:p-6">
+          <h2 className="text-sm font-semibold text-amber-900">Cotización pendiente de pago</h2>
+          <p className="mt-2 text-xs text-amber-800">
+            La cotización debe estar pagada para iniciar la producción. Hay material y la
+            orden está lista; sólo falta registrar el cobro.
+          </p>
+          <Link
+            to={`/cotizaciones/${data.quotation_id}`}
+            className="mt-3 inline-flex text-xs font-medium text-amber-900 underline underline-offset-2"
+          >
+            Ir a {data.quotation_code} →
+          </Link>
+        </section>
+      ) : null}
 
       {/* La disponibilidad sólo importa mientras la orden puede arrancar. Una
           orden ya arrancada consumió lo suyo, y seguir mostrando avisos de
