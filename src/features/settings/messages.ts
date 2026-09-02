@@ -103,6 +103,36 @@ export function describeError(error: unknown): string {
     case "PRODUCT_PRICE_UPDATE_NOT_ALLOWED":
       return "No se puede cambiar el precio del maestro desde la cotizacion.";
 
+    // ---- Fase 009I: ordenes de produccion ----------------------------
+    case "PRODUCTION_ORDER_NOT_FOUND":
+      return "La orden de produccion ya no existe. Actualice la lista.";
+    case "PRODUCTION_ORDER_QUOTATION_NOT_CONFIRMED":
+      return (
+        "Solo una cotizacion confirmada puede originar una orden. Un borrador " +
+        "todavia se edita y una anulada ya no se fabrica."
+      );
+    case "PRODUCTION_ORDER_LOCATION_INVALID":
+      return "El almacen elegido no existe o esta desactivado.";
+    case "PRODUCTION_ORDER_NOT_STARTABLE":
+      return "Esta orden ya no esta en un estado que permita arrancarla.";
+    // El detalle de POR QUE no puede arrancar no se saca de aqui: viaja en la
+    // disponibilidad de la propia orden, que la pantalla vuelve a pedir tras el
+    // intento fallido y muestra material por material.
+    case "PRODUCTION_ORDER_NOT_READY":
+      return (
+        "Falta algo para poder producir. No se descontó ningún material: " +
+        "revise la disponibilidad de abajo."
+      );
+    case "PRODUCTION_ORDER_NOT_COMPLETABLE":
+      return "Solo una orden que ya arranco puede marcarse como completada.";
+    case "PRODUCTION_ORDER_NOT_CANCELLABLE":
+      return (
+        "Una orden que ya arranco no se puede anular: el material consumido no " +
+        "vuelve al almacen. Corrijalo con un ajuste de inventario."
+      );
+    // `NEGATIVE_STOCK_NOT_ALLOWED` ya esta traducido mas arriba, con el
+    // inventario: es el mismo error mire quien lo mire.
+
     default:
       return safeFallback(error.message);
   }

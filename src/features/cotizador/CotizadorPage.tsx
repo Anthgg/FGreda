@@ -30,6 +30,7 @@ import { useKilns } from "@/features/firings/useFirings";
 import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
 import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
+import { ProductionOrderAction } from "@/features/production/ProductionOrderAction";
 import { canMarkPaid, describePayment, paymentDate, paymentTone } from "@/features/quotations/payment";
 import { describeError } from "@/features/settings/messages";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
@@ -476,6 +477,10 @@ export function CotizadorPage() {
           {canEdit && id && status !== "CANCELLED" ? <SecondaryButton disabled={busy} onClick={() => setConfirmCancel(true)}>Anular</SecondaryButton> : null}
           {canEdit && id && persisted && canMarkPaid(status, persisted.payment_status) ? <SecondaryButton disabled={busy} onClick={() => setConfirmPaid(true)}>Marcar como pagada</SecondaryButton> : null}
           {canEdit && id && status !== "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => duplicate.mutate(id, { onSuccess: (copy) => navigate(`/cotizador/${copy.id}`) })}>Duplicar</SecondaryButton> : null}
+          {/* Fase 009I. No se consulta el estado de cobro: producir y cobrar
+              son ejes distintos, y exigir el pago aqui pararia el taller por
+              una gestion administrativa. */}
+          {id ? <ProductionOrderAction quotationId={id} status={status} canEdit={canEdit} disabled={busy} /> : null}
         </div>
       </footer>
 

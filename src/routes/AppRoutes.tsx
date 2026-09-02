@@ -10,6 +10,9 @@ import { NuevaQuemaPage } from "@/features/firings/NuevaQuemaPage";
 import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
+import { ProductionOrderDetailPage } from "@/features/production/ProductionOrderDetailPage";
+import { ProductionOrderScanPage } from "@/features/production/ProductionOrderScanPage";
+import { ProductionOrdersPage } from "@/features/production/ProductionOrdersPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
 import { DetalleCotizacionPage } from "@/features/quotations/DetalleCotizacionPage";
 import { EditarCotizacionPage } from "@/features/quotations/EditarCotizacionPage";
@@ -50,6 +53,11 @@ export function AppRoutes() {
           <Route path="cotizaciones/nueva" element={<NuevaCotizacionPage />} />
           <Route path="cotizaciones/:id" element={<DetalleCotizacionPage />} />
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
+          <Route path="produccion" element={<ProductionOrdersPage />} />
+          {/* Antes que "produccion/:id": una ruta con parametro se traga
+              "produccion/scan/xxx" y el detalle recibiria "scan" como id. */}
+          <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
+          <Route path="produccion/:id" element={<ProductionOrderDetailPage />} />
           <Route path="cotizador/nuevo" element={<CotizadorPage />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
