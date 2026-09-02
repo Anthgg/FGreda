@@ -123,6 +123,14 @@ export function describeError(error: unknown): string {
         "Falta algo para poder producir. No se descontó ningún material: " +
         "revise la disponibilidad de abajo."
       );
+    // Fase 009H.1. Dice qué falta y quién puede resolverlo: quien está en el
+    // taller no cobra, así que "pendiente de pago" sin más lo dejaría mirando
+    // una pantalla sin saber a quién acudir.
+    case "PRODUCTION_ORDER_QUOTATION_NOT_PAID":
+      return (
+        "La cotización debe estar pagada para iniciar la producción. " +
+        "Registre el cobro en la cotización de origen."
+      );
     case "PRODUCTION_ORDER_NOT_COMPLETABLE":
       return "Solo una orden que ya arranco puede marcarse como completada.";
     case "PRODUCTION_ORDER_NOT_CANCELLABLE":
