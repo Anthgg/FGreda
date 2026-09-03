@@ -59,6 +59,32 @@ describe("Fase 009K · prototipos", () => {
 
   it("2. crea un prototipo standalone sin producto ni cotización", async () => { const { requests } = installBackend(); renderApp(["/prototipos/nuevo"]); await userEvent.type(await screen.findByLabelText(/^nombre/i), "Muestra standalone"); await userEvent.click(screen.getByRole("button", { name: "Crear prototipo" })); await waitFor(() => expect(requests.some((r) => r.path.endsWith("/prototypes") && r.method === "POST" && !r.body?.includes("quotation_id"))).toBe(true)); });
 
+  it("2b. crea desde la ficha del Excel con especificaciones y materiales iniciales", async () => {
+    const { requests } = installBackend();
+    renderApp(["/prototipos/nuevo"]);
+    await userEvent.type(await screen.findByLabelText(/^nombre/i), "Jarra prototipo");
+    await userEvent.type(screen.getByLabelText(/responsable/i), "Taller");
+    await userEvent.click(screen.getByRole("combobox", { name: /prioridad/i }));
+    await userEvent.click(await screen.findByRole("option", { name: "Alta" }));
+    fireEvent.change(screen.getByLabelText(/ancho cm/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/alto cm/i), { target: { value: "15" } });
+    await userEvent.type(screen.getAllByLabelText(/técnica/i)[0]!, "Modelado");
+    await userEvent.type(screen.getByLabelText(/esmalte \/ acabado/i), "Barniz base 57");
+    await userEvent.click(screen.getByRole("button", { name: /añadir material/i }));
+    await userEvent.click(screen.getByRole("combobox", { name: /^material/i }));
+    await userEvent.click(await screen.findByRole("option", { name: /MAT-011 · Arcilla blanca/i }));
+    fireEvent.change(screen.getByLabelText(/cantidad prevista \(g\)/i), { target: { value: "30" } });
+    await userEvent.click(screen.getByRole("button", { name: "Crear prototipo" }));
+    await waitFor(() => {
+      const body = requests.find((r) => r.path.endsWith("/prototypes") && r.method === "POST")?.body;
+      expect(body).toContain('"materials":[{"product_id":11,"quantity":"30"}]');
+      expect(body).toContain("[Especificaciones]");
+      expect(body).toContain("Ancho cm: 10");
+      expect(body).toContain("Esmalte/Acabado: Barniz base 57");
+      expect(body).toContain("Prioridad: Alta");
+    });
+  });
+
   it("3. enseña el código emitido por backend después de crear", async () => { installBackend(); renderApp(["/prototipos/nuevo"]); await userEvent.type(await screen.findByLabelText(/^nombre/i), "Muestra standalone"); await userEvent.click(screen.getByRole("button", { name: "Crear prototipo" })); expect(await screen.findByText(/creado con código PRT-2026-000007/i)).toBeInTheDocument(); });
 
   it("4. permite editar mientras está CREATED", async () => { const { requests } = installBackend(); renderApp(["/prototipos/7/editar"]); const field = await screen.findByLabelText(/^nombre/i); fireEvent.change(field, { target: { value: "Taza corregida" } }); await userEvent.click(screen.getByRole("button", { name: /guardar cambios/i })); await waitFor(() => expect(requests.some((r) => r.path.endsWith("/prototypes/7") && r.method === "PUT" && r.body?.includes("Taza corregida"))).toBe(true)); });
