@@ -13,6 +13,9 @@ import { PartnersPage } from "@/features/masters/PartnersPage";
 import { ProductionOrderDetailPage } from "@/features/production/ProductionOrderDetailPage";
 import { ProductionOrderScanPage } from "@/features/production/ProductionOrderScanPage";
 import { ProductionOrdersPage } from "@/features/production/ProductionOrdersPage";
+import { PrototypeDetailPage } from "@/features/prototypes/PrototypeDetailPage";
+import { PrototypeFormPage } from "@/features/prototypes/PrototypeFormPage";
+import { PrototypesPage } from "@/features/prototypes/PrototypesPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
 import { DetalleCotizacionPage } from "@/features/quotations/DetalleCotizacionPage";
 import { EditarCotizacionPage } from "@/features/quotations/EditarCotizacionPage";
@@ -81,6 +84,14 @@ export function AppRoutes() {
               "produccion/scan/xxx" y el detalle recibiria "scan" como id. */}
           <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
           <Route path="produccion/:id" element={<ProductionOrderDetailPage />} />
+          <Route path="prototipos" element={<PrototypesPage />} />
+          <Route path="prototipos/nuevo" element={<PrototypeFormPage />} />
+          <Route path="prototipos/:id" element={<PrototypeDetailPage section="resumen" />} />
+          <Route path="prototipos/:id/editar" element={<PrototypeDetailPage section="editar" />} />
+          <Route path="prototipos/:id/materiales" element={<PrototypeDetailPage section="materiales" />} />
+          <Route path="prototipos/:id/operacion" element={<PrototypeDetailPage section="operacion" />} />
+          <Route path="prototipos/:id/evaluacion" element={<PrototypeDetailPage section="evaluacion" />} />
+          <Route path="prototipos/:id/iteraciones" element={<PrototypeDetailPage section="iteraciones" />} />
           <Route path="cotizador/nuevo" element={<CotizadorPage />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
           <Route path="configuracion" element={<SettingsPage />} />

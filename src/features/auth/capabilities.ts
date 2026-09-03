@@ -33,6 +33,13 @@ function esAdmin(role: Role | undefined): boolean {
 }
 
 export interface Capabilities {
+  crearPrototipo: boolean;
+  editarPrototipo: boolean;
+  gestionarMaterialesPrototipo: boolean;
+  arrancarPrototipo: boolean;
+  completarPrototipo: boolean;
+  decidirPrototipo: boolean;
+  anularPrototipo: boolean;
   /** Crear la orden desde una cotización confirmada. */
   crearOrdenProduccion: boolean;
   /** Arrancar: el único punto que descuenta material. */
@@ -56,6 +63,13 @@ export interface Capabilities {
 
 export function capabilitiesFor(role: Role | undefined): Capabilities {
   return {
+    crearPrototipo: esTaller(role),
+    editarPrototipo: esTaller(role),
+    gestionarMaterialesPrototipo: esTaller(role),
+    arrancarPrototipo: esTaller(role),
+    completarPrototipo: esTaller(role),
+    decidirPrototipo: esAdmin(role),
+    anularPrototipo: esAdmin(role),
     crearOrdenProduccion: esTaller(role),
     arrancarProduccion: esTaller(role),
     completarProduccion: esTaller(role),

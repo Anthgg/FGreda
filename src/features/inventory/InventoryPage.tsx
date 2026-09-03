@@ -40,6 +40,7 @@ const MOVEMENT_LABELS: Record<MovementType, string> = {
   OUT: "Salida",
   PREPARATION_OUT: "Consumo por preparación",
   PREPARATION_IN: "Alta de preparado",
+  PROTOTYPE_OUT: "Consumo por prototipo",
 };
 
 function AdjustmentForm({
