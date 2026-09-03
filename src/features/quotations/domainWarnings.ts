@@ -77,6 +77,33 @@ const CATALOG: Record<string, DomainWarning> = {
     message: "Indica cuántos gramos de material necesita cada pieza.",
     step: "PRODUCCION",
   },
+  // ---- Material base de la pieza ------------------------------------
+  BODY_MATERIAL_PRODUCT_INVALID: {
+    message:
+      "El material base elegido ya no está disponible o no es un material del " +
+      "que se pueda hacer una pieza. Elige otro.",
+    step: "PRODUCCION",
+  },
+  BODY_MATERIAL_UOM_UNKNOWN: {
+    message:
+      "El material base no tiene unidad de medida registrada, así que no se " +
+      "puede saber cuánto lleva cada pieza. Regístrala en Productos.",
+    step: "PRODUCCION",
+  },
+  BODY_MATERIAL_COST_UNAVAILABLE: {
+    message:
+      "El material base no tiene costo registrado y tampoco se puede deducir de " +
+      "una receta. Regístralo en Productos: sin costo, el cuerpo de la pieza " +
+      "saldría gratis.",
+    step: "PRODUCCION",
+  },
+  BODY_MATERIAL_UNSUPPORTED_UOM_COSTING: {
+    message:
+      "El material base se lleva en volumen y su costo sólo se conoce por gramo. " +
+      "La equivalencia depende de la concentración de cada lote, así que hace " +
+      "falta registrarle un costo propio en Productos.",
+    step: "PRODUCCION",
+  },
   MATERIAL_WITHOUT_COST: {
     message:
       "Algún insumo de la receta no tiene costo registrado, así que el material " +

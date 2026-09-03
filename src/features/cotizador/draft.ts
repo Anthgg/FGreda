@@ -32,6 +32,20 @@ export interface CotizadorItemDraft {
   /** Fase 009B: la linea usa medidas propias en vez de las del maestro. */
   dimensionsOverridden: boolean;
   editableDimensions: ProductDimension[];
+  /**
+   * Material que forma el cuerpo de la pieza. Es lo que el usuario elige;
+   * la receta pasa a ser procedencia y se muestra sólo para informar.
+   */
+  bodyMaterialId: string;
+  bodyMaterialLabel: string;
+  bodyMaterialQuantityPerPiece: string;
+  /**
+   * Unidad y procedencia del material elegido. Vienen del backend y no se
+   * envían de vuelta: se guardan aquí para poder enseñarlas junto al campo
+   * sin pedir el maestro otra vez.
+   */
+  bodyMaterialUom: string;
+  bodyMaterialRecipeName: string;
   recipeId: string;
   recipeLabel: string;
   recipeVersionId: string;
@@ -103,6 +117,11 @@ export const emptyCotizadorItem = (): CotizadorItemDraft => ({
   standardDimensions: { width: "", height: "", length: "", depth: "" },
   dimensionsOverridden: false,
   editableDimensions: ["width", "height", "length", "depth"],
+  bodyMaterialId: "",
+  bodyMaterialLabel: "",
+  bodyMaterialQuantityPerPiece: "",
+  bodyMaterialUom: "",
+  bodyMaterialRecipeName: "",
   recipeId: "",
   recipeLabel: "",
   recipeVersionId: "",
@@ -148,6 +167,11 @@ export function itemFromProduct(product: Product): CotizadorItemDraft {
     standardDimensions: master,
     dimensionsOverridden: false,
     editableDimensions: fields.filter((field) => product[field] == null),
+    bodyMaterialId: "",
+    bodyMaterialLabel: "",
+    bodyMaterialQuantityPerPiece: "",
+    bodyMaterialUom: "",
+    bodyMaterialRecipeName: "",
     recipeId: "",
     recipeLabel: "",
     recipeVersionId: "",
@@ -217,6 +241,17 @@ function itemFromOutput(item: QuotationBuilderItemOut): CotizadorItemDraft {
     },
     dimensionsOverridden: item.dimensions_overridden,
     editableDimensions: item.editable_dimensions,
+    // La ELECCION del usuario y los derivados que sólo se muestran. Al volver
+    // a guardar sólo viajan los dos primeros: la unidad y la procedencia las
+    // resuelve el backend contra el maestro, y reenviarlas permitiría que un
+    // borrador viejo impusiera una unidad que ya cambió.
+    bodyMaterialId: decimal(item.body_material?.product_id ?? null),
+    bodyMaterialLabel: item.body_material
+      ? `${item.body_material.product_internal_reference ?? ""} · ${item.body_material.product_name ?? ""}`.trim()
+      : "",
+    bodyMaterialQuantityPerPiece: decimal(item.body_material?.quantity_per_piece ?? null),
+    bodyMaterialUom: item.body_material?.uom ?? "",
+    bodyMaterialRecipeName: item.body_material?.recipe_name_snapshot ?? "",
     recipeId: decimal(item.recipe_id),
     recipeLabel: item.recipe_id ? `Receta #${item.recipe_id}` : "",
     recipeVersionId: decimal(item.recipe_version_id),
@@ -307,6 +342,8 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
           .map((field) => [field, item.dimensions[field].trim()]),
       );
       const quantity = positiveInt(item.quantity);
+      const bodyMaterialId = positiveInt(item.bodyMaterialId);
+      const bodyMaterialQuantity = item.bodyMaterialQuantityPerPiece.trim();
       const recipeId = positiveInt(item.recipeId);
       const recipeVersionId = positiveInt(item.recipeVersionId);
       const firingLineId = positiveInt(item.firingLineId);
@@ -319,6 +356,17 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
         ...(quantity ? { quantity } : {}),
         dimensions,
         dimensions_overridden: item.dimensionsOverridden,
+        // Sólo material y cantidad. La unidad NO viaja: la pone el maestro del
+        // material, y mandarla desde aquí permitiría cotizar en mililitros
+        // algo que el almacén lleva en gramos.
+        ...(bodyMaterialId && bodyMaterialQuantity
+          ? {
+              body_material: {
+                product_id: bodyMaterialId,
+                quantity_per_piece: bodyMaterialQuantity,
+              },
+            }
+          : {}),
         ...(recipeId ? { recipe_id: recipeId } : {}),
         ...(recipeVersionId
           ? { recipe_version_id: recipeVersionId }

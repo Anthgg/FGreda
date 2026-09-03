@@ -5,7 +5,7 @@ import type { SelectOption } from "@/components/form";
 import { formatDecimalString } from "@/features/firings/labels";
 import { useConfirmedFiringLines } from "@/features/firings/useFirings";
 import { NuevaPiezaModal } from "@/features/masters/NuevaPiezaModal";
-import { RecipeSelectField } from "@/features/quotations/RecipeSelectField";
+import { BodyMaterialSelectField } from "@/features/cotizador/BodyMaterialSelectField";
 import { useAdditionals, useTechniques } from "@/features/quotations/useQuotations";
 import type { CotizadorItemDraft } from "@/features/cotizador/draft";
 import { GlazeEstimator } from "@/features/cotizador/GlazeEstimator";
@@ -241,6 +241,15 @@ export function CotizadorItemCard({
   const manualPriceOverridesMargin = item.commercialSaleUnitPrice.trim() !== "";
 
   const patch = (values: Partial<CotizadorItemDraft>) => onChange({ ...item, ...values });
+
+  // Unidad, procedencia y requerimiento del material base. Manda el preview:
+  // es el backend quien resuelve el material contra el maestro. Lo guardado en
+  // el borrador solo cubre el instante entre elegir y recalcular, para que la
+  // unidad no parpadee al teclear.
+  const bodyMaterialUom = preview?.body_material?.uom ?? item.bodyMaterialUom;
+  const bodyMaterialRecipeName =
+    preview?.body_material?.recipe_name_snapshot ?? item.bodyMaterialRecipeName;
+  const bodyMaterialRequired = preview?.body_material?.required_quantity ?? "";
 
   // Plan de hornadas por tipo de quema, leido del preview. El backend es la
   // autoridad: aqui no se recalcula nada, solo se muestra lo que devolvio.
@@ -523,41 +532,88 @@ export function CotizadorItemCard({
               error={item.quantity && !/^[1-9]\d*$/.test(item.quantity) ? "Use un entero mayor que cero." : undefined}
             />
             <TextField
-              label="Costo de materiales aplicado"
+              label="Costo de material aplicado"
               requirement={item.materialsApplied ? "required" : "optional"}
               value={item.materialsApplied}
               onChange={(materialsApplied) => patch({ materialsApplied })}
               disabled={disabled}
               inputMode="decimal"
               placeholder="Ej. 11.58"
-              // Deuda: este campo reemplaza el calculo del backend. Se
-              // retira en 009H, cuando las recetas que faltan esten
-              // cargadas: quitarlo antes dejaria en cero el material de
-              // las lineas que no tienen receta ni gramos.
-              hint="Reemplaza el cálculo por receta y gramos. Déjalo vacío para que lo calcule BGreda."
+              // Deuda: este campo reemplaza el calculo del backend. Se retira
+              // cuando ninguna linea dependa de el; quitarlo antes dejaria en
+              // cero el material de las que no tienen ni material base ni
+              // receta.
+              hint="Reemplaza el cálculo del material. Déjalo vacío para que lo calcule BGreda."
             />
-            <RecipeSelectField
-              label="Receta"
-              requirement={item.materialsApplied ? "optional" : "automatic"}
-              value={item.recipeId}
-              selectedLabel={item.recipeLabel}
-              disabled={disabled || !item.productId}
-              hint="El backend selecciona automáticamente cuando existe una única versión activa."
-              onChange={(recipeId, recipe) => patch({
-                recipeId,
-                recipeLabel: recipe ? `${recipe.product_internal_reference} · ${recipe.name}` : "",
-                recipeVersionId: recipe?.current_version_id ? String(recipe.current_version_id) : "",
-              })}
-            />
-            <TextField
-              label="Gramos de receta por pieza"
-              requirement={item.materialsApplied ? "optional" : "required"}
-              value={item.materialGramsPerPiece}
-              onChange={(materialGramsPerPiece) => patch({ materialGramsPerPiece })}
-              disabled={disabled}
-              inputMode="decimal"
-              placeholder="Ej. 450"
-            />
+          </div>
+
+          {/* MATERIAL BASE DE LA PIEZA — el cuerpo, no el acabado.
+              Va en su propio bloque para que se lea como lo que es: el
+              material del que está hecha la pieza. El esmalte y la quema
+              tienen los suyos, debajo. */}
+          <div className="rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-stone-900">Material base de la pieza</p>
+              <p className="text-[11px] text-stone-700">
+                El material que forma el cuerpo. Los esmaltes son adicionales y van aparte.
+              </p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <BodyMaterialSelectField
+                label="Material"
+                requirement={item.materialsApplied ? "optional" : "required"}
+                value={item.bodyMaterialId}
+                selectedLabel={item.bodyMaterialLabel}
+                disabled={disabled || !item.productId}
+                onChange={(bodyMaterialId, material) =>
+                  patch({
+                    bodyMaterialId,
+                    bodyMaterialLabel: material
+                      ? `${material.internal_reference} · ${material.name}`
+                      : "",
+                    bodyMaterialUom: material?.uom ?? "",
+                    bodyMaterialRecipeName: material?.recipe_name ?? "",
+                  })
+                }
+              />
+              <TextField
+                label="Cantidad de material por pieza"
+                requirement={item.materialsApplied ? "optional" : "required"}
+                value={item.bodyMaterialQuantityPerPiece}
+                onChange={(bodyMaterialQuantityPerPiece) =>
+                  patch({ bodyMaterialQuantityPerPiece })
+                }
+                disabled={disabled || !item.bodyMaterialId}
+                inputMode="decimal"
+                placeholder="Ej. 300"
+                // La unidad no se elige: es la del material. Decirlo aquí
+                // evita que alguien teclee mililitros en un campo que el
+                // almacén va a leer como gramos.
+                hint={
+                  bodyMaterialUom
+                    ? `Se expresa en ${bodyMaterialUom}, la unidad de este material.`
+                    : "Elige primero el material: la unidad la pone su ficha."
+                }
+              />
+              <div className="text-xs text-stone-700">
+                <p className="mb-1.5 block text-xs font-medium text-zinc-700">Unidad</p>
+                <p className="flex h-10 items-center rounded-xl border border-stone-200 bg-white px-3 text-sm text-zinc-900">
+                  {bodyMaterialUom || "—"}
+                </p>
+                {bodyMaterialRequired ? (
+                  <p className="mt-1 text-[11px] text-stone-600">
+                    Necesita {bodyMaterialRequired} {bodyMaterialUom} en total.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            {/* Procedencia, de sólo lectura. Informa de dónde salió el
+                preparado sin obligar a nadie a conocer la fórmula. */}
+            {bodyMaterialRecipeName ? (
+              <p className="mt-3 text-[11px] text-stone-600">
+                Preparado mediante: <span className="font-medium">{bodyMaterialRecipeName}</span>
+              </p>
+            ) : null}
           </div>
           <GlazeEstimator
             glazes={item.glazes}

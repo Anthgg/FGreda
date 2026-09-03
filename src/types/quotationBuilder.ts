@@ -16,6 +16,52 @@ export interface ProductDimensionCompletionIn {
   depth?: string;
 }
 
+/**
+ * Material que forma el CUERPO de la pieza, y cuanto lleva una pieza.
+ *
+ * No lleva unidad: la pone el maestro del material y la cantidad se expresa
+ * siempre en ella. Mandarla desde aqui permitiria cotizar en mililitros un
+ * material que el almacen lleva en gramos.
+ */
+export interface BodyMaterialIn {
+  product_id: number;
+  quantity_per_piece: string;
+}
+
+/** El material base ya resuelto por el backend. Todo lo demas es derivado. */
+export interface BodyMaterialOut {
+  product_id: number;
+  product_internal_reference: string | null;
+  product_name: string | null;
+  product_type: string | null;
+  quantity_per_piece: string;
+  uom: string | null;
+  source: "RAW" | "PREPARED" | null;
+  recipe_id_used: number | null;
+  recipe_version_id_used: number | null;
+  recipe_name_snapshot: string | null;
+  unit_cost_snapshot: string | null;
+  required_quantity: string | null;
+  material_cost: string | null;
+}
+
+/** Un material elegible como cuerpo de pieza, tal como lo lista el backend. */
+export interface BodyMaterialOptionOut {
+  product_id: number;
+  internal_reference: string;
+  name: string;
+  product_type: string;
+  source: "RAW" | "PREPARED";
+  uom: string | null;
+  recipe_name: string | null;
+  costable: boolean;
+}
+
+export interface BodyMaterialOptionPage {
+  items: BodyMaterialOptionOut[];
+  total: number;
+}
+
 export interface QuotationBuilderItemIn {
   id?: number;
   product_id: number;
@@ -27,6 +73,12 @@ export interface QuotationBuilderItemIn {
    * medida efectiva sin tocar el maestro del producto.
    */
   dimensions_overridden?: boolean;
+  /**
+   * El material fisico del cuerpo de la pieza. Cuando viaja, es la autoridad
+   * del material y de su costo; `recipe_id` y `material_grams_per_piece`
+   * quedan como compatibilidad con lo ya emitido.
+   */
+  body_material?: BodyMaterialIn;
   recipe_id?: number;
   recipe_version_id?: number;
   firing_line_id?: number;
@@ -150,6 +202,8 @@ export interface QuotationBuilderItemOut {
   /** Fase 009B: la linea usa medidas propias, distintas del maestro. */
   dimensions_overridden: boolean;
   quantity: number | null;
+  /** Nulo en las lineas anteriores al material base. */
+  body_material: BodyMaterialOut | null;
   recipe_id: number | null;
   recipe_version_id: number | null;
   recipe_version_fingerprint_snapshot: string | null;
