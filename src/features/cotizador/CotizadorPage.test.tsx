@@ -97,6 +97,7 @@ function itemOut(input: Record<string, unknown>, index: number) {
     recipe_id: null,
     recipe_version_id: null,
     recipe_version_fingerprint_snapshot: null,
+    body_material: null,
     recipe_auto_selected: false,
     material_grams_per_piece: grams,
     firing_id: null,

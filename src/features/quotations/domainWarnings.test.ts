@@ -38,6 +38,11 @@ const BACKEND_WARNING_CODES = [
   "GLAZE_ML_REQUIRES_PREPARATION",
   "IGV_RATE_NOT_CONFIGURED",
   "FIRING_LINE_REQUIRED",
+  // Material base de la pieza
+  "BODY_MATERIAL_PRODUCT_INVALID",
+  "BODY_MATERIAL_UOM_UNKNOWN",
+  "BODY_MATERIAL_COST_UNAVAILABLE",
+  "BODY_MATERIAL_UNSUPPORTED_UOM_COSTING",
 ];
 
 describe("Avisos de dominio · catálogo", () => {
@@ -62,6 +67,13 @@ describe("Avisos de dominio · catálogo", () => {
     expect(describeWarning("RECIPE_REQUIRED")).toMatch(/receta/i);
     expect(describeWarning("MATERIAL_GRAMS_PER_PIECE_REQUIRED")).toMatch(/gramos/i);
     expect(describeWarning("CUSTOMER_REQUIRED")).toMatch(/cliente/i);
+    // El aviso del material en volumen tiene que explicar POR QUE no se puede
+    // costear, no solo que no se puede: quien lo lee necesita saber que la
+    // salida es registrarle un costo propio.
+    expect(describeWarning("BODY_MATERIAL_UNSUPPORTED_UOM_COSTING")).toMatch(
+      /concentraci[óo]n de cada lote/i,
+    );
+    expect(describeWarning("BODY_MATERIAL_COST_UNAVAILABLE")).toMatch(/costo/i);
   });
 
   it("un código desconocido no se muestra crudo", () => {
