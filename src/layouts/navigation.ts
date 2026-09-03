@@ -96,6 +96,13 @@ export const NAVIGATION: readonly NavigationItem[] = [
     description: "Órdenes de fabricación y consumo de material preparado.",
   },
   {
+    label: "Prototipos",
+    to: "/prototipos",
+    enabled: true,
+    icon: "flask",
+    description: "Muestras físicas, evaluación e iteraciones antes de producir.",
+  },
+  {
     label: "Quemas",
     to: "/quemas",
     enabled: true,

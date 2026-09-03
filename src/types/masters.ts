@@ -156,7 +156,8 @@ export type MovementType =
   | "IN"
   | "OUT"
   | "PREPARATION_OUT"
-  | "PREPARATION_IN";
+  | "PREPARATION_IN"
+  | "PROTOTYPE_OUT";
 
 export interface StockMovement {
   id: number;

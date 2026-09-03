@@ -131,6 +131,8 @@ export function describeError(error: unknown): string {
         "La cotización debe estar pagada para iniciar la producción. " +
         "Registre el cobro en la cotización de origen."
       );
+    case "PRODUCTION_ORDER_PROTOTYPE_NOT_APPROVED":
+      return "La producción no puede iniciar hasta que el prototipo requerido sea aprobado.";
     case "PRODUCTION_ORDER_NOT_COMPLETABLE":
       return "Solo una orden que ya arranco puede marcarse como completada.";
     case "PRODUCTION_ORDER_NOT_CANCELLABLE":
