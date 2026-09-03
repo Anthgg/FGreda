@@ -5,7 +5,7 @@ import { PrimaryButton, SecondaryButton, SelectField, TextAreaField, TextField }
 import { Spinner } from "@/components/Spinner";
 import { capabilitiesFor } from "@/features/auth/capabilities";
 import { useSession } from "@/features/auth/useSession";
-import { useLocations, useProducts } from "@/features/masters/useMasters";
+import { useConsumableProducts, useLocations, useProducts } from "@/features/masters/useMasters";
 import { useQuotations } from "@/features/quotations/useQuotations";
 import { Alert, ApprovalBadge, StatusBadge } from "@/features/prototypes/PrototypeUi";
 import { describePrototypeError, describePrototypeIssue } from "@/features/prototypes/prototypeLabels";
@@ -110,10 +110,10 @@ function EditSection({ prototype }: { prototype: Prototype }) {
 
 function MaterialsSection({ prototype }: { prototype: Prototype }) {
   const save = useSetPrototypeMaterials(prototype.id);
-  const products = useProducts({ active: true, limit: 200 });
   const [materials, setMaterials] = useState<PrototypeMaterialInput[]>([]);
   useEffect(() => setMaterials(prototype.materials.map((line) => ({ product_id: line.product_id, quantity: line.quantity }))), [prototype.materials]);
-  const consumables = (products.data?.items ?? []).filter((p) => p.product_type === "RAW_MATERIAL" || p.product_type === "PREPARED_MATERIAL");
+  // Filtrado por tipo en el servidor: ver `useConsumableProducts`.
+  const consumables = useConsumableProducts().items;
   const byId = useMemo(() => new Map(consumables.map((p) => [p.id, p])), [consumables]);
   const locked = prototype.status !== "CREATED";
 

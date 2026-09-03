@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { PrimaryButton, SecondaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
-import { useLocations, useProducts } from "@/features/masters/useMasters";
+import { useConsumableProducts, useLocations, useProducts } from "@/features/masters/useMasters";
 import { useQuotations } from "@/features/quotations/useQuotations";
 import { Alert } from "@/features/prototypes/PrototypeUi";
 import { describePrototypeError } from "@/features/prototypes/prototypeLabels";
@@ -68,13 +68,10 @@ export function PrototypeFormPage() {
   const [evaluationNotes, setEvaluationNotes] = useState("");
   const [notes, setNotes] = useState("");
 
-  const consumables = useMemo(
-    () =>
-      (products.data?.items ?? []).filter(
-        (product) => product.product_type === "RAW_MATERIAL" || product.product_type === "PREPARED_MATERIAL",
-      ),
-    [products.data?.items],
-  );
+  // El catalogo de materiales se pide filtrado por tipo al servidor. Filtrarlo
+  // aqui, sobre una pagina ya recortada, dejaba fuera del selector las
+  // arcillas y las pastas: justo el material del cuerpo de la muestra.
+  const consumables = useConsumableProducts().items;
   const consumablesById = useMemo(() => new Map(consumables.map((product) => [product.id, product])), [consumables]);
 
   const noteValue = () => {

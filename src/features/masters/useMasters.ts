@@ -5,6 +5,7 @@
  * duplica en ningun almacen global y las mutaciones la invalidan.
  */
 
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -72,6 +73,44 @@ export function useProducts(filters: ProductFilters) {
     queryKey: [...PRODUCTS_KEY, filters],
     queryFn: () => fetchProducts(filters),
   });
+}
+
+/**
+ * Materiales que una muestra o una pieza pueden consumir: materia prima y
+ * preparados.
+ *
+ * Filtra **en el servidor**, por tipo, y esa es la razon de existir del hook.
+ * Antes se pedia una pagina de productos y se descartaba lo que no era
+ * material ya en el navegador: con 269 productos activos y un tope de 200, el
+ * corte se comia las referencias altas —arcillas y pastas entre ellas— y el
+ * selector se quedaba sin el material del cuerpo sin decir nada. Un filtro que
+ * llega despues del limite no filtra: recorta.
+ *
+ * Se piden los dos tipos por separado porque la API admite uno por consulta.
+ * Cada uno ronda la cincuentena, asi que el tope de 200 deja margen de verdad
+ * y no por casualidad.
+ */
+export function useConsumableProducts() {
+  const raw = useProducts({ active: true, product_type: "RAW_MATERIAL", limit: 200 });
+  const prepared = useProducts({ active: true, product_type: "PREPARED_MATERIAL", limit: 200 });
+
+  const items = useMemo(() => {
+    // Deduplicado por id: un producto tiene un solo tipo, asi que las dos
+    // consultas no deberian devolver el mismo nunca. «No deberia» no es una
+    // garantia, y un material repetido en el selector se elige dos veces.
+    const porId = new Map(
+      [...(raw.data?.items ?? []), ...(prepared.data?.items ?? [])].map((p) => [p.id, p]),
+    );
+    return [...porId.values()].sort((a, b) =>
+      a.internal_reference.localeCompare(b.internal_reference),
+    );
+  }, [raw.data?.items, prepared.data?.items]);
+
+  return {
+    items,
+    isPending: raw.isPending || prepared.isPending,
+    isError: raw.isError || prepared.isError,
+  };
 }
 
 export function useCreateProduct() {
