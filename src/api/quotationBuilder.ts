@@ -1,7 +1,26 @@
 import { apiClient } from "@/api/client";
-import type { QuotationBuilderDraftIn, QuotationBuilderOut } from "@/types/quotationBuilder";
+import { toQuery } from "@/api/masters";
+import type {
+  BodyMaterialOptionPage,
+  QuotationBuilderDraftIn,
+  QuotationBuilderOut,
+} from "@/types/quotationBuilder";
 
 const BUILDER = "/quotation-builder";
+
+/**
+ * Materiales que pueden formar el cuerpo de una pieza.
+ *
+ * Qué categorías del maestro califican lo decide el backend: aquí no se filtra
+ * por tipo de producto ni se adivina. Si mañana cambia la regla, cambia en un
+ * sitio y esta pantalla la obedece sin enterarse.
+ */
+export const fetchBodyMaterials = (filters: {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<BodyMaterialOptionPage> =>
+  apiClient.get(`${BUILDER}/body-materials${toQuery(filters as Record<string, unknown>)}`);
 
 export const previewQuotationBuilder = (
   payload: QuotationBuilderDraftIn,
