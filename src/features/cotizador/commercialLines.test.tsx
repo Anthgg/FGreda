@@ -19,6 +19,7 @@ import {
   mockFetch,
   renderWithProviders,
   sessionResponse,
+  TEST_USER,
 } from "@/test/utils";
 import type { CommercialLineOut } from "@/types/quotationBuilder";
 
@@ -75,7 +76,9 @@ describe("Cotizador · cargos comerciales", () => {
     });
     render();
 
-    await user.type(screen.getByLabelText(/Concepto/), "Prototipo PRT-2026-000007");
+    // Se espera al `findBy`: el formulario aparece cuando la sesion resuelve,
+    // porque poner precios es administracion y hay que saber quien mira.
+    await user.type(await screen.findByLabelText(/Concepto/), "Prototipo PRT-2026-000007");
     await user.type(screen.getByLabelText(/Importe neto/), "200");
     await user.click(screen.getByRole("button", { name: "Añadir" }));
 
@@ -110,7 +113,7 @@ describe("Cotizador · cargos comerciales", () => {
     });
     render({ currencyCode: "USD" });
 
-    expect(screen.getByLabelText(/Importe neto \(USD\)/)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Importe neto \(USD\)/)).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Concepto/), "Prototipo");
     await user.type(screen.getByLabelText(/Importe neto/), "200");
     await user.click(screen.getByRole("button", { name: "Añadir" }));
@@ -134,7 +137,7 @@ describe("Cotizador · cargos comerciales", () => {
     mockApi();
     render();
 
-    const anadir = screen.getByRole("button", { name: "Añadir" });
+    const anadir = await screen.findByRole("button", { name: "Añadir" });
     expect(anadir).toBeDisabled();
 
     await user.type(screen.getByLabelText(/Concepto/), "Prototipo");
@@ -142,6 +145,22 @@ describe("Cotizador · cargos comerciales", () => {
 
     await user.type(screen.getByLabelText(/Importe neto/), "50");
     expect(anadir).toBeEnabled();
+  });
+
+  it("COMMERCIAL_LINE_RBAC: el taller ve los conceptos y no los toca", async () => {
+    // Un concepto comercial es un importe que se le cobra a alguien. El taller
+    // ejecuta; decidir cuanto se cobra es administracion. El backend devuelve
+    // 403 igual: esto solo evita ofrecer un formulario que iba a rebotar.
+    mockFetch((url) => {
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/auth/me")) return sessionResponse({ ...TEST_USER, role: "OPERATOR" });
+      return errorResponse(404, "NOT_FOUND");
+    });
+    render({ lines: [CARGO] });
+
+    expect(await screen.findByText(CARGO.description)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Añadir" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quitar" })).not.toBeInTheDocument();
   });
 
   it("sin cotización guardada no se ofrece añadir un cargo", () => {

@@ -89,6 +89,13 @@ export interface PrototypeTechnicalSpecifications {
   evaluation?: PrototypeEvaluationCriterion[];
 }
 
+/** Una cotización nacida de la muestra. */
+export interface PrototypeOriginQuotation {
+  id: number;
+  code: string;
+  status: string;
+}
+
 export interface PrototypeSummary {
   id: number;
   code: string;
@@ -115,8 +122,12 @@ export interface Prototype extends PrototypeSummary {
   notes: string | null;
   /** Nula en las muestras anteriores a 0022, y ese hueco no se rellena. */
   technical_specifications: PrototypeTechnicalSpecifications | null;
-  /** Cotizaciones que nacieron de esta muestra. La activa es como mucho una. */
+  /**
+   * De qué cotizaciones fue origen esta muestra. Ojo: es la relación CONTRARIA
+   * a `quotation_code`, que es la cotización que pidió la muestra.
+   */
   origin_quotation_ids: number[];
+  origin_quotations?: PrototypeOriginQuotation[];
   quotation_payment_status: "UNPAID" | "PAID" | null;
   materials: PrototypeMaterial[];
   readiness: PrototypeReadiness;

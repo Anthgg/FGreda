@@ -1,5 +1,11 @@
 import { ApiError } from "@/api/client";
-import type { PrototypeApproval, PrototypeIssue, PrototypeStatus } from "@/types/prototypes";
+import type {
+  PrototypeApproval,
+  PrototypeIssue,
+  PrototypeMaterialRole,
+  PrototypeMaterialStage,
+  PrototypeStatus,
+} from "@/types/prototypes";
 
 export const statusLabel: Record<PrototypeStatus, string> = {
   CREATED: "Creado",
@@ -56,3 +62,31 @@ export function describePrototypeError(error: unknown): string {
   }
 }
 
+
+/**
+ * Rol y etapa son cosas distintas, y por eso viajan por separado.
+ *
+ * El rol dice QUÉ es el material dentro de la pieza —el cuerpo, el acabado— y
+ * la etapa dice CUÁNDO se gasta. Coinciden a menudo, pero deducir uno del otro
+ * haría que un barro usado en un ajuste dejara de ser el cuerpo.
+ */
+export const materialRoleLabel: Record<PrototypeMaterialRole, string> = {
+  BODY: "Cuerpo",
+  GLAZE: "Esmalte / acabado",
+  OTHER: "Otro",
+};
+
+export const materialStageLabel: Record<PrototypeMaterialStage, string> = {
+  PREPARATION: "Preparación",
+  FIRING: "Quema",
+  LIQUID_TEST: "Prueba líquida",
+  ADJUSTMENT: "Ajuste",
+};
+
+export const MATERIAL_ROLE_OPTIONS = (
+  Object.keys(materialRoleLabel) as PrototypeMaterialRole[]
+).map((value) => ({ value, label: materialRoleLabel[value] }));
+
+export const MATERIAL_STAGE_OPTIONS = (
+  Object.keys(materialStageLabel) as PrototypeMaterialStage[]
+).map((value) => ({ value, label: materialStageLabel[value] }));

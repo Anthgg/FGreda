@@ -131,6 +131,25 @@ export function describeError(error: unknown): string {
         "La cotización debe estar pagada para iniciar la producción. " +
         "Registre el cobro en la cotización de origen."
       );
+    // Fase 009K.1. Cada uno dice QUÉ falta, no que algo salió mal: quien está
+    // delante de la pantalla tiene que saber si le toca decidir, corregir o
+    // pedirle a otra persona que lo haga.
+    case "PROTOTYPE_NOT_APPROVED_FOR_QUOTATION":
+      return (
+        "Solo se cotiza a partir de una muestra terminada y aprobada. " +
+        "Decida la muestra antes de crear la cotización final."
+      );
+    case "PROTOTYPE_SUPERSEDED_FOR_QUOTATION":
+      return (
+        "Esta muestra fue reemplazada por una posterior. Cotice desde la " +
+        "muestra vigente, no desde la que se repitió."
+      );
+    case "QUOTATION_COMMERCIAL_LINE_NOT_FOUND":
+      return "Ese concepto comercial ya no existe en la cotización. Vuelva a cargarla.";
+    case "QUOTATION_COMMERCIAL_LINE_PROTOTYPE_INVALID":
+      return "Un concepto de tipo prototipo tiene que apuntar a una muestra que exista.";
+    case "BODY_MATERIAL_PRODUCT_INVALID":
+      return "El material base debe ser una materia prima o un preparado del catálogo.";
     case "PRODUCTION_ORDER_PROTOTYPE_NOT_APPROVED":
       return "La producción no puede iniciar hasta que el prototipo requerido sea aprobado.";
     case "PRODUCTION_ORDER_NOT_COMPLETABLE":

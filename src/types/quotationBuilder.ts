@@ -328,6 +328,12 @@ export interface QuotationBuilderOut {
   code: string | null;
   workflow: "COTIZADOR";
   status: QuotationStatus;
+  /**
+   * De qué muestra nació esta cotización, si nació de alguna. Nulo en todo lo
+   * anterior y en lo que se cotiza sin muestra previa.
+   */
+  origin_prototype_id?: number | null;
+  origin_prototype_code?: string | null;
   name: string | null;
   customer_id: number | null;
   customer_name_snapshot: string | null;

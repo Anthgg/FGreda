@@ -79,11 +79,17 @@ describe("Fase 009K · prototipos", () => {
     await userEvent.click(screen.getByRole("button", { name: "Crear prototipo" }));
     await waitFor(() => {
       const body = requests.find((r) => r.path.endsWith("/prototypes") && r.method === "POST")?.body;
+      // La ficha viaja como DATOS. Antes esta pantalla componía un bloque de
+      // texto —«[Especificaciones]», «Ancho cm: 10»— dentro de `notes`, y el
+      // backend no parsea `notes`: todo lo tecleado aquí quedaba fuera del
+      // alcance de la precarga. Si alguien vuelve a componer texto, esto falla.
       expect(body).toContain('"materials":[{"product_id":11,"quantity":"30"}]');
-      expect(body).toContain("[Especificaciones]");
-      expect(body).toContain("Ancho cm: 10");
-      expect(body).toContain("Esmalte/Acabado: Barniz base 57");
-      expect(body).toContain("Prioridad: Alta");
+      expect(body).toContain('"width_cm":"10"');
+      expect(body).toContain('"height_cm":"15"');
+      expect(body).toContain('"finish":"Barniz base 57"');
+      expect(body).toContain('"priority":"Alta"');
+      expect(body).not.toContain("[Especificaciones]");
+      expect(body).not.toContain("Ancho cm:");
     });
   });
 
@@ -155,5 +161,88 @@ describe("Fase 009K · prototipos", () => {
     renderApp(["/prototipos/7/evaluacion"]);
     await screen.findByRole("heading", { name: "Evaluación" });
     expect(screen.queryByRole("button", { name: /crear cotización final/i })).not.toBeInTheDocument();
+  });
+
+  it("32. la ficha guardada se lee estructurada, no como texto en las notas", async () => {
+    installBackend(sample({
+      technical_specifications: {
+        width_cm: "12",
+        height_cm: "18",
+        technique: "Torno",
+        evaluation: [{ criterion: "Medidas", result: "Conforme", responsible: "Taller" }],
+      },
+    }));
+    renderApp(["/prototipos/7"]);
+    // Se pinta desde los DATOS. Si la ficha volviera a viajar dentro de
+    // `notes`, esto no encontraria ni las medidas ni el criterio evaluado.
+    expect(await screen.findByText("Ficha técnica")).toBeInTheDocument();
+    expect(screen.getByText("Ancho cm")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("Torno")).toBeInTheDocument();
+    expect(screen.getByText(/Medidas · Conforme · Taller/)).toBeInTheDocument();
+  });
+
+  it("33. la cantidad real del material se ve y no se puede teclear", async () => {
+    installBackend(sample({
+      status: "STARTED",
+      materials: [
+        {
+          id: 1, product_id: 11, sort_order: 0, product_name: "Arcilla blanca",
+          product_internal_reference: "MAT-011", quantity: "30", uom_code: "g",
+          quantity_planned: "30", quantity_actual: "30",
+          material_role: "BODY", stage: "PREPARATION",
+        },
+      ],
+      material_count: 1,
+    }));
+    renderApp(["/prototipos/7/materiales"]);
+    // La escribe el backend al arrancar, junto al movimiento de inventario.
+    // Si se pudiera teclear, el consumo declarado y el movimiento podrian
+    // discrepar y ganaria el que no mueve material.
+    expect(await screen.findByText("Cantidad real")).toBeInTheDocument();
+    expect(screen.getByText("30 g")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/cantidad real/i)).not.toBeInTheDocument();
+  });
+
+  it("34. guardar materiales conserva el rol declarado en vez de borrarlo", async () => {
+    const { requests } = installBackend(sample({
+      materials: [
+        {
+          id: 1, product_id: 11, sort_order: 0, product_name: "Arcilla blanca",
+          product_internal_reference: "MAT-011", quantity: "30", uom_code: "g",
+          quantity_planned: "30", quantity_actual: null,
+          material_role: "BODY", stage: "PREPARATION",
+        },
+      ],
+      material_count: 1,
+    }));
+    renderApp(["/prototipos/7/materiales"]);
+    await userEvent.click(await screen.findByRole("button", { name: /guardar materiales/i }));
+    // La lista se guarda ENTERA: cargarla sin el rol y pulsar guardar borraria
+    // la unica forma de saber cual de los materiales es el cuerpo.
+    await waitFor(() => {
+      const body = requests.find((r) => r.path.endsWith("/materials") && r.method === "PUT")?.body;
+      expect(body).toContain('"material_role":"BODY"');
+      expect(body).toContain('"stage":"PREPARATION"');
+    });
+  });
+
+  it("35. muestra las cotizaciones nacidas de la muestra, que es la relación contraria", async () => {
+    installBackend(sample({
+      origin_quotation_ids: [42],
+      origin_quotations: [{ id: 42, code: "CTZ-2026-000042", status: "DRAFT" }],
+    }));
+    renderApp(["/prototipos/7"]);
+    expect(await screen.findByText("CTZ-2026-000042")).toBeInTheDocument();
+    expect(screen.getByText("Borrador")).toBeInTheDocument();
+  });
+
+  it("36. una muestra sin cotizaciones originadas no inventa ninguna", async () => {
+    installBackend(sample({ origin_quotation_ids: [], origin_quotations: [] }));
+    renderApp(["/prototipos/7"]);
+    // Se espera a que el resumen este pintado antes de afirmar una AUSENCIA:
+    // sin esperar, la prueba pasaria simplemente porque no ha cargado nada.
+    expect(await screen.findByText("Cantidad de muestra")).toBeInTheDocument();
+    expect(screen.queryByText(/Cotizaciones originadas/)).not.toBeInTheDocument();
   });
 });

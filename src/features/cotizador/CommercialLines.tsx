@@ -17,6 +17,8 @@ import {
   useDeleteCommercialLine,
   useUpdateCommercialLine,
 } from "@/features/cotizador/useCotizador";
+import { capabilitiesFor } from "@/features/auth/capabilities";
+import { useSession } from "@/features/auth/useSession";
 import { describeError } from "@/features/settings/messages";
 import { formatMoney } from "@/features/quotations/money";
 import type { CommercialLineOut } from "@/types/quotationBuilder";
@@ -38,6 +40,10 @@ export function CommercialLines({
   const [descripcion, setDescripcion] = useState("");
   const [importe, setImporte] = useState("");
   const [editando, setEditando] = useState<number | null>(null);
+  const { data: user } = useSession();
+  // El backend es la autoridad y devuelve 403 igual. Esto solo evita ofrecer
+  // un formulario que iba a rebotar.
+  const puedeGestionar = capabilitiesFor(user?.role).gestionarConceptosComerciales;
 
   const anadir = useAddCommercialLine(quotationId ?? 0);
   const actualizar = useUpdateCommercialLine(quotationId ?? 0);
@@ -94,7 +100,7 @@ export function CommercialLines({
                   {formatMoney(line.line_total_gross, currencyCode)}
                 </p>
               </div>
-              {editable ? (
+              {editable && puedeGestionar ? (
                 <div className="flex shrink-0 gap-2">
                   <SecondaryButton
                     type="button"
@@ -122,7 +128,7 @@ export function CommercialLines({
         </ul>
       )}
 
-      {editable ? (
+      {editable && puedeGestionar ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-[2fr_1fr_auto] sm:items-end">
           <TextField
             label="Concepto"

@@ -5,9 +5,19 @@ import { PrimaryButton, SecondaryButton, SelectField, TextAreaField, TextField }
 import { useConsumableProducts, useLocations, useProducts } from "@/features/masters/useMasters";
 import { useQuotations } from "@/features/quotations/useQuotations";
 import { Alert } from "@/features/prototypes/PrototypeUi";
-import { describePrototypeError } from "@/features/prototypes/prototypeLabels";
+import {
+  MATERIAL_ROLE_OPTIONS,
+  MATERIAL_STAGE_OPTIONS,
+  describePrototypeError,
+} from "@/features/prototypes/prototypeLabels";
 import { useCreatePrototype } from "@/features/prototypes/usePrototypes";
-import type { PrototypeMaterialInput } from "@/types/prototypes";
+import type {
+  PrototypeEvaluationCriterion,
+  PrototypeMaterialInput,
+  PrototypeMaterialRole,
+  PrototypeMaterialStage,
+  PrototypeTechnicalSpecifications,
+} from "@/types/prototypes";
 
 const YES_NO_OPTIONS = [
   { value: "No", label: "No" },
@@ -27,11 +37,26 @@ const EVALUATION_RESULT_OPTIONS = [
   { value: "Requiere ajuste", label: "Requiere ajuste" },
 ];
 
-function appendBlock(lines: string[], title: string, entries: Array<[string, string]>) {
-  const content = entries.filter(([, value]) => value.trim());
-  if (!content.length) return;
-  lines.push(`[${title}]`);
-  content.forEach(([label, value]) => lines.push(`${label}: ${value.trim()}`));
+/**
+ * La ficha se manda ESTRUCTURADA, no compuesta como texto dentro de `notes`.
+ *
+ * Antes esta pantalla escribía «Ancho cm: 24» en un bloque de observaciones. El
+ * backend nunca parsea `notes` —y hace bien: sería atarse a un formato que no
+ * controla—, así que todo lo que aquí se tecleaba quedaba fuera del alcance de
+ * cualquier automatismo. Las medidas de la muestra sólo pueden precargar una
+ * cotización final si llegan como datos.
+ *
+ * Se descarta lo vacío: un campo que nadie rellenó no es un campo declarado
+ * vacío, y esa diferencia es la que decide si hay algo que precargar.
+ */
+function limpiar<T extends Record<string, unknown>>(valores: T): Partial<T> {
+  const salida: Record<string, unknown> = {};
+  Object.entries(valores).forEach(([clave, valor]) => {
+    if (typeof valor === "string" && !valor.trim()) return;
+    if (valor === null || valor === undefined) return;
+    salida[clave] = typeof valor === "string" ? valor.trim() : valor;
+  });
+  return salida as Partial<T>;
 }
 
 export function PrototypeFormPage() {
@@ -61,11 +86,10 @@ export function PrototypeFormPage() {
   const [reference, setReference] = useState("");
   const [technicalNotes, setTechnicalNotes] = useState("");
   const [materials, setMaterials] = useState<PrototypeMaterialInput[]>([]);
-  const [evaluationCriterion, setEvaluationCriterion] = useState("Validación general");
-  const [evaluationResult, setEvaluationResult] = useState("Pendiente");
-  const [requiresAdjustment, setRequiresAdjustment] = useState("No");
-  const [evaluationNewSample, setEvaluationNewSample] = useState("No");
-  const [evaluationNotes, setEvaluationNotes] = useState("");
+  // La misma muestra se juzga por medidas, por acabado, por forma y por color,
+  // cada uno con su resultado. Un solo criterio obligaría a elegir cuál se
+  // guarda, y en el cuaderno del taller están los cuatro.
+  const [evaluation, setEvaluation] = useState<PrototypeEvaluationCriterion[]>([]);
   const [notes, setNotes] = useState("");
 
   // El catalogo de materiales se pide filtrado por tipo al servidor. Filtrarlo
@@ -74,36 +98,27 @@ export function PrototypeFormPage() {
   const consumables = useConsumableProducts().items;
   const consumablesById = useMemo(() => new Map(consumables.map((product) => [product.id, product])), [consumables]);
 
-  const noteValue = () => {
-    const lines: string[] = [];
-    appendBlock(lines, "Prototipo", [
-      ["Responsable", responsible],
-      ["Requiere nueva muestra", needsNewSample],
-      ["Prioridad", priority],
-    ]);
-    appendBlock(lines, "Especificaciones", [
-      ["Ancho cm", width],
-      ["Alto cm", height],
-      ["Largo cm", length],
-      ["Profundidad cm", depth],
-      ["Peso estimado g", estimatedWeight],
-      ["Técnica", technique],
-      ["Esmalte/Acabado", finish],
-      ["Molde", mold],
-      ["Color", color],
-      ["Referencia", reference],
-      ["Observaciones técnicas", technicalNotes],
-    ]);
-    appendBlock(lines, "Evaluación inicial", [
-      ["Criterio", evaluationCriterion],
-      ["Resultado", evaluationResult],
-      ["Requiere ajuste", requiresAdjustment],
-      ["Nueva muestra", evaluationNewSample],
-      ["Observación", evaluationNotes],
-    ]);
-    appendBlock(lines, "Observaciones", [["Notas", notes]]);
-    return lines.join("\n");
-  };
+  const ficha = (): PrototypeTechnicalSpecifications => ({
+    ...limpiar({
+      responsible,
+      priority,
+      width_cm: width,
+      height_cm: height,
+      length_cm: length,
+      depth_cm: depth,
+      estimated_weight_g: estimatedWeight,
+      technique,
+      finish,
+      mold,
+      color,
+      reference,
+      technical_notes: technicalNotes,
+      requires_new_sample: needsNewSample === "Sí",
+    }),
+    ...(evaluation.length
+      ? { evaluation: evaluation.filter((fila) => fila.criterion.trim()) }
+      : {}),
+  });
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -114,7 +129,10 @@ export function PrototypeFormPage() {
         ...(quotationId ? { quotation_id: Number(quotationId) } : {}),
         ...(locationId ? { stock_location_id: Number(locationId) } : {}),
         ...(targetDays ? { target_days: Number(targetDays) } : {}),
-        ...(noteValue().trim() ? { notes: noteValue().trim() } : {}),
+        // `notes` vuelve a ser lo que dice ser: observaciones humanas. La ficha
+        // va aparte, estructurada, y es de donde lee el puente al Cotizador.
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
+        ...(Object.keys(ficha()).length ? { technical_specifications: ficha() } : {}),
       },
       { onSuccess: (prototype) => navigate(`/prototipos/${prototype.id}`, { state: { createdCode: prototype.code } }) },
     );
@@ -161,10 +179,16 @@ export function PrototypeFormPage() {
           <div className="space-y-3">
             {materials.map((line, index) => {
               const product = consumablesById.get(line.product_id);
-              return <div key={`material-${index}`} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 sm:grid-cols-[1fr_180px_auto]">
+              return <div key={`material-${index}`} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 sm:grid-cols-[1fr_180px_auto] lg:grid-cols-[1fr_180px_auto_180px_180px]">
                 <SelectField label="Material" value={line.product_id ? String(line.product_id) : ""} placeholder="Seleccione del catálogo" options={consumables.map((p) => ({ value: String(p.id), label: `${p.internal_reference} · ${p.name}` }))} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, product_id: Number(value) } : row))} />
                 <TextField label={`Cantidad prevista${product?.base_uom_code ? ` (${product.base_uom_code})` : ""}`} requirement="required" type="number" inputMode="decimal" value={line.quantity} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, quantity: value } : row))} />
                 <SecondaryButton className="self-end" onClick={() => setMaterials((rows) => rows.filter((_, i) => i !== index))}>Quitar</SecondaryButton>
+                {/* Rol y etapa son campos DISTINTOS: uno dice qué es el
+                    material dentro de la pieza y el otro cuándo se gasta. Sin
+                    el rol declarado no hay forma de saber cuál es el cuerpo, y
+                    la cotización final no puede heredar el material base. */}
+                <SelectField label="Rol" requirement="optional" placeholder="Sin declarar" value={line.material_role ?? ""} options={MATERIAL_ROLE_OPTIONS} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, material_role: (value || null) as PrototypeMaterialRole | null } : row))} />
+                <SelectField label="Etapa" requirement="optional" placeholder="Sin declarar" value={line.stage ?? ""} options={MATERIAL_STAGE_OPTIONS} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, stage: (value || null) as PrototypeMaterialStage | null } : row))} />
               </div>;
             })}
           </div>
@@ -172,14 +196,24 @@ export function PrototypeFormPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-sm font-semibold text-zinc-950">Evaluación prevista</h2>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <TextField label="Criterio" requirement="optional" value={evaluationCriterion} onChange={setEvaluationCriterion} />
-            <SelectField label="Resultado" requirement="optional" value={evaluationResult} onChange={setEvaluationResult} options={EVALUATION_RESULT_OPTIONS} />
-            <SelectField label="Requiere ajuste" requirement="optional" value={requiresAdjustment} onChange={setRequiresAdjustment} options={YES_NO_OPTIONS} />
-            <SelectField label="Nueva muestra" requirement="optional" value={evaluationNewSample} onChange={setEvaluationNewSample} options={YES_NO_OPTIONS} />
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-950">Evaluación</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Una fila por criterio. Completarlos todos no aprueba la muestra: aprobar sigue siendo
+              una decisión que alguien toma.
+            </p>
           </div>
-          <TextAreaField label="Observación de evaluación" requirement="optional" value={evaluationNotes} onChange={setEvaluationNotes} rows={3} />
+          <div className="space-y-3">
+            {evaluation.map((fila, index) => (
+              <div key={`evaluacion-${index}`} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 sm:grid-cols-[1fr_180px_1fr_auto]">
+                <TextField label="Criterio" requirement="required" value={fila.criterion} onChange={(value) => setEvaluation((rows) => rows.map((row, i) => i === index ? { ...row, criterion: value } : row))} />
+                <SelectField label="Resultado" requirement="optional" placeholder="Sin evaluar" value={fila.result ?? ""} options={EVALUATION_RESULT_OPTIONS} onChange={(value) => setEvaluation((rows) => rows.map((row, i) => i === index ? { ...row, result: value || null } : row))} />
+                <TextField label="Responsable" requirement="optional" value={fila.responsible ?? ""} onChange={(value) => setEvaluation((rows) => rows.map((row, i) => i === index ? { ...row, responsible: value || null } : row))} />
+                <SecondaryButton className="self-end" onClick={() => setEvaluation((rows) => rows.filter((_, i) => i !== index))}>Quitar</SecondaryButton>
+              </div>
+            ))}
+          </div>
+          <SecondaryButton type="button" onClick={() => setEvaluation((rows) => [...rows, { criterion: "" }])}>Añadir criterio</SecondaryButton>
           <TextAreaField label="Observaciones generales" requirement="optional" value={notes} onChange={setNotes} rows={3} />
         </section>
         {create.error ? <Alert>{describePrototypeError(create.error)}</Alert> : null}

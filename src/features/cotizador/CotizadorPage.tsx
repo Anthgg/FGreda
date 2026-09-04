@@ -242,6 +242,17 @@ export function CotizadorPage() {
           <div className="flex flex-wrap items-center gap-3">
             <TypewriterTitle text={persisted?.code ?? "Nuevo cotizador."} className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl" />
             <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+            {/* Procedencia, no propiedad: esta es una cotización final como
+                cualquier otra, que además nació de una muestra aprobada. Por
+                eso va como una etiqueta discreta y no como un título. */}
+            {persisted?.origin_prototype_code ? (
+              <Link
+                to={`/prototipos/${persisted.origin_prototype_id}`}
+                className="text-[11px] text-zinc-500 hover:underline"
+              >
+                Origen: <span className="font-mono">{persisted.origin_prototype_code}</span>
+              </Link>
+            ) : null}
             {/* El cobro es un eje aparte: una anulada puede estar pagada, así
                 que las dos insignias conviven en vez de sustituirse. En un
                 borrador no se muestra nada, porque todavía no hay nada que

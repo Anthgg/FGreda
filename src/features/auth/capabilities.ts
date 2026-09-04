@@ -40,6 +40,14 @@ export interface Capabilities {
   completarPrototipo: boolean;
   decidirPrototipo: boolean;
   anularPrototipo: boolean;
+  /**
+   * Crear la cotización final desde una muestra aprobada, y poner o quitar
+   * conceptos comerciales. Cotizar es decidir un precio, y eso es
+   * administración: el taller ejecuta. El backend lo bloquea igual — esto solo
+   * evita ofrecer un botón que iba a devolver 403.
+   */
+  cotizarDesdePrototipo: boolean;
+  gestionarConceptosComerciales: boolean;
   /** Crear la orden desde una cotización confirmada. */
   crearOrdenProduccion: boolean;
   /** Arrancar: el único punto que descuenta material. */
@@ -70,6 +78,8 @@ export function capabilitiesFor(role: Role | undefined): Capabilities {
     completarPrototipo: esTaller(role),
     decidirPrototipo: esAdmin(role),
     anularPrototipo: esAdmin(role),
+    cotizarDesdePrototipo: esAdmin(role),
+    gestionarConceptosComerciales: esAdmin(role),
     crearOrdenProduccion: esTaller(role),
     arrancarProduccion: esTaller(role),
     completarProduccion: esTaller(role),
