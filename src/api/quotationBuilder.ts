@@ -2,6 +2,7 @@ import { apiClient } from "@/api/client";
 import { toQuery } from "@/api/masters";
 import type {
   BodyMaterialOptionPage,
+  CommercialLineIn,
   QuotationBuilderDraftIn,
   QuotationBuilderOut,
 } from "@/types/quotationBuilder";
@@ -63,3 +64,30 @@ export const fetchSavedDraftPdfPreview = (
   id: number,
 ): Promise<{ blob: Blob; filename: string | null }> =>
   apiClient.getBlobWithFilename(`${BUILDER}/${id}/pdf-preview`);
+
+
+// ---------------------------------------------------------------------------
+// Cargos comerciales (Fase 009K.1)
+//
+// Las tres devuelven la COTIZACIÓN ENTERA, no el cargo: añadirlo mueve el
+// subtotal, el IGV y el total, y la pantalla necesita esos números sin tener
+// que pedirlos otra vez.
+// ---------------------------------------------------------------------------
+export const addCommercialLine = (
+  quotationId: number,
+  payload: CommercialLineIn,
+): Promise<QuotationBuilderOut> =>
+  apiClient.post(`${BUILDER}/${quotationId}/commercial-lines`, payload);
+
+export const updateCommercialLine = (
+  quotationId: number,
+  lineId: number,
+  payload: CommercialLineIn,
+): Promise<QuotationBuilderOut> =>
+  apiClient.put(`${BUILDER}/${quotationId}/commercial-lines/${lineId}`, payload);
+
+export const deleteCommercialLine = (
+  quotationId: number,
+  lineId: number,
+): Promise<QuotationBuilderOut> =>
+  apiClient.delete(`${BUILDER}/${quotationId}/commercial-lines/${lineId}`);

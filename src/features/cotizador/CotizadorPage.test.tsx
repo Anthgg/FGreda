@@ -156,6 +156,7 @@ function builder(overrides: Partial<QuotationBuilderOut> = {}): QuotationBuilder
     code: null,
     workflow: "COTIZADOR",
     status: "DRAFT",
+    commercial_lines: [],
     name: null,
     customer_id: null,
     customer_name_snapshot: null,

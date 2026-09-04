@@ -175,6 +175,7 @@ function savedOutput(): QuotationBuilderOut {
     cancelled_at: null,
     payment_status: null,
     paid_at: null,
+    commercial_lines: [],
   } satisfies QuotationBuilderOut;
 }
 

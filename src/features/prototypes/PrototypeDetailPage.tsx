@@ -11,6 +11,7 @@ import { Alert, ApprovalBadge, StatusBadge } from "@/features/prototypes/Prototy
 import { describePrototypeError, describePrototypeIssue } from "@/features/prototypes/prototypeLabels";
 import {
   useApprovePrototype,
+  useCreateFinalQuotation,
   useCancelPrototype,
   useCompletePrototype,
   useCreatePrototypeSuccessor,
@@ -168,6 +169,50 @@ function EvaluationSection({ prototype }: { prototype: Prototype }) {
     {pending && canDecide ? <><TextAreaField label="Nota de evaluación" requirement="optional" value={note} onChange={setNote} /><div className="flex gap-2"><PrimaryButton type="button" disabled={approve.isPending || reject.isPending} onClick={() => approve.mutate(note)}>Aprobar</PrimaryButton><SecondaryButton className="border-red-200 text-red-700" disabled={approve.isPending || reject.isPending} onClick={() => reject.mutate(note)}>Rechazar</SecondaryButton></div></> : null}
     {approve.error ? <Alert>{describePrototypeError(approve.error)}</Alert> : null}{reject.error ? <Alert>{describePrototypeError(reject.error)}</Alert> : null}
     {approve.isSuccess ? <Alert tone="green">Prototipo aprobado. No se creó ninguna orden de producción.</Alert> : null}{reject.isSuccess ? <Alert tone="amber">Prototipo rechazado. Puede crear una nueva iteración.</Alert> : null}
+    <FinalQuotationAction prototype={prototype} />
+  </div>;
+}
+
+/**
+ * La cotización final de una muestra aprobada.
+ *
+ * Es una acción explícita a propósito: aprobar una muestra dice que la pieza
+ * vale, no que alguien la haya pedido. Quien decide cotizar es una persona.
+ */
+function FinalQuotationAction({ prototype }: { prototype: Prototype }) {
+  const navigate = useNavigate();
+  const { data: user } = useSession();
+  const puedeCotizar = capabilitiesFor(user?.role).decidirPrototipo;
+  const crear = useCreateFinalQuotation(prototype.id);
+  const aprobada = prototype.status === "COMPLETED" && prototype.approval === "APPROVED";
+
+  if (!aprobada) return null;
+  return <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+    <p className="text-sm font-semibold text-zinc-900">Cotización final</p>
+    <p className="mt-1 text-xs text-zinc-600">
+      Se abre un borrador nuevo con lo que la muestra demostró: el producto, sus medidas y el
+      material del cuerpo. La cantidad y el cliente los defines tú.
+    </p>
+    {puedeCotizar ? (
+      <PrimaryButton
+        type="button"
+        className="mt-3"
+        disabled={crear.isPending}
+        onClick={() =>
+          crear.mutate(undefined, {
+            // El backend devuelve 201 si la crea y 200 si ya existía. Aquí da
+            // igual: en los dos casos se abre la que devuelve, así que pulsar
+            // dos veces lleva al mismo sitio en vez de dar un error.
+            onSuccess: (cotizacion) => navigate(`/cotizador/${cotizacion.id}`),
+          })
+        }
+      >
+        {crear.isPending ? "Creando…" : "Crear cotización final"}
+      </PrimaryButton>
+    ) : (
+      <p className="mt-3 text-sm text-zinc-600">Cotizar corresponde a una persona administradora.</p>
+    )}
+    {crear.error ? <Alert>{describePrototypeError(crear.error)}</Alert> : null}
   </div>;
 }
 

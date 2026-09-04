@@ -24,14 +24,69 @@ export interface PrototypeReadiness {
   issues: PrototypeIssue[];
 }
 
+/** Qué papel juega el material en la pieza. Independiente de la etapa. */
+export type PrototypeMaterialRole = "BODY" | "GLAZE" | "OTHER";
+
+/** En qué momento del trabajo se gasta. Independiente del rol. */
+export type PrototypeMaterialStage = "PREPARATION" | "FIRING" | "LIQUID_TEST" | "ADJUSTMENT";
+
 export interface PrototypeMaterial {
   id: number;
   product_id: number;
   sort_order: number;
   product_name: string;
   product_internal_reference: string;
+  /**
+   * Lo AUTORIZADO a gastar. Se sigue llamando `quantity` en el contrato
+   * público por compatibilidad; `quantity_planned` es el mismo valor con el
+   * nombre que no miente.
+   */
   quantity: string;
+  quantity_planned: string;
+  /**
+   * Lo que de verdad salió del almacén. Nulo hasta arrancar. **Sólo lectura**:
+   * lo escribe el backend junto al movimiento de inventario, y de aquí sale el
+   * material base de la cotización final.
+   */
+  quantity_actual: string | null;
   uom_code: string;
+  material_role: PrototypeMaterialRole | null;
+  stage: PrototypeMaterialStage | null;
+}
+
+/** Un criterio evaluado de la muestra. El cuaderno del taller usa varios. */
+export interface PrototypeEvaluationCriterion {
+  criterion: string;
+  result?: string | null;
+  note?: string | null;
+  responsible?: string | null;
+  requires_adjustment?: boolean | null;
+  new_sample?: boolean | null;
+}
+
+/**
+ * La ficha del taller, estructurada.
+ *
+ * Nombres y unidades salen del cuaderno real: el peso es «Peso estimado g» y
+ * las medidas son centímetros, así que la unidad va en el nombre del campo y
+ * no hay un campo de unidad que alguien pueda contradecir.
+ */
+export interface PrototypeTechnicalSpecifications {
+  responsible?: string | null;
+  priority?: string | null;
+  width_cm?: string | null;
+  height_cm?: string | null;
+  length_cm?: string | null;
+  depth_cm?: string | null;
+  estimated_weight_g?: string | null;
+  technique?: string | null;
+  finish?: string | null;
+  mold?: string | null;
+  color?: string | null;
+  reference?: string | null;
+  technical_notes?: string | null;
+  requires_new_sample?: boolean | null;
+  evaluation?: PrototypeEvaluationCriterion[];
 }
 
 export interface PrototypeSummary {
@@ -56,7 +111,12 @@ export interface PrototypeSummary {
 }
 
 export interface Prototype extends PrototypeSummary {
+  /** Observaciones humanas. Ya no es autoridad de ningún dato técnico. */
   notes: string | null;
+  /** Nula en las muestras anteriores a 0022, y ese hueco no se rellena. */
+  technical_specifications: PrototypeTechnicalSpecifications | null;
+  /** Cotizaciones que nacieron de esta muestra. La activa es como mucho una. */
+  origin_quotation_ids: number[];
   quotation_payment_status: "UNPAID" | "PAID" | null;
   materials: PrototypeMaterial[];
   readiness: PrototypeReadiness;
@@ -79,7 +139,10 @@ export interface PrototypeFilters {
 
 export interface PrototypeMaterialInput {
   product_id: number;
+  /** La cantidad PREVISTA. La real la escribe el arranque, nunca el cliente. */
   quantity: string;
+  material_role?: PrototypeMaterialRole | null;
+  stage?: PrototypeMaterialStage | null;
 }
 
 export interface PrototypeCreateInput {
@@ -90,6 +153,7 @@ export interface PrototypeCreateInput {
   stock_location_id?: number;
   target_days?: number;
   notes?: string;
+  technical_specifications?: PrototypeTechnicalSpecifications;
   materials: PrototypeMaterialInput[];
 }
 
