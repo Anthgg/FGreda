@@ -1,5 +1,6 @@
 import { apiClient } from "@/api/client";
 import { toQuery } from "@/api/masters";
+import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 import type {
   Prototype,
   PrototypeCreateInput,
@@ -46,3 +47,14 @@ export const cancelPrototype = (id: number): Promise<Prototype> =>
 export const createPrototypeSuccessor = (id: number, notes?: string): Promise<Prototype> =>
   apiClient.post(`${PROTOTYPES}/${id}/successor`, { notes: notes || null });
 
+
+/**
+ * Crea —u obtiene— la cotización final de una muestra aprobada.
+ *
+ * El backend responde 201 si la crea y 200 si ya existía, pero aquí da igual:
+ * en los dos casos la acción es la misma, abrir la cotización que devuelve. Por
+ * eso pulsar dos veces no produce ningún error visible; produce la misma
+ * pantalla.
+ */
+export const createFinalQuotation = (id: number): Promise<QuotationBuilderOut> =>
+  apiClient.post(`${PROTOTYPES}/${id}/final-quotation`, {});

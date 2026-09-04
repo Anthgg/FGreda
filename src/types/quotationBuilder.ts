@@ -62,6 +62,37 @@ export interface BodyMaterialOptionPage {
   total: number;
 }
 
+/**
+ * Un cargo comercial de la cotización: un concepto que se cobra y no se
+ * fabrica.
+ *
+ * El importe es NETO y ya en la moneda de emisión, igual que el precio manual
+ * de una línea de producto: quien escribe 200 cotizando en dólares quiere
+ * cobrar doscientos dólares. El frontend **no** convierte, no aplica IGV y no
+ * redondea; eso lo hace el backend y vuelve en `line_total_*`.
+ */
+export interface CommercialLineIn {
+  kind: "PROTOTYPE";
+  description: string;
+  prototype_id?: number;
+  quantity: number;
+  manual_net_amount: string;
+  sort_order?: number;
+}
+
+export interface CommercialLineOut {
+  id: number;
+  kind: string;
+  description: string;
+  prototype_id: number | null;
+  quantity: number;
+  manual_net_amount: string;
+  sort_order: number;
+  line_total_net: string;
+  line_total_tax: string;
+  line_total_gross: string;
+}
+
 export interface QuotationBuilderItemIn {
   id?: number;
   product_id: number;
@@ -297,6 +328,12 @@ export interface QuotationBuilderOut {
   code: string | null;
   workflow: "COTIZADOR";
   status: QuotationStatus;
+  /**
+   * De qué muestra nació esta cotización, si nació de alguna. Nulo en todo lo
+   * anterior y en lo que se cotiza sin muestra previa.
+   */
+  origin_prototype_id?: number | null;
+  origin_prototype_code?: string | null;
   name: string | null;
   customer_id: number | null;
   customer_name_snapshot: string | null;
@@ -304,6 +341,8 @@ export interface QuotationBuilderOut {
   kiln_snapshot: Record<string, unknown>;
   production_summary: Record<string, unknown>;
   items: QuotationBuilderItemOut[];
+  /** Cargos comerciales. Entran en el subtotal, el IGV y el total. */
+  commercial_lines: CommercialLineOut[];
   item_count: number;
   commercial_subtotal: string;
   tax_percentage_snapshot: string;

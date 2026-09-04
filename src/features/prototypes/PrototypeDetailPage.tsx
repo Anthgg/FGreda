@@ -8,9 +8,15 @@ import { useSession } from "@/features/auth/useSession";
 import { useConsumableProducts, useLocations, useProducts } from "@/features/masters/useMasters";
 import { useQuotations } from "@/features/quotations/useQuotations";
 import { Alert, ApprovalBadge, StatusBadge } from "@/features/prototypes/PrototypeUi";
-import { describePrototypeError, describePrototypeIssue } from "@/features/prototypes/prototypeLabels";
+import {
+  MATERIAL_ROLE_OPTIONS,
+  MATERIAL_STAGE_OPTIONS,
+  describePrototypeError,
+  describePrototypeIssue,
+} from "@/features/prototypes/prototypeLabels";
 import {
   useApprovePrototype,
+  useCreateFinalQuotation,
   useCancelPrototype,
   useCompletePrototype,
   useCreatePrototypeSuccessor,
@@ -21,7 +27,13 @@ import {
   useStartPrototype,
   useUpdatePrototype,
 } from "@/features/prototypes/usePrototypes";
-import type { Prototype, PrototypeMaterialInput } from "@/types/prototypes";
+import type {
+  Prototype,
+  PrototypeMaterialInput,
+  PrototypeMaterialRole,
+  PrototypeMaterialStage,
+  PrototypeTechnicalSpecifications,
+} from "@/types/prototypes";
 
 export type PrototypeSection = "resumen" | "editar" | "materiales" | "operacion" | "evaluacion" | "iteraciones";
 
@@ -36,6 +48,61 @@ const SECTIONS: Array<{ key: PrototypeSection; label: string }> = [
 
 function routeFor(id: number, section: PrototypeSection) {
   return section === "resumen" ? `/prototipos/${id}` : `/prototipos/${id}/${section}`;
+}
+
+
+const CAMPOS_FICHA: Array<[keyof PrototypeTechnicalSpecifications, string]> = [
+  ["width_cm", "Ancho cm"],
+  ["height_cm", "Alto cm"],
+  ["length_cm", "Largo cm"],
+  ["depth_cm", "Profundidad cm"],
+  ["estimated_weight_g", "Peso estimado g"],
+  ["technique", "Técnica"],
+  ["finish", "Esmalte / acabado"],
+  ["mold", "Molde"],
+  ["color", "Color"],
+  ["reference", "Referencia"],
+  ["responsible", "Responsable"],
+  ["priority", "Prioridad"],
+];
+
+function FichaTecnica({ ficha }: { ficha: PrototypeTechnicalSpecifications }) {
+  const declarados = CAMPOS_FICHA.filter(([clave]) => ficha[clave]);
+  const evaluacion = ficha.evaluation ?? [];
+  if (!declarados.length && !evaluacion.length && !ficha.technical_notes) return null;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase text-zinc-500">Ficha técnica</p>
+      {declarados.length ? (
+        <dl className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {declarados.map(([clave, etiqueta]) => (
+            <div key={clave}>
+              <dt className="text-[11px] text-zinc-500">{etiqueta}</dt>
+              <dd className="text-sm text-zinc-900">{String(ficha[clave])}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {ficha.technical_notes ? (
+        <p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{ficha.technical_notes}</p>
+      ) : null}
+      {evaluacion.length ? (
+        <div className="mt-4">
+          <p className="text-[11px] font-medium text-zinc-500">Evaluación</p>
+          <ul className="mt-1 space-y-1">
+            {evaluacion.map((criterio, index) => (
+              <li key={`${criterio.criterion}-${index}`} className="text-sm text-zinc-800">
+                {criterio.criterion}
+                {criterio.result ? ` · ${criterio.result}` : ""}
+                {criterio.responsible ? ` · ${criterio.responsible}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function Summary({ prototype }: { prototype: Prototype }) {
@@ -54,6 +121,35 @@ function Summary({ prototype }: { prototype: Prototype }) {
         <Info label="Almacén" value={prototype.stock_location_id ? "Almacén seleccionado" : "Sin almacén"} />
         <Info label="Materiales" value={String(prototype.material_count)} />
       </div>
+      {/* La ficha se PINTA desde los datos, no desde un bloque de texto. Es la
+          misma estructura que lee el puente al crear la cotización final: si lo
+          que se ve aquí y lo que se precarga allí salieran de sitios distintos,
+          algún día dirían cosas distintas. */}
+      {prototype.technical_specifications ? (
+        <FichaTecnica ficha={prototype.technical_specifications} />
+      ) : null}
+      {/* La «Cotización» de arriba es la que PIDIÓ la muestra. Esta es la que
+          NACIÓ de ella, que es la relación contraria y se lee al revés. */}
+      {prototype.origin_quotations?.length ? (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <p className="text-xs font-semibold uppercase text-zinc-500">
+            Cotizaciones originadas por esta muestra
+          </p>
+          <ul className="mt-2 space-y-1">
+            {prototype.origin_quotations.map((cotizacion) => (
+              <li key={cotizacion.id} className="flex items-center gap-3 text-sm">
+                <span className="font-mono">{cotizacion.code}</span>
+                <span className="text-xs text-zinc-500">
+                  {cotizacion.status === "DRAFT" ? "Borrador" : "Historial"}
+                </span>
+                <Link to={`/cotizador/${cotizacion.id}`} className="text-xs text-zinc-600 hover:underline">
+                  Abrir
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {prototype.notes ? <div className="rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-700"><p className="text-xs font-semibold uppercase text-zinc-500">Notas</p><p className="mt-2 whitespace-pre-wrap">{prototype.notes}</p></div> : null}
       {cancel.error ? <Alert>{describePrototypeError(cancel.error)}</Alert> : null}
       {canCancel ? <SecondaryButton className="border-red-200 text-red-700" disabled={cancel.isPending} onClick={() => cancel.mutate()}>{cancel.isPending ? "Anulando…" : "Anular prototipo"}</SecondaryButton> : null}
@@ -111,7 +207,21 @@ function EditSection({ prototype }: { prototype: Prototype }) {
 function MaterialsSection({ prototype }: { prototype: Prototype }) {
   const save = useSetPrototypeMaterials(prototype.id);
   const [materials, setMaterials] = useState<PrototypeMaterialInput[]>([]);
-  useEffect(() => setMaterials(prototype.materials.map((line) => ({ product_id: line.product_id, quantity: line.quantity }))), [prototype.materials]);
+  // Rol y etapa viajan de vuelta. La lista se guarda ENTERA, asi que cargarla
+  // sin ellos y pulsar «Guardar materiales» borraria lo que el taller declaro
+  // —y con el rol se iria la unica forma de saber cual es el cuerpo—.
+  useEffect(
+    () =>
+      setMaterials(
+        prototype.materials.map((line) => ({
+          product_id: line.product_id,
+          quantity: line.quantity,
+          material_role: line.material_role,
+          stage: line.stage,
+        })),
+      ),
+    [prototype.materials],
+  );
   // Filtrado por tipo en el servidor: ver `useConsumableProducts`.
   const consumables = useConsumableProducts().items;
   const byId = useMemo(() => new Map(consumables.map((p) => [p.id, p])), [consumables]);
@@ -124,10 +234,22 @@ function MaterialsSection({ prototype }: { prototype: Prototype }) {
       <div className="space-y-3">
         {materials.map((line, index) => {
           const product = byId.get(line.product_id);
-          return <div key={`${line.product_id}-${index}`} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 sm:grid-cols-[1fr_180px_auto]">
+          return <div key={`${line.product_id}-${index}`} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 sm:grid-cols-[1fr_180px_auto] lg:grid-cols-[1fr_160px_auto_160px_160px_140px]">
             <SelectField label="Material" value={line.product_id ? String(line.product_id) : ""} disabled={locked} placeholder="Seleccione del catálogo" options={consumables.map((p) => ({ value: String(p.id), label: `${p.internal_reference} · ${p.name}` }))} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, product_id: Number(value) } : row))} />
             <TextField label={`Cantidad${product?.base_uom_code ? ` (${product.base_uom_code})` : ""}`} requirement="required" type="number" inputMode="decimal" disabled={locked} value={line.quantity} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, quantity: value } : row))} />
             {!locked ? <SecondaryButton className="self-end" onClick={() => setMaterials((rows) => rows.filter((_, i) => i !== index))}>Quitar</SecondaryButton> : null}
+            <SelectField label="Rol" requirement="optional" disabled={locked} placeholder="Sin declarar" value={line.material_role ?? ""} options={MATERIAL_ROLE_OPTIONS} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, material_role: (value || null) as PrototypeMaterialRole | null } : row))} />
+            <SelectField label="Etapa" requirement="optional" disabled={locked} placeholder="Sin declarar" value={line.stage ?? ""} options={MATERIAL_STAGE_OPTIONS} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, stage: (value || null) as PrototypeMaterialStage | null } : row))} />
+            {/* La cantidad REAL la escribe el backend al arrancar, junto al
+                movimiento de inventario. Aqui solo se lee: si se pudiera
+                teclear, el consumo declarado y el movimiento podrian discrepar
+                y ganaria el que no mueve material. */}
+            <div className="self-end text-xs text-zinc-600">
+              <span className="block text-[11px] font-medium text-zinc-500">Cantidad real</span>
+              {prototype.materials[index]?.quantity_actual
+                ? `${prototype.materials[index]!.quantity_actual} ${prototype.materials[index]!.uom_code}`
+                : "Aún no consta"}
+            </div>
           </div>;
         })}
       </div>
@@ -168,6 +290,52 @@ function EvaluationSection({ prototype }: { prototype: Prototype }) {
     {pending && canDecide ? <><TextAreaField label="Nota de evaluación" requirement="optional" value={note} onChange={setNote} /><div className="flex gap-2"><PrimaryButton type="button" disabled={approve.isPending || reject.isPending} onClick={() => approve.mutate(note)}>Aprobar</PrimaryButton><SecondaryButton className="border-red-200 text-red-700" disabled={approve.isPending || reject.isPending} onClick={() => reject.mutate(note)}>Rechazar</SecondaryButton></div></> : null}
     {approve.error ? <Alert>{describePrototypeError(approve.error)}</Alert> : null}{reject.error ? <Alert>{describePrototypeError(reject.error)}</Alert> : null}
     {approve.isSuccess ? <Alert tone="green">Prototipo aprobado. No se creó ninguna orden de producción.</Alert> : null}{reject.isSuccess ? <Alert tone="amber">Prototipo rechazado. Puede crear una nueva iteración.</Alert> : null}
+    <FinalQuotationAction prototype={prototype} />
+  </div>;
+}
+
+/**
+ * La cotización final de una muestra aprobada.
+ *
+ * Es una acción explícita a propósito: aprobar una muestra dice que la pieza
+ * vale, no que alguien la haya pedido. Quien decide cotizar es una persona.
+ */
+function FinalQuotationAction({ prototype }: { prototype: Prototype }) {
+  const navigate = useNavigate();
+  const { data: user } = useSession();
+  // Su propia capacidad, no la de decidir la muestra: aprobar y cotizar son
+  // dos permisos distintos aunque hoy los tenga el mismo rol.
+  const puedeCotizar = capabilitiesFor(user?.role).cotizarDesdePrototipo;
+  const crear = useCreateFinalQuotation(prototype.id);
+  const aprobada = prototype.status === "COMPLETED" && prototype.approval === "APPROVED";
+
+  if (!aprobada) return null;
+  return <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+    <p className="text-sm font-semibold text-zinc-900">Cotización final</p>
+    <p className="mt-1 text-xs text-zinc-600">
+      Se abre un borrador nuevo con lo que la muestra demostró: el producto, sus medidas y el
+      material del cuerpo. La cantidad y el cliente los defines tú.
+    </p>
+    {puedeCotizar ? (
+      <PrimaryButton
+        type="button"
+        className="mt-3"
+        disabled={crear.isPending}
+        onClick={() =>
+          crear.mutate(undefined, {
+            // El backend devuelve 201 si la crea y 200 si ya existía. Aquí da
+            // igual: en los dos casos se abre la que devuelve, así que pulsar
+            // dos veces lleva al mismo sitio en vez de dar un error.
+            onSuccess: (cotizacion) => navigate(`/cotizador/${cotizacion.id}`),
+          })
+        }
+      >
+        {crear.isPending ? "Creando…" : "Crear cotización final"}
+      </PrimaryButton>
+    ) : (
+      <p className="mt-3 text-sm text-zinc-600">Cotizar corresponde a una persona administradora.</p>
+    )}
+    {crear.error ? <Alert>{describePrototypeError(crear.error)}</Alert> : null}
   </div>;
 }
 

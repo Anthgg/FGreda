@@ -1,17 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  addCommercialLine,
   cancelQuotationBuilder,
+  deleteCommercialLine,
   confirmQuotationBuilder,
   createQuotationBuilder,
   duplicateQuotationBuilder,
   fetchQuotationBuilder,
   markQuotationBuilderPaid,
   previewQuotationBuilder,
+  updateCommercialLine,
   updateQuotationBuilder,
 } from "@/api/quotationBuilder";
 import { QUOTATIONS_KEY } from "@/features/quotations/useQuotations";
-import type { QuotationBuilderDraftIn } from "@/types/quotationBuilder";
+import type { CommercialLineIn, QuotationBuilderDraftIn } from "@/types/quotationBuilder";
 
 export const COTIZADOR_KEY = ["quotation-builder"] as const;
 export const cotizadorKey = (id: number) => [...COTIZADOR_KEY, id] as const;
@@ -67,6 +70,37 @@ export const useConfirmCotizador = () => {
 export const useCancelCotizador = () => {
   const invalidate = useInvalidateCotizador();
   return useMutation({ mutationFn: cancelQuotationBuilder, onSuccess: (data) => invalidate(data.id) });
+};
+
+// ---------------------------------------------------------------------------
+// Cargos comerciales (Fase 009K.1)
+//
+// Las tres devuelven la cotización entera ya recalculada por el backend, así
+// que la pantalla no suma nada: muestra lo que vuelve.
+// ---------------------------------------------------------------------------
+export const useAddCommercialLine = (id: number) => {
+  const invalidate = useInvalidateCotizador();
+  return useMutation({
+    mutationFn: (payload: CommercialLineIn) => addCommercialLine(id, payload),
+    onSuccess: (data) => invalidate(data.id),
+  });
+};
+
+export const useUpdateCommercialLine = (id: number) => {
+  const invalidate = useInvalidateCotizador();
+  return useMutation({
+    mutationFn: ({ lineId, payload }: { lineId: number; payload: CommercialLineIn }) =>
+      updateCommercialLine(id, lineId, payload),
+    onSuccess: (data) => invalidate(data.id),
+  });
+};
+
+export const useDeleteCommercialLine = (id: number) => {
+  const invalidate = useInvalidateCotizador();
+  return useMutation({
+    mutationFn: (lineId: number) => deleteCommercialLine(id, lineId),
+    onSuccess: (data) => invalidate(data.id),
+  });
 };
 
 export const useMarkCotizadorPaid = () => {

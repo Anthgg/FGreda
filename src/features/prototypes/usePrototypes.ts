@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   approvePrototype,
+  createFinalQuotation,
   cancelPrototype,
   completePrototype,
   createPrototype,
@@ -73,6 +74,21 @@ export const useStartPrototype = (id: number) => {
 export const useCompletePrototype = (id: number) => {
   const invalidate = useInvalidatePrototype();
   return useMutation({ mutationFn: () => completePrototype(id), onSuccess: () => invalidate(id) });
+};
+
+/**
+ * Crea —u obtiene— la cotización final de la muestra.
+ *
+ * El backend responde 201 si la crea y 200 si ya existía, y la pantalla hace
+ * lo mismo en los dos casos: abrir la cotización devuelta. Por eso pulsar dos
+ * veces no produce un error, produce la misma pantalla.
+ */
+export const useCreateFinalQuotation = (id: number) => {
+  const invalidate = useInvalidatePrototype();
+  return useMutation({
+    mutationFn: () => createFinalQuotation(id),
+    onSuccess: () => invalidate(id),
+  });
 };
 
 export const useApprovePrototype = (id: number) => {

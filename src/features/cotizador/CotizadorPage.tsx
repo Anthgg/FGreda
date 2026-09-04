@@ -6,6 +6,7 @@ import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/compon
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { useSession } from "@/features/auth/useSession";
+import { CommercialLines } from "@/features/cotizador/CommercialLines";
 import { CotizadorItemCard, type CotizadorItemMode } from "@/features/cotizador/CotizadorItemCard";
 import { CotizadorPdfPanel } from "@/features/cotizador/CotizadorPdfPanel";
 import {
@@ -241,6 +242,17 @@ export function CotizadorPage() {
           <div className="flex flex-wrap items-center gap-3">
             <TypewriterTitle text={persisted?.code ?? "Nuevo cotizador."} className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl" />
             <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+            {/* Procedencia, no propiedad: esta es una cotización final como
+                cualquier otra, que además nació de una muestra aprobada. Por
+                eso va como una etiqueta discreta y no como un título. */}
+            {persisted?.origin_prototype_code ? (
+              <Link
+                to={`/prototipos/${persisted.origin_prototype_id}`}
+                className="text-[11px] text-zinc-500 hover:underline"
+              >
+                Origen: <span className="font-mono">{persisted.origin_prototype_code}</span>
+              </Link>
+            ) : null}
             {/* El cobro es un eje aparte: una anulada puede estar pagada, así
                 que las dos insignias conviven en vez de sustituirse. En un
                 borrador no se muestra nada, porque todavía no hay nada que
@@ -388,6 +400,15 @@ export function CotizadorPage() {
       ) : null}
 
       {step === 5 ? (
+        <section className="space-y-4">
+          {/* Cargos comerciales: van en el Resumen porque afectan al total del
+              documento, no a ninguna pieza concreta. */}
+          <CommercialLines
+            quotationId={id}
+            lines={persisted?.commercial_lines ?? query.data?.commercial_lines ?? []}
+            currencyCode={preview?.currency_code_snapshot ?? null}
+            editable={canEdit && status === "DRAFT"}
+          />
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
           {/* Fase 009F: la moneda se dice, no se deduce del simbolo. Con USD
               tambien se dice la tasa, porque sin ella el documento afirma
@@ -427,6 +448,7 @@ export function CotizadorPage() {
               </PrimaryButton>
             </div>
           </div>
+        </section>
         </section>
       ) : null}
 

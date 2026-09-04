@@ -11,6 +11,7 @@ import type { Prototype } from "@/types/prototypes";
 function sample(overrides: Partial<Prototype> = {}): Prototype {
   return {
     id: 7, code: "PRT-2026-000007", name: "Taza piloto", status: "CREATED", approval: "PENDING",
+    technical_specifications: null, origin_quotation_ids: [],
     quotation_id: null, quotation_code: null, product_id: null, stock_location_id: null,
     quantity: 2, target_days: 4, requested_at: "2026-09-03T10:00:00Z", started_at: null,
     completed_at: null, cancelled_at: null, decided_at: null, supersedes_prototype_id: null,
@@ -37,12 +38,13 @@ function installBackend(initial = sample(), role: "ADMIN" | "OPERATOR" = "ADMIN"
     if (path.endsWith("/quotations")) return jsonResponse(200, quotationPage);
     if (path.endsWith("/prototypes") && method === "GET") return jsonResponse(200, { items: [row], total: 1, limit: 25, offset: 0 });
     if (path.endsWith("/prototypes") && method === "POST") { row = sample({ name: "Muestra standalone" }); return jsonResponse(201, row); }
-    if (path.endsWith("/prototypes/7/materials") && method === "PUT") { row = sample({ materials: [{ id: 1, product_id: 11, sort_order: 0, product_name: "Arcilla blanca", product_internal_reference: "MAT-011", quantity: "5", uom_code: "g" }], material_count: 1 }); return jsonResponse(200, row); }
+    if (path.endsWith("/prototypes/7/materials") && method === "PUT") { row = sample({ materials: [{ id: 1, product_id: 11, sort_order: 0, product_name: "Arcilla blanca", product_internal_reference: "MAT-011", quantity: "5", uom_code: "g", quantity_planned: "5", quantity_actual: null, material_role: null, stage: null }], material_count: 1 }); return jsonResponse(200, row); }
     if (path.endsWith("/prototypes/7/start") && method === "POST") { row = sample({ status: "STARTED", started_at: "2026-09-03T11:00:00Z", readiness: { ready: false, issues: [{ code: "INVALID_STATE", product_id: null, product_name: null, required_quantity: null, available_quantity: null, uom: null }] } }); return jsonResponse(200, row); }
     if (path.endsWith("/prototypes/7/complete") && method === "POST") { row = sample({ status: "COMPLETED", completed_at: "2026-09-03T12:00:00Z" }); return jsonResponse(200, row); }
     if (path.endsWith("/prototypes/7/approve") && method === "POST") { row = sample({ status: "COMPLETED", approval: "APPROVED" }); return jsonResponse(200, row); }
     if (path.endsWith("/prototypes/7/reject") && method === "POST") { row = sample({ status: "COMPLETED", approval: "REJECTED" }); return jsonResponse(200, row); }
     if (path.endsWith("/prototypes/7/cancel") && method === "POST") { row = sample({ status: "CANCELLED" }); return jsonResponse(200, row); }
+    if (path.endsWith("/prototypes/7/final-quotation") && method === "POST") return jsonResponse(201, { id: 55, code: "CTZ-2026-000055", status: "DRAFT", commercial_lines: [] });
     if (path.endsWith("/prototypes/7/successor") && method === "POST") return jsonResponse(201, sample({ id: 8, code: "PRT-2026-000008", name: "Taza piloto · iteración" , supersedes_prototype_id: 7 }));
     if (path.endsWith("/prototypes/8")) return jsonResponse(200, sample({ id: 8, code: "PRT-2026-000008", supersedes_prototype_id: 7 }));
     if (path.endsWith("/prototypes/7") && method === "PUT") { row = sample({ name: "Taza corregida" }); return jsonResponse(200, row); }
@@ -77,11 +79,17 @@ describe("Fase 009K · prototipos", () => {
     await userEvent.click(screen.getByRole("button", { name: "Crear prototipo" }));
     await waitFor(() => {
       const body = requests.find((r) => r.path.endsWith("/prototypes") && r.method === "POST")?.body;
+      // La ficha viaja como DATOS. Antes esta pantalla componía un bloque de
+      // texto —«[Especificaciones]», «Ancho cm: 10»— dentro de `notes`, y el
+      // backend no parsea `notes`: todo lo tecleado aquí quedaba fuera del
+      // alcance de la precarga. Si alguien vuelve a componer texto, esto falla.
       expect(body).toContain('"materials":[{"product_id":11,"quantity":"30"}]');
-      expect(body).toContain("[Especificaciones]");
-      expect(body).toContain("Ancho cm: 10");
-      expect(body).toContain("Esmalte/Acabado: Barniz base 57");
-      expect(body).toContain("Prioridad: Alta");
+      expect(body).toContain('"width_cm":"10"');
+      expect(body).toContain('"height_cm":"15"');
+      expect(body).toContain('"finish":"Barniz base 57"');
+      expect(body).toContain('"priority":"Alta"');
+      expect(body).not.toContain("[Especificaciones]");
+      expect(body).not.toContain("Ancho cm:");
     });
   });
 
@@ -116,4 +124,125 @@ describe("Fase 009K · prototipos", () => {
   it("17. nunca presenta PostgreSQL o IntegrityError crudos", async () => { mockFetch((url) => new URL(url).pathname.endsWith("/auth/me") ? sessionResponse() : errorResponse(500, "INTERNAL_ERROR", "IntegrityError: duplicate key PostgreSQL")); renderApp(["/prototipos/7"]); const alert = await screen.findByRole("alert"); expect(alert).not.toHaveTextContent(/IntegrityError|PostgreSQL|duplicate key/i); });
 
   it("18. traduce el guard de prototipo de ProductionOrder", () => { expect(describeError(new ApiError("PRODUCTION_ORDER_PROTOTYPE_NOT_APPROVED", "raw", 409))).toBe("La producción no puede iniciar hasta que el prototipo requerido sea aprobado."); });
+
+  // -------------------------------------------------------------------
+  // Fase 009K.1 — el puente a la cotizacion final
+  // -------------------------------------------------------------------
+  it("K1-1. una muestra sin aprobar no ofrece cotizar", async () => {
+    installBackend(sample({ status: "COMPLETED", approval: "PENDING" }));
+    renderApp(["/prototipos/7/evaluacion"]);
+    await screen.findByRole("heading", { name: "Evaluación" });
+    expect(screen.queryByRole("button", { name: /crear cotización final/i })).not.toBeInTheDocument();
+  });
+
+  it("K1-2. una muestra aprobada ofrece crear la cotización final", async () => {
+    installBackend(sample({ status: "COMPLETED", approval: "APPROVED" }));
+    renderApp(["/prototipos/7/evaluacion"]);
+    expect(await screen.findByRole("button", { name: /crear cotización final/i })).toBeInTheDocument();
+  });
+
+  it("K1-3. pulsar lleva al borrador que devuelve el backend", async () => {
+    // La idempotencia se siente natural porque 201 y 200 hacen lo mismo:
+    // abrir la cotizacion devuelta. No hay ningun «ya existe» que mostrar.
+    const { requests } = installBackend(sample({ status: "COMPLETED", approval: "APPROVED" }));
+    renderApp(["/prototipos/7/evaluacion"]);
+    await userEvent.click(await screen.findByRole("button", { name: /crear cotización final/i }));
+    await waitFor(() =>
+      expect(
+        requests.some((r) => r.path.endsWith("/prototypes/7/final-quotation") && r.method === "POST"),
+      ).toBe(true),
+    );
+  });
+
+  it("K1-4. el taller no cotiza", async () => {
+    // FRONTEND_PROTOTYPE_SECURITY_AUTHORITY sigue en 0: esto es UX. La
+    // autoridad es el backend, que responde 403 igualmente.
+    installBackend(sample({ status: "COMPLETED", approval: "APPROVED" }), "OPERATOR");
+    renderApp(["/prototipos/7/evaluacion"]);
+    await screen.findByRole("heading", { name: "Evaluación" });
+    expect(screen.queryByRole("button", { name: /crear cotización final/i })).not.toBeInTheDocument();
+  });
+
+  it("32. la ficha guardada se lee estructurada, no como texto en las notas", async () => {
+    installBackend(sample({
+      technical_specifications: {
+        width_cm: "12",
+        height_cm: "18",
+        technique: "Torno",
+        evaluation: [{ criterion: "Medidas", result: "Conforme", responsible: "Taller" }],
+      },
+    }));
+    renderApp(["/prototipos/7"]);
+    // Se pinta desde los DATOS. Si la ficha volviera a viajar dentro de
+    // `notes`, esto no encontraria ni las medidas ni el criterio evaluado.
+    expect(await screen.findByText("Ficha técnica")).toBeInTheDocument();
+    expect(screen.getByText("Ancho cm")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("Torno")).toBeInTheDocument();
+    expect(screen.getByText(/Medidas · Conforme · Taller/)).toBeInTheDocument();
+  });
+
+  it("33. la cantidad real del material se ve y no se puede teclear", async () => {
+    installBackend(sample({
+      status: "STARTED",
+      materials: [
+        {
+          id: 1, product_id: 11, sort_order: 0, product_name: "Arcilla blanca",
+          product_internal_reference: "MAT-011", quantity: "30", uom_code: "g",
+          quantity_planned: "30", quantity_actual: "30",
+          material_role: "BODY", stage: "PREPARATION",
+        },
+      ],
+      material_count: 1,
+    }));
+    renderApp(["/prototipos/7/materiales"]);
+    // La escribe el backend al arrancar, junto al movimiento de inventario.
+    // Si se pudiera teclear, el consumo declarado y el movimiento podrian
+    // discrepar y ganaria el que no mueve material.
+    expect(await screen.findByText("Cantidad real")).toBeInTheDocument();
+    expect(screen.getByText("30 g")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/cantidad real/i)).not.toBeInTheDocument();
+  });
+
+  it("34. guardar materiales conserva el rol declarado en vez de borrarlo", async () => {
+    const { requests } = installBackend(sample({
+      materials: [
+        {
+          id: 1, product_id: 11, sort_order: 0, product_name: "Arcilla blanca",
+          product_internal_reference: "MAT-011", quantity: "30", uom_code: "g",
+          quantity_planned: "30", quantity_actual: null,
+          material_role: "BODY", stage: "PREPARATION",
+        },
+      ],
+      material_count: 1,
+    }));
+    renderApp(["/prototipos/7/materiales"]);
+    await userEvent.click(await screen.findByRole("button", { name: /guardar materiales/i }));
+    // La lista se guarda ENTERA: cargarla sin el rol y pulsar guardar borraria
+    // la unica forma de saber cual de los materiales es el cuerpo.
+    await waitFor(() => {
+      const body = requests.find((r) => r.path.endsWith("/materials") && r.method === "PUT")?.body;
+      expect(body).toContain('"material_role":"BODY"');
+      expect(body).toContain('"stage":"PREPARATION"');
+    });
+  });
+
+  it("35. muestra las cotizaciones nacidas de la muestra, que es la relación contraria", async () => {
+    installBackend(sample({
+      origin_quotation_ids: [42],
+      origin_quotations: [{ id: 42, code: "CTZ-2026-000042", status: "DRAFT" }],
+    }));
+    renderApp(["/prototipos/7"]);
+    expect(await screen.findByText("CTZ-2026-000042")).toBeInTheDocument();
+    expect(screen.getByText("Borrador")).toBeInTheDocument();
+  });
+
+  it("36. una muestra sin cotizaciones originadas no inventa ninguna", async () => {
+    installBackend(sample({ origin_quotation_ids: [], origin_quotations: [] }));
+    renderApp(["/prototipos/7"]);
+    // Se espera a que el resumen este pintado antes de afirmar una AUSENCIA:
+    // sin esperar, la prueba pasaria simplemente porque no ha cargado nada.
+    expect(await screen.findByText("Cantidad de muestra")).toBeInTheDocument();
+    expect(screen.queryByText(/Cotizaciones originadas/)).not.toBeInTheDocument();
+  });
 });
