@@ -94,7 +94,9 @@ const COSTEO_USD: PrototypeCostBreakdown = {
   total_per_prototype: "118.00",
 };
 
-function cotizacion(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuotation {
+function cotizacion(
+  overrides: Partial<PrototypeQuotation> = {},
+): PrototypeQuotation {
   return {
     id: 12,
     code: null,
@@ -162,24 +164,38 @@ function mockApi(
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return sessionResponse();
     if (url.includes("/categories"))
-      return jsonResponse(200, [{ id: 4, name: "Piezas", display_path: "Piezas", active: true }]);
-    if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0 });
-    if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0 });
+      return jsonResponse(200, [
+        { id: 4, name: "Piezas", display_path: "Piezas", active: true },
+      ]);
+    if (url.includes("/products"))
+      return jsonResponse(200, { items: [], total: 0 });
+    if (url.includes("/partners"))
+      return jsonResponse(200, { items: [], total: 0 });
     if (url.includes("/prototype-quotations")) {
       const body = init?.body ? JSON.parse(String(init.body)) : null;
-      if (init?.method && init.method !== "GET") espias.enviados.push({ url, body });
-      if (url.includes("/preview")) return jsonResponse(200, { ...guardada, costing: costeo });
-      return jsonResponse(url.endsWith("/prototype-quotations") && init?.method === "POST" ? 201 : 200, guardada);
+      if (init?.method && init.method !== "GET")
+        espias.enviados.push({ url, body });
+      if (url.includes("/preview"))
+        return jsonResponse(200, { ...guardada, costing: costeo });
+      return jsonResponse(
+        url.endsWith("/prototype-quotations") && init?.method === "POST"
+          ? 201
+          : 200,
+        guardada,
+      );
     }
     return errorResponse(404, "NOT_FOUND");
   });
   return espias;
 }
 
-const ultimoEnviado = (espias: Espias) => espias.enviados.at(-1)?.body as Record<string, unknown>;
+const ultimoEnviado = (espias: Espias) =>
+  espias.enviados.at(-1)?.body as Record<string, unknown>;
 
 async function irA(user: ReturnType<typeof userEvent.setup>, etapa: string) {
-  await user.click(screen.getByRole("button", { name: new RegExp(etapa, "i") }));
+  await user.click(
+    screen.getByRole("button", { name: new RegExp(etapa, "i") }),
+  );
 }
 
 /**
@@ -196,7 +212,10 @@ async function elegir(
 }
 
 /** Pone la moneda en dólares con su tasa, que es como se cotiza fuera de Perú. */
-async function enDolaresA(user: ReturnType<typeof userEvent.setup>, tasa: string) {
+async function enDolaresA(
+  user: ReturnType<typeof userEvent.setup>,
+  tasa: string,
+) {
   await elegir(user, "Moneda", /Dólares/);
   await user.type(screen.getByLabelText(/Tipo de cambio/), tasa);
 }
@@ -219,12 +238,25 @@ async function describirPieza(user: ReturnType<typeof userEvent.setup>) {
 // El wizard
 // ---------------------------------------------------------------------------
 describe("Cotizador de prototipos · wizard", () => {
-  it("PROTOTYPE_QUOTER_STEPS: abre en Datos y enseña las SEIS etapas", () => {
+  it("PROTOTYPE_QUOTER_STEPS: abre en Datos y enseña las SIETE etapas", () => {
     mockApi();
     renderWithProviders(<PrototypeQuoterPage />);
 
-    for (const etapa of ["Datos", "Prototipo", "Trabajo", "Materiales", "Costeo", "Resumen"]) {
-      expect(screen.getByRole("button", { name: new RegExp(etapa, "i") })).toBeInTheDocument();
+    // Siete, no seis: la Quema se fue y el PDF gano etapa propia, igual que en
+    // el Cotizador de producto. Son dos cambios distintos sobre el mismo
+    // numero, y por eso conviene leerlo aqui y no deducirlo.
+    for (const etapa of [
+      "Datos",
+      "Prototipo",
+      "Trabajo",
+      "Materiales",
+      "Costeo",
+      "Resumen",
+      "PDF",
+    ]) {
+      expect(
+        screen.getByRole("button", { name: new RegExp(etapa, "i") }),
+      ).toBeInTheDocument();
     }
     expect(screen.getByText("Datos generales")).toBeInTheDocument();
   });
@@ -234,8 +266,10 @@ describe("Cotizador de prototipos · wizard", () => {
     renderWithProviders(<PrototypeQuoterPage />);
 
     // Lo que se cotiza es la muestra en barro: no pasa por el horno.
-    expect(screen.queryByRole("button", { name: /Quema/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^[1-9]/ })).toHaveLength(6);
+    expect(
+      screen.queryByRole("button", { name: /Quema/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^[1-9]/ })).toHaveLength(7);
   });
 
   it("se puede saltar de etapa sin perder lo escrito", async () => {
@@ -257,7 +291,9 @@ describe("Cotizador de prototipos · wizard", () => {
     renderWithProviders(<PrototypeQuoterPage />);
 
     await irA(user, "Trabajo");
-    expect(screen.getAllByText(/Vacío = la de Configuración/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Vacío = la de Configuración/).length,
+    ).toBeGreaterThan(0);
   });
 
   it("el precio del matricero se anuncia como fijo, no por día", async () => {
@@ -276,7 +312,15 @@ describe("Cotizador de prototipos · wizard", () => {
 
     // Se recorren TODAS las etapas: un campo escondido en cualquiera de ellas
     // seguiría rellenando el modelo viejo en silencio.
-    for (const etapa of ["Datos", "Prototipo", "Trabajo", "Materiales", "Costeo", "Resumen"]) {
+    for (const etapa of [
+      "Datos",
+      "Prototipo",
+      "Trabajo",
+      "Materiales",
+      "Costeo",
+      "Resumen",
+      "PDF",
+    ]) {
       await irA(user, etapa);
       expect(screen.queryByLabelText(/Horno/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/Tipo de quema/i)).not.toBeInTheDocument();
@@ -394,7 +438,9 @@ describe("Cotizador de prototipos · autoridad del backend", () => {
       if (url.includes("/auth/csrf")) return csrfResponse();
       if (url.includes("/auth/me")) return sessionResponse();
       if (url.includes("/categories"))
-        return jsonResponse(200, [{ id: 4, name: "Piezas", display_path: "Piezas", active: true }]);
+        return jsonResponse(200, [
+          { id: 4, name: "Piezas", display_path: "Piezas", active: true },
+        ]);
       if (url.includes("/prototype-quotations")) {
         return errorResponse(422, "PROTOTYPE_QUOTATION_INCOMPLETE");
       }
@@ -423,7 +469,9 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     mockApi();
     renderWithProviders(<PrototypeQuoterPage />);
 
-    expect(screen.getByRole("combobox", { name: "Moneda" })).toHaveTextContent(/Soles/);
+    expect(screen.getByRole("combobox", { name: "Moneda" })).toHaveTextContent(
+      /Soles/,
+    );
     // En soles no hay conversión que declarar.
     expect(screen.queryByLabelText(/Tipo de cambio/)).not.toBeInTheDocument();
   });
@@ -443,8 +491,12 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     renderWithProviders(<PrototypeQuoterPage />);
 
     await elegir(user, "Moneda", /Dólares/);
-    expect(screen.getByRole("alert")).toHaveTextContent(/Ingresa el tipo de cambio/i);
-    expect(screen.getByRole("button", { name: /Crear borrador/i })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /Ingresa el tipo de cambio/i,
+    );
+    expect(
+      screen.getByRole("button", { name: /Crear borrador/i }),
+    ).toBeDisabled();
   });
 
   it("una tasa que no es mayor que cero se rechaza en pantalla", async () => {
@@ -588,7 +640,6 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
   });
 });
 
-
 // ---------------------------------------------------------------------------
 // El producto interno
 //
@@ -607,10 +658,14 @@ describe("Cotizador de prototipos · producto interno", () => {
 
     // Sin familia no se puede guardar: al cobrar habría que crear el producto
     // maestro, y el maestro la exige.
-    expect(screen.getByRole("button", { name: /Guardar borrador/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Guardar borrador/i }),
+    ).toBeDisabled();
 
     await elegir(user, "Familia del nuevo producto", /Piezas/);
-    expect(screen.getByRole("button", { name: /Guardar borrador/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /Guardar borrador/i }),
+    ).toBeEnabled();
   });
 
   it("FRONTEND_FINISHED_PRODUCT_CODE_AUTHORITY: sin cobrar no hay código, y no se inventa", async () => {
@@ -619,7 +674,9 @@ describe("Cotizador de prototipos · producto interno", () => {
     renderWithProviders(<PrototypeQuoterPage />);
 
     await irA(user, "Prototipo");
-    expect(screen.getByText(/pendiente de código interno/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/pendiente de código interno/i),
+    ).toBeInTheDocument();
     // Ni un LAB50 a mano, ni un contador, ni la cantidad de productos + 1.
     expect(screen.queryByText(/LAB50/)).not.toBeInTheDocument();
   });
@@ -648,12 +705,20 @@ describe("Cotizador de prototipos · producto interno", () => {
 
   it("una muestra de un producto del catálogo no pide familia nueva", async () => {
     const user = userEvent.setup();
-    mockApi(cotizacion({ product_id: 77, product_code: "LAB50001", product_name: "Taza" }));
+    mockApi(
+      cotizacion({
+        product_id: 77,
+        product_code: "LAB50001",
+        product_name: "Taza",
+      }),
+    );
     renderApp(["/prototipos/cotizador/12"]);
 
     await user.click(await screen.findByRole("button", { name: /Prototipo/i }));
     // Ya tiene identidad: pedir familia daría a entender que va a nacer otro.
-    expect(screen.queryByLabelText(/Familia del nuevo producto/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/Familia del nuevo producto/),
+    ).not.toBeInTheDocument();
     // Sale en la cabecera y en la ficha de la pieza: las dos son correctas.
     expect(screen.getAllByText(/LAB50001/).length).toBeGreaterThan(0);
   });
@@ -717,14 +782,91 @@ describe("Cotizador de prototipos · el horno no se consulta", () => {
     // Se usa el mismo ayudante que el resto: el boton de etapa lleva su numero
     // dentro del nombre accesible, asi que anclar el texto no lo encuentra.
     await screen.findByRole("button", { name: /Prototipo/i });
-    for (const paso of ["Prototipo", "Trabajo", "Materiales", "Costeo", "Resumen"]) {
+    for (const paso of [
+      "Prototipo",
+      "Trabajo",
+      "Materiales",
+      "Costeo",
+      "Resumen",
+      "PDF",
+    ]) {
       await irA(user, paso);
     }
 
     expect(espias.visitadas.length).toBeGreaterThan(0);
     const alHorno = espias.visitadas.filter(
-      (url) => url.includes("/kilns") || url.includes("/firings") || url.includes("/kiln-rates"),
+      (url) =>
+        url.includes("/kilns") ||
+        url.includes("/firings") ||
+        url.includes("/kiln-rates"),
     );
     expect(alHorno).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// El paso del documento
+//
+// El PDF estaba al final del Resumen, donde hay que bajar para encontrarlo.
+// Ahora tiene etapa propia con el papel a la izquierda y lo comercial al lado,
+// igual que el Cotizador de producto: el mismo gesto, la misma pantalla.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · etapa PDF", () => {
+  it("en borrador explica por qué todavía no hay documento, en vez de fingir uno", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    renderWithProviders(<PrototypeQuoterPage />);
+
+    await irA(user, "PDF");
+
+    // El backend bloquea el PDF de un borrador a propósito: el correlativo se
+    // gasta al emitir. La pantalla da esa razón, no un error genérico.
+    expect(
+      screen.getByText(/aparece al emitir la cotización/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/el número se gasta al emitirlo/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("BORRADOR")).toBeInTheDocument();
+  });
+
+  it("el lateral enseña los importes que mandó el backend, sin recalcular nada", async () => {
+    const user = userEvent.setup();
+    // Una guardada, no una en blanco: en una pantalla nueva todavía no hay
+    // costeo, porque el preview lo pide el backend al llegar a Costeo.
+    mockApi();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    // Los del COSTEO de referencia: 450 / 81 / 531.
+    expect(screen.getByText("S/ 450.00")).toBeInTheDocument();
+    expect(screen.getByText("S/ 81.00")).toBeInTheDocument();
+    expect(screen.getByText("S/ 531.00")).toBeInTheDocument();
+  });
+
+  it("emitida, enseña el correlativo y el documento deja de ser un borrador", async () => {
+    const user = userEvent.setup();
+    mockApi(
+      cotizacion({
+        id: 12,
+        status: "CONFIRMED",
+        code: "CPR-2026-000007",
+        product_code: "LAB50042",
+        product_name: "Vasija Andina",
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    expect(screen.getByText("CPR-2026-000007")).toBeInTheDocument();
+    expect(screen.getByText(/Documento congelado/i)).toBeInTheDocument();
+    // Sale dos veces a propósito: en la cabecera y en el lateral del documento.
+    expect(screen.getAllByText(/LAB50042/).length).toBeGreaterThan(0);
+    // Ya no se ofrece emitir algo que ya está emitido.
+    expect(
+      screen.queryByRole("button", { name: /^Emitir cotización$/ }),
+    ).not.toBeInTheDocument();
   });
 });

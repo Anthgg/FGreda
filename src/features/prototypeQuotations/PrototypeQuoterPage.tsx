@@ -18,7 +18,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { SelectField } from "@/components/SelectField";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
-import { PrimaryButton, SecondaryButton, TextAreaField, TextField } from "@/components/form";
+import {
+  PrimaryButton,
+  SecondaryButton,
+  TextAreaField,
+  TextField,
+} from "@/components/form";
 import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import {
   useConsumableProducts,
@@ -36,8 +41,12 @@ import {
 } from "@/features/prototypeQuotations/usePrototypeQuotations";
 import { describeError } from "@/features/settings/messages";
 import { formatDecimalString } from "@/features/firings/labels";
-import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
-import { PrototypeQuotationDocument } from "@/features/prototypeQuotations/PrototypeQuotationDocument";
+import {
+  CURRENCY_OPTIONS,
+  exchangeRateLabel,
+  formatMoney,
+} from "@/features/quotations/money";
+import { PrototypeQuotationPdfPanel } from "@/features/prototypeQuotations/PrototypeQuotationPdfPanel";
 import type {
   PrototypeCostBreakdown,
   PrototypeQuotationDraftInput,
@@ -58,15 +67,24 @@ const STEPS = [
   { label: "Materiales", hint: "Insumos y cantidades" },
   { label: "Costeo", hint: "Cálculo del backend" },
   { label: "Resumen", hint: "Revisar y emitir" },
+  { label: "PDF", hint: "El documento emitido" },
 ] as const;
 
 /** Índices de los pasos que el código consulta por su nombre, no por su número. */
 const PASO_COSTEO = 4;
 const PASO_RESUMEN = 5;
+const PASO_PDF = 6;
 
-const STATUS_LABEL = { DRAFT: "Borrador", CONFIRMED: "Emitida", CANCELLED: "Anulada" } as const;
-const STATUS_TONE = { DRAFT: "warning", CONFIRMED: "positive", CANCELLED: "neutral" } as const;
-
+const STATUS_LABEL = {
+  DRAFT: "Borrador",
+  CONFIRMED: "Emitida",
+  CANCELLED: "Anulada",
+} as const;
+const STATUS_TONE = {
+  DRAFT: "warning",
+  CONFIRMED: "positive",
+  CANCELLED: "neutral",
+} as const;
 
 interface MaterialRow {
   product_id: number;
@@ -155,8 +173,16 @@ export function PrototypeQuoterPage() {
 
   const readOnly = persisted !== null && persisted.status !== "DRAFT";
   const busy =
-    create.isPending || update.isPending || confirm.isPending || markPaid.isPending;
-  const error = create.error ?? update.error ?? confirm.error ?? markPaid.error ?? preview.error;
+    create.isPending ||
+    update.isPending ||
+    confirm.isPending ||
+    markPaid.isPending;
+  const error =
+    create.error ??
+    update.error ??
+    confirm.error ??
+    markPaid.error ??
+    preview.error;
 
   // Al abrir una guardada, el formulario se rellena con lo que hay en el
   // servidor. Nunca al revés: la pantalla no es la fuente de nada.
@@ -182,7 +208,9 @@ export function PrototypeQuoterPage() {
       design_rate_override: sinEscalaCampo(persisted.design_rate_override),
       artist_days: sinEscalaCampo(persisted.artist_days),
       artist_rate_override: sinEscalaCampo(persisted.artist_rate_override),
-      mold_maker_price_override: sinEscalaCampo(persisted.mold_maker_price_override),
+      mold_maker_price_override: sinEscalaCampo(
+        persisted.mold_maker_price_override,
+      ),
       mold_maker_days: sinEscalaCampo(persisted.mold_maker_days),
       drying_days: sinEscalaCampo(persisted.drying_days),
       adjustment_days: sinEscalaCampo(persisted.adjustment_days),
@@ -217,7 +245,8 @@ export function PrototypeQuoterPage() {
   const tasa = (draft.exchange_rate ?? "").trim();
   const faltaTasa = enDolares && !tasa;
   const tasaInvalida = enDolares && Boolean(tasa) && !(Number(tasa) > 0);
-  const money = (value: string | null | undefined) => formatMoney(value, currency);
+  const money = (value: string | null | undefined) =>
+    formatMoney(value, currency);
 
   // Sin tasa el backend devuelve 422 y la pantalla se quedaría en un error
   // que no explica nada: se bloquea aquí, donde se ve el campo vacío.
@@ -266,15 +295,22 @@ export function PrototypeQuoterPage() {
             />
             <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
             {persisted && persisted.status === "CONFIRMED" ? (
-              <Badge tone={persisted.payment_status === "PAID" ? "positive" : "warning"}>
-                {persisted.payment_status === "PAID" ? "Pagada" : "Pendiente de cobro"}
+              <Badge
+                tone={
+                  persisted.payment_status === "PAID" ? "positive" : "warning"
+                }
+              >
+                {persisted.payment_status === "PAID"
+                  ? "Pagada"
+                  : "Pendiente de cobro"}
               </Badge>
             ) : null}
             {/* El código interno del producto se enseña donde se ve sin buscar:
                 al cobrar es lo primero que quiere confirmar quien cotizó. */}
             {persisted?.product_code ? (
               <span className="text-[11px] text-zinc-500">
-                Producto: <span className="font-mono">{persisted.product_code}</span>
+                Producto:{" "}
+                <span className="font-mono">{persisted.product_code}</span>
                 {persisted.product_name ? ` · ${persisted.product_name}` : null}
               </span>
             ) : null}
@@ -283,13 +319,14 @@ export function PrototypeQuoterPage() {
                 to={`/prototipos/${persisted.prototype_id}`}
                 className="text-[11px] text-zinc-500 hover:underline"
               >
-                Muestra: <span className="font-mono">{persisted.prototype_code}</span>
+                Muestra:{" "}
+                <span className="font-mono">{persisted.prototype_code}</span>
               </Link>
             ) : null}
           </div>
           <p className="mt-1 max-w-2xl text-xs text-zinc-500 sm:text-sm">
-            Cuánto cuesta y cuánto tarda desarrollar una muestra. El costo, el impuesto y el
-            plazo los calcula BGreda.
+            Cuánto cuesta y cuánto tarda desarrollar una muestra. El costo, el
+            impuesto y el plazo los calcula BGreda.
           </p>
         </div>
         <Link
@@ -336,9 +373,12 @@ export function PrototypeQuoterPage() {
       {step === 0 ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
           <div className="mb-5">
-            <h2 className="text-base font-semibold text-zinc-950">Datos generales</h2>
+            <h2 className="text-base font-semibold text-zinc-950">
+              Datos generales
+            </h2>
             <p className="text-xs text-zinc-500">
-              A quién se le cotiza y en qué moneda se emite. El impuesto sale de Configuración.
+              A quién se le cotiza y en qué moneda se emite. El impuesto sale de
+              Configuración.
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
@@ -348,7 +388,10 @@ export function PrototypeQuoterPage() {
               requirement="required"
               disabled={readOnly}
               onChange={(customerId, label) => {
-                setDraft({ ...draft, customer_id: customerId ? Number(customerId) : null });
+                setDraft({
+                  ...draft,
+                  customer_id: customerId ? Number(customerId) : null,
+                });
                 setCustomerLabel(label);
               }}
             />
@@ -364,7 +407,10 @@ export function PrototypeQuoterPage() {
                   currency_code: currencyCode === "USD" ? "USD" : "PEN",
                   // Volver a soles descarta la tasa: guardarla describiría una
                   // conversión que ya no ocurre, y el backend la rechaza.
-                  exchange_rate: currencyCode === "USD" ? (draft.exchange_rate ?? null) : null,
+                  exchange_rate:
+                    currencyCode === "USD"
+                      ? (draft.exchange_rate ?? null)
+                      : null,
                 })
               }
             />
@@ -373,7 +419,9 @@ export function PrototypeQuoterPage() {
                 label="Tipo de cambio"
                 requirement="required"
                 value={draft.exchange_rate ?? ""}
-                onChange={(exchangeRate) => setDraft({ ...draft, exchange_rate: exchangeRate })}
+                onChange={(exchangeRate) =>
+                  setDraft({ ...draft, exchange_rate: exchangeRate })
+                }
                 disabled={readOnly}
                 inputMode="decimal"
                 placeholder="3.75"
@@ -387,12 +435,18 @@ export function PrototypeQuoterPage() {
             ) : null}
           </div>
           {faltaTasa ? (
-            <p role="alert" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+            <p
+              role="alert"
+              className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900"
+            >
               Ingresa el tipo de cambio para cotizar en dólares.
             </p>
           ) : null}
           {tasaInvalida ? (
-            <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+            <p
+              role="alert"
+              className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700"
+            >
               El tipo de cambio debe ser mayor que 0.
             </p>
           ) : null}
@@ -404,8 +458,8 @@ export function PrototypeQuoterPage() {
           <div className="mb-5">
             <h2 className="text-base font-semibold text-zinc-950">La pieza</h2>
             <p className="text-xs text-zinc-500">
-              Un producto del catálogo o un concepto nuevo. Las medidas son de esta muestra: no
-              tocan el maestro.
+              Un producto del catálogo o un concepto nuevo. Las medidas son de
+              esta muestra: no tocan el maestro.
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
@@ -423,7 +477,9 @@ export function PrototypeQuoterPage() {
               type="number"
               inputMode="numeric"
               value={String(draft.quantity)}
-              onChange={(value) => setDraft({ ...draft, quantity: Number(value) || 0 })}
+              onChange={(value) =>
+                setDraft({ ...draft, quantity: Number(value) || 0 })
+              }
               disabled={readOnly}
             />
             <SelectField
@@ -448,26 +504,39 @@ export function PrototypeQuoterPage() {
                 label="Familia del nuevo producto"
                 requirement="required"
                 placeholder="Seleccione la familia"
-                value={draft.product_category_id ? String(draft.product_category_id) : ""}
+                value={
+                  draft.product_category_id
+                    ? String(draft.product_category_id)
+                    : ""
+                }
                 disabled={readOnly}
                 options={(categories.data ?? []).map((item) => ({
                   value: String(item.id),
                   label: item.display_path ?? item.name,
                 }))}
                 onChange={(value) =>
-                  setDraft({ ...draft, product_category_id: value ? Number(value) : null })
+                  setDraft({
+                    ...draft,
+                    product_category_id: value ? Number(value) : null,
+                  })
                 }
                 hint="El código interno lo genera BGreda al cobrar."
               />
             ) : null}
           </div>
           <div className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Producto interno</p>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+              Producto interno
+            </p>
             <p className="mt-0.5 text-sm text-zinc-900">
               {persisted?.product_code ? (
                 <>
-                  <span className="font-mono font-semibold">{persisted.product_code}</span>
-                  {persisted.product_name ? ` · ${persisted.product_name}` : null}
+                  <span className="font-mono font-semibold">
+                    {persisted.product_code}
+                  </span>
+                  {persisted.product_name
+                    ? ` · ${persisted.product_name}`
+                    : null}
                 </>
               ) : (
                 "Nuevo producto · pendiente de código interno"
@@ -475,18 +544,26 @@ export function PrototypeQuoterPage() {
             </p>
           </div>
           <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {(["width_cm", "length_cm", "height_cm", "depth_cm"] as const).map((campo, indice) => (
-              <TextField
-                key={campo}
-                label={["Ancho cm", "Largo cm", "Alto cm", "Profundidad cm"][indice]!}
-                requirement="optional"
-                type="number"
-                inputMode="decimal"
-                value={draft[campo] ?? ""}
-                onChange={(value) => setDraft({ ...draft, [campo]: orNull(value) })}
-                disabled={readOnly}
-              />
-            ))}
+            {(["width_cm", "length_cm", "height_cm", "depth_cm"] as const).map(
+              (campo, indice) => (
+                <TextField
+                  key={campo}
+                  label={
+                    ["Ancho cm", "Largo cm", "Alto cm", "Profundidad cm"][
+                      indice
+                    ]!
+                  }
+                  requirement="optional"
+                  type="number"
+                  inputMode="decimal"
+                  value={draft[campo] ?? ""}
+                  onChange={(value) =>
+                    setDraft({ ...draft, [campo]: orNull(value) })
+                  }
+                  disabled={readOnly}
+                />
+              ),
+            )}
           </div>
           <div className="mt-5">
             <TextAreaField
@@ -506,8 +583,9 @@ export function PrototypeQuoterPage() {
           <div className="mb-5">
             <h2 className="text-base font-semibold text-zinc-950">Trabajo</h2>
             <p className="text-xs text-zinc-500">
-              La variable principal del precio son los días. Dejar una tarifa vacía usa la de
-              Configuración. El secado y el ajuste alargan el plazo sin costar dinero.
+              La variable principal del precio son los días. Dejar una tarifa
+              vacía usa la de Configuración. El secado y el ajuste alargan el
+              plazo sin costar dinero.
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
@@ -526,7 +604,9 @@ export function PrototypeQuoterPage() {
               type="number"
               inputMode="decimal"
               value={draft.design_rate_override ?? ""}
-              onChange={(value) => setDraft({ ...draft, design_rate_override: orNull(value) })}
+              onChange={(value) =>
+                setDraft({ ...draft, design_rate_override: orNull(value) })
+              }
               disabled={readOnly}
               hint={
                 costing
@@ -549,7 +629,9 @@ export function PrototypeQuoterPage() {
               type="number"
               inputMode="decimal"
               value={draft.artist_rate_override ?? ""}
-              onChange={(value) => setDraft({ ...draft, artist_rate_override: orNull(value) })}
+              onChange={(value) =>
+                setDraft({ ...draft, artist_rate_override: orNull(value) })
+              }
               disabled={readOnly}
               hint={
                 costing
@@ -575,7 +657,9 @@ export function PrototypeQuoterPage() {
               type="number"
               inputMode="decimal"
               value={draft.mold_maker_days}
-              onChange={(mold_maker_days) => setDraft({ ...draft, mold_maker_days })}
+              onChange={(mold_maker_days) =>
+                setDraft({ ...draft, mold_maker_days })
+              }
               disabled={readOnly}
             />
             {/* Secado y ajuste son TIEMPO, no dinero: alargan el plazo y no
@@ -596,7 +680,9 @@ export function PrototypeQuoterPage() {
               type="number"
               inputMode="decimal"
               value={draft.adjustment_days}
-              onChange={(adjustment_days) => setDraft({ ...draft, adjustment_days })}
+              onChange={(adjustment_days) =>
+                setDraft({ ...draft, adjustment_days })
+              }
               disabled={readOnly}
             />
           </div>
@@ -606,14 +692,18 @@ export function PrototypeQuoterPage() {
       {step === 3 ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
           <div className="mb-5">
-            <h2 className="text-base font-semibold text-zinc-950">Materiales</h2>
+            <h2 className="text-base font-semibold text-zinc-950">
+              Materiales
+            </h2>
             <p className="text-xs text-zinc-500">
               Cantidad por muestra. La unidad y el costo los pone el catálogo.
             </p>
           </div>
           <div className="space-y-3">
             {materials.map((line, index) => {
-              const catalogo = consumables.find((item) => item.id === line.product_id);
+              const catalogo = consumables.find(
+                (item) => item.id === line.product_id,
+              );
               const costeada = costing?.materials.find(
                 (item) => item.product_id === line.product_id,
               );
@@ -634,7 +724,9 @@ export function PrototypeQuoterPage() {
                     onChange={(value) =>
                       setMaterials((rows) =>
                         rows.map((row, i) =>
-                          i === index ? { ...row, product_id: Number(value) } : row,
+                          i === index
+                            ? { ...row, product_id: Number(value) }
+                            : row,
                         ),
                       )
                     }
@@ -649,20 +741,28 @@ export function PrototypeQuoterPage() {
                     onChange={(value) =>
                       setMaterials((rows) =>
                         rows.map((row, i) =>
-                          i === index ? { ...row, quantity_per_prototype: value } : row,
+                          i === index
+                            ? { ...row, quantity_per_prototype: value }
+                            : row,
                         ),
                       )
                     }
                   />
                   {/* El costo llega del backend, en soles. Aquí no se multiplica nada. */}
                   <div className="self-end text-xs text-zinc-600">
-                    <span className="block text-[11px] font-medium text-zinc-500">Costo</span>
+                    <span className="block text-[11px] font-medium text-zinc-500">
+                      Costo
+                    </span>
                     {costeada ? soles(costeada.cost) : "Se calcula en Costeo"}
                   </div>
                   {!readOnly ? (
                     <SecondaryButton
                       className="self-end"
-                      onClick={() => setMaterials((rows) => rows.filter((_, i) => i !== index))}
+                      onClick={() =>
+                        setMaterials((rows) =>
+                          rows.filter((_, i) => i !== index),
+                        )
+                      }
                     >
                       Quitar
                     </SecondaryButton>
@@ -678,7 +778,11 @@ export function PrototypeQuoterPage() {
               onClick={() =>
                 setMaterials((rows) => [
                   ...rows,
-                  { product_id: 0, quantity_per_prototype: "1", is_body_material: rows.length === 0 },
+                  {
+                    product_id: 0,
+                    quantity_per_prototype: "1",
+                    is_body_material: rows.length === 0,
+                  },
                 ])
               }
             >
@@ -694,20 +798,25 @@ export function PrototypeQuoterPage() {
             <div>
               <h2 className="text-base font-semibold text-zinc-950">Costeo</h2>
               <p className="text-xs text-zinc-500">
-                Calculado por BGreda. Esta pantalla no hace aritmética de dinero.
+                Calculado por BGreda. Esta pantalla no hace aritmética de
+                dinero.
               </p>
             </div>
             <SecondaryButton
               type="button"
               disabled={preview.isPending || !prototipoListo}
               onClick={() =>
-                preview.mutate(payload, { onSuccess: (fila) => setCosting(fila.costing) })
+                preview.mutate(payload, {
+                  onSuccess: (fila) => setCosting(fila.costing),
+                })
               }
             >
               {preview.isPending ? "Calculando…" : "Recalcular"}
             </SecondaryButton>
           </div>
-          {costing ? <Costeo costing={costing} money={money} /> : (
+          {costing ? (
+            <Costeo costing={costing} money={money} />
+          ) : (
             <p className="text-xs text-zinc-400">
               Complete la pieza y pulse Recalcular para ver el costo.
             </p>
@@ -720,7 +829,8 @@ export function PrototypeQuoterPage() {
           <div className="mb-5">
             <h2 className="text-base font-semibold text-zinc-950">Resumen</h2>
             <p className="text-xs text-zinc-500">
-              Revise antes de emitir. Al emitir se congela el precio y se asigna el correlativo.
+              Revise antes de emitir. Al emitir se congela el precio y se asigna
+              el correlativo.
             </p>
           </div>
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -728,7 +838,9 @@ export function PrototypeQuoterPage() {
             <Dato
               label="Moneda"
               valor={
-                enDolares && tasa ? `${currency} · ${exchangeRateLabel(tasa)}` : currency
+                enDolares && tasa
+                  ? `${currency} · ${exchangeRateLabel(tasa)}`
+                  : currency
               }
             />
             <Dato label="Pieza" valor={draft.description || "—"} />
@@ -752,7 +864,9 @@ export function PrototypeQuoterPage() {
             />
             <Dato
               label="Plazo"
-              valor={costing ? `${sinEscala(costing.estimated_days)} días` : "—"}
+              valor={
+                costing ? `${sinEscala(costing.estimated_days)} días` : "—"
+              }
             />
           </dl>
           {costing ? (
@@ -763,26 +877,41 @@ export function PrototypeQuoterPage() {
         </section>
       ) : null}
 
-      {/* Emitida: se enseña el papel que se le manda al cliente, como en el
-          Cotizador de producto. `revision` lo regenera cuando el documento
-          cambia de estado —al cobrar, al anular—, que es cuando el PDF deja de
-          ser el mismo. */}
-      {step === PASO_RESUMEN && persisted && persisted.status !== "DRAFT" ? (
-        <PrototypeQuotationDocument
-          quotationId={persisted.id}
-          revision={`${persisted.status}-${persisted.payment_status}-${persisted.updated_at ?? ""}`}
+      {/* El documento tiene paso propio, igual que en el Cotizador de
+          producto: el papel a la izquierda y lo comercial al lado. Estaba
+          metido al final del Resumen, donde hay que bajar para encontrarlo. */}
+      {step === PASO_PDF ? (
+        <PrototypeQuotationPdfPanel
+          persisted={persisted}
+          costing={costing}
+          money={money}
+          cliente={customerLabel}
+          pieza={draft.description}
+          muestras={draft.quantity}
+          readOnly={readOnly}
+          busy={busy}
+          puedeEmitir={Boolean(quotationId) && status === "DRAFT"}
+          onGuardar={guardar}
+          onEmitir={() => confirm.mutate()}
+          onCobrar={() => markPaid.mutate()}
         />
       ) : null}
 
       {error ? (
-        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
           {describeError(error)}
         </p>
       ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:px-5">
         <div className="flex gap-2">
-          <SecondaryButton disabled={step === 0} onClick={() => setStep((v) => Math.max(0, v - 1))}>
+          <SecondaryButton
+            disabled={step === 0}
+            onClick={() => setStep((v) => Math.max(0, v - 1))}
+          >
             Anterior
           </SecondaryButton>
           <SecondaryButton
@@ -799,15 +928,24 @@ export function PrototypeQuoterPage() {
               disabled={busy || !datosListos || !prototipoListo}
               onClick={guardar}
             >
-              {busy ? "Guardando…" : quotationId ? "Guardar borrador" : "Crear borrador"}
+              {busy
+                ? "Guardando…"
+                : quotationId
+                  ? "Guardar borrador"
+                  : "Crear borrador"}
             </PrimaryButton>
           ) : null}
           {quotationId && status === "DRAFT" ? (
-            <PrimaryButton type="button" disabled={busy} onClick={() => confirm.mutate()}>
+            <PrimaryButton
+              type="button"
+              disabled={busy}
+              onClick={() => confirm.mutate()}
+            >
               Emitir cotización
             </PrimaryButton>
           ) : null}
-          {persisted?.status === "CONFIRMED" && persisted.payment_status === "UNPAID" ? (
+          {persisted?.status === "CONFIRMED" &&
+          persisted.payment_status === "UNPAID" ? (
             <SecondaryButton disabled={busy} onClick={() => markPaid.mutate()}>
               Registrar cobro
             </SecondaryButton>
@@ -850,7 +988,8 @@ function Costeo({
   money: (value: string | null | undefined) => string;
 }) {
   const soles = (value: string | null | undefined) => formatMoney(value, "PEN");
-  const convertido = costing.exchange_rate !== null && costing.currency !== "PEN";
+  const convertido =
+    costing.exchange_rate !== null && costing.currency !== "PEN";
   const conceptos: Array<[string, string]> = [
     ["Diseño", costing.design_cost],
     ["Artista", costing.artist_cost],
@@ -875,14 +1014,23 @@ function Costeo({
           </p>
           <dl className="mt-2 divide-y divide-zinc-100">
             {conceptos.map(([etiqueta, importe]) => (
-              <div key={etiqueta} className="flex items-center justify-between py-1.5">
+              <div
+                key={etiqueta}
+                className="flex items-center justify-between py-1.5"
+              >
                 <dt className="text-xs text-zinc-600">{etiqueta}</dt>
-                <dd className="text-xs font-medium text-zinc-900">{soles(importe)}</dd>
+                <dd className="text-xs font-medium text-zinc-900">
+                  {soles(importe)}
+                </dd>
               </div>
             ))}
             <div className="flex items-center justify-between py-2">
-              <dt className="text-xs font-semibold text-zinc-900">Costo base</dt>
-              <dd className="text-sm font-semibold text-zinc-950">{soles(costing.base_cost)}</dd>
+              <dt className="text-xs font-semibold text-zinc-900">
+                Costo base
+              </dt>
+              <dd className="text-sm font-semibold text-zinc-950">
+                {soles(costing.base_cost)}
+              </dd>
             </div>
             {convertido ? (
               <div className="flex items-center justify-between py-2">
@@ -901,25 +1049,35 @@ function Costeo({
         </div>
 
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Plazo</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+            Plazo
+          </p>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
             {dias.map(([etiqueta, valor]) => (
               <span key={etiqueta} className="text-xs text-zinc-600">
-                {etiqueta} <span className="font-medium text-zinc-900">{valor}</span>
+                {etiqueta}{" "}
+                <span className="font-medium text-zinc-900">{valor}</span>
               </span>
             ))}
           </div>
           <p className="mt-2 text-sm text-zinc-950">
-            <span className="font-semibold">{sinEscala(costing.estimated_days)} días</span>
+            <span className="font-semibold">
+              {sinEscala(costing.estimated_days)} días
+            </span>
             {costing.target_date ? (
-              <span className="text-xs text-zinc-500"> · objetivo {costing.target_date}</span>
+              <span className="text-xs text-zinc-500">
+                {" "}
+                · objetivo {costing.target_date}
+              </span>
             ) : null}
           </p>
         </div>
       </div>
 
       <div className="rounded-2xl bg-zinc-50 p-4">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Comercial</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+          Comercial
+        </p>
         <dl className="mt-2 space-y-1.5">
           <div className="flex items-center justify-between">
             <dt className="text-xs text-zinc-600">Subtotal</dt>
