@@ -80,6 +80,24 @@ export interface CommercialSettings {
   /** Paso del redondeo contractual. Solo 0,50 o 1,00. */
   rounding_step: string | number;
 
+  /**
+   * Fase 009K.1.1. Tarifas de casa del Cotizador de Prototipos.
+   *
+   * Viven en la configuracion comercial porque son politica de la casa, igual
+   * que el IGV. Una CPR sin override las hereda VIVAS: si el taller sube su
+   * tarifa, los borradores abiertos la ven; los documentos ya emitidos no,
+   * porque al emitir se congelan.
+   *
+   * **Cero es legitimo**: significa que el taller todavia no la ha fijado. El
+   * navegador no lo corrige ni sugiere otro numero.
+   */
+  prototype_design_rate: string | number;
+  prototype_artist_rate: string | number;
+  prototype_mold_maker_price: string | number;
+  /** Tiempo, no dinero: dias que tarda el matricero por omision. */
+  prototype_mold_maker_days: string | number;
+  prototype_fixed_cost: string | number;
+
   general_conditions: string | null;
   payment_notes: string | null;
   document_footer: string | null;

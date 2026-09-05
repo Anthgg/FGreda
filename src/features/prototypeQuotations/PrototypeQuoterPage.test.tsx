@@ -870,3 +870,77 @@ describe("Cotizador de prototipos · etapa PDF", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// La tarifa de la casa y el override
+//
+// Nulo NO es cero: significa «cobra lo que cobre la casa». La pantalla enseña
+// la tarifa vigente como AYUDA, nunca dentro del campo. Rellenar el input con
+// el valor por defecto convertiría una herencia en un precio pactado, y a
+// partir de ahí subir la tarifa dejaría de alcanzar a ese borrador.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · tarifa de casa frente a override", () => {
+  it("la tarifa vigente se enseña como ayuda y el campo queda VACÍO", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Trabajo/i }));
+
+    // La ayuda dice cuánto cobra la casa…
+    expect(
+      screen.getByText(/Vacío = la de Configuración \(S\/ 80\.00 \/ día\)/),
+    ).toBeInTheDocument();
+    // …y el campo sigue vacío. DEFAULT_VALUE_COPIED_INTO_OVERRIDE: NO.
+    expect(screen.getByLabelText(/Tarifa de diseño por día/i)).toHaveValue(
+      null,
+    );
+  });
+
+  it("si la casa cambia su tarifa, un borrador sin override ve la nueva", async () => {
+    const user = userEvent.setup();
+    // El preview lo calcula el backend: subir la tarifa en Configuración se
+    // refleja en el siguiente costeo sin tocar el borrador. La tarifa que ve
+    // la pantalla al abrir viene del costeo de la GUARDADA, no del `/preview`.
+    mockApi(cotizacion({ costing: { ...COSTEO, design_rate: "90.00" } }));
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Trabajo/i }));
+
+    expect(
+      screen.getByText(/Vacío = la de Configuración \(S\/ 90\.00 \/ día\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Tarifa de diseño por día/i)).toHaveValue(
+      null,
+    );
+  });
+
+  it("un override escrito viaja al backend y no se confunde con la tarifa", async () => {
+    const user = userEvent.setup();
+    const espias = mockApi();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Trabajo/i }));
+    await user.type(screen.getByLabelText(/Tarifa de diseño por día/i), "95");
+    await user.click(screen.getByRole("button", { name: /Guardar borrador/i }));
+
+    await vi.waitFor(() => expect(espias.enviados.length).toBeGreaterThan(0));
+    // Quien manda es el backend: aquí sólo se comprueba que la intención viaja.
+    expect(String(ultimoEnviado(espias).design_rate_override)).toBe("95");
+  });
+
+  it("una tarifa de casa en cero se enseña tal cual, sin inventar otra", async () => {
+    const user = userEvent.setup();
+    // Cero significa «el taller todavía no la ha fijado». La pantalla lo dice
+    // en vez de sustituirlo por un número del Excel.
+    mockApi(cotizacion({ costing: { ...COSTEO, design_rate: "0.00" } }));
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Trabajo/i }));
+
+    expect(
+      screen.getByText(/Vacío = la de Configuración \(S\/ 0\.00 \/ día\)/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/S\/ 80\.00 \/ día/)).not.toBeInTheDocument();
+  });
+});

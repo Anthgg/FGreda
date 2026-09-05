@@ -55,6 +55,13 @@ export const COMMERCIAL_EMPTY: CommercialSettings = {
   estimated_glaze_percent: "15",
   production_factor_default: "3",
   rounding_step: "0.50",
+  // Cero es lo que devuelve un backend real recien migrado: 0023 crea estas
+  // columnas en cero para no sembrar como precios los ejemplos del Excel.
+  prototype_design_rate: "0",
+  prototype_artist_rate: "0",
+  prototype_mold_maker_price: "0",
+  prototype_mold_maker_days: "0",
+  prototype_fixed_cost: "0",
   general_conditions: null,
   payment_notes: null,
   document_footer: null,
