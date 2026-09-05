@@ -14,6 +14,7 @@ import { ProductionOrderDetailPage } from "@/features/production/ProductionOrder
 import { ProductionOrderScanPage } from "@/features/production/ProductionOrderScanPage";
 import { ProductionOrdersPage } from "@/features/production/ProductionOrdersPage";
 import { PrototypeDetailPage } from "@/features/prototypes/PrototypeDetailPage";
+import { PrototypeQuoterPage } from "@/features/prototypeQuotations/PrototypeQuoterPage";
 import { PrototypeFormPage } from "@/features/prototypes/PrototypeFormPage";
 import { PrototypesPage } from "@/features/prototypes/PrototypesPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
@@ -85,6 +86,11 @@ export function AppRoutes() {
           <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
           <Route path="produccion/:id" element={<ProductionOrderDetailPage />} />
           <Route path="prototipos" element={<PrototypesPage />} />
+          {/* Fase 009K.1.1. Crear un prototipo es COTIZARLO: cuanto cuesta y
+              cuanto tarda. El formulario plano anterior sigue accesible como
+              alta directa para el taller, pero deja de ser el flujo principal. */}
+          <Route path="prototipos/cotizador" element={<PrototypeQuoterPage />} />
+          <Route path="prototipos/cotizador/:id" element={<PrototypeQuoterPage />} />
           <Route path="prototipos/nuevo" element={<PrototypeFormPage />} />
           <Route path="prototipos/:id" element={<PrototypeDetailPage section="resumen" />} />
           <Route path="prototipos/:id/editar" element={<PrototypeDetailPage section="editar" />} />
