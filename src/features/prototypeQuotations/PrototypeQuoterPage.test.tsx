@@ -140,6 +140,8 @@ function cotizacion(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuota
 
 interface Espias {
   enviados: Array<{ url: string; body: unknown }>;
+  /** TODA url pedida, no solo las que escriben: sirve para probar ausencias. */
+  visitadas: string[];
 }
 
 /**
@@ -154,14 +156,14 @@ function mockApi(
   guardada: PrototypeQuotation = cotizacion(),
   costeo: PrototypeCostBreakdown = COSTEO,
 ): Espias {
-  const espias: Espias = { enviados: [] };
+  const espias: Espias = { enviados: [], visitadas: [] };
   mockFetch((url, init) => {
+    espias.visitadas.push(url);
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return sessionResponse();
     if (url.includes("/categories"))
       return jsonResponse(200, [{ id: 4, name: "Piezas", display_path: "Piezas", active: true }]);
     if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0 });
-    if (url.includes("/kilns")) return jsonResponse(200, { items: [], total: 0 });
     if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0 });
     if (url.includes("/prototype-quotations")) {
       const body = init?.body ? JSON.parse(String(init.body)) : null;
@@ -693,5 +695,36 @@ describe("Cotizador de prototipos · escala de las columnas", () => {
     expect(screen.getByLabelText(/Días de diseño/i)).toHaveValue(1);
     // Medio día de secado es medio día: se recortan ceros, no decimales.
     expect(screen.getByLabelText(/Días de secado/i)).toHaveValue(0.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Que no se pida el horno tiene que poder fallar
+//
+// Habia un mock de `/kilns` respondiendo 200 a nadie. Eso no probaba nada: si
+// alguien volviera a llamar a `useKilns()`, el mock contestaria y estas pruebas
+// seguirian verdes. Una red de seguridad donde hacia falta un cable trampa.
+//
+// Ahora el backend de mentira no conoce esa ruta —devolveria 404— y ademas se
+// afirma la ausencia sobre lo que REALMENTE se pidio.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · el horno no se consulta", () => {
+  it("PROTOTYPE_QUOTATION_USES_KILN: recorrer el asistente entero no pide /kilns", async () => {
+    const user = userEvent.setup();
+    const espias = mockApi();
+    renderWithProviders(<PrototypeQuoterPage />);
+
+    // Se usa el mismo ayudante que el resto: el boton de etapa lleva su numero
+    // dentro del nombre accesible, asi que anclar el texto no lo encuentra.
+    await screen.findByRole("button", { name: /Prototipo/i });
+    for (const paso of ["Prototipo", "Trabajo", "Materiales", "Costeo", "Resumen"]) {
+      await irA(user, paso);
+    }
+
+    expect(espias.visitadas.length).toBeGreaterThan(0);
+    const alHorno = espias.visitadas.filter(
+      (url) => url.includes("/kilns") || url.includes("/firings") || url.includes("/kiln-rates"),
+    );
+    expect(alHorno).toEqual([]);
   });
 });
