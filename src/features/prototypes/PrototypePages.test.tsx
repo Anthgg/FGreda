@@ -245,4 +245,44 @@ describe("Fase 009K · prototipos", () => {
     expect(await screen.findByText("Cantidad de muestra")).toBeInTheDocument();
     expect(screen.queryByText(/Cotizaciones originadas/)).not.toBeInTheDocument();
   });
+
+  // -------------------------------------------------------------------------
+  // Fase 009K.1.1 — el camino normal para crear una muestra
+  //
+  // Desde que existe el Cotizador de Prototipos, una muestra nace de un
+  // documento CPR emitido y cobrado. El alta directa sigue viva porque las
+  // muestras de 009K cuelgan de una cotización de producto (CTZ) y ésas no se
+  // cotizan aquí, pero dejar los dos botones con el mismo peso convertía el
+  // atajo en el camino.
+  // -------------------------------------------------------------------------
+  it("37. PROTOTYPE_NORMAL_CREATION_ENTRYPOINT: el botón principal lleva al Cotizador", async () => {
+    installBackend();
+    renderApp(["/prototipos"]);
+
+    const principal = await screen.findByRole("link", { name: /Cotizar prototipo/i });
+    expect(principal).toHaveAttribute("href", "/prototipos/cotizador");
+  });
+
+  it("38. el alta directa sigue existiendo, pero como camino secundario", async () => {
+    installBackend();
+    renderApp(["/prototipos"]);
+
+    // No se elimina: las muestras de una CTZ de 009K se siguen registrando así.
+    const secundario = await screen.findByRole("link", { name: /Muestra de una cotización/i });
+    expect(secundario).toHaveAttribute("href", "/prototipos/nuevo");
+    expect(secundario.className).not.toContain("bg-black");
+  });
+
+  it("39. el formulario directo avisa de que no emite ni cobra una cotización", async () => {
+    installBackend();
+    renderApp(["/prototipos/nuevo"]);
+
+    // Sin este aviso parecía el alta normal, y usarlo así se saltaba el
+    // documento y el cobro: la persona lo descubría al final, no al empezar.
+    expect(await screen.findByText(/no emite una cotización de prototipo/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Cotizador de prototipos/i })).toHaveAttribute(
+      "href",
+      "/prototipos/cotizador",
+    );
+  });
 });

@@ -33,7 +33,8 @@ import {
   useUpdatePrototypeQuotation,
 } from "@/features/prototypeQuotations/usePrototypeQuotations";
 import { describeError } from "@/features/settings/messages";
-import { formatMoney } from "@/features/quotations/money";
+import { formatDecimalString } from "@/features/firings/labels";
+import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
 import type {
   FiringType,
   PrototypeCostBreakdown,
@@ -70,6 +71,10 @@ function emptyDraft(): PrototypeQuotationDraftInput {
     product_id: null,
     description: "",
     quantity: 1,
+    // Igual que el Cotizador principal: se arranca en soles, y la tasa sólo
+    // existe mientras la moneda sea dólares.
+    currency_code: "PEN",
+    exchange_rate: null,
     design_days: "0",
     artist_days: "0",
     mold_maker_days: "0",
@@ -128,6 +133,8 @@ export function PrototypeQuoterPage() {
       height_cm: persisted.height_cm,
       depth_cm: persisted.depth_cm,
       notes: persisted.notes,
+      currency_code: persisted.currency_code === "USD" ? "USD" : "PEN",
+      exchange_rate: persisted.exchange_rate,
       design_days: persisted.design_days,
       design_rate_override: persisted.design_rate_override,
       artist_days: persisted.artist_days,
@@ -158,10 +165,23 @@ export function PrototypeQuoterPage() {
     [draft, materials],
   );
 
-  const currency = persisted?.currency_code ?? "PEN";
+  // La del borrador en pantalla, no la guardada: si no, cambiar a dólares
+  // dejaría los importes del costeo encabezados por `S/` hasta recargar.
+  const currency = draft.currency_code ?? persisted?.currency_code ?? "PEN";
+  // El COSTO está siempre en soles: en soles se le paga al artista y se compra
+  // el barro. Sólo el PRECIO va en la moneda de emisión. Mezclarlos pondría
+  // `US$` delante de una tarifa en soles, que es el error que nadie detecta
+  // hasta que ya está firmado.
+  const soles = (value: string | null | undefined) => formatMoney(value, "PEN");
+  const enDolares = draft.currency_code === "USD";
+  const tasa = (draft.exchange_rate ?? "").trim();
+  const faltaTasa = enDolares && !tasa;
+  const tasaInvalida = enDolares && Boolean(tasa) && !(Number(tasa) > 0);
   const money = (value: string | null | undefined) => formatMoney(value, currency);
 
-  const datosListos = Boolean(draft.customer_id);
+  // Sin tasa el backend devuelve 422 y la pantalla se quedaría en un error
+  // que no explica nada: se bloquea aquí, donde se ve el campo vacío.
+  const datosListos = Boolean(draft.customer_id) && !faltaTasa && !tasaInvalida;
   const prototipoListo = Boolean(draft.description.trim()) && draft.quantity > 0;
 
   // Al entrar en Costeo se pide el cálculo al backend. Es el único sitio donde
@@ -266,7 +286,7 @@ export function PrototypeQuoterPage() {
           <div className="mb-5">
             <h2 className="text-base font-semibold text-zinc-950">Datos generales</h2>
             <p className="text-xs text-zinc-500">
-              A quién se le cotiza. La moneda y el impuesto salen de Configuración.
+              A quién se le cotiza y en qué moneda se emite. El impuesto sale de Configuración.
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
@@ -280,15 +300,50 @@ export function PrototypeQuoterPage() {
                 setCustomerLabel(label);
               }}
             />
-            <TextField
+            <SelectField
               label="Moneda"
-              requirement="optional"
-              value={persisted?.currency_code ?? "PEN"}
-              onChange={() => undefined}
-              disabled
-              hint="La fija Configuración; no se elige por cotización."
+              requirement="required"
+              value={draft.currency_code ?? "PEN"}
+              options={CURRENCY_OPTIONS}
+              disabled={readOnly}
+              onChange={(currencyCode: string) =>
+                setDraft({
+                  ...draft,
+                  currency_code: currencyCode === "USD" ? "USD" : "PEN",
+                  // Volver a soles descarta la tasa: guardarla describiría una
+                  // conversión que ya no ocurre, y el backend la rechaza.
+                  exchange_rate: currencyCode === "USD" ? (draft.exchange_rate ?? null) : null,
+                })
+              }
             />
+            {enDolares ? (
+              <TextField
+                label="Tipo de cambio"
+                requirement="required"
+                value={draft.exchange_rate ?? ""}
+                onChange={(exchangeRate) => setDraft({ ...draft, exchange_rate: exchangeRate })}
+                disabled={readOnly}
+                inputMode="decimal"
+                placeholder="3.75"
+                // Se dice la dirección entera: el número solo no aclara si hay
+                // que multiplicar o dividir, y esa duda cuadruplica precios.
+                hint={
+                  exchangeRateLabel(tasa || null) ??
+                  "Cuántos soles vale un dólar. Ejemplo: 1 USD = S/ 3.75"
+                }
+              />
+            ) : null}
           </div>
+          {faltaTasa ? (
+            <p role="alert" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+              Ingresa el tipo de cambio para cotizar en dólares.
+            </p>
+          ) : null}
+          {tasaInvalida ? (
+            <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+              El tipo de cambio debe ser mayor que 0.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -390,7 +445,7 @@ export function PrototypeQuoterPage() {
               disabled={readOnly}
               hint={
                 costing
-                  ? `Vacío = la de Configuración (${money(costing.design_rate)} / día)`
+                  ? `Vacío = la de Configuración (${soles(costing.design_rate)} / día)`
                   : "Vacío = la de Configuración"
               }
             />
@@ -413,7 +468,7 @@ export function PrototypeQuoterPage() {
               disabled={readOnly}
               hint={
                 costing
-                  ? `Vacío = la de Configuración (${money(costing.artist_rate)} / día)`
+                  ? `Vacío = la de Configuración (${soles(costing.artist_rate)} / día)`
                   : "Vacío = la de Configuración"
               }
             />
@@ -427,7 +482,7 @@ export function PrototypeQuoterPage() {
                 setDraft({ ...draft, mold_maker_price_override: orNull(value) })
               }
               disabled={readOnly}
-              hint="Precio fijo. Sus días alargan el plazo, no multiplican el importe."
+              hint="Precio fijo en soles. Sus días alargan el plazo, no multiplican el importe."
             />
             <TextField
               label="Días del matricero"
@@ -493,10 +548,10 @@ export function PrototypeQuoterPage() {
                       )
                     }
                   />
-                  {/* El costo llega del backend. Aquí no se multiplica nada. */}
+                  {/* El costo llega del backend, en soles. Aquí no se multiplica nada. */}
                   <div className="self-end text-xs text-zinc-600">
                     <span className="block text-[11px] font-medium text-zinc-500">Costo</span>
-                    {costeada ? money(costeada.cost) : "Se calcula en Costeo"}
+                    {costeada ? soles(costeada.cost) : "Se calcula en Costeo"}
                   </div>
                   {!readOnly ? (
                     <SecondaryButton
@@ -628,7 +683,12 @@ export function PrototypeQuoterPage() {
           </div>
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Dato label="Cliente" valor={customerLabel || "—"} />
-            <Dato label="Moneda" valor={currency} />
+            <Dato
+              label="Moneda"
+              valor={
+                enDolares && tasa ? `${currency} · ${exchangeRateLabel(tasa)}` : currency
+              }
+            />
             <Dato label="Pieza" valor={draft.description || "—"} />
             <Dato label="Muestras" valor={String(draft.quantity)} />
             <Dato
@@ -719,6 +779,13 @@ function Dato({ label, valor }: { label: string; valor: string }) {
  * colocan. Separar el costo interno del bloque comercial es deliberado: lo de
  * arriba explica en qué se va el dinero, lo de abajo es lo que firma el
  * cliente.
+ *
+ * Y esa separación no es sólo estética: el **costo** está siempre en soles
+ * —en soles se le paga al artista y se compra el barro— mientras que el
+ * **precio** va en la moneda de emisión. Formatear los conceptos internos con
+ * la moneda del documento pondría `US$` delante de importes en soles: el
+ * número sería correcto y la etiqueta mentiría, que es la peor combinación
+ * posible.
  */
 function Costeo({
   costing,
@@ -727,6 +794,8 @@ function Costeo({
   costing: PrototypeCostBreakdown;
   money: (value: string | null | undefined) => string;
 }) {
+  const soles = (value: string | null | undefined) => formatMoney(value, "PEN");
+  const convertido = costing.exchange_rate !== null && costing.currency !== "PEN";
   const conceptos: Array<[string, string]> = [
     ["Diseño", costing.design_cost],
     ["Artista", costing.artist_cost],
@@ -749,19 +818,32 @@ function Costeo({
       <div className="space-y-5">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-            Costo interno
+            Costo interno {convertido ? "(en soles)" : null}
           </p>
           <dl className="mt-2 divide-y divide-zinc-100">
             {conceptos.map(([etiqueta, importe]) => (
               <div key={etiqueta} className="flex items-center justify-between py-1.5">
                 <dt className="text-xs text-zinc-600">{etiqueta}</dt>
-                <dd className="text-xs font-medium text-zinc-900">{money(importe)}</dd>
+                <dd className="text-xs font-medium text-zinc-900">{soles(importe)}</dd>
               </div>
             ))}
             <div className="flex items-center justify-between py-2">
               <dt className="text-xs font-semibold text-zinc-900">Costo base</dt>
-              <dd className="text-sm font-semibold text-zinc-950">{money(costing.base_cost)}</dd>
+              <dd className="text-sm font-semibold text-zinc-950">{soles(costing.base_cost)}</dd>
             </div>
+            {convertido ? (
+              <div className="flex items-center justify-between py-2">
+                <dt className="text-xs font-semibold text-zinc-900">
+                  Neto convertido
+                  <span className="ml-1 font-normal text-zinc-500">
+                    {exchangeRateLabel(costing.exchange_rate)}
+                  </span>
+                </dt>
+                <dd className="text-sm font-semibold text-zinc-950">
+                  {money(costing.raw_net_total)}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         </div>
 
@@ -793,7 +875,10 @@ function Costeo({
             </dd>
           </div>
           <div className="flex items-center justify-between">
-            <dt className="text-xs text-zinc-600">IGV ({costing.tax_percent}%)</dt>
+            {/* La columna guarda 18.000000; el resto del sistema escribe 18.00. */}
+            <dt className="text-xs text-zinc-600">
+              IGV ({formatDecimalString(costing.tax_percent, 2)}%)
+            </dt>
             <dd className="text-xs font-medium text-zinc-900">
               {money(costing.commercial_tax_total)}
             </dd>

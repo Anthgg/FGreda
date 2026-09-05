@@ -9,6 +9,10 @@
  * La unidad de medida tampoco viaja de ida: la manda el catálogo del material.
  * Si la pantalla pudiera elegirla, se cotizarían kilos de algo que se lleva en
  * gramos.
+ *
+ * La moneda sí viaja: decir «esto se cobra en dólares» es una decisión
+ * comercial de quien cotiza, igual que en el Cotizador principal. Lo que sigue
+ * sin viajar es el resultado de convertir.
  */
 
 export type PrototypeQuotationStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
@@ -37,6 +41,15 @@ export interface PrototypeQuotationDraftInput {
 
   technical_specifications?: Record<string, unknown> | null;
   notes?: string | null;
+
+  /** Omitirla toma la de Configuración, que es lo que hacía el sistema antes. */
+  currency_code?: "PEN" | "USD" | null;
+  /**
+   * Cuántos soles vale un dólar. Obligatorio con USD y **prohibido** con PEN:
+   * mandarlo en soles es un 422, porque una cotización en soles no describe
+   * ninguna conversión.
+   */
+  exchange_rate?: string | null;
 
   design_days: string;
   /**
@@ -91,7 +104,18 @@ export interface PrototypeCostBreakdown {
   materials_cost: string;
   firing_cost: string;
   fixed_cost: string;
+  /** La suma de los conceptos, SIEMPRE en soles: es el costo, no el precio. */
   base_cost: string;
+
+  /**
+   * El mismo neto ya en la moneda de emisión. Con PEN coincide con
+   * `base_cost`; con USD es lo único que explica por qué el total no se parece
+   * al costo.
+   */
+  raw_net_total: string;
+  /** Con qué moneda y con qué tasa se llegó hasta aquí. */
+  currency: string;
+  exchange_rate: string | null;
 
   /** Antes del escalón comercial. Explica de dónde sale el ajuste. */
   raw_tax: string;
@@ -183,6 +207,9 @@ export interface PrototypeQuotationListItem {
   description: string;
   quantity: number;
   commercial_gross_total: string | null;
+  /** Sin esto el listado pondría `S/` delante de un importe en dólares. */
+  currency_code: string | null;
+  currency_symbol: string | null;
   estimated_days: string | null;
   confirmed_at: string | null;
 }
