@@ -43,6 +43,17 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     restoreMocks: true,
+    // Los 5 s por omision se quedan cortos para las pruebas de interaccion de
+    // este repo. Una que teclea, abre dos desplegables y elige sus opciones
+    // tarda ~1 s aislada, pero en la corrida completa 39 archivos se reparten
+    // la maquina y alguna cruza el limite. Ha pasado ya en dos archivos
+    // distintos —PrototypePages y FiringsPage— y las dos veces el fallo era
+    // por reloj, no por lo que comprobaban.
+    //
+    // 15 s da margen sin volverse inutil: sigue muy por debajo de lo que
+    // tardaria una prueba realmente colgada, asi que un bucle infinito se
+    // sigue notando.
+    testTimeout: 15_000,
     // e2e/ son specs de Playwright (otro test runner, otro `test.describe`);
     // el glob por defecto de Vitest los recoge tambien porque terminan en
     // .spec.ts, y ambos runners chocan al importarlos.
