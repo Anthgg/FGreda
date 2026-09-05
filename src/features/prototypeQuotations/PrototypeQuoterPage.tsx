@@ -20,10 +20,12 @@ import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { PrimaryButton, SecondaryButton, TextAreaField, TextField } from "@/components/form";
 import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
-import { useKilns } from "@/features/firings/useFirings";
-import { useConsumableProducts, useProducts } from "@/features/masters/useMasters";
+import {
+  useConsumableProducts,
+  useProductCategories,
+  useProducts,
+} from "@/features/masters/useMasters";
 import { Badge } from "@/features/masters/MasterTable";
-import { prototypeQuotationPdfUrl } from "@/api/prototypeQuotations";
 import {
   useConfirmPrototypeQuotation,
   useCreatePrototypeQuotation,
@@ -35,29 +37,36 @@ import {
 import { describeError } from "@/features/settings/messages";
 import { formatDecimalString } from "@/features/firings/labels";
 import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
+import { PrototypeQuotationDocument } from "@/features/prototypeQuotations/PrototypeQuotationDocument";
 import type {
-  FiringType,
   PrototypeCostBreakdown,
   PrototypeQuotationDraftInput,
 } from "@/types/prototypeQuotations";
 
+/**
+ * Seis pasos, no siete.
+ *
+ * Hubo una etapa «Quema» y dejó de tener sentido: lo que se cotiza aquí es la
+ * muestra en BARRO, y una muestra en barro no pasa por el horno. El sistema de
+ * quemas sigue intacto para producción; simplemente no participa en este
+ * documento, así que tampoco se pide horno, tipo de quema ni hornadas.
+ */
 const STEPS = [
   { label: "Datos", hint: "Cliente y moneda" },
   { label: "Prototipo", hint: "Producto o concepto nuevo" },
-  { label: "Trabajo", hint: "Diseño, artista y matricero" },
+  { label: "Trabajo", hint: "Días, tarifas y espera" },
   { label: "Materiales", hint: "Insumos y cantidades" },
-  { label: "Quema", hint: "Horno, hornadas y espera" },
   { label: "Costeo", hint: "Cálculo del backend" },
   { label: "Resumen", hint: "Revisar y emitir" },
 ] as const;
 
+/** Índices de los pasos que el código consulta por su nombre, no por su número. */
+const PASO_COSTEO = 4;
+const PASO_RESUMEN = 5;
+
 const STATUS_LABEL = { DRAFT: "Borrador", CONFIRMED: "Emitida", CANCELLED: "Anulada" } as const;
 const STATUS_TONE = { DRAFT: "warning", CONFIRMED: "positive", CANCELLED: "neutral" } as const;
 
-const FIRING_OPTIONS = [
-  { value: "LOW", label: "Baja" },
-  { value: "HIGH", label: "Alta" },
-];
 
 interface MaterialRow {
   product_id: number;
@@ -69,6 +78,7 @@ function emptyDraft(): PrototypeQuotationDraftInput {
   return {
     customer_id: null,
     product_id: null,
+    product_category_id: null,
     description: "",
     quantity: 1,
     // Igual que el Cotizador principal: se arranca en soles, y la tasa sólo
@@ -78,7 +88,6 @@ function emptyDraft(): PrototypeQuotationDraftInput {
     design_days: "0",
     artist_days: "0",
     mold_maker_days: "0",
-    firing_batches: 0,
     drying_days: "0",
     adjustment_days: "0",
     materials: [],
@@ -88,6 +97,24 @@ function emptyDraft(): PrototypeQuotationDraftInput {
 /** Vacío significa «usa la tarifa de la casa», y por eso no se rellena solo. */
 function orNull(value: string): string | null {
   return value.trim() ? value.trim() : null;
+}
+
+/**
+ * Un número de días o una medida, sin la escala de la columna.
+ *
+ * El backend guarda `Numeric(18, 6)` y devuelve «6.000000». Eso es la
+ * precisión del almacenamiento, no lo que se acordó: en pantalla son 6 días.
+ * Se recortan los ceros sobrantes y se conserva la parte decimal que sí dice
+ * algo, porque medio día de secado es medio día.
+ *
+ * No es aritmética: no suma, no redondea al alza ni cambia el valor. Sólo deja
+ * de escribir ceros que nadie tecleó.
+ */
+function sinEscala(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const texto = String(value);
+  if (!texto.includes(".")) return texto;
+  return texto.replace(/\.?0+$/, "") || "0";
 }
 
 export function PrototypeQuoterPage() {
@@ -110,8 +137,8 @@ export function PrototypeQuoterPage() {
   const confirm = useConfirmPrototypeQuotation(quotationId ?? 0);
   const markPaid = useMarkPrototypeQuotationPaid(quotationId ?? 0);
 
-  const kilns = useKilns();
   const products = useProducts({ active: true, limit: 200 });
+  const categories = useProductCategories();
   const consumables = useConsumableProducts().items;
 
   const readOnly = persisted !== null && persisted.status !== "DRAFT";
@@ -126,6 +153,7 @@ export function PrototypeQuoterPage() {
     setDraft({
       customer_id: persisted.customer_id,
       product_id: persisted.product_id,
+      product_category_id: persisted.product_category_id,
       description: persisted.description,
       quantity: persisted.quantity,
       width_cm: persisted.width_cm,
@@ -141,9 +169,6 @@ export function PrototypeQuoterPage() {
       artist_rate_override: persisted.artist_rate_override,
       mold_maker_price_override: persisted.mold_maker_price_override,
       mold_maker_days: persisted.mold_maker_days,
-      kiln_id: persisted.kiln_id,
-      firing_type: persisted.firing_type,
-      firing_batches: persisted.firing_batches,
       drying_days: persisted.drying_days,
       adjustment_days: persisted.adjustment_days,
       fixed_cost_override: persisted.fixed_cost_override,
@@ -182,12 +207,16 @@ export function PrototypeQuoterPage() {
   // Sin tasa el backend devuelve 422 y la pantalla se quedaría en un error
   // que no explica nada: se bloquea aquí, donde se ve el campo vacío.
   const datosListos = Boolean(draft.customer_id) && !faltaTasa && !tasaInvalida;
-  const prototipoListo = Boolean(draft.description.trim()) && draft.quantity > 0;
+  // Un concepto nuevo es el que todavía no cuelga de ninguna pieza del catálogo.
+  const conceptoNuevo = !draft.product_id;
+  const faltaFamilia = conceptoNuevo && !draft.product_category_id;
+  const prototipoListo =
+    Boolean(draft.description.trim()) && draft.quantity > 0 && !faltaFamilia;
 
   // Al entrar en Costeo se pide el cálculo al backend. Es el único sitio donde
   // aparecen importes, y ninguno se ha tocado por el camino.
   useEffect(() => {
-    if (step !== 5 || !prototipoListo) return;
+    if (step !== PASO_COSTEO || !prototipoListo) return;
     preview.mutate(payload, { onSuccess: (fila) => setCosting(fila.costing) });
     // Sólo al llegar al paso: recalcular en cada tecla dispararía una petición
     // por pulsación y mostraría precios a medio escribir.
@@ -225,6 +254,14 @@ export function PrototypeQuoterPage() {
               <Badge tone={persisted.payment_status === "PAID" ? "positive" : "warning"}>
                 {persisted.payment_status === "PAID" ? "Pagada" : "Pendiente de cobro"}
               </Badge>
+            ) : null}
+            {/* El código interno del producto se enseña donde se ve sin buscar:
+                al cobrar es lo primero que quiere confirmar quien cotizó. */}
+            {persisted?.product_code ? (
+              <span className="text-[11px] text-zinc-500">
+                Producto: <span className="font-mono">{persisted.product_code}</span>
+                {persisted.product_name ? ` · ${persisted.product_name}` : null}
+              </span>
             ) : null}
             {persisted?.prototype_code ? (
               <Link
@@ -388,6 +425,39 @@ export function PrototypeQuoterPage() {
                 setDraft({ ...draft, product_id: value ? Number(value) : null })
               }
             />
+            {/* Un concepto nuevo se convierte en producto maestro al cobrar, y
+                el maestro exige familia. Se pregunta aquí y no al pagar: con el
+                dinero cobrado ya sería tarde para descubrir que falta. */}
+            {conceptoNuevo ? (
+              <SelectField
+                label="Familia del nuevo producto"
+                requirement="required"
+                placeholder="Seleccione la familia"
+                value={draft.product_category_id ? String(draft.product_category_id) : ""}
+                disabled={readOnly}
+                options={(categories.data ?? []).map((item) => ({
+                  value: String(item.id),
+                  label: item.display_path ?? item.name,
+                }))}
+                onChange={(value) =>
+                  setDraft({ ...draft, product_category_id: value ? Number(value) : null })
+                }
+                hint="El código interno lo genera BGreda al cobrar."
+              />
+            ) : null}
+          </div>
+          <div className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Producto interno</p>
+            <p className="mt-0.5 text-sm text-zinc-900">
+              {persisted?.product_code ? (
+                <>
+                  <span className="font-mono font-semibold">{persisted.product_code}</span>
+                  {persisted.product_name ? ` · ${persisted.product_name}` : null}
+                </>
+              ) : (
+                "Nuevo producto · pendiente de código interno"
+              )}
+            </p>
           </div>
           <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {(["width_cm", "length_cm", "height_cm", "depth_cm"] as const).map((campo, indice) => (
@@ -422,7 +492,7 @@ export function PrototypeQuoterPage() {
             <h2 className="text-base font-semibold text-zinc-950">Trabajo</h2>
             <p className="text-xs text-zinc-500">
               La variable principal del precio son los días. Dejar una tarifa vacía usa la de
-              Configuración.
+              Configuración. El secado y el ajuste alargan el plazo sin costar dinero.
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
@@ -491,6 +561,27 @@ export function PrototypeQuoterPage() {
               inputMode="decimal"
               value={draft.mold_maker_days}
               onChange={(mold_maker_days) => setDraft({ ...draft, mold_maker_days })}
+              disabled={readOnly}
+            />
+            {/* Secado y ajuste son TIEMPO, no dinero: alargan el plazo y no
+                tocan el costo. Viven aquí, junto a los demás días, desde que
+                la etapa de quema dejó de existir. */}
+            <TextField
+              label="Días de secado"
+              requirement="optional"
+              type="number"
+              inputMode="decimal"
+              value={draft.drying_days}
+              onChange={(drying_days) => setDraft({ ...draft, drying_days })}
+              disabled={readOnly}
+            />
+            <TextField
+              label="Días de ajuste"
+              requirement="optional"
+              type="number"
+              inputMode="decimal"
+              value={draft.adjustment_days}
+              onChange={(adjustment_days) => setDraft({ ...draft, adjustment_days })}
               disabled={readOnly}
             />
           </div>
@@ -582,71 +673,7 @@ export function PrototypeQuoterPage() {
         </section>
       ) : null}
 
-      {step === 4 ? (
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
-          <div className="mb-5">
-            <h2 className="text-base font-semibold text-zinc-950">Quema y espera</h2>
-            <p className="text-xs text-zinc-500">
-              La tarifa y los días por hornada salen del horno. El secado y el ajuste alargan el
-              plazo sin costar dinero.
-            </p>
-          </div>
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            <SelectField
-              label="Horno"
-              requirement="optional"
-              placeholder="Sin quema"
-              value={draft.kiln_id ? String(draft.kiln_id) : ""}
-              disabled={readOnly}
-              options={(kilns.data?.items ?? []).map((kiln) => ({
-                value: String(kiln.id),
-                label: kiln.name,
-              }))}
-              onChange={(value) => setDraft({ ...draft, kiln_id: value ? Number(value) : null })}
-            />
-            <SelectField
-              label="Tipo de quema"
-              requirement="optional"
-              placeholder="Seleccione"
-              value={draft.firing_type ?? ""}
-              disabled={readOnly}
-              options={FIRING_OPTIONS}
-              onChange={(value) =>
-                setDraft({ ...draft, firing_type: (value || null) as FiringType | null })
-              }
-            />
-            <TextField
-              label="Número de hornadas"
-              requirement="optional"
-              type="number"
-              inputMode="numeric"
-              value={String(draft.firing_batches)}
-              onChange={(value) => setDraft({ ...draft, firing_batches: Number(value) || 0 })}
-              disabled={readOnly}
-            />
-            <TextField
-              label="Días de secado"
-              requirement="optional"
-              type="number"
-              inputMode="decimal"
-              value={draft.drying_days}
-              onChange={(drying_days) => setDraft({ ...draft, drying_days })}
-              disabled={readOnly}
-            />
-            <TextField
-              label="Días de ajuste"
-              requirement="optional"
-              type="number"
-              inputMode="decimal"
-              value={draft.adjustment_days}
-              onChange={(adjustment_days) => setDraft({ ...draft, adjustment_days })}
-              disabled={readOnly}
-            />
-          </div>
-        </section>
-      ) : null}
-
-      {step === 5 ? (
+      {step === PASO_COSTEO ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -673,7 +700,7 @@ export function PrototypeQuoterPage() {
         </section>
       ) : null}
 
-      {step === 6 ? (
+      {step === PASO_RESUMEN ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
           <div className="mb-5">
             <h2 className="text-base font-semibold text-zinc-950">Resumen</h2>
@@ -690,16 +717,28 @@ export function PrototypeQuoterPage() {
               }
             />
             <Dato label="Pieza" valor={draft.description || "—"} />
+            <Dato
+              label="Producto interno"
+              valor={
+                persisted?.product_code
+                  ? `${persisted.product_code}${persisted.product_name ? ` · ${persisted.product_name}` : ""}`
+                  : "Pendiente de código interno"
+              }
+            />
             <Dato label="Muestras" valor={String(draft.quantity)} />
             <Dato
               label="Medidas"
               valor={
                 [draft.width_cm, draft.length_cm, draft.height_cm]
                   .filter(Boolean)
+                  .map(sinEscala)
                   .join(" × ") || "—"
               }
             />
-            <Dato label="Plazo" valor={costing ? `${costing.estimated_days} días` : "—"} />
+            <Dato
+              label="Plazo"
+              valor={costing ? `${sinEscala(costing.estimated_days)} días` : "—"}
+            />
           </dl>
           {costing ? (
             <div className="mt-5 border-t border-zinc-100 pt-5">
@@ -707,6 +746,17 @@ export function PrototypeQuoterPage() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {/* Emitida: se enseña el papel que se le manda al cliente, como en el
+          Cotizador de producto. `revision` lo regenera cuando el documento
+          cambia de estado —al cobrar, al anular—, que es cuando el PDF deja de
+          ser el mismo. */}
+      {step === PASO_RESUMEN && persisted && persisted.status !== "DRAFT" ? (
+        <PrototypeQuotationDocument
+          quotationId={persisted.id}
+          revision={`${persisted.status}-${persisted.payment_status}-${persisted.updated_at ?? ""}`}
+        />
       ) : null}
 
       {error ? (
@@ -741,16 +791,6 @@ export function PrototypeQuoterPage() {
             <PrimaryButton type="button" disabled={busy} onClick={() => confirm.mutate()}>
               Emitir cotización
             </PrimaryButton>
-          ) : null}
-          {persisted?.status === "CONFIRMED" ? (
-            <a
-              href={prototypeQuotationPdfUrl(persisted.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-xs hover:bg-zinc-50"
-            >
-              Ver PDF
-            </a>
           ) : null}
           {persisted?.status === "CONFIRMED" && persisted.payment_status === "UNPAID" ? (
             <SecondaryButton disabled={busy} onClick={() => markPaid.mutate()}>
@@ -801,16 +841,14 @@ function Costeo({
     ["Artista", costing.artist_cost],
     ["Matricero", costing.mold_maker_cost],
     ["Materiales", costing.materials_cost],
-    ["Quema", costing.firing_cost],
     ["Costos fijos", costing.fixed_cost],
   ];
   const dias: Array<[string, string]> = [
-    ["Diseño", costing.design_days],
-    ["Artista", costing.artist_days],
-    ["Matricero", costing.mold_maker_days],
-    ["Secado", costing.drying_days],
-    ["Quema", String(costing.firing_days)],
-    ["Ajuste", costing.adjustment_days],
+    ["Diseño", sinEscala(costing.design_days)],
+    ["Artista", sinEscala(costing.artist_days)],
+    ["Matricero", sinEscala(costing.mold_maker_days)],
+    ["Secado", sinEscala(costing.drying_days)],
+    ["Ajuste", sinEscala(costing.adjustment_days)],
   ];
 
   return (
@@ -857,7 +895,7 @@ function Costeo({
             ))}
           </div>
           <p className="mt-2 text-sm text-zinc-950">
-            <span className="font-semibold">{costing.estimated_days} días</span>
+            <span className="font-semibold">{sinEscala(costing.estimated_days)} días</span>
             {costing.target_date ? (
               <span className="text-xs text-zinc-500"> · objetivo {costing.target_date}</span>
             ) : null}

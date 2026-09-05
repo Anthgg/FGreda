@@ -52,4 +52,14 @@ export const cancelPrototypeQuotation = (id: number): Promise<PrototypeQuotation
 export const markPrototypeQuotationPaid = (id: number): Promise<PrototypeQuotation> =>
   apiClient.post(`${BASE}/${id}/mark-paid`, {});
 
-export const prototypeQuotationPdfUrl = (id: number): string => `/api/v1${BASE}/${id}/pdf`;
+/**
+ * El documento, para verlo dentro de la pantalla.
+ *
+ * Se trae como blob y no como enlace por la misma razon que en el Cotizador: la
+ * peticion lleva la sesion y el CSRF del cliente HTTP, y un `<a href>` a la API
+ * saldria del navegador sin ellos.
+ */
+export const fetchPrototypeQuotationPdf = (
+  id: number,
+): Promise<{ blob: Blob; filename: string | null }> =>
+  apiClient.getBlobWithFilename(`${BASE}/${id}/pdf`);

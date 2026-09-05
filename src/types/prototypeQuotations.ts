@@ -1,6 +1,10 @@
 /**
  * Cotización de prototipo: el documento comercial, no la muestra física.
  *
+ * Aquí NO hay quema. Lo que se cotiza es la muestra en barro, así que no viaja
+ * horno, ni tipo de quema, ni hornadas: el sistema de quemas sigue intacto para
+ * producción y simplemente no entra en este documento.
+ *
  * La regla que gobierna estos tipos: **el navegador manda intención y recibe
  * importes**. Por eso `PrototypeQuotationDraftInput` no tiene ni un campo de
  * dinero calculado —ni subtotal, ni IGV, ni total, ni costo unitario, ni
@@ -18,9 +22,6 @@
 export type PrototypeQuotationStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
 export type PrototypeQuotationPaymentStatus = "UNPAID" | "PAID";
 
-/** El mismo vocabulario que las quemas. «Baja» y «Alta» son etiquetas. */
-export type FiringType = "LOW" | "HIGH";
-
 export interface PrototypeQuotationMaterialInput {
   product_id: number;
   /** Por UNA muestra. El total lo multiplica el backend. */
@@ -31,6 +32,12 @@ export interface PrototypeQuotationMaterialInput {
 export interface PrototypeQuotationDraftInput {
   customer_id?: number | null;
   product_id?: number | null;
+  /**
+   * Sólo para conceptos nuevos: a qué familia irá el producto que nazca al
+   * cobrar. No se puede deducir, y elegirla por el usuario metería la pieza en
+   * una categoría que nadie escogió.
+   */
+  product_category_id?: number | null;
   description: string;
   quantity: number;
 
@@ -66,11 +73,6 @@ export interface PrototypeQuotationDraftInput {
   mold_maker_price_override?: string | null;
   mold_maker_days: string;
 
-  kiln_id?: number | null;
-  /** Sin valor por defecto: elegir uno en silencio cotizaría a otra tarifa. */
-  firing_type?: FiringType | null;
-  firing_batches: number;
-
   drying_days: string;
   adjustment_days: string;
   fixed_cost_override?: string | null;
@@ -102,7 +104,6 @@ export interface PrototypeCostBreakdown {
   artist_cost: string;
   mold_maker_cost: string;
   materials_cost: string;
-  firing_cost: string;
   fixed_cost: string;
   /** La suma de los conceptos, SIEMPRE en soles: es el costo, no el precio. */
   base_cost: string;
@@ -134,14 +135,11 @@ export interface PrototypeCostBreakdown {
   design_rate: string;
   artist_rate: string;
   mold_maker_price: string;
-  firing_rate: string;
-  firing_days_per_batch: number;
 
   design_days: string;
   artist_days: string;
   mold_maker_days: string;
   drying_days: string;
-  firing_days: number;
   adjustment_days: string;
   estimated_days: string;
   target_date: string | null;
@@ -161,6 +159,14 @@ export interface PrototypeQuotation {
   customer_id: number | null;
   customer_name: string | null;
   product_id: number | null;
+  product_category_id: number | null;
+  /**
+   * El producto maestro, cuando existe. En un concepto nuevo sin cobrar llega
+   * `null` a propósito: todavía no hay código, y la pantalla lo dice en vez de
+   * inventarlo. **El código es autoridad del backend.**
+   */
+  product_code: string | null;
+  product_name: string | null;
   description: string;
   quantity: number;
 
@@ -178,9 +184,6 @@ export interface PrototypeQuotation {
   mold_maker_partner_id: number | null;
   mold_maker_price_override: string | null;
   mold_maker_days: string;
-  kiln_id: number | null;
-  firing_type: FiringType | null;
-  firing_batches: number;
   drying_days: string;
   adjustment_days: string;
   fixed_cost_override: string | null;

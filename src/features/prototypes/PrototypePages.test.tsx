@@ -91,7 +91,13 @@ describe("Fase 009K · prototipos", () => {
       expect(body).not.toContain("[Especificaciones]");
       expect(body).not.toContain("Ancho cm:");
     });
-  });
+    // Diez interacciones encadenadas —teclear, abrir dos desplegables, elegir
+    // sus opciones, rellenar cuatro medidas— contra el plazo de 5 s por
+    // omisión. Aislado sobra; en la corrida completa, con las otras 38 suites
+    // repartiéndose la máquina, se queda sin margen y falla por reloj, no por
+    // lo que comprueba. Ninguna aserción se relaja: sólo se le da el aire que
+    // necesita para llegar a hacerlas.
+  }, 20000);
 
   it("3. enseña el código emitido por backend después de crear", async () => { installBackend(); renderApp(["/prototipos/nuevo"]); await userEvent.type(await screen.findByLabelText(/^nombre/i), "Muestra standalone"); await userEvent.click(screen.getByRole("button", { name: "Crear prototipo" })); expect(await screen.findByText(/creado con código PRT-2026-000007/i)).toBeInTheDocument(); });
 

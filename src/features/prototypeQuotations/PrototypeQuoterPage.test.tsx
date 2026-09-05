@@ -30,40 +30,40 @@ import type {
   PrototypeQuotation,
 } from "@/types/prototypeQuotations";
 
-// El caso canónico del Excel v2: 800 de costo, 144 de IGV, 944 de total.
+// El caso de referencia: 450 de costo, 81 de IGV, 531 de total, 6 días.
+//
+// El ejemplo del Excel v2 daba 800 / 144 / 944 / 9 porque incluía una hornada.
+// La quema salió del Cotizador de Prototipos —lo que se cotiza es la muestra en
+// barro— y con ella esos números.
 const COSTEO: PrototypeCostBreakdown = {
   design_cost: "240.00",
   artist_cost: "200.00",
   mold_maker_cost: "0.00",
   materials_cost: "10.00",
-  firing_cost: "350.00",
   fixed_cost: "0.00",
-  base_cost: "800.00",
-  raw_net_total: "800.00",
+  base_cost: "450.00",
+  raw_net_total: "450.00",
   currency: "PEN",
   exchange_rate: null,
-  raw_tax: "144.00",
-  raw_gross_total: "944.00",
-  commercial_net_total: "800.00",
+  raw_tax: "81.00",
+  raw_gross_total: "531.00",
+  commercial_net_total: "450.00",
   tax_percent: "18",
-  commercial_tax_total: "144.00",
-  commercial_gross_total: "944.00",
-  total_per_prototype: "944.00",
+  commercial_tax_total: "81.00",
+  commercial_gross_total: "531.00",
+  total_per_prototype: "531.00",
   rounding_step: "0.50",
   rounding_source: "COMMERCIAL_SETTINGS",
   design_rate: "80.00",
   artist_rate: "100.00",
   mold_maker_price: "0.00",
-  firing_rate: "350.00",
-  firing_days_per_batch: 3,
   design_days: "3",
   artist_days: "2",
   mold_maker_days: "0",
   drying_days: "1",
-  firing_days: 3,
   adjustment_days: "0",
-  estimated_days: "9",
-  target_date: "2026-09-14",
+  estimated_days: "6",
+  target_date: "2026-09-11",
   materials: [
     {
       id: 1,
@@ -79,19 +79,19 @@ const COSTEO: PrototypeCostBreakdown = {
   ],
 };
 
-// El mismo caso en dólares a 4.00: el costo sigue siendo 800 soles y el precio
-// pasa a 200 + 36 = 236 dólares.
+// El mismo caso en dólares a 4.50: el costo sigue siendo 450 soles y el precio
+// pasa a 100 + 18 = 118 dólares.
 const COSTEO_USD: PrototypeCostBreakdown = {
   ...COSTEO,
-  raw_net_total: "200.00",
+  raw_net_total: "100.00",
   currency: "USD",
-  exchange_rate: "4.000000",
-  raw_tax: "36.00",
-  raw_gross_total: "236.00",
-  commercial_net_total: "200.00",
-  commercial_tax_total: "36.00",
-  commercial_gross_total: "236.00",
-  total_per_prototype: "236.00",
+  exchange_rate: "4.500000",
+  raw_tax: "18.00",
+  raw_gross_total: "118.00",
+  commercial_net_total: "100.00",
+  commercial_tax_total: "18.00",
+  commercial_gross_total: "118.00",
+  total_per_prototype: "118.00",
 };
 
 function cotizacion(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuotation {
@@ -106,6 +106,9 @@ function cotizacion(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuota
     customer_id: 3,
     customer_name: "Cliente prototipo",
     product_id: null,
+    product_category_id: 4,
+    product_code: null,
+    product_name: null,
     description: "Taza personalizada",
     quantity: 1,
     width_cm: "15",
@@ -121,9 +124,6 @@ function cotizacion(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuota
     mold_maker_partner_id: null,
     mold_maker_price_override: null,
     mold_maker_days: "0",
-    kiln_id: 2,
-    firing_type: "LOW",
-    firing_batches: 1,
     drying_days: "1",
     adjustment_days: "0",
     fixed_cost_override: null,
@@ -158,6 +158,8 @@ function mockApi(
   mockFetch((url, init) => {
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return sessionResponse();
+    if (url.includes("/categories"))
+      return jsonResponse(200, [{ id: 4, name: "Piezas", display_path: "Piezas", active: true }]);
     if (url.includes("/products")) return jsonResponse(200, { items: [], total: 0 });
     if (url.includes("/kilns")) return jsonResponse(200, { items: [], total: 0 });
     if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0 });
@@ -206,20 +208,32 @@ async function enDolaresA(user: ReturnType<typeof userEvent.setup>, tasa: string
 async function describirPieza(user: ReturnType<typeof userEvent.setup>) {
   await irA(user, "Prototipo");
   await user.type(screen.getByLabelText(/Descripción/), "Taza personalizada");
+  // Un concepto nuevo declara su familia: al cobrar se convierte en producto
+  // maestro, y el maestro la exige.
+  await elegir(user, "Familia del nuevo producto", /Piezas/);
 }
 
 // ---------------------------------------------------------------------------
 // El wizard
 // ---------------------------------------------------------------------------
 describe("Cotizador de prototipos · wizard", () => {
-  it("abre en Datos y enseña las siete etapas del documento", () => {
+  it("PROTOTYPE_QUOTER_STEPS: abre en Datos y enseña las SEIS etapas", () => {
     mockApi();
     renderWithProviders(<PrototypeQuoterPage />);
 
-    for (const etapa of ["Datos", "Prototipo", "Trabajo", "Materiales", "Quema", "Costeo", "Resumen"]) {
+    for (const etapa of ["Datos", "Prototipo", "Trabajo", "Materiales", "Costeo", "Resumen"]) {
       expect(screen.getByRole("button", { name: new RegExp(etapa, "i") })).toBeInTheDocument();
     }
     expect(screen.getByText("Datos generales")).toBeInTheDocument();
+  });
+
+  it("PROTOTYPE_QUOTATION_HAS_FIRING_STEP: no hay etapa de Quema", () => {
+    mockApi();
+    renderWithProviders(<PrototypeQuoterPage />);
+
+    // Lo que se cotiza es la muestra en barro: no pasa por el horno.
+    expect(screen.queryByRole("button", { name: /Quema/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^[1-9]/ })).toHaveLength(6);
   });
 
   it("se puede saltar de etapa sin perder lo escrito", async () => {
@@ -253,14 +267,29 @@ describe("Cotizador de prototipos · wizard", () => {
     expect(screen.getByText(/Precio fijo en soles/i)).toBeInTheDocument();
   });
 
-  it("el tipo de quema no trae valor por defecto", async () => {
+  it("PROTOTYPE_QUOTATION_USES_KILN: no se pide horno, tipo de quema ni hornadas", async () => {
     const user = userEvent.setup();
     mockApi();
     renderWithProviders(<PrototypeQuoterPage />);
 
-    await irA(user, "Quema");
-    // Elegir BAJA en silencio cotizaría a una tarifa que nadie escogió.
-    expect(screen.getByLabelText(/Tipo de quema/)).toHaveValue("");
+    // Se recorren TODAS las etapas: un campo escondido en cualquiera de ellas
+    // seguiría rellenando el modelo viejo en silencio.
+    for (const etapa of ["Datos", "Prototipo", "Trabajo", "Materiales", "Costeo", "Resumen"]) {
+      await irA(user, etapa);
+      expect(screen.queryByLabelText(/Horno/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Tipo de quema/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/hornadas/i)).not.toBeInTheDocument();
+    }
+  });
+
+  it("el secado y el ajuste siguen pidiéndose: son plazo, no costo", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    renderWithProviders(<PrototypeQuoterPage />);
+
+    await irA(user, "Trabajo");
+    expect(screen.getByLabelText(/Días de secado/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Días de ajuste/)).toBeInTheDocument();
   });
 
   it("la cantidad de material es POR MUESTRA, no el total", async () => {
@@ -313,12 +342,12 @@ describe("Cotizador de prototipos · autoridad del backend", () => {
 
     await describirPieza(user);
     await irA(user, "Costeo");
-    expect(await screen.findByText("S/ 944.00")).toBeInTheDocument();
-    expect(screen.getByText("S/ 144.00")).toBeInTheDocument();
+    expect(await screen.findByText("S/ 531.00")).toBeInTheDocument();
+    expect(screen.getByText("S/ 81.00")).toBeInTheDocument();
     // Aparece dos veces y está bien: sin factor ni margen, el costo base ES el
     // subtotal comercial. Es justamente lo que distingue este motor del de
     // producción, y verlo repetido es la prueba de que nadie multiplicó nada.
-    expect(screen.getAllByText("S/ 800.00")).toHaveLength(2);
+    expect(screen.getAllByText("S/ 450.00")).toHaveLength(2);
   });
 
   it("el plazo también llega del backend y no se suma en pantalla", async () => {
@@ -328,7 +357,7 @@ describe("Cotizador de prototipos · autoridad del backend", () => {
 
     await describirPieza(user);
     await irA(user, "Costeo");
-    expect(await screen.findByText(/9 días/)).toBeInTheDocument();
+    expect(await screen.findByText(/6 días/)).toBeInTheDocument();
   });
 
   it("una tarifa vacía viaja como null, no como cero", async () => {
@@ -352,7 +381,7 @@ describe("Cotizador de prototipos · autoridad del backend", () => {
 
     await describirPieza(user);
     await irA(user, "Costeo");
-    await screen.findByText("S/ 944.00");
+    await screen.findByText("S/ 531.00");
     // No hay ningún campo de unidad: viene del catálogo.
     expect(screen.queryByLabelText(/Unidad/i)).not.toBeInTheDocument();
   });
@@ -362,8 +391,10 @@ describe("Cotizador de prototipos · autoridad del backend", () => {
     mockFetch((url) => {
       if (url.includes("/auth/csrf")) return csrfResponse();
       if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/categories"))
+        return jsonResponse(200, [{ id: 4, name: "Piezas", display_path: "Piezas", active: true }]);
       if (url.includes("/prototype-quotations")) {
-        return errorResponse(422, "PROTOTYPE_QUOTATION_FIRING_RATE_MISSING");
+        return errorResponse(422, "PROTOTYPE_QUOTATION_INCOMPLETE");
       }
       return jsonResponse(200, { items: [], total: 0 });
     });
@@ -458,7 +489,7 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     const espias = mockApi(cotizacion(), COSTEO_USD);
     renderWithProviders(<PrototypeQuoterPage />);
 
-    await enDolaresA(user, "4");
+    await enDolaresA(user, "4.5");
     await describirPieza(user);
     await irA(user, "Costeo");
     await vi.waitFor(() => expect(espias.enviados.length).toBeGreaterThan(0));
@@ -466,7 +497,7 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     const enviado = ultimoEnviado(espias);
     expect(enviado.currency_code).toBe("USD");
     // Viaja como cadena: convertirla a número es el primer paso para sumarla.
-    expect(enviado.exchange_rate).toBe("4");
+    expect(enviado.exchange_rate).toBe("4.5");
   });
 
   it("el precio se enseña en la moneda de emisión", async () => {
@@ -474,12 +505,12 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     mockApi(cotizacion(), COSTEO_USD);
     renderWithProviders(<PrototypeQuoterPage />);
 
-    await enDolaresA(user, "4");
+    await enDolaresA(user, "4.5");
     await describirPieza(user);
     await irA(user, "Costeo");
 
-    expect(await screen.findByText("US$ 236.00")).toBeInTheDocument();
-    expect(screen.getByText("US$ 36.00")).toBeInTheDocument();
+    expect(await screen.findByText("US$ 118.00")).toBeInTheDocument();
+    expect(screen.getByText("US$ 18.00")).toBeInTheDocument();
   });
 
   it("FRONT_PROTOTYPE_COST_STAYS_IN_PEN: el costo interno sigue en soles", async () => {
@@ -487,13 +518,15 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     mockApi(cotizacion(), COSTEO_USD);
     renderWithProviders(<PrototypeQuoterPage />);
 
-    await enDolaresA(user, "4");
+    await enDolaresA(user, "4.5");
     await describirPieza(user);
     await irA(user, "Costeo");
 
     // En soles se le paga al artista: encabezar 200 con `US$` sería mentir.
     expect(await screen.findByText("S/ 200.00")).toBeInTheDocument();
     expect(screen.getByText("S/ 240.00")).toBeInTheDocument();
+    // Y el costo base tampoco se convierte: sigue siendo el de soles.
+    expect(screen.getByText("S/ 450.00")).toBeInTheDocument();
     expect(screen.getByText(/Costo interno \(en soles\)/)).toBeInTheDocument();
   });
 
@@ -502,12 +535,12 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     mockApi(cotizacion(), COSTEO_USD);
     renderWithProviders(<PrototypeQuoterPage />);
 
-    await enDolaresA(user, "4");
+    await enDolaresA(user, "4.5");
     await describirPieza(user);
     await irA(user, "Costeo");
 
     expect(await screen.findByText(/Neto convertido/)).toBeInTheDocument();
-    expect(screen.getByText("1 USD = S/ 4.00")).toBeInTheDocument();
+    expect(screen.getByText("1 USD = S/ 4.50")).toBeInTheDocument();
   });
 
   it("una cotización emitida en dólares no deja cambiar de moneda", async () => {
@@ -518,15 +551,16 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
         code: "CPR-2026-000001",
         currency_code: "USD",
         currency_symbol: "US$",
-        exchange_rate: "4.000000",
+        exchange_rate: "4.500000",
         costing: COSTEO_USD,
       }),
     );
     renderApp(["/prototipos/cotizador/12"]);
 
     // Un documento emitido es un papel entregado, no un formulario.
-    // «Ver PDF» sólo existe para una emitida: es la señal de que ya cargó.
-    await screen.findByRole("link", { name: /Ver PDF/i });
+    // «Registrar cobro» sólo existe para una emitida sin pagar: es la señal
+    // de que la cotización guardada ya cargó.
+    await screen.findByRole("button", { name: /Registrar cobro/i });
     expect(screen.getByRole("combobox", { name: "Moneda" })).toBeDisabled();
   });
 
@@ -538,13 +572,84 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
         code: "CPR-2026-000002",
         currency_code: "USD",
         currency_symbol: "US$",
-        exchange_rate: "4.000000",
+        exchange_rate: "4.500000",
         costing: COSTEO_USD,
       }),
     );
     renderApp(["/prototipos/cotizador/12"]);
 
-    await screen.findByRole("link", { name: /Ver PDF/i });
-    expect(screen.getByLabelText(/Tipo de cambio/)).toHaveValue("4.000000");
+    await screen.findByRole("button", { name: /Registrar cobro/i });
+    expect(screen.getByLabelText(/Tipo de cambio/)).toHaveValue("4.500000");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// El producto interno
+//
+// El código lo emite el backend al cobrar. Antes de eso la pantalla dice que
+// está pendiente; inventarlo aquí daría un código que no existe en el maestro.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · producto interno", () => {
+  it("un concepto nuevo tiene que declarar su familia antes de guardarse", async () => {
+    const user = userEvent.setup();
+    // Se abre una guardada para que el cliente ya esté puesto y lo único que
+    // falte sea la familia.
+    mockApi(cotizacion({ product_id: null, product_category_id: null }));
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Prototipo/i }));
+
+    // Sin familia no se puede guardar: al cobrar habría que crear el producto
+    // maestro, y el maestro la exige.
+    expect(screen.getByRole("button", { name: /Guardar borrador/i })).toBeDisabled();
+
+    await elegir(user, "Familia del nuevo producto", /Piezas/);
+    expect(screen.getByRole("button", { name: /Guardar borrador/i })).toBeEnabled();
+  });
+
+  it("FRONTEND_FINISHED_PRODUCT_CODE_AUTHORITY: sin cobrar no hay código, y no se inventa", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    renderWithProviders(<PrototypeQuoterPage />);
+
+    await irA(user, "Prototipo");
+    expect(screen.getByText(/pendiente de código interno/i)).toBeInTheDocument();
+    // Ni un LAB50 a mano, ni un contador, ni la cantidad de productos + 1.
+    expect(screen.queryByText(/LAB50/)).not.toBeInTheDocument();
+  });
+
+  it("cobrada, la pantalla enseña el código real y el nombre", async () => {
+    mockApi(
+      cotizacion({
+        id: 12,
+        status: "CONFIRMED",
+        payment_status: "PAID",
+        code: "CPR-2026-000003",
+        product_id: 77,
+        product_code: "LAB50042",
+        product_name: "Jarra Mediterránea",
+        prototype_id: 5,
+        prototype_code: "PRT-2026-000005",
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    // La muestra ya existe: es la señal de que el cobro se registró.
+    await screen.findByRole("link", { name: /PRT-2026-000005/ });
+    expect(screen.getByText(/LAB50042/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Jarra Mediterránea/).length).toBeGreaterThan(0);
+  });
+
+  it("una muestra de un producto del catálogo no pide familia nueva", async () => {
+    const user = userEvent.setup();
+    mockApi(cotizacion({ product_id: 77, product_code: "LAB50001", product_name: "Taza" }));
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Prototipo/i }));
+    // Ya tiene identidad: pedir familia daría a entender que va a nacer otro.
+    expect(screen.queryByLabelText(/Familia del nuevo producto/)).not.toBeInTheDocument();
+    // Sale en la cabecera y en la ficha de la pieza: las dos son correctas.
+    expect(screen.getAllByText(/LAB50001/).length).toBeGreaterThan(0);
   });
 });
