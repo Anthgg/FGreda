@@ -579,7 +579,10 @@ describe("Cotizador de prototipos · moneda y tipo de cambio", () => {
     renderApp(["/prototipos/cotizador/12"]);
 
     await screen.findByRole("button", { name: /Registrar cobro/i });
-    expect(screen.getByLabelText(/Tipo de cambio/)).toHaveValue("4.500000");
+    // Lo que se afirma es que vuelve LA TASA CONGELADA —4.5, la del día en que
+    // se emitió— y no la de hoy. Se escribe «4.5» y no «4.500000» porque la
+    // escala de la columna no es parte del acuerdo: ver la prueba de escala.
+    expect(screen.getByLabelText(/Tipo de cambio/)).toHaveValue("4.5");
   });
 });
 
@@ -651,5 +654,44 @@ describe("Cotizador de prototipos · producto interno", () => {
     expect(screen.queryByLabelText(/Familia del nuevo producto/)).not.toBeInTheDocument();
     // Sale en la cabecera y en la ficha de la pieza: las dos son correctas.
     expect(screen.getAllByText(/LAB50001/).length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// La escala de la columna no es lo que se tecleó
+//
+// Defecto encontrado mirando la pantalla, no leyendo el código: se escribía
+// «15» de ancho, se guardaba, y el campo volvía como «15.000000». Es la
+// precisión de `Numeric(18, 6)` asomando por un sitio donde nadie la pidió.
+// Recortar ceros no es aritmética —el valor que viaja es el mismo—, pero
+// devolverle a alguien algo distinto de lo que escribió sí es un defecto.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · escala de las columnas", () => {
+  it("al reabrir una guardada, las medidas y los días vuelven como se teclearon", async () => {
+    const user = userEvent.setup();
+    mockApi(
+      cotizacion({
+        width_cm: "15.000000",
+        height_cm: "22.000000",
+        design_days: "1.000000",
+        drying_days: "0.500000",
+        currency_code: "USD",
+        exchange_rate: "3.800000",
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    // La tasa, en el primer paso.
+    const tasa = await screen.findByLabelText(/Tipo de cambio/i);
+    expect(tasa).toHaveValue("3.8");
+
+    await user.click(screen.getByRole("button", { name: /Prototipo/i }));
+    expect(screen.getByLabelText(/Ancho cm/i)).toHaveValue(15);
+    expect(screen.getByLabelText(/Alto cm/i)).toHaveValue(22);
+
+    await user.click(screen.getByRole("button", { name: /Trabajo/i }));
+    expect(screen.getByLabelText(/Días de diseño/i)).toHaveValue(1);
+    // Medio día de secado es medio día: se recortan ceros, no decimales.
+    expect(screen.getByLabelText(/Días de secado/i)).toHaveValue(0.5);
   });
 });

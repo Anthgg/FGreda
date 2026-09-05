@@ -117,6 +117,18 @@ function sinEscala(value: string | number | null | undefined): string {
   return texto.replace(/\.?0+$/, "") || "0";
 }
 
+/**
+ * Lo mismo, pero para un campo que se puede editar.
+ *
+ * En un dato de solo lectura, vacio se dibuja como una raya. En un campo no:
+ * una raya no se puede seguir escribiendo. Aqui vacio sigue siendo vacio.
+ */
+function sinEscalaCampo(value: string): string;
+function sinEscalaCampo(value: string | null): string | null;
+function sinEscalaCampo(value: string | null): string | null {
+  return value === null || value === "" ? value : sinEscala(value);
+}
+
 export function PrototypeQuoterPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -156,22 +168,25 @@ export function PrototypeQuoterPage() {
       product_category_id: persisted.product_category_id,
       description: persisted.description,
       quantity: persisted.quantity,
-      width_cm: persisted.width_cm,
-      length_cm: persisted.length_cm,
-      height_cm: persisted.height_cm,
-      depth_cm: persisted.depth_cm,
+      // La columna es Numeric(18, 6) y devuelve «15.000000». Quien tecleo «15»
+      // no espera encontrarse eso al volver, asi que se le devuelve lo suyo.
+      // Es recorte de ceros, no aritmetica: el valor que viaja es el mismo.
+      width_cm: sinEscalaCampo(persisted.width_cm),
+      length_cm: sinEscalaCampo(persisted.length_cm),
+      height_cm: sinEscalaCampo(persisted.height_cm),
+      depth_cm: sinEscalaCampo(persisted.depth_cm),
       notes: persisted.notes,
       currency_code: persisted.currency_code === "USD" ? "USD" : "PEN",
-      exchange_rate: persisted.exchange_rate,
-      design_days: persisted.design_days,
-      design_rate_override: persisted.design_rate_override,
-      artist_days: persisted.artist_days,
-      artist_rate_override: persisted.artist_rate_override,
-      mold_maker_price_override: persisted.mold_maker_price_override,
-      mold_maker_days: persisted.mold_maker_days,
-      drying_days: persisted.drying_days,
-      adjustment_days: persisted.adjustment_days,
-      fixed_cost_override: persisted.fixed_cost_override,
+      exchange_rate: sinEscalaCampo(persisted.exchange_rate),
+      design_days: sinEscalaCampo(persisted.design_days),
+      design_rate_override: sinEscalaCampo(persisted.design_rate_override),
+      artist_days: sinEscalaCampo(persisted.artist_days),
+      artist_rate_override: sinEscalaCampo(persisted.artist_rate_override),
+      mold_maker_price_override: sinEscalaCampo(persisted.mold_maker_price_override),
+      mold_maker_days: sinEscalaCampo(persisted.mold_maker_days),
+      drying_days: sinEscalaCampo(persisted.drying_days),
+      adjustment_days: sinEscalaCampo(persisted.adjustment_days),
+      fixed_cost_override: sinEscalaCampo(persisted.fixed_cost_override),
       materials: [],
     });
     setCustomerLabel(persisted.customer_name ?? "");
