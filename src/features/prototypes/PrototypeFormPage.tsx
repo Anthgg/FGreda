@@ -140,7 +140,29 @@ export function PrototypeFormPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
-      <header><Link to="/prototipos" className="text-sm text-zinc-500 hover:underline">← Prototipos</Link><h1 className="mt-2 text-2xl font-semibold">Crear prototipo</h1><p className="mt-1 text-sm text-zinc-500">Ficha basada en el control de prototipos del taller. El código lo asignará el backend.</p></header>
+      <header>
+        <Link to="/prototipos" className="text-sm text-zinc-500 hover:underline">← Prototipos</Link>
+        <h1 className="mt-2 text-2xl font-semibold">Muestra de una cotización</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Para prototipar una pieza que ya está dentro de una cotización de producto. El código
+          lo asignará el backend.
+        </p>
+        {/*
+          Se dice en voz alta lo que este formulario NO hace. Sin este aviso
+          parecía el alta normal de muestras, y usarlo así se saltaba el
+          documento y el cobro: la muestra no arranca igual —el backend lo
+          impide— pero la persona lo descubría al final, no al empezar.
+        */}
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          Esto <span className="font-semibold">no emite una cotización de prototipo</span> ni la
+          cobra. Sólo arrancará si la cotización de producto que elijas está pagada. Para
+          venderle un desarrollo a un cliente,{" "}
+          <Link to="/prototipos/cotizador" className="font-semibold underline">
+            usa el Cotizador de prototipos
+          </Link>
+          .
+        </p>
+      </header>
       <form onSubmit={submit} className="glass-panel space-y-6 rounded-3xl border border-white/60 p-6 shadow-sm">
         <section className="space-y-4">
           <h2 className="text-sm font-semibold text-zinc-950">Datos del prototipo</h2>

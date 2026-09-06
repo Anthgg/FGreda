@@ -1,7 +1,12 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { jsonResponse, mockFetch, renderApp, sessionResponse } from "@/test/utils";
+import {
+  jsonResponse,
+  mockFetch,
+  renderApp,
+  sessionResponse,
+} from "@/test/utils";
 import type { ProductionOrder } from "@/types/production";
 import type { QuotationPaymentStatus } from "@/types/quotations";
 
@@ -53,7 +58,8 @@ function orden(payment: QuotationPaymentStatus | null): ProductionOrder {
 function backend(payment: QuotationPaymentStatus | null) {
   return mockFetch((url) => {
     if (url.includes("/auth/me")) return sessionResponse();
-    if (url.includes("/production-orders/2")) return jsonResponse(200, orden(payment));
+    if (url.includes("/production-orders/2"))
+      return jsonResponse(200, orden(payment));
     return jsonResponse(200, {});
   });
 }
@@ -64,7 +70,9 @@ describe("arrancar producción y el cobro", () => {
 
     renderApp(["/produccion/2"]);
 
-    expect(await screen.findByRole("button", { name: /arrancar producción/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /arrancar producción/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/pendiente de pago/i)).not.toBeInTheDocument();
   });
 
@@ -76,11 +84,15 @@ describe("arrancar producción y el cobro", () => {
 
     renderApp(["/produccion/2"]);
 
-    expect(await screen.findByText(/cotización pendiente de pago/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/cotización pendiente de pago/i),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/debe estar pagada para iniciar la producción/i),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /arrancar producción/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /arrancar producción/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("«no consta» tampoco alcanza", async () => {
@@ -90,8 +102,12 @@ describe("arrancar producción y el cobro", () => {
 
     renderApp(["/produccion/2"]);
 
-    expect(await screen.findByText(/cotización pendiente de pago/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /arrancar producción/i })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/cotización pendiente de pago/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /arrancar producción/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("el aviso lleva a la cotización, porque quien fabrica no cobra", async () => {
@@ -104,7 +120,62 @@ describe("arrancar producción y el cobro", () => {
     // Por destino y no por el texto del enlace: lo que importa es a dónde
     // lleva. El nombre accesible incluye la flecha y depende de cómo se
     // componga, así que afirmarlo por texto probaría la maquetación.
-    const enlaces = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    const enlaces = screen
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href"));
     expect(enlaces).toContain("/cotizaciones/349");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// La hoja de taller y el lateral de la orden
+//
+// La hoja estaba detrás de un botón: había que saber que existía para verla.
+// Ahora se pide al abrir la orden, y al lado va lo que hay que decidir.
+// ---------------------------------------------------------------------------
+describe("Orden de producción · hoja y lateral", () => {
+  it("el lateral enseña la orden sin un solo importe", async () => {
+    backend("PAID");
+    renderApp(["/produccion/2"]);
+
+    await screen.findByText("Hoja de taller");
+
+    // Lo que necesita quien fabrica.
+    expect(screen.getAllByText("JARRAS").length).toBeGreaterThan(0);
+    expect(screen.getByText("12 piezas")).toBeInTheDocument();
+    expect(screen.getByText("Pagada")).toBeInTheDocument();
+
+    // Y lo que NO: una orden de producción no es un documento comercial.
+    // Poner el precio de venta delante de quien fabrica no le ayuda a
+    // fabricar, y ninguno de estos rótulos tiene sitio aquí.
+    for (const comercial of [
+      /Subtotal/i,
+      /IGV/i,
+      /^Total:/i,
+      /P\. Unitario/i,
+    ]) {
+      expect(screen.queryByText(comercial)).not.toBeInTheDocument();
+    }
+  });
+
+  it("la hoja se pide al abrir la orden, sin que haya que pulsar nada", async () => {
+    const fetchSpy = backend("PAID");
+    renderApp(["/produccion/2"]);
+
+    await screen.findByText("Hoja de taller");
+
+    // Nadie ha pulsado: si el documento no se pidiera solo, esto no estaría.
+    await vi.waitFor(() =>
+      expect(
+        fetchSpy.mock.calls.some(([url]) => String(url).includes("/document")),
+      ).toBe(true),
+    );
+    // El botón queda para regenerar, no para descubrir que la hoja existe.
+    expect(
+      screen.queryByRole("button", { name: /Hoja de taller \(PDF\)/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Actualizar hoja/i }),
+    ).toBeInTheDocument();
   });
 });

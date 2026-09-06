@@ -55,9 +55,28 @@ export function PrototypesPage() {
           <TypewriterTitle text="Prototipos." className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl" />
           <p className="mt-1 text-xs text-zinc-500 sm:text-sm">Muestras físicas, disponibilidad, evaluación e iteraciones.</p>
         </div>
-        <Link to="/prototipos/nuevo" className="inline-flex rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800">
-          Crear prototipo
-        </Link>
+        {/*
+          El camino normal es el Cotizador: una muestra nace de un documento
+          CPR emitido y cobrado. El alta directa sigue existiendo porque las
+          muestras de 009K cuelgan de una cotización de producto (CTZ) y esas
+          no se cotizan aquí, pero deja de ser el botón primario: ofrecer los
+          dos con el mismo peso hacía que el atajo fuera el camino.
+        */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/prototipos/nuevo"
+            className="inline-flex rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 shadow-xs hover:bg-zinc-50"
+            title="Sólo para muestras que cuelgan de una cotización de producto ya pagada. No emite CPR."
+          >
+            Muestra de una cotización
+          </Link>
+          <Link
+            to="/prototipos/cotizador"
+            className="inline-flex rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800"
+          >
+            Cotizar prototipo
+          </Link>
+        </div>
       </header>
 
       <section className="glass-panel rounded-2xl border border-white/60 p-4 shadow-sm sm:rounded-3xl sm:p-6">

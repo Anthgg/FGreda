@@ -21,7 +21,11 @@ import {
 } from "@/test/utils";
 import type { SessionUser } from "@/types/auth";
 
-const OPERATOR: SessionUser = { ...TEST_USER, display_name: "Operario", role: "OPERATOR" };
+const OPERATOR: SessionUser = {
+  ...TEST_USER,
+  display_name: "Operario",
+  role: "OPERATOR",
+};
 
 interface Overrides {
   user?: SessionUser;
@@ -39,18 +43,23 @@ function mockSettings(overrides: Overrides = {}) {
     if (custom) return custom;
 
     if (url.includes("/auth/csrf")) return csrfResponse();
-    if (url.includes("/auth/me")) return sessionResponse(overrides.user ?? TEST_USER);
+    if (url.includes("/auth/me"))
+      return sessionResponse(overrides.user ?? TEST_USER);
     if (url.includes("/settings/reference-data"))
       return jsonResponse(200, overrides.reference ?? REFERENCE_DATA);
     if (url.includes("/settings/sequence-patterns")) {
       const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
       return jsonResponse(201, { id: 10, is_system: false, ...enviado });
     }
-    if (url.includes("/settings/company/logo")) return new Response(null, { status: 404 });
+    if (url.includes("/settings/company/logo"))
+      return new Response(null, { status: 404 });
     if (url.includes("/settings/company")) {
       // El backend devuelve el estado resultante con la version incrementada.
       if (init.method === "PUT") {
-        const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+        const enviado = JSON.parse(String(init.body)) as Record<
+          string,
+          unknown
+        >;
         return jsonResponse(200, {
           ...COMPANY_FILLED,
           ...enviado,
@@ -64,10 +73,17 @@ function mockSettings(overrides: Overrides = {}) {
     if (url.includes("/settings/sequences")) {
       // El PUT devuelve la secuencia actualizada, no la lista completa.
       if (init.method === "PUT") {
-        const enviado = JSON.parse(String(init.body)) as Record<string, unknown>;
+        const enviado = JSON.parse(String(init.body)) as Record<
+          string,
+          unknown
+        >;
         const tipo = url.endsWith("/FIRING") ? "FIRING" : "QUOTE";
         const actual = SEQUENCES.find((item) => item.sequence_type === tipo)!;
-        return jsonResponse(200, { ...actual, ...enviado, version: Number(enviado.version) + 1 });
+        return jsonResponse(200, {
+          ...actual,
+          ...enviado,
+          version: Number(enviado.version) + 1,
+        });
       }
       return jsonResponse(200, { sequences: overrides.sequences ?? SEQUENCES });
     }
@@ -77,7 +93,9 @@ function mockSettings(overrides: Overrides = {}) {
 }
 
 async function abrirPestana(nombre: RegExp) {
-  await userEvent.setup().click(await screen.findByRole("tab", { name: nombre }));
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("tab", { name: nombre }));
 }
 
 describe("pantalla de configuración", () => {
@@ -85,11 +103,13 @@ describe("pantalla de configuración", () => {
     mockSettings();
     renderApp(["/"]);
 
-    await userEvent.setup().click(
-      await screen.findByRole("link", { name: /^configuracion$/i }),
-    );
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("link", { name: /^configuracion$/i }));
 
-    expect(await screen.findByRole("heading", { name: /configuración/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /configuración/i }),
+    ).toBeInTheDocument();
   });
 
   it("muestra un estado de carga mientras consulta", async () => {
@@ -101,16 +121,21 @@ describe("pantalla de configuración", () => {
       if (url.includes("/auth/me")) return sessionResponse();
       if (url.includes("/auth/csrf")) return csrfResponse();
       await retenida;
-      if (url.includes("/settings/reference-data")) return jsonResponse(200, REFERENCE_DATA);
-      if (url.includes("/settings/company")) return jsonResponse(200, COMPANY_FILLED);
-      if (url.includes("/settings/commercial")) return jsonResponse(200, COMMERCIAL_FILLED);
+      if (url.includes("/settings/reference-data"))
+        return jsonResponse(200, REFERENCE_DATA);
+      if (url.includes("/settings/company"))
+        return jsonResponse(200, COMPANY_FILLED);
+      if (url.includes("/settings/commercial"))
+        return jsonResponse(200, COMMERCIAL_FILLED);
       if (url.includes("/settings/sequences"))
         return jsonResponse(200, { sequences: SEQUENCES });
       return jsonResponse(200, {});
     });
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByText(/cargando configuración/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/cargando configuración/i),
+    ).toBeInTheDocument();
     liberar?.();
   });
 
@@ -118,7 +143,9 @@ describe("pantalla de configuración", () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByDisplayValue("Taller Greda SAC")).toBeInTheDocument();
+    expect(
+      await screen.findByDisplayValue("Taller Greda SAC"),
+    ).toBeInTheDocument();
     expect(screen.getByDisplayValue("20123456789")).toBeInTheDocument();
     expect(screen.getByDisplayValue("contacto@greda.pe")).toBeInTheDocument();
   });
@@ -147,7 +174,9 @@ describe("pantalla de configuración", () => {
     });
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/no se pudo conectar/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /no se pudo conectar/i,
+    );
   });
 });
 
@@ -156,7 +185,9 @@ describe("edición como ADMIN", () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByRole("button", { name: /guardar cambios/i })).toBeDisabled();
+    expect(
+      await screen.findByRole("button", { name: /guardar cambios/i }),
+    ).toBeDisabled();
   });
 
   it("al editar aparece el aviso de cambios sin guardar", async () => {
@@ -167,7 +198,9 @@ describe("edición como ADMIN", () => {
     await userEvent.setup().type(campo, " Editado");
 
     expect(screen.getByText(/cambios sin guardar/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    ).toBeEnabled();
   });
 
   it("cancelar descarta los cambios", async () => {
@@ -188,12 +221,16 @@ describe("edición como ADMIN", () => {
     renderApp(["/configuracion"]);
 
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText(/nombre comercial/i), " Editado");
+    await user.type(
+      await screen.findByLabelText(/nombre comercial/i),
+      " Editado",
+    );
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
 
     await waitFor(() => {
       const put = fetchSpy.mock.calls.find(
-        ([url, init]) => String(url).includes("/settings/company") && init?.method === "PUT",
+        ([url, init]) =>
+          String(url).includes("/settings/company") && init?.method === "PUT",
       );
       expect(put).toBeDefined();
       const cuerpo = JSON.parse(String(put![1]?.body));
@@ -209,7 +246,9 @@ describe("edición como ADMIN", () => {
 
     const user = userEvent.setup();
     // 1. Departamento: Abrir select y elegir Lima
-    const deptoTrigger = await screen.findByRole("combobox", { name: /departamento/i });
+    const deptoTrigger = await screen.findByRole("combobox", {
+      name: /departamento/i,
+    });
     await user.click(deptoTrigger);
     await user.click(screen.getByRole("option", { name: /^Lima$/i }));
 
@@ -228,9 +267,13 @@ describe("edición como ADMIN", () => {
 
     await waitFor(() => {
       const put = fetchSpy.mock.calls.find(
-        ([url, init]) => String(url).includes("/settings/company") && init?.method === "PUT",
+        ([url, init]) =>
+          String(url).includes("/settings/company") && init?.method === "PUT",
       );
-      const body = JSON.parse(String(put?.[1]?.body)) as Record<string, unknown>;
+      const body = JSON.parse(String(put?.[1]?.body)) as Record<
+        string,
+        unknown
+      >;
       expect(body.ubigeo_code).toBe("150122");
       expect(body.department).toBe("LIMA");
       expect(body.province).toBe("LIMA");
@@ -243,13 +286,20 @@ describe("edición como ADMIN", () => {
     renderApp(["/configuracion"]);
 
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText(/nombre comercial/i), " Editado");
+    await user.type(
+      await screen.findByLabelText(/nombre comercial/i),
+      " Editado",
+    );
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
 
     expect(await screen.findByText(/cambios guardados/i)).toBeInTheDocument();
     expect(screen.queryByText(/cambios sin guardar/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/nombre comercial/i)).toHaveValue("Greda Editado");
-    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
+    expect(screen.getByLabelText(/nombre comercial/i)).toHaveValue(
+      "Greda Editado",
+    );
+    expect(
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    ).toBeDisabled();
   });
 
   it("un RUC inválido bloquea el guardado sin llamar al backend", async () => {
@@ -262,10 +312,12 @@ describe("edición como ADMIN", () => {
     await user.type(ruc, "123");
 
     expect(screen.getByText(/11 dígitos/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
     expect(
-      fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT"),
-    ).toBe(false);
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    ).toBeDisabled();
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(
+      false,
+    );
   });
 
   it("informa cuando otra persona modificó la configuración", async () => {
@@ -281,8 +333,12 @@ describe("edición como ADMIN", () => {
     await user.type(await screen.findByLabelText(/nombre comercial/i), " X");
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/otra persona modific[oó]/i);
-    expect(screen.getByRole("button", { name: /recargar configuración/i })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /otra persona modific[oó]/i,
+    );
+    expect(
+      screen.getByRole("button", { name: /recargar configuración/i }),
+    ).toBeInTheDocument();
   });
 
   it("maneja un 403 del backend al guardar", async () => {
@@ -298,7 +354,9 @@ describe("edición como ADMIN", () => {
     await user.type(await screen.findByLabelText(/nombre comercial/i), " X");
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/rol no permite/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /rol no permite/i,
+    );
   });
 });
 
@@ -309,8 +367,12 @@ describe("permisos de OPERATOR", () => {
 
     await screen.findByLabelText(/razón social/i);
 
-    expect(screen.queryByRole("button", { name: /guardar cambios/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/solo un administrador puede modificar/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /guardar cambios/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/solo un administrador puede modificar/i),
+    ).toBeInTheDocument();
   });
 
   it("los campos se muestran deshabilitados", async () => {
@@ -326,7 +388,9 @@ describe("permisos de OPERATOR", () => {
 
     await screen.findByLabelText(/razón social/i);
 
-    expect(screen.queryByRole("tab", { name: /historial/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: /historial/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("puede consultar la configuración comercial", async () => {
@@ -336,7 +400,9 @@ describe("permisos de OPERATOR", () => {
     await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
+    expect(
+      await screen.findByRole("combobox", { name: /moneda/i }),
+    ).toHaveTextContent(/PEN/);
     expect(screen.getByDisplayValue("18")).toBeInTheDocument();
   });
 });
@@ -349,13 +415,17 @@ describe("sección comercial", () => {
     await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByRole("combobox", { name: /moneda/i })).toHaveTextContent(/PEN/);
+    expect(
+      await screen.findByRole("combobox", { name: /moneda/i }),
+    ).toHaveTextContent(/PEN/);
     expect(screen.getByLabelText(/IGV/i)).toHaveValue("18");
     // Se busca por etiqueta y no por valor: vigencia y esmalte estimado
     // comparten el 15 de la configuración de prueba, y `getByDisplayValue`
     // no distinguiría cuál es cuál.
     expect(screen.getByLabelText(/vigencia de cotización/i)).toHaveValue("15");
-    expect(screen.getByDisplayValue("00219300123456789015")).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue("00219300123456789015"),
+    ).toBeInTheDocument();
   });
 
   it("muestra el factor de producción y el redondeo que envía el backend", async () => {
@@ -366,12 +436,14 @@ describe("sección comercial", () => {
     await screen.findByLabelText(/razón social/i);
     await abrirPestana(/comercial/i);
 
-    expect(await screen.findByLabelText(/factor de producción/i)).toHaveValue("3");
+    expect(await screen.findByLabelText(/factor de producción/i)).toHaveValue(
+      "3",
+    );
     // Solo hay dos políticas, así que es un selector: un 0,25 tecleado daría
     // precios que no son múltiplos de nada.
-    expect(screen.getByRole("combobox", { name: /redondeo contractual/i })).toHaveTextContent(
-      "S/ 0.50",
-    );
+    expect(
+      screen.getByRole("combobox", { name: /redondeo contractual/i }),
+    ).toHaveTextContent("S/ 0.50");
   });
 
   it("rechaza un factor de producción de cero sin llamar al backend", async () => {
@@ -418,8 +490,12 @@ describe("sección comercial", () => {
     await user.type(igv, "150");
 
     expect(screen.getByText(/entre 0 y 100/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /guardar cambios/i })).toBeDisabled();
-    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    expect(
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    ).toBeDisabled();
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(
+      false,
+    );
   });
 
   it("solo permite monedas del catálogo y completa el símbolo con Select React", async () => {
@@ -434,7 +510,9 @@ describe("sección comercial", () => {
     expect(moneda).toHaveTextContent(/PEN/);
 
     await user.click(moneda);
-    expect(screen.queryByRole("option", { name: /ABC/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: /ABC/ }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("option", { name: /USD/ }));
 
     expect(screen.getByLabelText(/símbolo/i)).toHaveValue("USD");
@@ -442,9 +520,14 @@ describe("sección comercial", () => {
     await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
     await waitFor(() => {
       const put = fetchSpy.mock.calls.find(
-        ([url, init]) => String(url).includes("/settings/commercial") && init?.method === "PUT",
+        ([url, init]) =>
+          String(url).includes("/settings/commercial") &&
+          init?.method === "PUT",
       );
-      const body = JSON.parse(String(put?.[1]?.body)) as Record<string, unknown>;
+      const body = JSON.parse(String(put?.[1]?.body)) as Record<
+        string,
+        unknown
+      >;
       expect(body.currency_code).toBe("USD");
       expect(body.currency_symbol).toBe("USD");
     });
@@ -474,7 +557,9 @@ describe("sección de numeración", () => {
     await screen.findByLabelText(/razón social/i);
     await abrirPestana(/numeraci[oó]n/i);
 
-    expect(await screen.findByRole("heading", { name: "Cotizaciones" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Cotizaciones" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Quemas" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("CTZ")).toBeInTheDocument();
     expect(screen.getByDisplayValue("HR")).toBeInTheDocument();
@@ -488,7 +573,9 @@ describe("sección de numeración", () => {
     await abrirPestana(/numeraci[oó]n/i);
 
     expect(await screen.findAllByText(/vista previa/i)).not.toHaveLength(0);
-    expect(screen.getAllByText(/no reserva ni consume/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/no reserva ni consume/i).length,
+    ).toBeGreaterThan(0);
   });
 
   it("marca como obligatorios los datos de numeración", async () => {
@@ -498,7 +585,9 @@ describe("sección de numeración", () => {
     await screen.findByLabelText(/razón social/i);
     await abrirPestana(/numeraci[oó]n/i);
 
-    expect((await screen.findAllByText("* Obligatorio")).length).toBeGreaterThan(4);
+    expect(
+      (await screen.findAllByText("* Obligatorio")).length,
+    ).toBeGreaterThan(4);
   });
 
   it("la vista previa se recalcula en el navegador y no llama al backend", async () => {
@@ -528,7 +617,9 @@ describe("sección de numeración", () => {
 
     await screen.findByRole("heading", { name: "Cotizaciones" });
     expect(
-      screen.queryByRole("button", { name: /generar|siguiente numero|reservar/i }),
+      screen.queryByRole("button", {
+        name: /generar|siguiente numero|reservar/i,
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -549,7 +640,9 @@ describe("sección de numeración", () => {
 
     await waitFor(() => {
       const put = fetchSpy.mock.calls.find(
-        ([url, init]) => String(url).includes("/settings/sequences/QUOTE") && init?.method === "PUT",
+        ([url, init]) =>
+          String(url).includes("/settings/sequences/QUOTE") &&
+          init?.method === "PUT",
       );
       expect(put).toBeDefined();
       const cuerpo = JSON.parse(String(put![1]?.body));
@@ -569,20 +662,33 @@ describe("sección de numeración", () => {
     const tarjeta = prefijo.closest("form")!;
     const user = userEvent.setup();
 
-    const formatoSelect = within(tarjeta).getByRole("combobox", { name: /formato/i });
+    const formatoSelect = within(tarjeta).getByRole("combobox", {
+      name: /formato/i,
+    });
     await user.click(formatoSelect);
-    await user.click(screen.getByRole("option", { name: /crear un nuevo formato/i }));
+    await user.click(
+      screen.getByRole("option", { name: /crear un nuevo formato/i }),
+    );
 
-    await user.type(within(tarjeta).getByLabelText(/nombre del nuevo formato/i), "Serie mensual");
-    await user.click(within(tarjeta).getByRole("button", { name: /crear y usar/i }));
+    await user.type(
+      within(tarjeta).getByLabelText(/nombre del nuevo formato/i),
+      "Serie mensual",
+    );
+    await user.click(
+      within(tarjeta).getByRole("button", { name: /crear y usar/i }),
+    );
 
     await waitFor(() => {
       const post = fetchSpy.mock.calls.find(
         ([url, init]) =>
-          String(url).includes("/settings/sequence-patterns") && init?.method === "POST",
+          String(url).includes("/settings/sequence-patterns") &&
+          init?.method === "POST",
       );
       expect(post).toBeDefined();
-      const body = JSON.parse(String(post?.[1]?.body)) as Record<string, unknown>;
+      const body = JSON.parse(String(post?.[1]?.body)) as Record<
+        string,
+        unknown
+      >;
       expect(body.name).toBe("Serie mensual");
       expect(body.pattern).toBe("{PREFIX}-{YYYY}-{NUMBER}");
     });
@@ -615,30 +721,45 @@ describe("logo", () => {
     const fetchSpy = mockSettings();
     renderApp(["/configuracion"]);
 
-    const entrada = await screen.findByLabelText(/seleccionar archivo de logo/i);
-    const archivo = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "logo.png", {
-      type: "image/png",
-    });
+    const entrada = await screen.findByLabelText(
+      /seleccionar archivo de logo/i,
+    );
+    const archivo = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+      "logo.png",
+      {
+        type: "image/png",
+      },
+    );
     await userEvent.setup().upload(entrada, archivo);
 
     await waitFor(() => {
       const post = fetchSpy.mock.calls.find(
-        ([url, init]) => String(url).includes("/settings/company/logo") && init?.method === "POST",
+        ([url, init]) =>
+          String(url).includes("/settings/company/logo") &&
+          init?.method === "POST",
       );
       expect(post).toBeDefined();
       expect(post![1]?.body).toBeInstanceOf(FormData);
       expect(post![1]?.credentials).toBe("include");
     });
 
-    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("supabase"))).toBe(false);
+    expect(
+      fetchSpy.mock.calls.some(([url]) => String(url).includes("supabase")),
+    ).toBe(false);
   });
 
   it("el atributo accept ya descarta los formatos no admitidos", async () => {
     mockSettings();
     renderApp(["/configuracion"]);
 
-    const entrada = await screen.findByLabelText(/seleccionar archivo de logo/i);
-    expect(entrada).toHaveAttribute("accept", "image/png,image/jpeg,image/webp");
+    const entrada = await screen.findByLabelText(
+      /seleccionar archivo de logo/i,
+    );
+    expect(entrada).toHaveAttribute(
+      "accept",
+      "image/png,image/jpeg,image/webp",
+    );
   });
 
   it("informa cuando el servidor rechaza el archivo", async () => {
@@ -650,32 +771,54 @@ describe("logo", () => {
     });
     renderApp(["/configuracion"]);
 
-    const entrada = await screen.findByLabelText(/seleccionar archivo de logo/i);
+    const entrada = await screen.findByLabelText(
+      /seleccionar archivo de logo/i,
+    );
     await userEvent
       .setup()
-      .upload(entrada, new File(["<svg/>"], "disfrazado.png", { type: "image/png" }));
+      .upload(
+        entrada,
+        new File(["<svg/>"], "disfrazado.png", { type: "image/png" }),
+      );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/png, jpg o webp/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /png, jpg o webp/i,
+    );
   });
 
   it("descarga la vista previa por el backend con las cookies incluidas", async () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const fetchSpy = mockSettings({
-      company: { ...COMPANY_FILLED, logo: { content_type: "image/png", size_bytes: 4, url: "/api/v1/settings/company/logo" } },
+      company: {
+        ...COMPANY_FILLED,
+        logo: {
+          content_type: "image/png",
+          size_bytes: 4,
+          url: "/api/v1/settings/company/logo",
+        },
+      },
       onRequest: (url, init) =>
-        url.includes("/settings/company/logo") && (init.method ?? "GET") === "GET"
-          ? new Response(png, { status: 200, headers: { "Content-Type": "image/png" } })
+        url.includes("/settings/company/logo") &&
+        (init.method ?? "GET") === "GET"
+          ? new Response(png, {
+              status: 200,
+              headers: { "Content-Type": "image/png" },
+            })
           : undefined,
     });
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     renderApp(["/configuracion"]);
 
-    expect(await screen.findByAltText(/logo de la empresa/i)).toHaveAttribute("src", "blob:preview");
+    expect(await screen.findByAltText(/logo de la empresa/i)).toHaveAttribute(
+      "src",
+      "blob:preview",
+    );
 
     const get = fetchSpy.mock.calls.find(
       ([url, init]) =>
-        String(url).includes("/settings/company/logo") && (init?.method ?? "GET") === "GET",
+        String(url).includes("/settings/company/logo") &&
+        (init?.method ?? "GET") === "GET",
     );
     expect(get![1]?.credentials).toBe("include");
   });
@@ -686,7 +829,220 @@ describe("logo", () => {
 
     await screen.findByLabelText(/razón social/i);
 
-    expect(screen.queryByLabelText(/seleccionar archivo de logo/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/seleccionar archivo de logo/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /eliminar/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tarifas de prototipos
+//
+// Las cinco columnas existían desde 0023 pero no las exponía ningún esquema:
+// sólo se podían cambiar por SQL. Y como nacen en cero —a propósito, para no
+// sembrar como precios los ejemplos del Excel—, un taller sin forma de
+// configurarlas cotizaría a cero sin enterarse.
+// ---------------------------------------------------------------------------
+describe("sección comercial · tarifas de prototipos", () => {
+  const TARIFAS = [
+    /tarifa de diseño por día/i,
+    /tarifa de artista por día/i,
+    /precio base de matricero/i,
+    /días estimados de matricero/i,
+    /costos fijos de prototipo/i,
+  ];
+
+  /** Deja la pantalla abierta en Comercial, que es donde viven. */
+  async function abrirComercial(fetchSpy: ReturnType<typeof mockSettings>) {
+    renderApp(["/configuracion"]);
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+    return fetchSpy;
+  }
+
+  it("PROTOTYPE_SETTINGS_UI_EXPOSED: las cinco tarifas se pueden configurar", async () => {
+    await abrirComercial(mockSettings());
+
+    for (const etiqueta of TARIFAS) {
+      expect(await screen.findByLabelText(etiqueta)).toBeInTheDocument();
+    }
+  });
+
+  it("carga los valores que manda el backend, no unos inventados", async () => {
+    await abrirComercial(
+      mockSettings({
+        commercial: {
+          ...COMMERCIAL_FILLED,
+          prototype_design_rate: "200",
+          prototype_artist_rate: "150",
+          prototype_mold_maker_price: "100",
+          prototype_mold_maker_days: "1",
+          prototype_fixed_cost: "30",
+        },
+      }),
+    );
+
+    expect(
+      await screen.findByLabelText(/tarifa de diseño por día/i),
+    ).toHaveValue("200");
+    expect(screen.getByLabelText(/tarifa de artista por día/i)).toHaveValue(
+      "150",
+    );
+    expect(screen.getByLabelText(/precio base de matricero/i)).toHaveValue(
+      "100",
+    );
+    expect(screen.getByLabelText(/días estimados de matricero/i)).toHaveValue(
+      "1",
+    );
+    expect(screen.getByLabelText(/costos fijos de prototipo/i)).toHaveValue(
+      "30",
+    );
+  });
+
+  it.each([
+    ["tarifa de diseño por día", "prototype_design_rate", "200"],
+    ["tarifa de artista por día", "prototype_artist_rate", "150"],
+    ["precio base de matricero", "prototype_mold_maker_price", "100"],
+    ["días estimados de matricero", "prototype_mold_maker_days", "2"],
+    ["costos fijos de prototipo", "prototype_fixed_cost", "30"],
+  ])(
+    "editar «%s» viaja en el payload como %s",
+    async (etiqueta, campo, valor) => {
+      const fetchSpy = await abrirComercial(mockSettings());
+
+      const campoUi = await screen.findByLabelText(new RegExp(etiqueta, "i"));
+      await userEvent.clear(campoUi);
+      await userEvent.type(campoUi, valor);
+      await userEvent.click(
+        screen.getByRole("button", { name: /guardar cambios/i }),
+      );
+
+      await waitFor(() => {
+        const put = fetchSpy.mock.calls.find(
+          ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+        );
+        expect(put).toBeDefined();
+        const cuerpo = JSON.parse(String((put![1] as RequestInit).body));
+        expect(String(cuerpo[campo])).toBe(valor);
+      });
+    },
+  );
+
+  it("PROTOTYPE_SETTINGS_ZERO_ALLOWED: cero se guarda y no se corrige solo", async () => {
+    const fetchSpy = await abrirComercial(
+      mockSettings({
+        commercial: { ...COMMERCIAL_FILLED, prototype_design_rate: "200" },
+      }),
+    );
+
+    const campo = await screen.findByLabelText(/tarifa de diseño por día/i);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "0");
+
+    // Cero significa «todavía no hay tarifa». No es un error, y la pantalla no
+    // lo sustituye por 80, 100 ni ningún número del Excel.
+    expect(screen.queryByText(/mayor o igual que 0/i)).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    );
+
+    await waitFor(() => {
+      const put = fetchSpy.mock.calls.find(
+        ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(put).toBeDefined();
+      expect(
+        JSON.parse(String((put![1] as RequestInit).body)).prototype_design_rate,
+      ).toBe("0");
+    });
+  });
+
+  it("una tarifa negativa se avisa y no se manda", async () => {
+    const fetchSpy = await abrirComercial(mockSettings());
+
+    const campo = await screen.findByLabelText(/tarifa de artista por día/i);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "-5");
+
+    expect(await screen.findByText(/mayor o igual que 0/i)).toBeInTheDocument();
+    const puts = fetchSpy.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(puts).toHaveLength(0);
+  });
+
+  it("si el backend rechaza, se dice; no se da por guardado", async () => {
+    await abrirComercial(
+      mockSettings({
+        onRequest: (url, init) =>
+          url.includes("/settings/commercial") && init.method === "PUT"
+            ? errorResponse(422, "VALIDATION_ERROR")
+            : undefined,
+      }),
+    );
+
+    const campo = await screen.findByLabelText(/tarifa de diseño por día/i);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "200");
+    await userEvent.click(
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("al volver a abrir Configuración se ven los valores guardados", async () => {
+    // El backend ya tiene las tarifas puestas: reabrir tiene que enseñarlas,
+    // no volver a cero.
+    await abrirComercial(
+      mockSettings({
+        commercial: { ...COMMERCIAL_FILLED, prototype_fixed_cost: "30" },
+      }),
+    );
+
+    expect(
+      await screen.findByLabelText(/costos fijos de prototipo/i),
+    ).toHaveValue("30");
+  });
+
+  it("guardar deja el cache de Configuración con lo que devolvió el backend", async () => {
+    // Un CPR sin override hereda la tarifa VIVA. Si el cache se quedara con la
+    // vieja, la pantalla y el cálculo dirían cosas distintas.
+    await abrirComercial(
+      mockSettings({
+        onRequest: (url, init) =>
+          url.includes("/settings/commercial") && init.method === "PUT"
+            ? jsonResponse(200, {
+                ...COMMERCIAL_FILLED,
+                version: 3,
+                prototype_design_rate: "90",
+              })
+            : undefined,
+      }),
+    );
+
+    const campo = await screen.findByLabelText(/tarifa de diseño por día/i);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "90");
+    await userEvent.click(
+      screen.getByRole("button", { name: /guardar cambios/i }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/tarifa de diseño por día/i)).toHaveValue(
+        "90",
+      ),
+    );
+  });
+
+  it("un OPERATOR las ve pero no las puede cambiar", async () => {
+    await abrirComercial(mockSettings({ user: OPERATOR }));
+
+    expect(
+      await screen.findByLabelText(/tarifa de diseño por día/i),
+    ).toBeDisabled();
   });
 });
