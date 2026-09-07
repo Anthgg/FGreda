@@ -452,6 +452,58 @@ describe("009K.4 · la ficha canónica de una orden de muestra", () => {
     expect(backend.enviados.filter((e) => e.url.includes("/prototypes/101/start"))).toHaveLength(0);
   });
 
+  it("F11 bis: tras arrancar, el material real deja de decir «aún no consta»", async () => {
+    // Lo encontró la prueba de navegador: el backend ya había escrito lo
+    // consumido y la pantalla seguía enseñando lo de antes, porque arrancar la
+    // ORDEN no invalidaba la MUESTRA. El dato correcto existía; nadie lo pedía.
+    let arrancada = false;
+    mockFetch((url, init) => {
+      const method = init?.method ?? "GET";
+      if (url.includes("/auth/csrf")) return csrfResponse();
+      if (url.includes("/auth/me")) return sessionResponse();
+      if (url.includes("/inventory/locations")) return jsonResponse(200, ALMACENES);
+      if (url.includes("/document")) {
+        return new Response(new Blob(["%PDF-1.4"]), {
+          status: 200,
+          headers: { "Content-Type": "application/pdf" },
+        });
+      }
+      if (url.includes("/production-orders/501/start") && method === "POST") {
+        arrancada = true;
+        return jsonResponse(200, ordenPRT({ status: "STARTED" }));
+      }
+      if (url.includes("/production-orders/501")) {
+        return jsonResponse(200, ordenPRT(arrancada ? { status: "STARTED" } : {}));
+      }
+      if (url.includes("/prototypes/101")) {
+        const fila = muestra();
+        return jsonResponse(
+          200,
+          arrancada
+            ? fila
+            : {
+                ...fila,
+                status: "CREATED",
+                materials: fila.materials.map((m) => ({ ...m, quantity_actual: null })),
+              },
+        );
+      }
+      if (url.includes("/prototypes")) {
+        return jsonResponse(200, { items: [], total: 0, limit: 25, offset: 0 });
+      }
+      return errorResponse(404, "NOT_FOUND");
+    });
+
+    const user = userEvent.setup();
+    renderApp(["/produccion/501"]);
+
+    expect(await screen.findByText(/Aún no consta/i)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Arrancar producción/i }));
+
+    await waitFor(() => expect(screen.queryByText(/Aún no consta/i)).not.toBeInTheDocument());
+    expect(screen.getAllByText("1.25").length).toBeGreaterThan(0);
+  });
+
   it("F12: la evaluación se decide desde la ficha y se guarda en la muestra", async () => {
     // PROTOTYPE_EVALUATION_ACCESSIBLE_FROM_ORDER. El dato sigue viviendo en el
     // prototipo, que es su autoridad; la orden sólo abre la puerta.
