@@ -38,6 +38,7 @@ interface PrototypeQuotationPdfPanelProps {
   puedeEmitir: boolean;
   onGuardar: () => void;
   onEmitir: () => void;
+  /** Abre el diálogo de cobro. No cobra: el almacén se elige allí. */
   onCobrar: () => void;
 }
 

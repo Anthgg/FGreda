@@ -26,6 +26,7 @@ import {
   useProductionOrder,
   useStartProductionOrder,
 } from "@/features/production/useProductionOrders";
+import { PrototypeOrderContext } from "@/features/production/PrototypeOrderContext";
 import { describeError } from "@/features/settings/messages";
 import type { ProductionOrder, ReadinessIssue } from "@/types/production";
 
@@ -104,6 +105,42 @@ function IssueRow({ issue }: { issue: ReadinessIssue }) {
         <p className="mt-0.5 text-[11px] text-amber-800/90">{detalle}</p>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * De dónde viene la orden, escrito con códigos.
+ *
+ * El origen lo dice el backend en un campo propio. Deducirlo de qué campo venga
+ * relleno convertiría una regla del dominio en una heurística de pantalla, y
+ * las dos acabarían discrepando.
+ */
+function Origen({ data }: { data: ProductionOrder }) {
+  if (data.origin_type === "PROTOTYPE") {
+    return (
+      <span>
+        <span className="font-mono text-zinc-700">
+          {data.prototype_quotation_code ?? "Sin cotización de prototipo"}
+        </span>
+        {data.prototype_code ? (
+          <>
+            {" · Muestra "}
+            <span className="font-mono text-zinc-700">{data.prototype_code}</span>
+          </>
+        ) : null}
+      </span>
+    );
+  }
+  return (
+    <span>
+      <Link
+        to={`/cotizador/${data.quotation_id}`}
+        className="font-mono text-zinc-700 hover:text-black hover:underline"
+      >
+        {data.quotation_code}
+      </Link>
+      {data.quotation_customer_name ? ` · ${data.quotation_customer_name}` : ""}
+    </span>
   );
 }
 
@@ -200,11 +237,17 @@ export function ProductionOrderDetailPage() {
 
   const data = order.data;
   const { readiness } = data;
+  const esMuestra = data.origin_type === "PROTOTYPE";
   const generales = stockIssues(readiness.issues);
   // Se avisa sólo cuando el cobro es lo ÚNICO que falta. Si además falta
   // material, el panel de disponibilidad ya explica lo suyo y dos avisos a la
   // vez hacen que no se lea ninguno.
+  //
+  // Fase 009K.4: sólo en la rama de COTIZACIÓN. Una orden de muestra nace ya
+  // cobrada —se crea dentro del propio cobro— y su comprobación de pago viaja
+  // en la disponibilidad, así que este aviso ahí no diría nada cierto.
   const faltaCobrar =
+    data.origin_type === "QUOTATION" &&
     data.status === "CREATED" &&
     readiness.ready &&
     !estaCobrada(data.quotation_payment_status);
@@ -224,16 +267,7 @@ export function ProductionOrderDetailPage() {
             </Badge>
           </div>
           <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
-            Orden de producción ·{" "}
-            <Link
-              to={`/cotizador/${data.quotation_id}`}
-              className="font-mono text-zinc-700 hover:text-black hover:underline"
-            >
-              {data.quotation_code}
-            </Link>
-            {data.quotation_customer_name
-              ? ` · ${data.quotation_customer_name}`
-              : ""}
+            Orden de producción · <Origen data={data} />
           </p>
         </div>
 
@@ -423,25 +457,42 @@ export function ProductionOrderDetailPage() {
                   {cuantasPiezas(data)}
                 </p>
               </div>
-              <div>
-                <p className="text-[10px] uppercase text-zinc-400">
-                  Cotización
-                </p>
-                <p className="font-medium text-zinc-800">
-                  <Link
-                    to={`/cotizador/${data.quotation_id}`}
-                    className="font-mono hover:text-black hover:underline"
-                  >
-                    {data.quotation_code}
-                  </Link>
-                  {" · "}
-                  {estaCobrada(data.quotation_payment_status) ? (
-                    <span className="text-emerald-700">Pagada</span>
-                  ) : (
-                    <span className="text-amber-700">Pendiente de pago</span>
-                  )}
-                </p>
-              </div>
+              {data.origin_type === "PROTOTYPE" ? (
+                <>
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-400">Origen</p>
+                    <p className="font-mono font-medium text-zinc-800">
+                      {data.prototype_quotation_code ?? "Sin cotización de prototipo"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-400">Muestra</p>
+                    <p className="font-mono font-medium text-zinc-800">
+                      {data.prototype_code ?? "—"}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <p className="text-[10px] uppercase text-zinc-400">
+                    Cotización
+                  </p>
+                  <p className="font-medium text-zinc-800">
+                    <Link
+                      to={`/cotizador/${data.quotation_id}`}
+                      className="font-mono hover:text-black hover:underline"
+                    >
+                      {data.quotation_code}
+                    </Link>
+                    {" · "}
+                    {estaCobrada(data.quotation_payment_status) ? (
+                      <span className="text-emerald-700">Pagada</span>
+                    ) : (
+                      <span className="text-amber-700">Pendiente de pago</span>
+                    )}
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-[10px] uppercase text-zinc-400">
                   Almacén de salida
@@ -458,6 +509,7 @@ export function ProductionOrderDetailPage() {
                 data.status,
                 readiness.ready,
                 data.quotation_payment_status,
+                data.origin_type,
               ) ? (
                 <PrimaryButton
                   type="button"
@@ -504,10 +556,17 @@ export function ProductionOrderDetailPage() {
                 <th className="px-4 py-3 font-semibold">Producto</th>
                 <th className="px-4 py-3 font-semibold">Medidas</th>
                 <th className="px-4 py-3 text-right font-semibold">Cantidad</th>
-                <th className="px-4 py-3 font-semibold">Material preparado</th>
-                <th className="px-4 py-3 text-right font-semibold">
-                  Requerido
-                </th>
+                {/* Una muestra no tiene receta ni material preparado, y su
+                    material se enseña entero en su propia sección. Dejar aquí
+                    dos columnas con guiones haría parecer que faltan datos. */}
+                {esMuestra ? null : (
+                  <>
+                    <th className="px-4 py-3 font-semibold">Material preparado</th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Requerido
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -539,25 +598,29 @@ export function ProductionOrderDetailPage() {
                     <td className="px-4 py-3 text-right tabular-nums font-medium">
                       {line.quantity ?? "—"}
                     </td>
-                    <td className="px-4 py-3">
-                      {line.prepared_product_name ? (
-                        <>
-                          <span className="text-zinc-900">
-                            {line.prepared_product_name}
-                          </span>
-                          <span className="block font-mono text-[10px] text-zinc-400">
-                            {line.prepared_product_internal_reference}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {line.required_material_quantity !== null
-                        ? `${line.required_material_quantity} ${line.required_material_uom ?? ""}`
-                        : "—"}
-                    </td>
+                    {esMuestra ? null : (
+                      <>
+                        <td className="px-4 py-3">
+                          {line.prepared_product_name ? (
+                            <>
+                              <span className="text-zinc-900">
+                                {line.prepared_product_name}
+                              </span>
+                              <span className="block font-mono text-[10px] text-zinc-400">
+                                {line.prepared_product_internal_reference}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-zinc-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {line.required_material_quantity !== null
+                            ? `${line.required_material_quantity} ${line.required_material_uom ?? ""}`
+                            : "—"}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -565,6 +628,14 @@ export function ProductionOrderDetailPage() {
           </table>
         </div>
       </section>
+
+      {/* Material, evaluación e iteraciones de la muestra. Van DENTRO de esta
+          ficha y no en una pantalla aparte: la ejecución física es una sola, y
+          mandar a la gente a otro sitio recrearía el segundo flujo que 009K.4
+          elimina. */}
+      {esMuestra && data.prototype_id !== null ? (
+        <PrototypeOrderContext prototypeId={data.prototype_id} />
+      ) : null}
     </div>
   );
 }

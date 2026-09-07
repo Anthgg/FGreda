@@ -54,7 +54,7 @@ export function PrototypesPage() {
   const cprQuery = usePrototypeQuotations(cprFilters);
 
   if (searchParams.get("tab") === "muestras") {
-    return <Navigate to="/produccion?tab=prototipos" replace />;
+    return <Navigate to="/produccion" replace />;
   }
 
   const handleDownloadPdf = async (id: number) => {

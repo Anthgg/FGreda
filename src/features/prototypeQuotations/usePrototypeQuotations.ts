@@ -10,6 +10,7 @@ import {
   previewPrototypeQuotation,
   updatePrototypeQuotation,
 } from "@/api/prototypeQuotations";
+import { PRODUCTION_KEY } from "@/features/production/useProductionOrders";
 import { PROTOTYPES_KEY } from "@/features/prototypes/usePrototypes";
 import type {
   PrototypeQuotation,
@@ -93,14 +94,22 @@ export const useCancelPrototypeQuotation = (id: number) => {
  * muestras: al pagar aparece una nueva, y dejarla fuera de la caché haría que
  * el taller no la viera hasta recargar.
  */
+/**
+ * Cobrar. Recibe el almacén porque quien cobra es quien lo elige.
+ *
+ * Fase 009K.4: el cobro materializa también la ORDEN de producción, así que
+ * también se invalida su listado; si no, el taller seguiría viendo la lista de
+ * antes del cobro.
+ */
 export const useMarkPrototypeQuotationPaid = (id: number) => {
   const client = useQueryClient();
-  return useMutation<PrototypeQuotation, Error, void>({
-    mutationFn: () => markPrototypeQuotationPaid(id),
+  return useMutation<PrototypeQuotation, Error, number>({
+    mutationFn: (stockLocationId: number) => markPrototypeQuotationPaid(id, stockLocationId),
     onSuccess: (data) => {
       client.setQueryData([...PROTOTYPE_QUOTATIONS_KEY, id], data);
       void client.invalidateQueries({ queryKey: PROTOTYPE_QUOTATIONS_KEY });
       void client.invalidateQueries({ queryKey: PROTOTYPES_KEY });
+      void client.invalidateQueries({ queryKey: PRODUCTION_KEY });
     },
   });
 };

@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -103,6 +103,8 @@ function cpr(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuotation {
     costing: COSTEO,
     prototype_id: null,
     prototype_code: null,
+    production_order_id: null,
+    production_order_code: null,
     updated_at: "2026-09-06T12:00:00Z",
     ...overrides,
   };
@@ -113,8 +115,13 @@ function ordenCTZ(overrides: Partial<ProductionOrder> = {}): ProductionOrder {
     id: 2,
     code: "OP-2026-000002",
     status: "CREATED",
+    origin_type: "QUOTATION",
     quotation_id: 349,
     quotation_code: "CTZ-2026-000349",
+    prototype_id: null,
+    prototype_code: null,
+    prototype_quotation_id: null,
+    prototype_quotation_code: null,
     quotation_customer_name: "ANA MARIA CISNEROS",
     quotation_payment_status: "PAID",
     stock_location_id: 1,
@@ -153,6 +160,48 @@ function ordenCTZ(overrides: Partial<ProductionOrder> = {}): ProductionOrder {
   };
 }
 
+/** Fase 009K.4. La orden que nace al cobrar una cotización de prototipo. */
+function ordenPRT(overrides: Partial<ProductionOrder> = {}): ProductionOrder {
+  return {
+    ...ordenCTZ(),
+    id: 501,
+    code: "OP-2026-000501",
+    origin_type: "PROTOTYPE",
+    quotation_id: null,
+    quotation_code: null,
+    quotation_customer_name: null,
+    quotation_payment_status: null,
+    prototype_id: 101,
+    prototype_code: "PRT-2026-000101",
+    prototype_quotation_id: 12,
+    prototype_quotation_code: "CPR-2026-000012",
+    lines: [
+      {
+        id: 9,
+        quotation_item_id: null,
+        sort_order: 0,
+        product_id: 77,
+        product_name: "Maceta de muestra",
+        product_internal_reference: "LAB50077",
+        quantity: 1,
+        width: "15",
+        height: "20",
+        length: "15",
+        depth: null,
+        recipe_id: null,
+        recipe_version_id: null,
+        material_grams_per_piece: null,
+        prepared_product_id: null,
+        prepared_product_name: null,
+        prepared_product_internal_reference: null,
+        required_material_quantity: null,
+        required_material_uom: null,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function prtFisico(overrides: Partial<Prototype> = {}): Prototype {
   return {
     id: 99,
@@ -177,6 +226,8 @@ function prtFisico(overrides: Partial<Prototype> = {}): Prototype {
     material_count: 1,
     notes: "Histórico",
     quotation_payment_status: null,
+    production_order_id: null,
+    production_order_code: null,
     materials: [
       {
         id: 1,
@@ -256,6 +307,13 @@ function setupBackend(opts: {
         total: 1,
       });
     }
+    // Fase 009K.4: cobrar exige elegir almacén, así que el diálogo los pide.
+    if (url.includes("/inventory/locations")) {
+      return jsonResponse(200, [
+        { id: 1, name: "Almacén principal", active: true },
+        { id: 2, name: "Almacén secundario", active: true },
+      ]);
+    }
 
     // Órdenes de producción CTZ
     if (url.includes("/production-orders")) {
@@ -317,6 +375,12 @@ function setupBackend(opts: {
           prototype_code: opts.nullPrototypeId
             ? null
             : (encontrada.prototype_code ?? "PRT-2026-000101"),
+          production_order_id: opts.nullPrototypeId
+            ? null
+            : (encontrada.production_order_id ?? 501),
+          production_order_code: opts.nullPrototypeId
+            ? null
+            : (encontrada.production_order_code ?? "OP-2026-000501"),
         });
       }
       const matchId = url.match(/\/prototype-quotations\/(\d+)/);
@@ -488,26 +552,24 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
     );
   });
 
-  // F9: /produccion permite visualizar Prototipos
-  it("F9: /produccion permite cambiar a la pestaña Prototipos y ver los PRT físicos", async () => {
-    const muestra = prtFisico({ id: 50, code: "PRT-2026-000050", name: "Jarrón Prototipo F9" });
-    setupBackend({ muestras: [muestra] });
-    const user = userEvent.setup();
+  // F9: la lista única incluye las órdenes nacidas de una muestra
+  it("F9: /produccion lista también las órdenes de prototipo, en la misma tabla", async () => {
+    // Fase 009K.4. Ya no hay pestaña de Prototipos: hay UNA lista, porque hay
+    // un solo documento de ejecución física.
+    setupBackend({ ordenes: [ordenCTZ(), ordenPRT()] });
     renderApp(["/produccion"]);
 
-    const tabPrototipos = await screen.findByRole("tab", { name: /Prototipos/i });
-    await user.click(tabPrototipos);
-
-    expect(await screen.findByText("PRT-2026-000050")).toBeInTheDocument();
-    expect(screen.getByText("Jarrón Prototipo F9")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Ver detalle/i })).toHaveAttribute(
-      "href",
-      "/produccion/prototipos/50",
-    );
+    expect((await screen.findAllByText("OP-2026-000501")).length).toBeGreaterThan(0);
+    expect(screen.getByText("OP-2026-000002")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Prototipos/i })).not.toBeInTheDocument();
+    // Y el origen se lee con códigos, no con identificadores.
+    expect(screen.getByText("CPR-2026-000012")).toBeInTheDocument();
+    expect(screen.getByText("PRT-2026-000101")).toBeInTheDocument();
+    expect(screen.getByText("CTZ-2026-000349")).toBeInTheDocument();
   });
 
-  // F10: PRT históricos sin CPR siguen visibles
-  it("F10: PRT históricos sin cotización ni producto siguen visibles en Producción -> Prototipos", async () => {
+  // F10: las muestras históricas NO se cuelan como órdenes falsas
+  it("F10: las muestras históricas sin orden no aparecen en la lista de producción", async () => {
     const legacyPrt = prtFisico({
       id: 60,
       code: "PRT-2026-000060",
@@ -516,16 +578,14 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
       quotation_code: null,
       product_id: null,
     });
-    setupBackend({ muestras: [legacyPrt] });
-    const user = userEvent.setup();
+    setupBackend({ ordenes: [ordenCTZ()], muestras: [legacyPrt] });
     renderApp(["/produccion"]);
 
-    await user.click(await screen.findByRole("tab", { name: /Prototipos/i }));
-
-    expect(await screen.findByText("PRT-2026-000060")).toBeInTheDocument();
-    expect(screen.getByText("Muestra Legacy Sin CPR")).toBeInTheDocument();
-    expect(screen.getByText("Sin cotización")).toBeInTheDocument();
-    expect(screen.getByText("Sin producto")).toBeInTheDocument();
+    expect(await screen.findByText("OP-2026-000002")).toBeInTheDocument();
+    // Fabricarles una orden retroactiva habría inventado un documento para un
+    // hecho que ya ocurrió sin él, y con un almacén que nadie eligió.
+    expect(screen.queryByText("PRT-2026-000060")).not.toBeInTheDocument();
+    expect(screen.queryByText("Muestra Legacy Sin CPR")).not.toBeInTheDocument();
   });
 
   // F11: PRT detail sigue accesible en /produccion/prototipos/:id
@@ -543,7 +603,7 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
     expect(screen.getAllByText("PRT-2026-000070").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /← Producción/i })).toHaveAttribute(
       "href",
-      "/produccion?tab=prototipos",
+      "/produccion",
     );
   });
 
@@ -557,28 +617,29 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
     expect(screen.getAllByText("PRT-2026-000080").length).toBeGreaterThan(0);
   });
 
-  // F13: START no cambia
-  it("F13: la acción de iniciar fabricación de un prototipo sigue invocando POST /prototypes/:id/start", async () => {
-    const muestra = prtFisico({
-      id: 90,
-      code: "PRT-2026-000090",
-      name: "Muestra Lista para Arrancar",
-      status: "CREATED",
-      readiness: { ready: true, issues: [] },
+  // F13: arrancar una muestra se hace desde SU ORDEN, y sólo desde ahí
+  it("F13: arrancar una muestra invoca POST /production-orders/:id/start", async () => {
+    // PROTOTYPE_VISIBLE_START_ENTRYPOINT_COUNT: 1. El arranque propio del
+    // prototipo desapareció de la interfaz: dos botones para el mismo consumo
+    // eran dos formas de gastar el mismo barro.
+    const backend = setupBackend({
+      ordenes: [ordenPRT()],
+      muestras: [prtFisico({ id: 101, code: "PRT-2026-000101" })],
     });
-    const backend = setupBackend({ muestras: [muestra] });
     const user = userEvent.setup();
-    renderApp(["/produccion/prototipos/90/operacion"]);
+    renderApp(["/produccion/501"]);
 
-    const startBtn = await screen.findByRole("button", { name: /Iniciar fabricación/i });
-    await user.click(startBtn);
+    await user.click(await screen.findByRole("button", { name: /Arrancar producción/i }));
 
     await waitFor(() => {
       const starts = backend.enviados.filter(
-        (e) => e.url.includes("/prototypes/90/start") && e.method === "POST",
+        (e) => e.url.includes("/production-orders/501/start") && e.method === "POST",
       );
       expect(starts.length).toBe(1);
     });
+    expect(
+      backend.enviados.filter((e) => e.url.includes("/prototypes/101/start")),
+    ).toHaveLength(0);
   });
 
   // F14: PR #59 resumable CPR sigue intacto
@@ -609,8 +670,8 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
     expect(creates.length).toBe(0);
   });
 
-  // F15: CPR CONFIRMED pasa a PAID al pulsar Registrar cobro y redirige automáticamente a /produccion/prototipos/:prototypeId
-  it("F15: al pulsar Registrar cobro en CPR confirmada, el backend devuelve prototype_id y el frontend navega automáticamente a /produccion/prototipos/:id", async () => {
+  // F15: cobrar exige elegir almacén y termina en la ORDEN, no en la muestra
+  it("F15: cobrar pide el almacén y navega a /produccion/:order_id", async () => {
     const cotizacion = cpr({
       id: 12,
       code: "CPR-2026-000012",
@@ -618,33 +679,39 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
       payment_status: "UNPAID",
       prototype_id: 101,
     });
-    const muestra = prtFisico({
-      id: 101,
-      code: "PRT-2026-000101",
-      name: "Muestra Fabricada Auto 101",
-    });
     const backend = setupBackend({
       cotizaciones: [cotizacion],
-      muestras: [muestra],
+      ordenes: [ordenPRT()],
+      muestras: [prtFisico({ id: 101, code: "PRT-2026-000101" })],
     });
     const user = userEvent.setup();
     renderApp(["/prototipos/cotizador/12"]);
 
-    const cobroBtn = await screen.findByRole("button", { name: /Registrar cobro/i });
-    await user.click(cobroBtn);
+    await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
 
-    // Debe navegar automáticamente a /produccion/prototipos/101 y mostrar la muestra
-    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Muestra Fabricada Auto 101")).toBeInTheDocument();
+    // El diálogo se abre con el almacén VACÍO. Aunque hubiera uno solo activo,
+    // seguiría vacío: el día que haya dos, un valor por defecto descontaría del
+    // equivocado sin que nadie lo notara.
+    const dialogo = await screen.findByRole("dialog", { name: /Registrar cobro/i });
+    expect(dialogo).toBeInTheDocument();
+    await user.click(
+      await within(dialogo).findByRole("combobox", { name: /almacén de salida/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: /Almacén principal/i }));
+    await user.click(within(dialogo).getByRole("button", { name: /Registrar cobro/i }));
 
-    const pays = backend.enviados.filter(
+    // Termina en la ORDEN. La ejecución física vive ahí desde 009K.4.
+    expect((await screen.findAllByText("OP-2026-000501")).length).toBeGreaterThan(0);
+
+    const pagos = backend.enviados.filter(
       (e) => e.url.includes("/prototype-quotations/12/mark-paid") && e.method === "POST",
     );
-    expect(pays.length).toBe(1);
+    expect(pagos).toHaveLength(1);
+    expect(pagos[0]!.body).toEqual({ stock_location_id: 1 });
   });
 
-  // F16: Error en el registro de cobro no redirige y enseña el mensaje de error
-  it("F16: si el registro de cobro falla en backend, no redirige y enseña el mensaje de alerta", async () => {
+  // F16: un cobro fallido no navega a ninguna parte
+  it("F16: si el cobro falla, no redirige y enseña el mensaje de alerta", async () => {
     const cotizacion = cpr({
       id: 12,
       code: "CPR-2026-000012",
@@ -652,104 +719,95 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
       payment_status: "UNPAID",
       prototype_id: 101,
     });
-    const muestra = prtFisico({
-      id: 101,
-      code: "PRT-2026-000101",
-      name: "Muestra Fabricada Auto 101",
-    });
     setupBackend({
       cotizaciones: [cotizacion],
-      muestras: [muestra],
+      ordenes: [ordenPRT()],
       failPayment: true,
     });
     const user = userEvent.setup();
     renderApp(["/prototipos/cotizador/12"]);
 
-    const cobroBtn = await screen.findByRole("button", { name: /Registrar cobro/i });
-    await user.click(cobroBtn);
+    await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
+    const dialogo = await screen.findByRole("dialog", { name: /Registrar cobro/i });
+    await user.click(
+      await within(dialogo).findByRole("combobox", { name: /almacén de salida/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: /Almacén principal/i }));
+    await user.click(within(dialogo).getByRole("button", { name: /Registrar cobro/i }));
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    // Permanece en el cotizador: sigue mostrando el estado pendiente y el botón de cobro
+    // El error sale DENTRO del diálogo, que sigue abierto: quien cobra ve por
+    // qué falló sin perder el almacén que acababa de elegir.
+    expect((await screen.findAllByRole("alert")).length).toBeGreaterThan(0);
+    // Se queda en la cotización, con el estado como estaba.
     expect(screen.getByText("Pendiente de cobro")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Registrar cobro/i })).toBeInTheDocument();
-    expect(screen.queryByText("Muestra Fabricada Auto 101")).not.toBeInTheDocument();
+    expect(screen.queryByText("OP-2026-000501")).not.toBeInTheDocument();
   });
 
-  // F17: CPR ya pagada (CASO B) enseña enlace 'Ir a producción' y no re-ejecuta cobro
-  it("F17: si la cotización ya está pagada (CASO B), enseña 'Ir a producción' apuntando a /produccion/prototipos/:id sin re-ejecutar cobro", async () => {
+  // F17: una CPR ya pagada enlaza a su ORDEN, sin volver a cobrar
+  it("F17: una cotización ya pagada enlaza a /produccion/:order_id sin re-ejecutar el cobro", async () => {
     const cotizacion = cpr({
       id: 12,
       code: "CPR-2026-000012",
       status: "CONFIRMED",
       payment_status: "PAID",
       prototype_id: 101,
-    });
-    const muestra = prtFisico({
-      id: 101,
-      code: "PRT-2026-000101",
-      name: "Muestra Fabricada Auto 101",
+      prototype_code: "PRT-2026-000101",
+      production_order_id: 501,
+      production_order_code: "OP-2026-000501",
     });
     const backend = setupBackend({
       cotizaciones: [cotizacion],
-      muestras: [muestra],
+      ordenes: [ordenPRT()],
+      muestras: [prtFisico({ id: 101, code: "PRT-2026-000101" })],
     });
     const user = userEvent.setup();
     renderApp(["/prototipos/cotizador/12"]);
 
-    // No debe existir el botón de registrar cobro
     expect(screen.queryByRole("button", { name: /Registrar cobro/i })).not.toBeInTheDocument();
+    const enlace = await screen.findByRole("link", { name: /Ir a producción/i });
+    expect(enlace).toHaveAttribute("href", "/produccion/501");
 
-    // Debe existir enlace a producción
-    const irProduccionLink = await screen.findByRole("link", { name: /Ir a producción/i });
-    expect(irProduccionLink).toHaveAttribute("href", "/produccion/prototipos/101");
-
-    await user.click(irProduccionLink);
-    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
-
-    const pays = backend.enviados.filter((e) => e.url.includes("/mark-paid"));
-    expect(pays.length).toBe(0);
+    await user.click(enlace);
+    expect((await screen.findAllByText("OP-2026-000501")).length).toBeGreaterThan(0);
+    expect(backend.enviados.filter((e) => e.url.includes("/mark-paid"))).toHaveLength(0);
   });
 
-  // F18: Registrar cobro desde panel PDF también redirige automáticamente
-  it("F18: pulsar Registrar cobro desde la pestaña PDF también redirige automáticamente a /produccion/prototipos/:id", async () => {
+  // F18: el mismo diálogo desde el panel del PDF
+  it("F18: cobrar desde la pestaña PDF abre el mismo diálogo y acaba en la orden", async () => {
     const cotizacion = cpr({
       id: 12,
       code: "CPR-2026-000012",
       status: "CONFIRMED",
       payment_status: "UNPAID",
       prototype_id: 101,
-    });
-    const muestra = prtFisico({
-      id: 101,
-      code: "PRT-2026-000101",
-      name: "Muestra Fabricada Auto 101",
     });
     setupBackend({
       cotizaciones: [cotizacion],
-      muestras: [muestra],
+      ordenes: [ordenPRT()],
+      muestras: [prtFisico({ id: 101, code: "PRT-2026-000101" })],
     });
     const user = userEvent.setup();
     renderApp(["/prototipos/cotizador/12"]);
 
-    // Ir a etapa PDF
-    const pdfTab = await screen.findByRole("button", { name: /PDF/i });
-    await user.click(pdfTab);
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+    const botones = screen.getAllByRole("button", { name: /Registrar cobro/i });
+    await user.click(botones[0]!);
 
-    // Click en Registrar cobro dentro del panel
-    const cobroBtns = screen.getAllByRole("button", { name: /Registrar cobro/i });
-    expect(cobroBtns.length).toBeGreaterThan(0);
-    await user.click(cobroBtns[0]!);
+    const dialogo = await screen.findByRole("dialog", { name: /Registrar cobro/i });
+    await user.click(
+      await within(dialogo).findByRole("combobox", { name: /almacén de salida/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: /Almacén principal/i }));
+    await user.click(within(dialogo).getByRole("button", { name: /Registrar cobro/i }));
 
-    // Debe navegar automáticamente
-    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Muestra Fabricada Auto 101")).toBeInTheDocument();
+    expect((await screen.findAllByText("OP-2026-000501")).length).toBeGreaterThan(0);
   });
 
   // F19: el destino es la MUESTRA, no la cotizacion
-  it("F19: la redirección usa el prototype_id de la muestra, no el id de la CPR", async () => {
-    // Los dos identificadores son distintos a proposito: si la pantalla
-    // usara el de la cotizacion, /produccion/prototipos/12 existiria como
-    // ruta y llevaria a OTRA muestra sin dar ningun error.
+  it("F19: la redirección usa el id de la ORDEN, no el de la CPR ni el de la muestra", async () => {
+    // Los tres identificadores son distintos a propósito: si la pantalla usara
+    // el de la cotización o el de la muestra, /produccion/12 y /produccion/101
+    // existirían como rutas y llevarían a OTRA orden sin dar ningún error.
     const cotizacion = cpr({
       id: 12,
       code: "CPR-2026-000012",
@@ -757,26 +815,36 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
       payment_status: "UNPAID",
       prototype_id: 101,
     });
-    const suya = prtFisico({ id: 101, code: "PRT-2026-000101", name: "La muestra correcta" });
-    const ajena = prtFisico({ id: 12, code: "PRT-2026-000012", name: "La muestra equivocada" });
-    setupBackend({ cotizaciones: [cotizacion], muestras: [suya, ajena] });
+    const suya = ordenPRT({ id: 501, code: "OP-2026-000501" });
+    const ajena = ordenCTZ({ id: 101, code: "OP-2026-000101" });
+    setupBackend({
+      cotizaciones: [cotizacion],
+      ordenes: [suya, ajena],
+      muestras: [prtFisico({ id: 101, code: "PRT-2026-000101" })],
+    });
     const user = userEvent.setup();
     renderApp(["/prototipos/cotizador/12"]);
 
     await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
+    const dialogo = await screen.findByRole("dialog", { name: /Registrar cobro/i });
+    await user.click(
+      await within(dialogo).findByRole("combobox", { name: /almacén de salida/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: /Almacén principal/i }));
+    await user.click(within(dialogo).getByRole("button", { name: /Registrar cobro/i }));
 
-    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("La muestra equivocada")).not.toBeInTheDocument();
+    expect((await screen.findAllByText("OP-2026-000501")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("OP-2026-000101")).not.toBeInTheDocument();
   });
 
-  // F20: un cobro sin muestra no se resuelve adivinando
-  it("F20: si el cobro responde sin prototype_id, no navega a ninguna parte", async () => {
-    // Cobrar SIEMPRE materializa la muestra —`mark_paid` la crea, la devuelve
-    // y es idempotente—, asi que esto no es un caso legitimo sino una
-    // respuesta rara. Llevar al usuario a la lista de Produccion con la
-    // esperanza de que encuentre la suya seria adivinar, y fabricar un
-    // identificador seria peor: se queda donde esta, con el cobro ya
-    // registrado, y al recargar aparece el boton con el id de verdad.
+  // F20: un cobro sin orden ni muestra no se resuelve adivinando
+  it("F20: si el cobro responde sin orden ni muestra, no navega a ninguna parte", async () => {
+    // Cobrar SIEMPRE materializa las dos —`mark_paid` las crea, las devuelve y
+    // es idempotente—, así que esto no es un caso legítimo sino una respuesta
+    // rara. Llevar a la lista de Producción con la esperanza de que alguien
+    // encuentre la suya sería adivinar, y fabricar un identificador sería peor:
+    // se queda donde está, con el cobro ya registrado, y al recargar aparece el
+    // botón con el id de verdad.
     const cotizacion = cpr({
       id: 12,
       code: "CPR-2026-000012",
@@ -784,22 +852,29 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
       payment_status: "UNPAID",
       prototype_id: 101,
     });
-    const muestra = prtFisico({ id: 101, code: "PRT-2026-000101" });
     setupBackend({
       cotizaciones: [cotizacion],
-      muestras: [muestra],
+      ordenes: [ordenPRT()],
+      muestras: [prtFisico({ id: 101, code: "PRT-2026-000101" })],
       nullPrototypeId: true,
     });
     const user = userEvent.setup();
     renderApp(["/prototipos/cotizador/12"]);
 
     await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
+    const dialogo = await screen.findByRole("dialog", { name: /Registrar cobro/i });
+    await user.click(
+      await within(dialogo).findByRole("combobox", { name: /almacén de salida/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: /Almacén principal/i }));
+    await user.click(within(dialogo).getByRole("button", { name: /Registrar cobro/i }));
 
-    // Sigue en el cotizador: no aparece la muestra ni se inventa un destino.
-    expect(
-      await screen.findByRole("button", { name: /Registrar cobro/i }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Muestra Fabricada Auto 101")).not.toBeInTheDocument();
+    // Sigue en el cotizador: ni orden, ni muestra, ni destino inventado.
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /Registrar cobro/i })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("link", { name: /Volver al tablero/i })).toBeInTheDocument();
+    expect(screen.queryByText("OP-2026-000501")).not.toBeInTheDocument();
     expect(screen.queryByText("PRT-2026-000101")).not.toBeInTheDocument();
   });
 });

@@ -102,6 +102,8 @@ function cpr(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuotation {
     costing: COSTEO,
     prototype_id: null,
     prototype_code: null,
+    production_order_id: null,
+    production_order_code: null,
     updated_at: "2026-09-06T12:00:00Z",
     ...overrides,
   };
@@ -132,6 +134,8 @@ function prtFisico(overrides: Partial<Prototype> = {}): Prototype {
     notes: "Histórico",
     quotation_payment_status: null,
     materials: [],
+    production_order_id: null,
+    production_order_code: null,
     readiness: { ready: true, issues: [] },
     ...overrides,
   };
@@ -486,19 +490,19 @@ describe("Parte 13 — Tests Frontend: Flujo de Cotización de Prototipos y Nave
     expect(produccionBtn).toHaveAttribute("href", "/produccion/prototipos/99");
   });
 
-  // TEST 13: PRT histórico sigue accesible en /produccion (tab Prototipos)
-  it("TEST 13: las muestras PRT históricas son accesibles en Producción -> Prototipos", async () => {
+  // TEST 13: una muestra histórica se lee por su propia ruta, no en la lista
+  it("TEST 13: las muestras PRT históricas se leen en su propia ficha, fuera de la lista", async () => {
+    // Fase 009K.4. La lista de /produccion es de ÓRDENES. Colar ahí las once
+    // muestras que se fabricaron sin orden las enseñaría como documentos que
+    // no existen, y el primer clic llevaría a una orden inventada.
     const muestra = prtFisico({ id: 99, code: "PRT-2026-000099", name: "Jarra Histórica 009K" });
     setupBackend({ muestras: [muestra] });
-    const user = userEvent.setup();
     renderApp(["/produccion"]);
 
-    const tabPrototipos = await screen.findByRole("tab", { name: /Prototipos/i });
-    await user.click(tabPrototipos);
-
-    expect(await screen.findByText("PRT-2026-000099")).toBeInTheDocument();
-    expect(screen.getByText("Jarra Histórica 009K")).toBeInTheDocument();
-    const detalleLink = screen.getByRole("link", { name: /Ver detalle/i });
-    expect(detalleLink).toHaveAttribute("href", "/produccion/prototipos/99");
+    // La pestaña desapareció con la unificación, y la muestra no se cuela en
+    // la tabla de órdenes. Se lee por su propia ruta, en sólo lectura.
+    expect(await screen.findByRole("heading", { name: /Producción/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Prototipos/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("PRT-2026-000099")).not.toBeInTheDocument();
   });
 });

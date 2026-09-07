@@ -46,6 +46,8 @@ function sample(overrides: Partial<Prototype> = {}): Prototype {
     notes: "Prueba controlada",
     quotation_payment_status: null,
     materials: [],
+    production_order_id: null,
+    production_order_code: null,
     readiness: {
       ready: false,
       issues: [
@@ -266,12 +268,14 @@ function installBackend(
 beforeEach(() => resetClientState());
 
 describe("Fase 009K · prototipos", () => {
-  it("1. muestra el listado con estados humanos", async () => {
+  it("1. la pestaña de muestras dejó de existir y lleva a Producción", async () => {
+    // Fase 009K.4. Ya no hay una lista de muestras aparte: la ejecución física
+    // vive entera en las órdenes de producción, y un enlace guardado a la
+    // pestaña antigua tiene que llevar allí en vez de romperse.
     installBackend();
     renderApp(["/prototipos?tab=muestras"]);
-    expect(await screen.findByText("PRT-2026-000007")).toBeInTheDocument();
-    expect(screen.getByText("Creado")).toBeInTheDocument();
-    expect(screen.queryByText("CREATED")).not.toBeInTheDocument();
+    expect(await screen.findByText(/Órdenes de fabricación/i)).toBeInTheDocument();
+    expect(screen.queryByText("PRT-2026-000007")).not.toBeInTheDocument();
   });
 
   it("2. crea un prototipo standalone sin producto ni cotización", async () => {
@@ -371,136 +375,54 @@ describe("Fase 009K · prototipos", () => {
     ).toBeInTheDocument();
   });
 
-  it("4. permite editar mientras está CREATED", async () => {
-    const { requests } = installBackend();
+  it("4. una muestra sin orden ya no se edita: se lee", async () => {
+    // F20 + F22. Editar los datos físicos era parte de la ejecución, y desde
+    // 009K.4 la ejecución vive en la orden. Estas muestras se hicieron antes de
+    // que la orden existiera: cambiarles algo ahora reescribiría un hecho que
+    // ya ocurrió. La dirección antigua sigue resolviendo, en sólo lectura.
+    installBackend();
     renderApp(["/prototipos/7/editar"]);
-    const field = await screen.findByLabelText(/^nombre/i);
-    fireEvent.change(field, { target: { value: "Taza corregida" } });
-    await userEvent.click(
-      screen.getByRole("button", { name: /guardar cambios/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some(
-          (r) =>
-            r.path.endsWith("/prototypes/7") &&
-            r.method === "PUT" &&
-            r.body?.includes("Taza corregida"),
-        ),
-      ).toBe(true),
-    );
+    expect(await screen.findByText(/Muestra histórica, en sólo lectura/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /guardar cambios/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^nombre/i)).not.toBeInTheDocument();
   });
 
-  it("5. añade material desde el catálogo real y conserva su unidad", async () => {
-    const { requests } = installBackend();
+  it("5. los materiales de una muestra histórica no se pueden guardar", async () => {
+    // F22. LEGACY_PRT_READ_ONLY.
+    installBackend();
     renderApp(["/prototipos/7/materiales"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /añadir material/i }),
-    );
-    await userEvent.click(screen.getByRole("combobox", { name: /^material/i }));
-    await userEvent.click(
-      await screen.findByRole("option", { name: /MAT-011 · Arcilla blanca/i }),
-    );
-    fireEvent.change(screen.getByLabelText(/cantidad \(g\)/i), {
-      target: { value: "5" },
-    });
-    await userEvent.click(
-      screen.getByRole("button", { name: /guardar materiales/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some(
-          (r) =>
-            r.path.endsWith("/materials") && r.body?.includes('"quantity":"5"'),
-        ),
-      ).toBe(true),
-    );
+    expect(await screen.findByText(/Materiales de la muestra/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /añadir material/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /guardar materiales/i })).not.toBeInTheDocument();
   });
 
-  it("6. sin cotización explica el bloqueo y no ofrece START", async () => {
+  it("6. una muestra histórica no ofrece arrancar por ninguna vía", async () => {
+    // F21. PROTOTYPE_VISIBLE_START_ENTRYPOINT_COUNT: 1, y ese uno está en la
+    // ficha de la orden. Aquí no hay ninguno: estas muestras no tienen orden y
+    // arrancarlas otra vez volvería a descontar material que ya se gastó.
     installBackend();
     renderApp(["/prototipos/7/operacion"]);
-    expect(
-      await screen.findByText(/vincula una cotización pagada/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Muestra histórica, en sólo lectura/i)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /iniciar fabricación/i }),
     ).not.toBeInTheDocument();
-  });
-
-  it("7. UNPAID explica el bloqueo", async () => {
-    installBackend(
-      sample({
-        quotation_id: 21,
-        quotation_code: "CTZ-2026-000021",
-        quotation_payment_status: "UNPAID",
-        readiness: {
-          ready: false,
-          issues: [
-            {
-              code: "QUOTATION_UNPAID",
-              product_id: null,
-              product_name: null,
-              required_quantity: null,
-              available_quantity: null,
-              uom: null,
-            },
-          ],
-        },
-      }),
-    );
-    renderApp(["/prototipos/7/operacion"]);
-    expect(await screen.findByText(/pendiente de pago/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /iniciar fabricación/i }),
+      screen.queryByRole("button", { name: /completar prototipo/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("8. PAID y ready permite START", async () => {
-    const { requests } = installBackend(
-      sample({
-        quotation_id: 21,
-        quotation_code: "CTZ-2026-000021",
-        quotation_payment_status: "PAID",
-        stock_location_id: 3,
-        readiness: { ready: true, issues: [] },
-      }),
-    );
-    renderApp(["/prototipos/7/operacion"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /iniciar fabricación/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some((r) => r.path.endsWith("/start") && r.method === "POST"),
-      ).toBe(true),
-    );
-  });
-
-  it("9. STARTED bloquea materiales", async () => {
+  it("9. una muestra STARTED histórica se lee entera y sin botones", async () => {
+    // Es el caso de PRT-2026-000009 en producción: arrancada por el camino
+    // antiguo, con su consumo ya escrito. Tiene que seguir siendo legible.
     installBackend(sample({ status: "STARTED" }));
     renderApp(["/prototipos/7/materiales"]);
-    expect(
-      await screen.findByText(/materiales están bloqueados/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Materiales de la muestra/i)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /añadir material/i }),
     ).not.toBeInTheDocument();
-  });
-
-  it("10. completa únicamente un prototipo STARTED", async () => {
-    const { requests } = installBackend(sample({ status: "STARTED" }));
-    renderApp(["/prototipos/7/operacion"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /completar prototipo/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some(
-          (r) => r.path.endsWith("/complete") && r.method === "POST",
-        ),
-      ).toBe(true),
-    );
+    expect(
+      screen.queryByRole("button", { name: /guardar materiales/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("11. OPERATOR no ve approve, reject ni cancel", async () => {
@@ -707,47 +629,10 @@ describe("Fase 009K · prototipos", () => {
     );
     renderApp(["/prototipos/7/materiales"]);
     // La escribe el backend al arrancar, junto al movimiento de inventario.
-    // Si se pudiera teclear, el consumo declarado y el movimiento podrian
-    // discrepar y ganaria el que no mueve material.
-    expect(await screen.findByText("Cantidad real")).toBeInTheDocument();
-    expect(screen.getByText("30 g")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/cantidad real/i)).not.toBeInTheDocument();
-  });
-
-  it("34. guardar materiales conserva el rol declarado en vez de borrarlo", async () => {
-    const { requests } = installBackend(
-      sample({
-        materials: [
-          {
-            id: 1,
-            product_id: 11,
-            sort_order: 0,
-            product_name: "Arcilla blanca",
-            product_internal_reference: "MAT-011",
-            quantity: "30",
-            uom_code: "g",
-            quantity_planned: "30",
-            quantity_actual: null,
-            material_role: "BODY",
-            stage: "PREPARATION",
-          },
-        ],
-        material_count: 1,
-      }),
-    );
-    renderApp(["/prototipos/7/materiales"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /guardar materiales/i }),
-    );
-    // La lista se guarda ENTERA: cargarla sin el rol y pulsar guardar borraria
-    // la unica forma de saber cual de los materiales es el cuerpo.
-    await waitFor(() => {
-      const body = requests.find(
-        (r) => r.path.endsWith("/materials") && r.method === "PUT",
-      )?.body;
-      expect(body).toContain('"material_role":"BODY"');
-      expect(body).toContain('"stage":"PREPARATION"');
-    });
+    // Si se pudiera teclear, el consumo declarado y el movimiento podrían
+    // discrepar y ganaría el que no mueve material.
+    expect(await screen.findByText("Real")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/cantidad/i)).not.toBeInTheDocument();
   });
 
   it("35. muestra las cotizaciones nacidas de la muestra, que es la relación contraria", async () => {

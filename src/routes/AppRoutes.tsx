@@ -94,10 +94,16 @@ export function AppRoutes() {
           <Route path="produccion" element={<ProductionOrdersPage />} />
           {/* Antes que "produccion/:id": las rutas con segmentos fijos se declaran antes. */}
           <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
+          {/* Fase 009K.4. La ficha de una muestra: redirige a su orden si la
+              tiene, y si no la tiene se lee en sólo lectura. «Edición» y
+              «Disponibilidad y operación» dejaron de existir —eso es ejecución,
+              y la ejecución vive en la orden—, pero sus direcciones siguen
+              resolviendo al detalle en vez de dar un 404: hay enlaces
+              históricos guardados por ahí. */}
           <Route path="produccion/prototipos/:id" element={<PrototypeDetailPage section="resumen" />} />
-          <Route path="produccion/prototipos/:id/editar" element={<PrototypeDetailPage section="editar" />} />
+          <Route path="produccion/prototipos/:id/editar" element={<PrototypeDetailPage section="resumen" />} />
           <Route path="produccion/prototipos/:id/materiales" element={<PrototypeDetailPage section="materiales" />} />
-          <Route path="produccion/prototipos/:id/operacion" element={<PrototypeDetailPage section="operacion" />} />
+          <Route path="produccion/prototipos/:id/operacion" element={<PrototypeDetailPage section="resumen" />} />
           <Route path="produccion/prototipos/:id/evaluacion" element={<PrototypeDetailPage section="evaluacion" />} />
           <Route path="produccion/prototipos/:id/iteraciones" element={<PrototypeDetailPage section="iteraciones" />} />
           <Route path="produccion/:id" element={<ProductionOrderDetailPage />} />
@@ -110,9 +116,9 @@ export function AppRoutes() {
           <Route path="prototipos/nuevo" element={<Navigate to="/prototipos/cotizador" replace />} />
           {/* Fase 009K.2.1. Redirecciones históricas de prototipo físico hacia Producción */}
           <Route path="prototipos/:id" element={<LegacyPrototypeRedirect section="resumen" />} />
-          <Route path="prototipos/:id/editar" element={<LegacyPrototypeRedirect section="editar" />} />
+          <Route path="prototipos/:id/editar" element={<LegacyPrototypeRedirect section="resumen" />} />
           <Route path="prototipos/:id/materiales" element={<LegacyPrototypeRedirect section="materiales" />} />
-          <Route path="prototipos/:id/operacion" element={<LegacyPrototypeRedirect section="operacion" />} />
+          <Route path="prototipos/:id/operacion" element={<LegacyPrototypeRedirect section="resumen" />} />
           <Route path="prototipos/:id/evaluacion" element={<LegacyPrototypeRedirect section="evaluacion" />} />
           <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
           <Route path="cotizador/nuevo" element={<CotizadorPage />} />

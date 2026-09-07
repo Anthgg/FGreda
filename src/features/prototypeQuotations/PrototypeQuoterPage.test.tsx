@@ -11,7 +11,7 @@
  * una pieza de catálogo.
  */
 
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -137,6 +137,8 @@ function cotizacion(
     costing: COSTEO,
     prototype_id: null,
     prototype_code: null,
+    production_order_id: null,
+    production_order_code: null,
     updated_at: "2026-09-04T10:00:00Z",
     ...overrides,
   };
@@ -187,6 +189,9 @@ function mockApi(
           paid_at: "2026-09-07T12:00:00Z",
           prototype_id: guardada.prototype_id ?? 88,
           prototype_code: guardada.prototype_code ?? "PRT-2026-000088",
+          production_order_id: guardada.production_order_id ?? 88,
+          production_order_code:
+            guardada.production_order_code ?? "OP-2026-000088",
         });
       }
       return jsonResponse(
@@ -195,6 +200,10 @@ function mockApi(
           : 200,
         guardada,
       );
+    }
+    // Fase 009K.4: cobrar exige elegir almacén.
+    if (url.includes("/inventory/locations")) {
+      return jsonResponse(200, [{ id: 1, name: "Almacén principal", active: true }]);
     }
     if (url.includes("/prototypes")) {
       return jsonResponse(200, {
@@ -221,6 +230,8 @@ function mockApi(
         notes: null,
         quotation_payment_status: "PAID",
         materials: [],
+        production_order_id: null,
+        production_order_code: null,
         readiness: { ready: true, issues: [] },
       });
     }
@@ -1097,9 +1108,11 @@ describe("Cotizador de prototipos · actores del documento", () => {
 // módulo de producción con el prototype_id devuelto por el backend.
 // ---------------------------------------------------------------------------
 describe("Cotizador de prototipos · registro de cobro y navegación a producción", () => {
-  it("al pulsar Registrar cobro en CPR confirmada, redirige automáticamente a /produccion/prototipos/:id", async () => {
+  it("cobrar abre el diálogo del almacén y termina en la orden de producción", async () => {
+    // Fase 009K.4. El cobro materializa la ORDEN, y una orden no existe sin
+    // saber de qué almacén sale su material. Por eso ya no es un botón directo.
     const user = userEvent.setup();
-    mockApi(
+    const espias = mockApi(
       cotizacion({
         id: 12,
         status: "CONFIRMED",
@@ -1110,19 +1123,24 @@ describe("Cotizador de prototipos · registro de cobro y navegación a producci�
     );
     renderApp(["/prototipos/cotizador/12"]);
 
-    const cobroBtn = await screen.findByRole("button", { name: /Registrar cobro/i });
-    await user.click(cobroBtn);
+    await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
 
-    // En producción/prototipos/88 carga el detalle y el enlace de vuelta a Producción
-    expect(await screen.findByRole("link", { name: /← Producción/i })).toHaveAttribute(
-      "href",
-      "/produccion?tab=prototipos",
+    const dialogo = await screen.findByRole("dialog", { name: /Registrar cobro/i });
+    // Empieza VACÍO aunque sólo haya un almacén activo. Quien cobra elige.
+    await user.click(
+      await within(dialogo).findByRole("combobox", { name: /almacén de salida/i }),
     );
-    expect((await screen.findAllByText("PRT-2026-000088")).length).toBeGreaterThan(0);
+    await user.click(await screen.findByRole("option", { name: /Almacén principal/i }));
+    await user.click(within(dialogo).getByRole("button", { name: /Registrar cobro/i }));
+
+    await waitFor(() => {
+      const pagos = espias.enviados.filter((e) => e.url.includes("/mark-paid"));
+      expect(pagos).toHaveLength(1);
+      expect(pagos[0]!.body).toEqual({ stock_location_id: 1 });
+    });
   });
 
-  it("si la cotización ya está pagada (CASO B), el botón 'Ir a producción' apunta a la ruta unificada sin repetir cobro", async () => {
-    const user = userEvent.setup();
+  it("una cotización ya pagada enlaza a su ORDEN sin repetir el cobro", async () => {
     const espias = mockApi(
       cotizacion({
         id: 12,
@@ -1130,21 +1148,15 @@ describe("Cotizador de prototipos · registro de cobro y navegación a producci�
         payment_status: "PAID",
         prototype_id: 88,
         prototype_code: "PRT-2026-000088",
+        production_order_id: 501,
+        production_order_code: "OP-2026-000501",
       }),
     );
     renderApp(["/prototipos/cotizador/12"]);
 
     expect(screen.queryByRole("button", { name: /Registrar cobro/i })).not.toBeInTheDocument();
-    const irProduccionLink = await screen.findByRole("link", { name: /Ir a producción/i });
-    expect(irProduccionLink).toHaveAttribute("href", "/produccion/prototipos/88");
-
-    await user.click(irProduccionLink);
-    expect(await screen.findByRole("link", { name: /← Producción/i })).toHaveAttribute(
-      "href",
-      "/produccion?tab=prototipos",
-    );
-
-    const pays = espias.enviados.filter((e) => e.url.includes("/mark-paid"));
-    expect(pays.length).toBe(0);
+    const enlace = await screen.findByRole("link", { name: /Ir a producción/i });
+    expect(enlace).toHaveAttribute("href", "/produccion/501");
+    expect(espias.enviados.filter((e) => e.url.includes("/mark-paid"))).toHaveLength(0);
   });
 });

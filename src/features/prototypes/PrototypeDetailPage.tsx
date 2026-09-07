@@ -1,47 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { PrimaryButton, SecondaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
+import { PrimaryButton, SecondaryButton, TextAreaField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { capabilitiesFor } from "@/features/auth/capabilities";
 import { useSession } from "@/features/auth/useSession";
-import { useConsumableProducts, useLocations, useProducts } from "@/features/masters/useMasters";
-import { useQuotations } from "@/features/quotations/useQuotations";
 import { Alert, ApprovalBadge, StatusBadge } from "@/features/prototypes/PrototypeUi";
-import {
-  MATERIAL_ROLE_OPTIONS,
-  MATERIAL_STAGE_OPTIONS,
-  describePrototypeError,
-  describePrototypeIssue,
-} from "@/features/prototypes/prototypeLabels";
+import { describePrototypeError } from "@/features/prototypes/prototypeLabels";
 import {
   useApprovePrototype,
   useCreateFinalQuotation,
   useCancelPrototype,
-  useCompletePrototype,
   useCreatePrototypeSuccessor,
   usePrototype,
   usePrototypes,
   useRejectPrototype,
-  useSetPrototypeMaterials,
-  useStartPrototype,
-  useUpdatePrototype,
 } from "@/features/prototypes/usePrototypes";
-import type {
-  Prototype,
-  PrototypeMaterialInput,
-  PrototypeMaterialRole,
-  PrototypeMaterialStage,
-  PrototypeTechnicalSpecifications,
-} from "@/types/prototypes";
+import type { Prototype, PrototypeTechnicalSpecifications } from "@/types/prototypes";
 
-export type PrototypeSection = "resumen" | "editar" | "materiales" | "operacion" | "evaluacion" | "iteraciones";
+/**
+ * Las secciones que quedan de una muestra HISTÓRICA. Fase 009K.4.
+ *
+ * Se fueron «editar» y «operacion»: editar los datos físicos y arrancar la
+ * fabricación son ejecución, y la ejecución vive en la orden de producción.
+ * Una muestra sin orden es una que ya se hizo, y lo hecho se lee.
+ */
+export type PrototypeSection = "resumen" | "materiales" | "evaluacion" | "iteraciones";
 
 const SECTIONS: Array<{ key: PrototypeSection; label: string }> = [
   { key: "resumen", label: "Detalle" },
-  { key: "editar", label: "Edición" },
   { key: "materiales", label: "Materiales" },
-  { key: "operacion", label: "Disponibilidad y operación" },
   { key: "evaluacion", label: "Evaluación" },
   { key: "iteraciones", label: "Iteraciones" },
 ];
@@ -163,119 +151,58 @@ function Info({ label, value, mono = false }: { label: string; value: string; mo
   return <div className="rounded-2xl border border-zinc-100 bg-white/70 p-4"><p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p><p className={`mt-1 text-sm font-semibold text-zinc-900 ${mono ? "font-mono" : ""}`}>{value}</p></div>;
 }
 
-function EditSection({ prototype }: { prototype: Prototype }) {
-  const update = useUpdatePrototype(prototype.id);
-  const products = useProducts({ active: true, limit: 200 });
-  const locations = useLocations();
-  const quotations = useQuotations({ limit: 200 });
-  const [name, setName] = useState(prototype.name);
-  const [quantity, setQuantity] = useState(String(prototype.quantity));
-  const [productId, setProductId] = useState(prototype.product_id ? String(prototype.product_id) : "");
-  const [quotationId, setQuotationId] = useState(prototype.quotation_id ? String(prototype.quotation_id) : "");
-  const [locationId, setLocationId] = useState(prototype.stock_location_id ? String(prototype.stock_location_id) : "");
-  const [targetDays, setTargetDays] = useState(prototype.target_days ? String(prototype.target_days) : "");
-  const [notes, setNotes] = useState(prototype.notes ?? "");
-  const locked = prototype.status !== "CREATED";
-
-  const save = (event: React.FormEvent) => {
-    event.preventDefault();
-    update.mutate({
-      name: name.trim(), quantity: Number(quantity), notes,
-      ...(productId ? { product_id: Number(productId) } : {}),
-      ...(quotationId ? { quotation_id: Number(quotationId) } : {}),
-      ...(locationId ? { stock_location_id: Number(locationId) } : {}),
-      ...(targetDays ? { target_days: Number(targetDays) } : {}),
-    });
-  };
-
-  return locked ? <Alert tone="amber">Los campos físicos quedaron bloqueados cuando inició la fabricación. El backend conserva la autoridad sobre esta regla.</Alert> : (
-    <form onSubmit={save} className="space-y-5">
-      <div className="grid gap-5 sm:grid-cols-2">
-        <TextField label="Nombre" requirement="required" value={name} onChange={setName} />
-        <TextField label="Cantidad de muestra" requirement="required" type="number" value={quantity} onChange={setQuantity} />
-        <SelectField label="Producto" requirement="optional" value={productId} onChange={setProductId} placeholder="Sin producto" options={(products.data?.items ?? []).map((p) => ({ value: String(p.id), label: `${p.internal_reference} · ${p.name}` }))} />
-        <SelectField label="Cotización" requirement="optional" value={quotationId} onChange={setQuotationId} placeholder="Sin cotización" options={(quotations.data?.items ?? []).map((q) => ({ value: String(q.id), label: `${q.code} · ${q.name ?? q.product_name ?? "Sin nombre"}` }))} />
-        <SelectField label="Almacén" requirement="optional" value={locationId} onChange={setLocationId} placeholder="Sin almacén" options={(locations.data ?? []).filter((l) => l.active).map((l) => ({ value: String(l.id), label: l.name }))} />
-        <TextField label="Días objetivo" requirement="optional" type="number" value={targetDays} onChange={setTargetDays} />
-      </div>
-      <TextAreaField label="Notas" requirement="optional" value={notes} onChange={setNotes} />
-      {update.error ? <Alert>{describePrototypeError(update.error)}</Alert> : null}
-      {update.isSuccess ? <Alert tone="green">Cambios guardados.</Alert> : null}
-      <PrimaryButton disabled={update.isPending || !name.trim() || Number(quantity) <= 0}>{update.isPending ? "Guardando…" : "Guardar cambios"}</PrimaryButton>
-    </form>
-  );
-}
-
-function MaterialsSection({ prototype }: { prototype: Prototype }) {
-  const save = useSetPrototypeMaterials(prototype.id);
-  const [materials, setMaterials] = useState<PrototypeMaterialInput[]>([]);
-  // Rol y etapa viajan de vuelta. La lista se guarda ENTERA, asi que cargarla
-  // sin ellos y pulsar «Guardar materiales» borraria lo que el taller declaro
-  // —y con el rol se iria la unica forma de saber cual es el cuerpo—.
-  useEffect(
-    () =>
-      setMaterials(
-        prototype.materials.map((line) => ({
-          product_id: line.product_id,
-          quantity: line.quantity,
-          material_role: line.material_role,
-          stage: line.stage,
-        })),
-      ),
-    [prototype.materials],
-  );
-  // Filtrado por tipo en el servidor: ver `useConsumableProducts`.
-  const consumables = useConsumableProducts().items;
-  const byId = useMemo(() => new Map(consumables.map((p) => [p.id, p])), [consumables]);
-  const locked = prototype.status !== "CREATED";
-
+/**
+ * Los materiales de una muestra histórica. Sólo lectura. Fase 009K.4.
+ *
+ * Ya no se editan desde aquí: esta pantalla existe para las once muestras que
+ * se fabricaron antes de que la orden de producción fuera el único documento
+ * de ejecución. Guardar materiales sobre una de ellas cambiaría lo que dice
+ * un hecho que ya ocurrió.
+ */
+function MaterialsReadOnly({ prototype }: { prototype: Prototype }) {
   return (
     <div className="space-y-4">
-      <div><h2 className="font-semibold">Materiales del prototipo</h2><p className="mt-1 text-sm text-zinc-500">Lista física explícita. No se deduce una receta ni se añade barniz automáticamente.</p></div>
-      {locked ? <Alert tone="amber">Los materiales están bloqueados porque el prototipo ya inició o terminó.</Alert> : null}
-      <div className="space-y-3">
-        {materials.map((line, index) => {
-          const product = byId.get(line.product_id);
-          return <div key={`${line.product_id}-${index}`} className="grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 sm:grid-cols-[1fr_180px_auto] lg:grid-cols-[1fr_160px_auto_160px_160px_140px]">
-            <SelectField label="Material" value={line.product_id ? String(line.product_id) : ""} disabled={locked} placeholder="Seleccione del catálogo" options={consumables.map((p) => ({ value: String(p.id), label: `${p.internal_reference} · ${p.name}` }))} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, product_id: Number(value) } : row))} />
-            <TextField label={`Cantidad${product?.base_uom_code ? ` (${product.base_uom_code})` : ""}`} requirement="required" type="number" inputMode="decimal" disabled={locked} value={line.quantity} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, quantity: value } : row))} />
-            {!locked ? <SecondaryButton className="self-end" onClick={() => setMaterials((rows) => rows.filter((_, i) => i !== index))}>Quitar</SecondaryButton> : null}
-            <SelectField label="Rol" requirement="optional" disabled={locked} placeholder="Sin declarar" value={line.material_role ?? ""} options={MATERIAL_ROLE_OPTIONS} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, material_role: (value || null) as PrototypeMaterialRole | null } : row))} />
-            <SelectField label="Etapa" requirement="optional" disabled={locked} placeholder="Sin declarar" value={line.stage ?? ""} options={MATERIAL_STAGE_OPTIONS} onChange={(value) => setMaterials((rows) => rows.map((row, i) => i === index ? { ...row, stage: (value || null) as PrototypeMaterialStage | null } : row))} />
-            {/* La cantidad REAL la escribe el backend al arrancar, junto al
-                movimiento de inventario. Aqui solo se lee: si se pudiera
-                teclear, el consumo declarado y el movimiento podrian discrepar
-                y ganaria el que no mueve material. */}
-            <div className="self-end text-xs text-zinc-600">
-              <span className="block text-[11px] font-medium text-zinc-500">Cantidad real</span>
-              {prototype.materials[index]?.quantity_actual
-                ? `${prototype.materials[index]!.quantity_actual} ${prototype.materials[index]!.uom_code}`
-                : "Aún no consta"}
-            </div>
-          </div>;
-        })}
+      <div>
+        <h2 className="font-semibold">Materiales de la muestra</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Lista física explícita: no se dedujo de ninguna receta. Lo real lo escribió el arranque.
+        </p>
       </div>
-      {!locked ? <div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => setMaterials((rows) => [...rows, { product_id: 0, quantity: "1" }])}>Añadir material</SecondaryButton><PrimaryButton type="button" disabled={save.isPending || materials.some((m) => !m.product_id || Number(m.quantity) <= 0)} onClick={() => save.mutate(materials)}>{save.isPending ? "Guardando…" : "Guardar materiales"}</PrimaryButton></div> : null}
-      {save.error ? <Alert>{describePrototypeError(save.error)}</Alert> : null}
-      {save.isSuccess ? <Alert tone="green">Materiales guardados.</Alert> : null}
+      {prototype.materials.length === 0 ? (
+        <p className="text-sm text-zinc-500">Esta muestra no llegó a declarar materiales.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white/80">
+          <table className="min-w-full text-left text-xs">
+            <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Material</th>
+                <th className="px-4 py-3 text-right font-semibold">Previsto</th>
+                <th className="px-4 py-3 text-right font-semibold">Real</th>
+                <th className="px-4 py-3 font-semibold">Unidad</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {prototype.materials.map((line) => (
+                <tr key={line.id}>
+                  <td className="px-4 py-3">
+                    <span className="font-medium text-zinc-900">{line.product_name}</span>
+                    <span className="block font-mono text-[10px] text-zinc-400">
+                      {line.product_internal_reference}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{line.quantity_planned}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {line.quantity_actual ?? <span className="text-zinc-400">No consta</span>}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500">{line.uom_code}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
-}
-
-function OperationSection({ prototype }: { prototype: Prototype }) {
-  const { data: user } = useSession();
-  const caps = capabilitiesFor(user?.role);
-  const start = useStartPrototype(prototype.id);
-  const complete = useCompletePrototype(prototype.id);
-  const canStart = caps.arrancarPrototipo && prototype.status === "CREATED" && prototype.readiness.ready;
-  const canComplete = caps.completarPrototipo && prototype.status === "STARTED";
-  return <div className="space-y-5">
-    <div><h2 className="font-semibold">Disponibilidad</h2><p className="mt-1 text-sm text-zinc-500">El backend recalcula cada condición; esta pantalla solo la explica.</p></div>
-    {prototype.readiness.ready ? <Alert tone="green">Cotización pagada, almacén y materiales listos.</Alert> : <div className="grid gap-3 sm:grid-cols-2">{prototype.readiness.issues.map((issue, index) => <div key={`${issue.code}-${index}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">{issue.code === "NO_QUOTATION" ? "Cotización" : issue.code === "QUOTATION_UNPAID" ? "Pago" : issue.code === "NO_STOCK_LOCATION" ? "Almacén" : issue.code === "NO_MATERIALS" ? "Materiales" : "Stock"}</p><p className="mt-1 text-sm text-amber-900">{describePrototypeIssue(issue)}</p></div>)}</div>}
-    <div className="flex gap-2">{canStart ? <PrimaryButton type="button" disabled={start.isPending} onClick={() => start.mutate()}>{start.isPending ? "Iniciando…" : "Iniciar fabricación"}</PrimaryButton> : null}{canComplete ? <PrimaryButton type="button" disabled={complete.isPending} onClick={() => complete.mutate()}>{complete.isPending ? "Completando…" : "Completar prototipo"}</PrimaryButton> : null}</div>
-    {start.error ? <Alert>{describePrototypeError(start.error)}</Alert> : null}{complete.error ? <Alert>{describePrototypeError(complete.error)}</Alert> : null}
-    {start.isSuccess ? <Alert tone="green">Fabricación iniciada. La disponibilidad y el inventario se actualizaron.</Alert> : null}{complete.isSuccess ? <Alert tone="green">Prototipo completado.</Alert> : null}
-  </div>;
 }
 
 function EvaluationSection({ prototype }: { prototype: Prototype }) {
@@ -364,12 +291,26 @@ export function PrototypeDetailPage({ section }: { section: PrototypeSection }) 
   if (prototype.isPending) return <div className="flex justify-center py-20"><Spinner className="size-5" label="Cargando prototipo…" /></div>;
   if (prototype.isError || !prototype.data) return <Alert>{describePrototypeError(prototype.error)}</Alert>;
   const row = prototype.data;
+
+  // Fase 009K.4. Si la muestra tiene orden, la ficha canónica es la de la
+  // orden: ahí está el material, el arranque, la hoja de taller y la
+  // evaluación. Los enlaces antiguos siguen funcionando y llevan allí.
+  if (row.production_order_id) {
+    return <Navigate to={`/produccion/${row.production_order_id}`} replace />;
+  }
+
+  // Sin orden: es una de las muestras anteriores a esta fase. Se lee y no se
+  // toca. Y leerla NO le crea una orden: el backend tampoco lo hace.
   return <div className="mx-auto w-full max-w-6xl space-y-5">
-    <header><Link to="/produccion?tab=prototipos" className="text-sm text-zinc-500 hover:underline">← Producción</Link><div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold">{row.name}</h1><span className="font-mono text-sm font-bold text-zinc-500">{row.code}</span><StatusBadge status={row.status} /><ApprovalBadge approval={row.approval} /></div></header>
+    <header><Link to="/produccion" className="text-sm text-zinc-500 hover:underline">← Producción</Link><div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold">{row.name}</h1><span className="font-mono text-sm font-bold text-zinc-500">{row.code}</span><StatusBadge status={row.status} /><ApprovalBadge approval={row.approval} /></div></header>
     {createdCode ? <Alert tone="green">Prototipo creado con código {createdCode}.</Alert> : null}
+    <Alert tone="amber">
+      Muestra histórica, en sólo lectura. Se fabricó antes de que la orden de producción fuera
+      el único documento de ejecución, así que no tiene orden y no se le crea una ahora.
+    </Alert>
     <nav aria-label="Secciones del prototipo" className="flex gap-2 overflow-x-auto pb-1">{SECTIONS.map((item) => <Link key={item.key} to={routeFor(id, item.key)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold ${section === item.key ? "bg-black text-white" : "border border-zinc-200 bg-white/70 text-zinc-700"}`}>{item.label}</Link>)}</nav>
     <section className="glass-panel rounded-3xl border border-white/60 p-5 shadow-sm sm:p-6">
-      {section === "resumen" ? <Summary prototype={row} /> : section === "editar" ? <EditSection prototype={row} /> : section === "materiales" ? <MaterialsSection prototype={row} /> : section === "operacion" ? <OperationSection prototype={row} /> : section === "evaluacion" ? <EvaluationSection prototype={row} /> : <IterationsSection prototype={row} />}
+      {section === "materiales" ? <MaterialsReadOnly prototype={row} /> : section === "evaluacion" ? <EvaluationSection prototype={row} /> : section === "iteraciones" ? <IterationsSection prototype={row} /> : <Summary prototype={row} />}
     </section>
   </div>;
 }

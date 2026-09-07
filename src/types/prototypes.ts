@@ -131,6 +131,15 @@ export interface Prototype extends PrototypeSummary {
   quotation_payment_status: "UNPAID" | "PAID" | null;
   materials: PrototypeMaterial[];
   readiness: PrototypeReadiness;
+  /**
+   * Fase 009K.4. La orden de producción que la fabrica, si existe.
+   *
+   * Es lo que decide qué pantalla se abre: con orden, la ficha canónica de
+   * producción; sin ella, la vista histórica de sólo lectura. Nula en las 11
+   * muestras anteriores a esta fase, y el backend nunca la crea al leer.
+   */
+  production_order_id: number | null;
+  production_order_code: string | null;
 }
 
 export interface PrototypePage {
