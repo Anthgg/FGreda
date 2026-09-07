@@ -5,6 +5,7 @@ import { fetchDraftPdfPreview } from "@/api/quotationBuilder";
 import { fetchQuotationPdf } from "@/api/quotations";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { nombreDeActor } from "@/features/documents/actors";
 import { formatMoney } from "@/features/quotations/money";
 import { Badge } from "@/features/masters/MasterTable";
 import type { QuotationBuilderDraftIn, QuotationBuilderOut } from "@/types/quotationBuilder";
@@ -233,6 +234,22 @@ export function CotizadorPdfPanel({
                 <p className="text-[10px] uppercase text-zinc-400">Productos cotizados</p>
                 <p className="font-semibold text-zinc-900">{itemCount} {itemCount === 1 ? "pieza" : "piezas"}</p>
               </div>
+
+              {/* Fase 009K.2. Quién la preparó y quién la emitió. Los nombres
+                  llegan congelados desde BGreda: aquí no se consulta ningún
+                  perfil. Una cotización anterior a esta fase no registró a
+                  nadie, y se dice en vez de rellenarlo. */}
+              <div>
+                <p className="text-[10px] uppercase text-zinc-400">Creado por</p>
+                <p className="font-medium text-zinc-800">{nombreDeActor(preview?.created_by_name)}</p>
+              </div>
+
+              {status === "CONFIRMED" ? (
+                <div>
+                  <p className="text-[10px] uppercase text-zinc-400">Confirmado por</p>
+                  <p className="font-medium text-zinc-800">{nombreDeActor(preview?.confirmed_by_name)}</p>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-2 rounded-xl bg-zinc-50 p-3.5 text-xs">

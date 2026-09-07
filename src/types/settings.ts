@@ -207,3 +207,40 @@ export interface AuditPage {
   limit: number;
   offset: number;
 }
+
+// ---------------------------------------------------------------------------
+// Usuarios (Fase 009K.2)
+//
+// Un usuario vive partido en dos: la CUENTA en Supabase Auth —de donde sale el
+// correo, y donde vive la contraseña, que este frontend nunca ve— y el PERFIL
+// en el backend, que dice cómo se llama, qué rol tiene y si sigue activo.
+// ---------------------------------------------------------------------------
+export type UserRole = "ADMIN" | "OPERATOR";
+
+export interface AppUser {
+  /** Sólo para saber a quién se edita. No se enseña en ninguna pantalla. */
+  id: string;
+  display_name: string;
+  /** Nulo cuando el perfil existe pero Supabase no conoce la cuenta. */
+  email: string | null;
+  role: UserRole;
+  active: boolean;
+}
+
+export interface UserPage {
+  items: AppUser[];
+  total: number;
+}
+
+export interface UserCreateInput {
+  email: string;
+  display_name: string;
+  role: UserRole;
+  /** Viaja de ida y nunca de vuelta: no se guarda ni se vuelve a leer. */
+  password: string;
+}
+
+export interface UserUpdateInput {
+  display_name?: string;
+  role?: UserRole;
+}

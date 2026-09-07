@@ -81,7 +81,12 @@ interface TextFieldProps {
   onChange: (value: string) => void;
   disabled?: boolean | undefined;
   readOnly?: boolean | undefined;
-  type?: "text" | "email" | "url" | "tel" | "number" | undefined;
+  /**
+   * `password` se anadio en 009K.2 para el alta de usuarios: es un input de
+   * texto mas, y ocultarlo mientras se teclea es justo lo que hace falta
+   * cuando alguien da de alta a un companero con otra persona delante.
+   */
+  type?: "text" | "email" | "url" | "tel" | "number" | "password" | undefined;
   placeholder?: string | undefined;
   hint?: string | undefined;
   error?: string | undefined;

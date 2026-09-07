@@ -188,6 +188,8 @@ function builder(overrides: Partial<QuotationBuilderOut> = {}): QuotationBuilder
     updated_at: null,
     confirmed_at: null,
     cancelled_at: null,
+    created_by_name: null,
+    confirmed_by_name: null,
     payment_status: null,
     paid_at: null,
     ...overrides,
@@ -1112,5 +1114,78 @@ describe("Cotizador integral", () => {
     await user.click(screen.getByRole("button", { name: /Actualizar vista previa/i }));
     await waitFor(() => expect(pdfCallCount).toBeGreaterThan(previousCount));
     expect(screen.queryByText(/Vista previa desactualizada debido a cambios recientes/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fase 009K.2 — quien preparo y quien emitio
+// ---------------------------------------------------------------------------
+describe("Cotizador · actores del documento", () => {
+  it("enseña quién la creó y quién la confirmó, con los nombres del backend", async () => {
+    const user = userEvent.setup();
+    const guardada = builder({
+      id: 81,
+      code: "CTZ-2026-000081",
+      status: "CONFIRMED",
+      confirmed_at: "2026-09-07T10:00:00Z",
+      created_by_name: "Ana Pérez",
+      confirmed_by_name: "Beto Ruiz",
+    });
+    mockFetch((url, init) => {
+      if (url.includes("/quotation-builder/81") && (init.method ?? "GET") === "GET") {
+        return jsonResponse(200, guardada);
+      }
+      return handler(url, init);
+    });
+    renderApp(["/cotizador/81"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+    expect(screen.getByText("Beto Ruiz")).toBeInTheDocument();
+  });
+
+  it("una confirmada sin actor registrado lo dice, en vez de rellenarlo", async () => {
+    const user = userEvent.setup();
+    // Las anteriores a 009K.2 no guardaron a nadie. Poner ahí a quien está
+    // mirando sería atribuirle un documento que no firmó.
+    const antigua = builder({
+      id: 81,
+      code: "CTZ-2026-000081",
+      status: "CONFIRMED",
+      confirmed_at: "2026-01-02T10:00:00Z",
+      created_by_name: null,
+      confirmed_by_name: null,
+    });
+    mockFetch((url, init) => {
+      if (url.includes("/quotation-builder/81") && (init.method ?? "GET") === "GET") {
+        return jsonResponse(200, antigua);
+      }
+      return handler(url, init);
+    });
+    renderApp(["/cotizador/81"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    // Dos: creado por y confirmado por. Que las dos digan que no consta es lo
+    // que prueba que no cayeron en el usuario en sesión.
+    expect(await screen.findAllByText("No registrado")).toHaveLength(2);
+  });
+
+  it("un borrador todavía no tiene quien lo confirme", async () => {
+    const user = userEvent.setup();
+    const borrador = builder({ id: 81, created_by_name: "Ana Pérez" });
+    mockFetch((url, init) => {
+      if (url.includes("/quotation-builder/81") && (init.method ?? "GET") === "GET") {
+        return jsonResponse(200, borrador);
+      }
+      return handler(url, init);
+    });
+    renderApp(["/cotizador/81"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+    expect(screen.queryByText(/Confirmado por/i)).not.toBeInTheDocument();
   });
 });

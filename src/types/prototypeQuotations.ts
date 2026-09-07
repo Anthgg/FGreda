@@ -156,6 +156,17 @@ export interface PrototypeQuotation {
   confirmed_at: string | null;
   cancelled_at: string | null;
 
+  /**
+   * Fase 009K.2. Quién la preparó y quién la emitió, por su nombre visible tal
+   * como estaba ESE día. Llegan resueltos y congelados desde BGreda: el
+   * navegador no consulta perfiles ni compone identidades.
+   *
+   * `null` en los documentos anteriores a esta fase, que no registraron a
+   * nadie. La pantalla dice «No registrado», no se lo inventa.
+   */
+  created_by_name: string | null;
+  confirmed_by_name: string | null;
+
   customer_id: number | null;
   customer_name: string | null;
   product_id: number | null;

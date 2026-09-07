@@ -10,6 +10,7 @@ import { CompanySection } from "@/features/settings/CompanySection";
 import { DocumentsSection } from "@/features/settings/DocumentsSection";
 import { describeError } from "@/features/settings/messages";
 import { SequencesSection } from "@/features/settings/SequencesSection";
+import { UsersSection } from "@/features/settings/UsersSection";
 import {
   useCommercialSettings,
   useCompanySettings,
@@ -17,13 +18,16 @@ import {
   useSequences,
 } from "@/features/settings/useSettings";
 
-type TabId = "empresa" | "comercial" | "documentos" | "numeracion" | "historial";
+type TabId = "empresa" | "comercial" | "documentos" | "numeracion" | "usuarios" | "historial";
 
 const TABS: readonly { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "empresa", label: "Empresa" },
   { id: "comercial", label: "Comercial" },
   { id: "documentos", label: "Documentos" },
   { id: "numeracion", label: "Numeración" },
+  // Fase 009K.2. Quién entra y con qué rol es política de la casa, igual que el
+  // IGV o los correlativos: vive en Configuración y no en un módulo aparte.
+  { id: "usuarios", label: "Usuarios", adminOnly: true },
   { id: "historial", label: "Historial", adminOnly: true },
 ];
 
@@ -124,6 +128,7 @@ export function SettingsPage() {
               {tab === "comercial" ? <CommercialSection canEdit={isAdmin} /> : null}
               {tab === "documentos" ? <DocumentsSection canEdit={isAdmin} /> : null}
               {tab === "numeracion" ? <SequencesSection canEdit={isAdmin} /> : null}
+              {tab === "usuarios" ? <UsersSection canEdit={isAdmin} /> : null}
               {tab === "historial" ? <AuditSection canView={isAdmin} /> : null}
             </div>
           )}

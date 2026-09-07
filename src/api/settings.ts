@@ -7,6 +7,7 @@
 
 import { apiClient } from "@/api/client";
 import type {
+  AppUser,
   AuditPage,
   CommercialSettings,
   CommercialSettingsInput,
@@ -19,6 +20,9 @@ import type {
   SequencePatternPreset,
   SequencePatternPresetInput,
   SequenceType,
+  UserCreateInput,
+  UserPage,
+  UserUpdateInput,
 } from "@/types/settings";
 
 const COMPANY = "/settings/company";
@@ -101,4 +105,29 @@ export function updateSequence(
 // ---------------------------------------------------------------------------
 export function fetchAuditEvents(limit = 50): Promise<AuditPage> {
   return apiClient.get<AuditPage>(`${AUDIT}?limit=${limit}`);
+}
+
+// ---------------------------------------------------------------------------
+// Usuarios (Fase 009K.2)
+// ---------------------------------------------------------------------------
+const USERS = "/users";
+
+export function fetchUsers(): Promise<UserPage> {
+  return apiClient.get<UserPage>(USERS);
+}
+
+export function createUser(payload: UserCreateInput): Promise<AppUser> {
+  return apiClient.post<AppUser>(USERS, payload);
+}
+
+export function updateUser(id: string, payload: UserUpdateInput): Promise<AppUser> {
+  return apiClient.put<AppUser>(`${USERS}/${id}`, payload);
+}
+
+/**
+ * Baja y alta de nuevo. NO hay borrado: quien ya firmó documentos no se puede
+ * quitar sin romper el historial.
+ */
+export function setUserActive(id: string, active: boolean): Promise<AppUser> {
+  return apiClient.post<AppUser>(`${USERS}/${id}/${active ? "enable" : "disable"}`, {});
 }

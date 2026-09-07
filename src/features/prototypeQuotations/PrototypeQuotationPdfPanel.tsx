@@ -16,6 +16,7 @@
 import { Link } from "react-router-dom";
 
 import { PrimaryButton, SecondaryButton } from "@/components/form";
+import { nombreDeActor } from "@/features/documents/actors";
 import { formatDecimalString } from "@/features/firings/labels";
 import { Badge } from "@/features/masters/MasterTable";
 import { PrototypeQuotationDocument } from "@/features/prototypeQuotations/PrototypeQuotationDocument";
@@ -147,6 +148,27 @@ export function PrototypeQuotationPdfPanel({
                 {muestras} {muestras === 1 ? "muestra" : "muestras"}
               </p>
             </div>
+            {/* Fase 009K.2. Quién la preparó y quién la emitió. Los nombres
+                llegan ya resueltos y congelados desde BGreda: aquí no se
+                consulta ningún perfil ni se compone ninguna identidad. Un
+                documento anterior a esta fase no registró a nadie, y eso se
+                dice en vez de rellenarlo. */}
+            <div>
+              <p className="text-[10px] uppercase text-zinc-400">Creado por</p>
+              <p className="font-medium text-zinc-800">
+                {nombreDeActor(persisted?.created_by_name)}
+              </p>
+            </div>
+            {emitida ? (
+              <div>
+                <p className="text-[10px] uppercase text-zinc-400">
+                  Confirmado por
+                </p>
+                <p className="font-medium text-zinc-800">
+                  {nombreDeActor(persisted?.confirmed_by_name)}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {/* Los importes son los que devolvió BGreda. Aquí no se suma nada. */}
