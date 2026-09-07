@@ -282,6 +282,31 @@ export function PrototypeQuoterPage() {
     });
   };
 
+  /**
+   * Cobrar lleva a la muestra: la cotización comercial ya cumplió su papel y
+   * lo que sigue es taller.
+   *
+   * La navegación va DENTRO de `onSuccess`. Si el cobro falla, la pantalla se
+   * queda donde está y enseña el error de siempre — mandar a Producción a
+   * alguien cuyo cobro no entró le haría creer que sí.
+   *
+   * Sin `prototype_id` no se navega. Cobrar SIEMPRE materializa la muestra
+   * —`mark_paid` la crea y la devuelve, y es idempotente—, así que esa
+   * ausencia no es un caso legítimo sino una respuesta rara: llevar a la lista
+   * de Producción con la esperanza de que el usuario encuentre la suya sería
+   * adivinar. El cobro sí quedó registrado, y al recargar la cotización
+   * aparece el botón «Ir a producción» con el identificador de verdad.
+   */
+  const handleCobrar = () => {
+    markPaid.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data.prototype_id) {
+          navigate(`/produccion/prototipos/${data.prototype_id}`);
+        }
+      },
+    });
+  };
+
   if (quotationId && query.isPending) return <Spinner />;
 
   const status = persisted?.status ?? "DRAFT";
@@ -318,7 +343,7 @@ export function PrototypeQuoterPage() {
             ) : null}
             {persisted?.prototype_code ? (
               <Link
-                to={`/prototipos/${persisted.prototype_id}`}
+                to={`/produccion/prototipos/${persisted.prototype_id}`}
                 className="text-[11px] text-zinc-500 hover:underline"
               >
                 Muestra:{" "}
@@ -895,7 +920,7 @@ export function PrototypeQuoterPage() {
           puedeEmitir={Boolean(quotationId) && status === "DRAFT"}
           onGuardar={guardar}
           onEmitir={() => confirm.mutate()}
-          onCobrar={() => markPaid.mutate()}
+          onCobrar={handleCobrar}
         />
       ) : null}
 
@@ -948,7 +973,7 @@ export function PrototypeQuoterPage() {
           ) : null}
           {persisted?.status === "CONFIRMED" &&
           persisted.payment_status === "UNPAID" ? (
-            <SecondaryButton disabled={busy} onClick={() => markPaid.mutate()}>
+            <SecondaryButton disabled={busy} onClick={handleCobrar}>
               Registrar cobro
             </SecondaryButton>
           ) : null}
