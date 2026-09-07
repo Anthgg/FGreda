@@ -206,6 +206,7 @@ function setupBackend(opts: {
   cotizaciones?: PrototypeQuotation[];
   ordenes?: ProductionOrder[];
   muestras?: Prototype[];
+  failPayment?: boolean;
 } = {}): TestBackend {
   const cotizaciones = opts.cotizaciones ?? [cpr()];
   const ordenes = opts.ordenes ?? [ordenCTZ()];
@@ -290,6 +291,22 @@ function setupBackend(opts: {
             confirmed_at: c.confirmed_at,
           })),
           total: cotizaciones.length,
+        });
+      }
+      if (url.includes("/mark-paid") && method === "POST") {
+        if (opts.failPayment) {
+          return errorResponse(500, "PAYMENT_PROCESSING_ERROR");
+        }
+        const matchId = url.match(/\/prototype-quotations\/(\d+)\/mark-paid/);
+        const id = Number(matchId?.[1] ?? 12);
+        const encontrada = cotizaciones.find((c) => c.id === id) ?? cotizaciones[0]!;
+        return jsonResponse(200, {
+          ...encontrada,
+          status: "CONFIRMED",
+          payment_status: "PAID",
+          paid_at: "2026-09-07T12:00:00Z",
+          prototype_id: encontrada.prototype_id ?? 101,
+          prototype_code: encontrada.prototype_code ?? "PRT-2026-000101",
         });
       }
       const matchId = url.match(/\/prototype-quotations\/(\d+)/);
@@ -580,5 +597,141 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
       (e) => e.url.endsWith("/prototype-quotations") && e.method === "POST",
     );
     expect(creates.length).toBe(0);
+  });
+
+  // F15: CPR CONFIRMED pasa a PAID al pulsar Registrar cobro y redirige automáticamente a /produccion/prototipos/:prototypeId
+  it("F15: al pulsar Registrar cobro en CPR confirmada, el backend devuelve prototype_id y el frontend navega automáticamente a /produccion/prototipos/:id", async () => {
+    const cotizacion = cpr({
+      id: 12,
+      code: "CPR-2026-000012",
+      status: "CONFIRMED",
+      payment_status: "UNPAID",
+      prototype_id: 101,
+    });
+    const muestra = prtFisico({
+      id: 101,
+      code: "PRT-2026-000101",
+      name: "Muestra Fabricada Auto 101",
+    });
+    const backend = setupBackend({
+      cotizaciones: [cotizacion],
+      muestras: [muestra],
+    });
+    const user = userEvent.setup();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    const cobroBtn = await screen.findByRole("button", { name: /Registrar cobro/i });
+    await user.click(cobroBtn);
+
+    // Debe navegar automáticamente a /produccion/prototipos/101 y mostrar la muestra
+    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Muestra Fabricada Auto 101")).toBeInTheDocument();
+
+    const pays = backend.enviados.filter(
+      (e) => e.url.includes("/prototype-quotations/12/mark-paid") && e.method === "POST",
+    );
+    expect(pays.length).toBe(1);
+  });
+
+  // F16: Error en el registro de cobro no redirige y enseña el mensaje de error
+  it("F16: si el registro de cobro falla en backend, no redirige y enseña el mensaje de alerta", async () => {
+    const cotizacion = cpr({
+      id: 12,
+      code: "CPR-2026-000012",
+      status: "CONFIRMED",
+      payment_status: "UNPAID",
+      prototype_id: 101,
+    });
+    const muestra = prtFisico({
+      id: 101,
+      code: "PRT-2026-000101",
+      name: "Muestra Fabricada Auto 101",
+    });
+    setupBackend({
+      cotizaciones: [cotizacion],
+      muestras: [muestra],
+      failPayment: true,
+    });
+    const user = userEvent.setup();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    const cobroBtn = await screen.findByRole("button", { name: /Registrar cobro/i });
+    await user.click(cobroBtn);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // Permanece en el cotizador: sigue mostrando el estado pendiente y el botón de cobro
+    expect(screen.getByText("Pendiente de cobro")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Registrar cobro/i })).toBeInTheDocument();
+    expect(screen.queryByText("Muestra Fabricada Auto 101")).not.toBeInTheDocument();
+  });
+
+  // F17: CPR ya pagada (CASO B) enseña enlace 'Ir a producción' y no re-ejecuta cobro
+  it("F17: si la cotización ya está pagada (CASO B), enseña 'Ir a producción' apuntando a /produccion/prototipos/:id sin re-ejecutar cobro", async () => {
+    const cotizacion = cpr({
+      id: 12,
+      code: "CPR-2026-000012",
+      status: "CONFIRMED",
+      payment_status: "PAID",
+      prototype_id: 101,
+    });
+    const muestra = prtFisico({
+      id: 101,
+      code: "PRT-2026-000101",
+      name: "Muestra Fabricada Auto 101",
+    });
+    const backend = setupBackend({
+      cotizaciones: [cotizacion],
+      muestras: [muestra],
+    });
+    const user = userEvent.setup();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    // No debe existir el botón de registrar cobro
+    expect(screen.queryByRole("button", { name: /Registrar cobro/i })).not.toBeInTheDocument();
+
+    // Debe existir enlace a producción
+    const irProduccionLink = await screen.findByRole("link", { name: /Ir a producción/i });
+    expect(irProduccionLink).toHaveAttribute("href", "/produccion/prototipos/101");
+
+    await user.click(irProduccionLink);
+    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
+
+    const pays = backend.enviados.filter((e) => e.url.includes("/mark-paid"));
+    expect(pays.length).toBe(0);
+  });
+
+  // F18: Registrar cobro desde panel PDF también redirige automáticamente
+  it("F18: pulsar Registrar cobro desde la pestaña PDF también redirige automáticamente a /produccion/prototipos/:id", async () => {
+    const cotizacion = cpr({
+      id: 12,
+      code: "CPR-2026-000012",
+      status: "CONFIRMED",
+      payment_status: "UNPAID",
+      prototype_id: 101,
+    });
+    const muestra = prtFisico({
+      id: 101,
+      code: "PRT-2026-000101",
+      name: "Muestra Fabricada Auto 101",
+    });
+    setupBackend({
+      cotizaciones: [cotizacion],
+      muestras: [muestra],
+    });
+    const user = userEvent.setup();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    // Ir a etapa PDF
+    const pdfTab = await screen.findByRole("button", { name: /PDF/i });
+    await user.click(pdfTab);
+
+    // Click en Registrar cobro dentro del panel
+    const cobroBtns = screen.getAllByRole("button", { name: /Registrar cobro/i });
+    expect(cobroBtns.length).toBeGreaterThan(0);
+    await user.click(cobroBtns[0]!);
+
+    // Debe navegar automáticamente
+    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Muestra Fabricada Auto 101")).toBeInTheDocument();
   });
 });
