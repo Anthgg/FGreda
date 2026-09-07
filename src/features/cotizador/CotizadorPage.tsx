@@ -34,6 +34,12 @@ import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import { ProductionOrderAction } from "@/features/production/ProductionOrderAction";
 import { canMarkPaid, describePayment, paymentDate, paymentTone } from "@/features/quotations/payment";
 import { describeError } from "@/features/settings/messages";
+import {
+  KilnModeField,
+  ProductionFactorField,
+} from "@/features/cotizador/CotizadorPolicyFields";
+import { applyKilnMode } from "@/features/cotizador/kilnMode";
+import { useCommercialSettings } from "@/features/settings/useSettings";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
 
@@ -121,6 +127,18 @@ export function CotizadorPage() {
   const duplicate = useDuplicateCotizador();
   const markPaid = useMarkCotizadorPaid();
   const kilns = useKilns({ active: true, limit: 100 });
+  const commercialSettings = useCommercialSettings();
+  const kilnOptions = (kilns.data?.items ?? []).map((kiln) => ({
+    value: String(kiln.id),
+    label: `${kiln.code} · ${kiln.name}`,
+  }));
+  // Fase 009K.3. El factor que se aplicaria si se encendiera. Sale del preview
+  // —que es quien lo resuelve— y solo cuando esta encendido; apagado el
+  // preview trae el neutro 1, que no es el numero de Configuracion. Por eso
+  // el valor de referencia se pide a Configuracion, la unica autoridad.
+  const configuredProductionFactor = commercialSettings.data
+    ? String(commercialSettings.data.production_factor_default)
+    : null;
   const [draft, setDraft] = useState<CotizadorDraft>(emptyCotizadorDraft);
   const [persisted, setPersisted] = useState<QuotationBuilderOut | null>(null);
   const [step, setStep] = useState(0);
@@ -344,6 +362,19 @@ export function CotizadorPage() {
 
       {currentMode ? (
         <section className="space-y-4">
+          {/* El factor es de la COTIZACION, no de una pieza: va antes de las
+              tarjetas, donde se decide el precio y no donde se describe el
+              producto. */}
+          {currentMode === "MARGIN" ? (
+            <ProductionFactorField
+              enabled={draft.productionFactorEnabled}
+              configuredFactor={configuredProductionFactor}
+              disabled={readOnly}
+              onChange={(productionFactorEnabled) =>
+                changeDraft({ ...draft, productionFactorEnabled })
+              }
+            />
+          ) : null}
           {draft.items.map((item, index) => (
             <CotizadorItemCard
               key={item.id ?? `new-${index}`}
@@ -372,6 +403,17 @@ export function CotizadorPage() {
 
       {step === 2 ? (
         <div className="space-y-4">
+          {/* El modo va ARRIBA de las piezas: decide como se lee todo lo que
+              viene debajo —si cada pieza elige horno o lo hereda— y leerlo
+              despues obligaria a reinterpretar lo ya visto. */}
+          <KilnModeField
+            mode={draft.kilnMode}
+            commonKilnId={draft.kilnId}
+            kilnOptions={kilnOptions}
+            disabled={readOnly}
+            onModeChange={(kilnMode) => changeDraft(applyKilnMode(draft, kilnMode))}
+            onCommonKilnChange={(kilnId) => changeDraft({ ...draft, kilnId })}
+          />
           {draft.items.map((item, index) => (
             <CotizadorItemCard
               key={item.id ?? `production-${index}`}
@@ -382,6 +424,7 @@ export function CotizadorPage() {
               currencyCode={preview?.currency_code_snapshot}
               productionSummary={preview?.production_summary}
               headerKilnId={draft.kilnId}
+              kilnMode={draft.kilnMode}
               kilns={kilns.data?.items ?? []}
               disabled={readOnly}
               excludedProductIds={[]}

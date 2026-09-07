@@ -54,6 +54,9 @@ export const COMMERCIAL_EMPTY: CommercialSettings = {
   // inicializa en 15. Un backend real nunca devuelve esto en blanco.
   estimated_glaze_percent: "15",
   production_factor_default: "3",
+  // Fase 009K.3: el factor nace apagado y el horno se carga junto.
+  production_factor_enabled_default: false,
+  kiln_mode_default: "TOGETHER",
   rounding_step: "0.50",
   // Cero es lo que devuelve un backend real recien migrado: 0023 crea estas
   // columnas en cero para no sembrar como precios los ejemplos del Excel.

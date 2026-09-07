@@ -22,6 +22,18 @@ const ROUNDING_OPTIONS = [
   { value: "1.00", label: "S/ 1.00" },
 ];
 
+//: Fase 009K.3. Se escriben como «No» y «Si» y no como «Desactivado /
+//: Activado» porque la etiqueta ya pregunta: «...activado por defecto».
+const FACTOR_DEFAULT_OPTIONS = [
+  { value: "NO", label: "No" },
+  { value: "SI", label: "Sí" },
+];
+
+const KILN_MODE_OPTIONS = [
+  { value: "TOGETHER", label: "Todo junto" },
+  { value: "PER_PRODUCT", label: "Por producto" },
+];
+
 /** Validación de experiencia de usuario. El backend la repite entera. */
 function validate(
   draft: CommercialSettingsInput,
@@ -234,6 +246,29 @@ export function CommercialSection({ canEdit }: { canEdit: boolean }) {
             placeholder="3"
             hint="Multiplica el costo técnico antes de los costos fijos y del margen."
             error={errors.production_factor_default}
+          />
+          {/* Fase 009K.3. Con que arranca una cotizacion NUEVA. No cambia
+              ninguna existente: los borradores guardan su propia decision y
+              las confirmadas la tienen congelada. */}
+          <SelectField
+            label="Factor comercial activado por defecto"
+            requirement="required"
+            value={draft.production_factor_enabled_default ? "SI" : "NO"}
+            options={FACTOR_DEFAULT_OPTIONS}
+            onChange={(value) => setField("production_factor_enabled_default", value === "SI")}
+            disabled={disabled}
+            hint="Activado aplica el factor de arriba. Desactivado deja el costo técnico sin multiplicar."
+          />
+          <SelectField
+            label="Modo de horno predeterminado"
+            requirement="required"
+            value={draft.kiln_mode_default}
+            options={KILN_MODE_OPTIONS}
+            onChange={(value) =>
+              setField("kiln_mode_default", value === "PER_PRODUCT" ? "PER_PRODUCT" : "TOGETHER")
+            }
+            disabled={disabled}
+            hint="Todo junto reparte una hornada entre las piezas. Por producto da una hornada a cada una."
           />
           <SelectField
             label="Redondeo contractual"
