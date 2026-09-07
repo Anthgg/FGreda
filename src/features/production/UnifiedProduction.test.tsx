@@ -207,6 +207,14 @@ function setupBackend(opts: {
   ordenes?: ProductionOrder[];
   muestras?: Prototype[];
   failPayment?: boolean;
+  /**
+   * El cobro responde 200 pero SIN muestra.
+   *
+   * No es un caso legitimo del contrato —`mark_paid` siempre materializa el
+   * prototipo y lo devuelve—, pero es exactamente lo que la pantalla no puede
+   * resolver adivinando: existe la opcion para poder comprobar que no adivina.
+   */
+  nullPrototypeId?: boolean;
 } = {}): TestBackend {
   const cotizaciones = opts.cotizaciones ?? [cpr()];
   const ordenes = opts.ordenes ?? [ordenCTZ()];
@@ -305,8 +313,10 @@ function setupBackend(opts: {
           status: "CONFIRMED",
           payment_status: "PAID",
           paid_at: "2026-09-07T12:00:00Z",
-          prototype_id: encontrada.prototype_id ?? 101,
-          prototype_code: encontrada.prototype_code ?? "PRT-2026-000101",
+          prototype_id: opts.nullPrototypeId ? null : (encontrada.prototype_id ?? 101),
+          prototype_code: opts.nullPrototypeId
+            ? null
+            : (encontrada.prototype_code ?? "PRT-2026-000101"),
         });
       }
       const matchId = url.match(/\/prototype-quotations\/(\d+)/);
@@ -733,5 +743,63 @@ describe("Fase 009K.2.1: Unificar Producción CTZ + Prototipos (F1 a F14)", () =
     // Debe navegar automáticamente
     expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
     expect(screen.getByText("Muestra Fabricada Auto 101")).toBeInTheDocument();
+  });
+
+  // F19: el destino es la MUESTRA, no la cotizacion
+  it("F19: la redirección usa el prototype_id de la muestra, no el id de la CPR", async () => {
+    // Los dos identificadores son distintos a proposito: si la pantalla
+    // usara el de la cotizacion, /produccion/prototipos/12 existiria como
+    // ruta y llevaria a OTRA muestra sin dar ningun error.
+    const cotizacion = cpr({
+      id: 12,
+      code: "CPR-2026-000012",
+      status: "CONFIRMED",
+      payment_status: "UNPAID",
+      prototype_id: 101,
+    });
+    const suya = prtFisico({ id: 101, code: "PRT-2026-000101", name: "La muestra correcta" });
+    const ajena = prtFisico({ id: 12, code: "PRT-2026-000012", name: "La muestra equivocada" });
+    setupBackend({ cotizaciones: [cotizacion], muestras: [suya, ajena] });
+    const user = userEvent.setup();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
+
+    expect((await screen.findAllByText("PRT-2026-000101")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("La muestra equivocada")).not.toBeInTheDocument();
+  });
+
+  // F20: un cobro sin muestra no se resuelve adivinando
+  it("F20: si el cobro responde sin prototype_id, no navega a ninguna parte", async () => {
+    // Cobrar SIEMPRE materializa la muestra —`mark_paid` la crea, la devuelve
+    // y es idempotente—, asi que esto no es un caso legitimo sino una
+    // respuesta rara. Llevar al usuario a la lista de Produccion con la
+    // esperanza de que encuentre la suya seria adivinar, y fabricar un
+    // identificador seria peor: se queda donde esta, con el cobro ya
+    // registrado, y al recargar aparece el boton con el id de verdad.
+    const cotizacion = cpr({
+      id: 12,
+      code: "CPR-2026-000012",
+      status: "CONFIRMED",
+      payment_status: "UNPAID",
+      prototype_id: 101,
+    });
+    const muestra = prtFisico({ id: 101, code: "PRT-2026-000101" });
+    setupBackend({
+      cotizaciones: [cotizacion],
+      muestras: [muestra],
+      nullPrototypeId: true,
+    });
+    const user = userEvent.setup();
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /Registrar cobro/i }));
+
+    // Sigue en el cotizador: no aparece la muestra ni se inventa un destino.
+    expect(
+      await screen.findByRole("button", { name: /Registrar cobro/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Muestra Fabricada Auto 101")).not.toBeInTheDocument();
+    expect(screen.queryByText("PRT-2026-000101")).not.toBeInTheDocument();
   });
 });
