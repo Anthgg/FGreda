@@ -244,7 +244,7 @@ export function PrototypeQuotationPdfPanel({
                 ) : null}
                 {persisted?.prototype_id ? (
                   <Link
-                    to={`/prototipos/${persisted.prototype_id}`}
+                    to={`/produccion/prototipos/${persisted.prototype_id}`}
                     className="flex w-full items-center justify-center rounded-xl bg-black py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800"
                   >
                     Ir a producción
