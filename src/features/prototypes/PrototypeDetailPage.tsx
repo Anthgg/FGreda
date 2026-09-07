@@ -47,7 +47,9 @@ const SECTIONS: Array<{ key: PrototypeSection; label: string }> = [
 ];
 
 function routeFor(id: number, section: PrototypeSection) {
-  return section === "resumen" ? `/prototipos/${id}` : `/prototipos/${id}/${section}`;
+  return section === "resumen"
+    ? `/produccion/prototipos/${id}`
+    : `/produccion/prototipos/${id}/${section}`;
 }
 
 
@@ -346,9 +348,9 @@ function IterationsSection({ prototype }: { prototype: Prototype }) {
   const next = all.data?.items.find((row) => row.supersedes_prototype_id === prototype.id);
   return <div className="space-y-5">
     <div><h2 className="font-semibold">Iteraciones</h2><p className="mt-1 text-sm text-zinc-500">Cada intento conserva su historia. Una nueva iteración recibe otro código PRT.</p></div>
-    {prototype.supersedes_prototype_id ? <p className="text-sm">Sustituye a: <Link className="font-mono font-semibold hover:underline" to={`/prototipos/${prototype.supersedes_prototype_id}`}>ver iteración anterior</Link></p> : <p className="text-sm text-zinc-500">Este es el primer intento.</p>}
-    {next ? <p className="text-sm">Iteración posterior: <Link className="font-mono font-semibold hover:underline" to={`/prototipos/${next.id}`}>{next.code}</Link></p> : null}
-    {prototype.approval === "REJECTED" && !next ? <PrimaryButton type="button" disabled={successor.isPending} onClick={() => successor.mutate(undefined, { onSuccess: (created) => navigate(`/prototipos/${created.id}`) })}>{successor.isPending ? "Creando…" : "Crear nueva iteración"}</PrimaryButton> : null}
+    {prototype.supersedes_prototype_id ? <p className="text-sm">Sustituye a: <Link className="font-mono font-semibold hover:underline" to={`/produccion/prototipos/${prototype.supersedes_prototype_id}`}>ver iteración anterior</Link></p> : <p className="text-sm text-zinc-500">Este es el primer intento.</p>}
+    {next ? <p className="text-sm">Iteración posterior: <Link className="font-mono font-semibold hover:underline" to={`/produccion/prototipos/${next.id}`}>{next.code}</Link></p> : null}
+    {prototype.approval === "REJECTED" && !next ? <PrimaryButton type="button" disabled={successor.isPending} onClick={() => successor.mutate(undefined, { onSuccess: (created) => navigate(`/produccion/prototipos/${created.id}`) })}>{successor.isPending ? "Creando…" : "Crear nueva iteración"}</PrimaryButton> : null}
     {successor.error ? <Alert>{describePrototypeError(successor.error)}</Alert> : null}
   </div>;
 }
@@ -363,7 +365,7 @@ export function PrototypeDetailPage({ section }: { section: PrototypeSection }) 
   if (prototype.isError || !prototype.data) return <Alert>{describePrototypeError(prototype.error)}</Alert>;
   const row = prototype.data;
   return <div className="mx-auto w-full max-w-6xl space-y-5">
-    <header><Link to="/prototipos" className="text-sm text-zinc-500 hover:underline">← Prototipos</Link><div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold">{row.name}</h1><span className="font-mono text-sm font-bold text-zinc-500">{row.code}</span><StatusBadge status={row.status} /><ApprovalBadge approval={row.approval} /></div></header>
+    <header><Link to="/produccion?tab=prototipos" className="text-sm text-zinc-500 hover:underline">← Producción</Link><div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold">{row.name}</h1><span className="font-mono text-sm font-bold text-zinc-500">{row.code}</span><StatusBadge status={row.status} /><ApprovalBadge approval={row.approval} /></div></header>
     {createdCode ? <Alert tone="green">Prototipo creado con código {createdCode}.</Alert> : null}
     <nav aria-label="Secciones del prototipo" className="flex gap-2 overflow-x-auto pb-1">{SECTIONS.map((item) => <Link key={item.key} to={routeFor(id, item.key)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold ${section === item.key ? "bg-black text-white" : "border border-zinc-200 bg-white/70 text-zinc-700"}`}>{item.label}</Link>)}</nav>
     <section className="glass-panel rounded-3xl border border-white/60 p-5 shadow-sm sm:p-6">
