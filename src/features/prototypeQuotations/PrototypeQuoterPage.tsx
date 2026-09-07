@@ -282,6 +282,18 @@ export function PrototypeQuoterPage() {
     });
   };
 
+  const handleCobrar = () => {
+    markPaid.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data.prototype_id) {
+          navigate(`/produccion/prototipos/${data.prototype_id}`);
+        } else {
+          navigate("/produccion?tab=prototipos");
+        }
+      },
+    });
+  };
+
   if (quotationId && query.isPending) return <Spinner />;
 
   const status = persisted?.status ?? "DRAFT";
@@ -318,7 +330,7 @@ export function PrototypeQuoterPage() {
             ) : null}
             {persisted?.prototype_code ? (
               <Link
-                to={`/prototipos/${persisted.prototype_id}`}
+                to={`/produccion/prototipos/${persisted.prototype_id}`}
                 className="text-[11px] text-zinc-500 hover:underline"
               >
                 Muestra:{" "}
@@ -895,7 +907,7 @@ export function PrototypeQuoterPage() {
           puedeEmitir={Boolean(quotationId) && status === "DRAFT"}
           onGuardar={guardar}
           onEmitir={() => confirm.mutate()}
-          onCobrar={() => markPaid.mutate()}
+          onCobrar={handleCobrar}
         />
       ) : null}
 
@@ -948,7 +960,7 @@ export function PrototypeQuoterPage() {
           ) : null}
           {persisted?.status === "CONFIRMED" &&
           persisted.payment_status === "UNPAID" ? (
-            <SecondaryButton disabled={busy} onClick={() => markPaid.mutate()}>
+            <SecondaryButton disabled={busy} onClick={handleCobrar}>
               Registrar cobro
             </SecondaryButton>
           ) : null}

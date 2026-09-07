@@ -179,12 +179,50 @@ function mockApi(
         espias.enviados.push({ url, body });
       if (url.includes("/preview"))
         return jsonResponse(200, { ...guardada, costing: costeo });
+      if (url.includes("/mark-paid") && init?.method === "POST") {
+        return jsonResponse(200, {
+          ...guardada,
+          status: "CONFIRMED",
+          payment_status: "PAID",
+          paid_at: "2026-09-07T12:00:00Z",
+          prototype_id: guardada.prototype_id ?? 88,
+          prototype_code: guardada.prototype_code ?? "PRT-2026-000088",
+        });
+      }
       return jsonResponse(
         url.endsWith("/prototype-quotations") && init?.method === "POST"
           ? 201
           : 200,
         guardada,
       );
+    }
+    if (url.includes("/prototypes")) {
+      return jsonResponse(200, {
+        id: 88,
+        code: "PRT-2026-000088",
+        name: "Prototipo Fabricado",
+        status: "CREATED",
+        approval: "PENDING",
+        technical_specifications: null,
+        origin_quotation_ids: [],
+        quotation_id: 12,
+        quotation_code: "CPR-2026-000012",
+        product_id: null,
+        stock_location_id: 1,
+        quantity: 1,
+        target_days: 5,
+        requested_at: "2026-09-01T10:00:00Z",
+        started_at: null,
+        completed_at: null,
+        cancelled_at: null,
+        decided_at: null,
+        supersedes_prototype_id: null,
+        material_count: 0,
+        notes: null,
+        quotation_payment_status: "PAID",
+        materials: [],
+        readiness: { ready: true, issues: [] },
+      });
     }
     return errorResponse(404, "NOT_FOUND");
   });
@@ -1049,5 +1087,64 @@ describe("Cotizador de prototipos · actores del documento", () => {
     expect(document.body.textContent).not.toMatch(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fase 009K.2.1 Addendum · registro de cobro y redirección automática
+//
+// Al cobrar un CPR confirmado, el frontend debe redirigir automáticamente al
+// módulo de producción con el prototype_id devuelto por el backend.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · registro de cobro y navegación a producción", () => {
+  it("al pulsar Registrar cobro en CPR confirmada, redirige automáticamente a /produccion/prototipos/:id", async () => {
+    const user = userEvent.setup();
+    mockApi(
+      cotizacion({
+        id: 12,
+        status: "CONFIRMED",
+        payment_status: "UNPAID",
+        prototype_id: 88,
+        prototype_code: "PRT-2026-000088",
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    const cobroBtn = await screen.findByRole("button", { name: /Registrar cobro/i });
+    await user.click(cobroBtn);
+
+    // En producción/prototipos/88 carga el detalle y el enlace de vuelta a Producción
+    expect(await screen.findByRole("link", { name: /← Producción/i })).toHaveAttribute(
+      "href",
+      "/produccion?tab=prototipos",
+    );
+    expect((await screen.findAllByText("PRT-2026-000088")).length).toBeGreaterThan(0);
+  });
+
+  it("si la cotización ya está pagada (CASO B), el botón 'Ir a producción' apunta a la ruta unificada sin repetir cobro", async () => {
+    const user = userEvent.setup();
+    const espias = mockApi(
+      cotizacion({
+        id: 12,
+        status: "CONFIRMED",
+        payment_status: "PAID",
+        prototype_id: 88,
+        prototype_code: "PRT-2026-000088",
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    expect(screen.queryByRole("button", { name: /Registrar cobro/i })).not.toBeInTheDocument();
+    const irProduccionLink = await screen.findByRole("link", { name: /Ir a producción/i });
+    expect(irProduccionLink).toHaveAttribute("href", "/produccion/prototipos/88");
+
+    await user.click(irProduccionLink);
+    expect(await screen.findByRole("link", { name: /← Producción/i })).toHaveAttribute(
+      "href",
+      "/produccion?tab=prototipos",
+    );
+
+    const pays = espias.enviados.filter((e) => e.url.includes("/mark-paid"));
+    expect(pays.length).toBe(0);
   });
 });
