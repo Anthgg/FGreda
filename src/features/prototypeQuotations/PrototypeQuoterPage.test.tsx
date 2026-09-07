@@ -105,6 +105,8 @@ function cotizacion(
     paid_at: null,
     confirmed_at: null,
     cancelled_at: null,
+    created_by_name: null,
+    confirmed_by_name: null,
     customer_id: 3,
     customer_name: "Cliente prototipo",
     product_id: null,
@@ -942,5 +944,84 @@ describe("Cotizador de prototipos · tarifa de casa frente a override", () => {
       screen.getByText(/Vacío = la de Configuración \(S\/ 0\.00 \/ día\)/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/S\/ 80\.00 \/ día/)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fase 009K.2 — quien preparo y quien emitio
+//
+// Los nombres llegan congelados desde BGreda. La pantalla los escribe y no
+// resuelve nada: si un dia intentara componer la identidad por su cuenta, un
+// documento ya emitido empezaria a cambiar de autor cuando esa persona se
+// renombra.
+// ---------------------------------------------------------------------------
+describe("Cotizador de prototipos · actores del documento", () => {
+  it("un borrador enseña quién lo creó y todavía no a quién lo emite", async () => {
+    const user = userEvent.setup();
+    mockApi(cotizacion({ created_by_name: "Ana Pérez" }));
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+    expect(screen.queryByText(/Confirmado por/i)).not.toBeInTheDocument();
+  });
+
+  it("una emitida enseña las dos personas, que no tienen por qué ser la misma", async () => {
+    const user = userEvent.setup();
+    mockApi(
+      cotizacion({
+        id: 12,
+        code: "CPR-2026-000012",
+        status: "CONFIRMED",
+        confirmed_at: "2026-09-07T10:00:00Z",
+        created_by_name: "Ana Pérez",
+        confirmed_by_name: "Beto Ruiz",
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+    expect(screen.getByText("Beto Ruiz")).toBeInTheDocument();
+  });
+
+  it("una emitida sin actor registrado lo dice, en vez de rellenarlo", async () => {
+    const user = userEvent.setup();
+    // Las anteriores a 009K.2 no guardaron a nadie. Poner ahí al usuario en
+    // sesión sería atribuirle un documento que no firmó.
+    mockApi(
+      cotizacion({
+        id: 12,
+        code: "CPR-2026-000001",
+        status: "CONFIRMED",
+        confirmed_at: "2026-01-02T10:00:00Z",
+        created_by_name: null,
+        confirmed_by_name: null,
+      }),
+    );
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+
+    // Dos: creado por y confirmado por. Que las DOS digan que no consta es lo
+    // que prueba que no cayeron en el usuario en sesión —que sí aparece en la
+    // barra lateral de la aplicación, y por eso no se busca en toda la página.
+    expect(await screen.findAllByText("No registrado")).toHaveLength(2);
+  });
+
+  it("no enseña identificadores internos de personas", async () => {
+    const user = userEvent.setup();
+    mockApi(cotizacion({ created_by_name: "Ana Pérez" }));
+    renderApp(["/prototipos/cotizador/12"]);
+
+    await user.click(await screen.findByRole("button", { name: /PDF/i }));
+    await screen.findByText("Ana Pérez");
+
+    // FRONTEND_ACTOR_UUID_RESOLUTION: 0.
+    expect(document.body.textContent).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
   });
 });

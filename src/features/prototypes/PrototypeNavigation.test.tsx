@@ -70,6 +70,8 @@ function cpr(overrides: Partial<PrototypeQuotation> = {}): PrototypeQuotation {
     paid_at: null,
     confirmed_at: null,
     cancelled_at: null,
+    created_by_name: null,
+    confirmed_by_name: null,
     customer_id: 3,
     customer_name: "Cliente Prototipo SAC",
     product_id: null,

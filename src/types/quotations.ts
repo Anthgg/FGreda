@@ -266,7 +266,15 @@ export interface QuotationOut extends QuotationCalculateOut {
   workflow?: "LEGACY" | "COTIZADOR";
   item_count?: number;
   status: QuotationStatus;
-  created_by_id: string | null;
+  /**
+   * Fase 009K.2. NOMBRES, no identificadores. El UUID del actor dejo de
+   * viajar: ningun consumidor lo usaba, y publicar la clave con la que el
+   * sistema busca a alguien no hace falta para escribir su nombre.
+   *
+   * `null` en lo anterior a esta fase, que no registro a nadie.
+   */
+  created_by_name: string | null;
+  confirmed_by_name: string | null;
   confirmed_at: string | null;
   cancelled_at: string | null;
   created_at: string;

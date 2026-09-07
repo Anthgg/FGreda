@@ -371,6 +371,15 @@ export interface QuotationBuilderOut {
   updated_at: string | null;
   confirmed_at: string | null;
   cancelled_at: string | null;
+  /**
+   * Fase 009K.2. Quién la preparó y quién la emitió, por nombre visible del día
+   * en que ocurrió. Van NOMBRES y no identificadores: la pantalla enseña a una
+   * persona, y para eso no hace falta la clave con la que el sistema la busca.
+   *
+   * `null` en lo anterior a esta fase. La pantalla dice «No registrado».
+   */
+  created_by_name: string | null;
+  confirmed_by_name: string | null;
   /** `null` = el pago no lo registró el sistema. No es lo mismo que UNPAID. */
   payment_status: QuotationPaymentStatus | null;
   paid_at: string | null;

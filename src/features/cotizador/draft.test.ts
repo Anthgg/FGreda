@@ -173,6 +173,8 @@ function savedOutput(): QuotationBuilderOut {
     updated_at: "2026-08-24T12:00:00Z",
     confirmed_at: null,
     cancelled_at: null,
+    created_by_name: null,
+    confirmed_by_name: null,
     payment_status: null,
     paid_at: null,
     commercial_lines: [],

@@ -9,15 +9,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createSequencePattern,
+  createUser,
   deleteLogo,
   fetchAuditEvents,
   fetchCommercialSettings,
   fetchCompanySettings,
   fetchReferenceData,
   fetchSequences,
+  fetchUsers,
+  setUserActive,
   updateCommercialSettings,
   updateCompanySettings,
   updateSequence,
+  updateUser,
   uploadLogo,
 } from "@/api/settings";
 import type {
@@ -26,6 +30,8 @@ import type {
   SequencePatternPresetInput,
   SequenceConfigInput,
   SequenceType,
+  UserCreateInput,
+  UserUpdateInput,
 } from "@/types/settings";
 
 export const COMPANY_KEY = ["settings", "company"] as const;
@@ -138,4 +144,44 @@ export function useDeleteLogo() {
       void queryClient.invalidateQueries({ queryKey: AUDIT_KEY });
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Usuarios (Fase 009K.2)
+//
+// Toda mutacion invalida la lista Y el historial: administrar usuarios queda
+// auditado, y el Historial de Configuracion es donde se lee.
+// ---------------------------------------------------------------------------
+export const USERS_KEY = ["settings", "users"] as const;
+
+export function useUsers(enabled: boolean) {
+  return useQuery({ queryKey: USERS_KEY, queryFn: fetchUsers, enabled });
+}
+
+function useUserMutation<TArgs>(mutationFn: (args: TArgs) => Promise<unknown>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: USERS_KEY });
+      void queryClient.invalidateQueries({ queryKey: AUDIT_KEY });
+    },
+  });
+}
+
+export function useCreateUser() {
+  return useUserMutation((payload: UserCreateInput) => createUser(payload));
+}
+
+export function useUpdateUser() {
+  return useUserMutation(({ id, payload }: { id: string; payload: UserUpdateInput }) =>
+    updateUser(id, payload),
+  );
+}
+
+/** Baja y alta de nuevo. No existe borrado. */
+export function useSetUserActive() {
+  return useUserMutation(({ id, active }: { id: string; active: boolean }) =>
+    setUserActive(id, active),
+  );
 }
