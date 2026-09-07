@@ -113,8 +113,13 @@ export function PrototypeQuotationDocument({
           <SecondaryButton onClick={() => void generar()}>Reintentar</SecondaryButton>
         </div>
       ) : blobUrl ? (
+        // `view=FitH` ajusta la hoja al ANCHO del marco. Sin él, el visor del
+        // navegador encaja la página entera y deja franjas grises a los lados
+        // y debajo: se ve el visor, no el documento. Con `toolbar=0` y
+        // `navpanes=0` ya no hay barra ni panel lateral, así que lo único que
+        // queda en pantalla es el papel.
         <iframe
-          src={`${blobUrl}#toolbar=0&navpanes=0`}
+          src={`${blobUrl}#toolbar=0&navpanes=0&view=FitH`}
           title="Cotización de prototipo"
           className="min-h-[520px] w-full border-0 bg-white lg:min-h-[720px]"
         />

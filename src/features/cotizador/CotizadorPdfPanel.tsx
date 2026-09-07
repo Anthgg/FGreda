@@ -197,8 +197,11 @@ export function CotizadorPdfPanel({
                   </button>
                 </div>
               </div>
+              {/* `view=FitH`: la hoja al ancho del marco. El visor del navegador,
+                  si no se le dice, encaja la página entera y rodea el papel de
+                  gris. */}
               <iframe
-                src={`${blobUrl}#toolbar=0&navpanes=0`}
+                src={`${blobUrl}#toolbar=0&navpanes=0&view=FitH`}
                 title="Documento Comercial de Cotización"
                 className="h-full min-h-[500px] w-full flex-1 border-0 bg-white lg:min-h-[700px]"
               />
