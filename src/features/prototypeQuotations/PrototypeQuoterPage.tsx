@@ -954,7 +954,7 @@ export function PrototypeQuoterPage() {
           ) : null}
           {persisted?.payment_status === "PAID" && persisted.prototype_id ? (
             <Link
-              to={`/prototipos/${persisted.prototype_id}`}
+              to={`/produccion/prototipos/${persisted.prototype_id}`}
               className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-zinc-800"
             >
               Ir a producción

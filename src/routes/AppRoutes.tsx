@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
@@ -13,7 +13,10 @@ import { PartnersPage } from "@/features/masters/PartnersPage";
 import { ProductionOrderDetailPage } from "@/features/production/ProductionOrderDetailPage";
 import { ProductionOrderScanPage } from "@/features/production/ProductionOrderScanPage";
 import { ProductionOrdersPage } from "@/features/production/ProductionOrdersPage";
-import { PrototypeDetailPage } from "@/features/prototypes/PrototypeDetailPage";
+import {
+  PrototypeDetailPage,
+  type PrototypeSection,
+} from "@/features/prototypes/PrototypeDetailPage";
 import { PrototypeQuoterPage } from "@/features/prototypeQuotations/PrototypeQuoterPage";
 import { PrototypesPage } from "@/features/prototypes/PrototypesPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
@@ -28,6 +31,15 @@ import { TrackingScanPage } from "@/features/tracking/TrackingScanPage";
 import { AppShell } from "@/layouts/AppShell";
 import { HomePage } from "@/routes/HomePage";
 import { NotFoundPage } from "@/routes/NotFoundPage";
+
+function LegacyPrototypeRedirect({ section }: { section: PrototypeSection }) {
+  const { id } = useParams();
+  const target =
+    section === "resumen"
+      ? `/produccion/prototipos/${id}`
+      : `/produccion/prototipos/${id}/${section}`;
+  return <Navigate to={target} replace />;
+}
 
 /**
  * Mapa de rutas.
@@ -80,9 +92,14 @@ export function AppRoutes() {
           <Route path="cotizaciones/:id" element={<DetalleCotizacionPage />} />
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
           <Route path="produccion" element={<ProductionOrdersPage />} />
-          {/* Antes que "produccion/:id": una ruta con parametro se traga
-              "produccion/scan/xxx" y el detalle recibiria "scan" como id. */}
+          {/* Antes que "produccion/:id": las rutas con segmentos fijos se declaran antes. */}
           <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
+          <Route path="produccion/prototipos/:id" element={<PrototypeDetailPage section="resumen" />} />
+          <Route path="produccion/prototipos/:id/editar" element={<PrototypeDetailPage section="editar" />} />
+          <Route path="produccion/prototipos/:id/materiales" element={<PrototypeDetailPage section="materiales" />} />
+          <Route path="produccion/prototipos/:id/operacion" element={<PrototypeDetailPage section="operacion" />} />
+          <Route path="produccion/prototipos/:id/evaluacion" element={<PrototypeDetailPage section="evaluacion" />} />
+          <Route path="produccion/prototipos/:id/iteraciones" element={<PrototypeDetailPage section="iteraciones" />} />
           <Route path="produccion/:id" element={<ProductionOrderDetailPage />} />
           <Route path="prototipos" element={<PrototypesPage />} />
           {/* Fase 009K.1.1. Crear un prototipo es COTIZARLO: cuanto cuesta y
@@ -91,12 +108,13 @@ export function AppRoutes() {
           <Route path="prototipos/cotizador" element={<PrototypeQuoterPage />} />
           <Route path="prototipos/cotizador/:id" element={<PrototypeQuoterPage />} />
           <Route path="prototipos/nuevo" element={<Navigate to="/prototipos/cotizador" replace />} />
-          <Route path="prototipos/:id" element={<PrototypeDetailPage section="resumen" />} />
-          <Route path="prototipos/:id/editar" element={<PrototypeDetailPage section="editar" />} />
-          <Route path="prototipos/:id/materiales" element={<PrototypeDetailPage section="materiales" />} />
-          <Route path="prototipos/:id/operacion" element={<PrototypeDetailPage section="operacion" />} />
-          <Route path="prototipos/:id/evaluacion" element={<PrototypeDetailPage section="evaluacion" />} />
-          <Route path="prototipos/:id/iteraciones" element={<PrototypeDetailPage section="iteraciones" />} />
+          {/* Fase 009K.2.1. Redirecciones históricas de prototipo físico hacia Producción */}
+          <Route path="prototipos/:id" element={<LegacyPrototypeRedirect section="resumen" />} />
+          <Route path="prototipos/:id/editar" element={<LegacyPrototypeRedirect section="editar" />} />
+          <Route path="prototipos/:id/materiales" element={<LegacyPrototypeRedirect section="materiales" />} />
+          <Route path="prototipos/:id/operacion" element={<LegacyPrototypeRedirect section="operacion" />} />
+          <Route path="prototipos/:id/evaluacion" element={<LegacyPrototypeRedirect section="evaluacion" />} />
+          <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
           <Route path="cotizador/nuevo" element={<CotizadorPage />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
