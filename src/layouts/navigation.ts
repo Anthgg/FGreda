@@ -100,7 +100,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/prototipos",
     enabled: true,
     icon: "flask",
-    description: "Muestras físicas, evaluación e iteraciones antes de producir.",
+    description: "Cotizaciones de prototipo y desarrollo previo a producción.",
   },
   {
     label: "Quemas",

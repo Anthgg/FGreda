@@ -470,7 +470,7 @@ describe("Parte 13 — Tests Frontend: Flujo de Cotización de Prototipos y Nave
   });
 
   // TEST 12: Ir a producción usa prototype_id real
-  it("TEST 12: «Ir a producción» navega usando el prototype_id real del backend", async () => {
+  it("TEST 12: «Ir a producción» navega usando el prototype_id real del backend hacia el módulo Producción", async () => {
     const cprPaid = cpr({
       id: 12,
       code: "CPR-2026-000012",
@@ -483,22 +483,22 @@ describe("Parte 13 — Tests Frontend: Flujo de Cotización de Prototipos y Nave
     renderApp(["/prototipos/cotizador/12"]);
 
     const produccionBtn = await screen.findByRole("link", { name: /Ir a producción/i });
-    expect(produccionBtn).toHaveAttribute("href", "/prototipos/99");
+    expect(produccionBtn).toHaveAttribute("href", "/produccion/prototipos/99");
   });
 
-  // TEST 13: PRT histórico sigue accesible
-  it("TEST 13: las muestras PRT históricas siguen accesibles en la pestaña de producción", async () => {
+  // TEST 13: PRT histórico sigue accesible en /produccion (tab Prototipos)
+  it("TEST 13: las muestras PRT históricas son accesibles en Producción -> Prototipos", async () => {
     const muestra = prtFisico({ id: 99, code: "PRT-2026-000099", name: "Jarra Histórica 009K" });
     setupBackend({ muestras: [muestra] });
     const user = userEvent.setup();
-    renderApp(["/prototipos"]);
+    renderApp(["/produccion"]);
 
-    const tabMuestras = await screen.findByRole("tab", { name: /Muestras en producción/i });
-    await user.click(tabMuestras);
+    const tabPrototipos = await screen.findByRole("tab", { name: /Prototipos/i });
+    await user.click(tabPrototipos);
 
     expect(await screen.findByText("PRT-2026-000099")).toBeInTheDocument();
     expect(screen.getByText("Jarra Histórica 009K")).toBeInTheDocument();
     const detalleLink = screen.getByRole("link", { name: /Ver detalle/i });
-    expect(detalleLink).toHaveAttribute("href", "/prototipos/99");
+    expect(detalleLink).toHaveAttribute("href", "/produccion/prototipos/99");
   });
 });
