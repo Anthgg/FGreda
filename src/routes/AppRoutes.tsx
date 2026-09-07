@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
@@ -15,7 +15,6 @@ import { ProductionOrderScanPage } from "@/features/production/ProductionOrderSc
 import { ProductionOrdersPage } from "@/features/production/ProductionOrdersPage";
 import { PrototypeDetailPage } from "@/features/prototypes/PrototypeDetailPage";
 import { PrototypeQuoterPage } from "@/features/prototypeQuotations/PrototypeQuoterPage";
-import { PrototypeFormPage } from "@/features/prototypes/PrototypeFormPage";
 import { PrototypesPage } from "@/features/prototypes/PrototypesPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
 import { DetalleCotizacionPage } from "@/features/quotations/DetalleCotizacionPage";
@@ -91,7 +90,7 @@ export function AppRoutes() {
               alta directa para el taller, pero deja de ser el flujo principal. */}
           <Route path="prototipos/cotizador" element={<PrototypeQuoterPage />} />
           <Route path="prototipos/cotizador/:id" element={<PrototypeQuoterPage />} />
-          <Route path="prototipos/nuevo" element={<PrototypeFormPage />} />
+          <Route path="prototipos/nuevo" element={<Navigate to="/prototipos/cotizador" replace />} />
           <Route path="prototipos/:id" element={<PrototypeDetailPage section="resumen" />} />
           <Route path="prototipos/:id/editar" element={<PrototypeDetailPage section="editar" />} />
           <Route path="prototipos/:id/materiales" element={<PrototypeDetailPage section="materiales" />} />

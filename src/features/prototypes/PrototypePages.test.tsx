@@ -2,15 +2,20 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { Route, Routes } from "react-router-dom";
+
 import { ApiError, resetClientState } from "@/api/client";
 import { describePrototypeError } from "@/features/prototypes/prototypeLabels";
 import { describeError } from "@/features/settings/messages";
+import { PrototypeDetailPage } from "@/features/prototypes/PrototypeDetailPage";
+import { PrototypeFormPage } from "@/features/prototypes/PrototypeFormPage";
 import {
   csrfResponse,
   errorResponse,
   jsonResponse,
   mockFetch,
   renderApp,
+  renderWithProviders,
   sessionResponse,
   TEST_USER,
 } from "@/test/utils";
@@ -263,7 +268,7 @@ beforeEach(() => resetClientState());
 describe("Fase 009K · prototipos", () => {
   it("1. muestra el listado con estados humanos", async () => {
     installBackend();
-    renderApp(["/prototipos"]);
+    renderApp(["/prototipos?tab=muestras"]);
     expect(await screen.findByText("PRT-2026-000007")).toBeInTheDocument();
     expect(screen.getByText("Creado")).toBeInTheDocument();
     expect(screen.queryByText("CREATED")).not.toBeInTheDocument();
@@ -271,7 +276,7 @@ describe("Fase 009K · prototipos", () => {
 
   it("2. crea un prototipo standalone sin producto ni cotización", async () => {
     const { requests } = installBackend();
-    renderApp(["/prototipos/nuevo"]);
+    renderWithProviders(<PrototypeFormPage />);
     await userEvent.type(
       await screen.findByLabelText(/^nombre/i),
       "Muestra standalone",
@@ -293,7 +298,7 @@ describe("Fase 009K · prototipos", () => {
 
   it("2b. crea desde la ficha del Excel con especificaciones y materiales iniciales", async () => {
     const { requests } = installBackend();
-    renderApp(["/prototipos/nuevo"]);
+    renderWithProviders(<PrototypeFormPage />);
     await userEvent.type(
       await screen.findByLabelText(/^nombre/i),
       "Jarra prototipo",
@@ -345,7 +350,15 @@ describe("Fase 009K · prototipos", () => {
 
   it("3. enseña el código emitido por backend después de crear", async () => {
     installBackend();
-    renderApp(["/prototipos/nuevo"]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/" element={<PrototypeFormPage />} />
+        <Route
+          path="/prototipos/:id"
+          element={<PrototypeDetailPage section="resumen" />}
+        />
+      </Routes>,
+    );
     await userEvent.type(
       await screen.findByLabelText(/^nombre/i),
       "Muestra standalone",
@@ -781,29 +794,22 @@ describe("Fase 009K · prototipos", () => {
     expect(principal).toHaveAttribute("href", "/prototipos/cotizador");
   });
 
-  it("38. el alta directa sigue existiendo, pero como camino secundario", async () => {
+  it("38. DIRECT_PHYSICAL_SAMPLE_CREATE_BUTTON_VISIBLE: el botón «Muestra de una cotización» no existe", async () => {
     installBackend();
     renderApp(["/prototipos"]);
 
-    // No se elimina: las muestras de una CTZ de 009K se siguen registrando así.
-    const secundario = await screen.findByRole("link", {
-      name: /Muestra de una cotización/i,
-    });
-    expect(secundario).toHaveAttribute("href", "/prototipos/nuevo");
-    expect(secundario.className).not.toContain("bg-black");
+    expect(
+      screen.queryByRole("link", { name: /Muestra de una cotización/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("39. el formulario directo avisa de que no emite ni cobra una cotización", async () => {
+  it("39. LEGACY_DIRECT_PROTOTYPE_CREATE_NORMAL_ENTRYPOINT: /prototipos/nuevo redirige al cotizador", async () => {
     installBackend();
     renderApp(["/prototipos/nuevo"]);
 
-    // Sin este aviso parecía el alta normal, y usarlo así se saltaba el
-    // documento y el cobro: la persona lo descubría al final, no al empezar.
     expect(
-      await screen.findByText(/no emite una cotización de prototipo/i),
+      await screen.findByRole("heading", { name: /Cotizador de prototipo/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /Cotizador de prototipos/i }),
-    ).toHaveAttribute("href", "/prototipos/cotizador");
+    expect(screen.queryByLabelText(/^nombre/i)).not.toBeInTheDocument();
   });
 });

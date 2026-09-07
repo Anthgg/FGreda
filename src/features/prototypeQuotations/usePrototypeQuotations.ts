@@ -48,7 +48,8 @@ export const useCreatePrototypeQuotation = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (payload: PrototypeQuotationDraftInput) => createPrototypeQuotation(payload),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      client.setQueryData([...PROTOTYPE_QUOTATIONS_KEY, data.id], data);
       void client.invalidateQueries({ queryKey: PROTOTYPE_QUOTATIONS_KEY });
     },
   });
@@ -58,7 +59,8 @@ export const useUpdatePrototypeQuotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (payload: PrototypeQuotationUpdateInput) => updatePrototypeQuotation(id, payload),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      client.setQueryData([...PROTOTYPE_QUOTATIONS_KEY, id], data);
       void client.invalidateQueries({ queryKey: PROTOTYPE_QUOTATIONS_KEY });
     },
   });
@@ -68,7 +70,8 @@ export const useConfirmPrototypeQuotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => confirmPrototypeQuotation(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      client.setQueryData([...PROTOTYPE_QUOTATIONS_KEY, id], data);
       void client.invalidateQueries({ queryKey: PROTOTYPE_QUOTATIONS_KEY });
     },
   });
@@ -78,7 +81,8 @@ export const useCancelPrototypeQuotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => cancelPrototypeQuotation(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      client.setQueryData([...PROTOTYPE_QUOTATIONS_KEY, id], data);
       void client.invalidateQueries({ queryKey: PROTOTYPE_QUOTATIONS_KEY });
     },
   });
@@ -93,7 +97,8 @@ export const useMarkPrototypeQuotationPaid = (id: number) => {
   const client = useQueryClient();
   return useMutation<PrototypeQuotation, Error, void>({
     mutationFn: () => markPrototypeQuotationPaid(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      client.setQueryData([...PROTOTYPE_QUOTATIONS_KEY, id], data);
       void client.invalidateQueries({ queryKey: PROTOTYPE_QUOTATIONS_KEY });
       void client.invalidateQueries({ queryKey: PROTOTYPES_KEY });
     },

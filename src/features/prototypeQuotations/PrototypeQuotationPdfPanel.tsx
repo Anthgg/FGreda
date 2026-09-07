@@ -220,6 +220,14 @@ export function PrototypeQuotationPdfPanel({
                     Registrar cobro
                   </PrimaryButton>
                 ) : null}
+                {persisted?.prototype_id ? (
+                  <Link
+                    to={`/prototipos/${persisted.prototype_id}`}
+                    className="flex w-full items-center justify-center rounded-xl bg-black py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800"
+                  >
+                    Ir a producción
+                  </Link>
+                ) : null}
                 <Link
                   to="/prototipos"
                   className="flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white py-2.5 text-xs font-semibold text-zinc-700 shadow-xs hover:bg-zinc-50"

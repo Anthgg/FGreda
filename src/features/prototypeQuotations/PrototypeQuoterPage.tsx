@@ -201,6 +201,7 @@ export function PrototypeQuoterPage() {
       length_cm: sinEscalaCampo(persisted.length_cm),
       height_cm: sinEscalaCampo(persisted.height_cm),
       depth_cm: sinEscalaCampo(persisted.depth_cm),
+      technical_specifications: persisted.technical_specifications ?? null,
       notes: persisted.notes,
       currency_code: persisted.currency_code === "USD" ? "USD" : "PEN",
       exchange_rate: sinEscalaCampo(persisted.exchange_rate),
@@ -208,6 +209,7 @@ export function PrototypeQuoterPage() {
       design_rate_override: sinEscalaCampo(persisted.design_rate_override),
       artist_days: sinEscalaCampo(persisted.artist_days),
       artist_rate_override: sinEscalaCampo(persisted.artist_rate_override),
+      mold_maker_partner_id: persisted.mold_maker_partner_id ?? null,
       mold_maker_price_override: sinEscalaCampo(
         persisted.mold_maker_price_override,
       ),
@@ -221,7 +223,7 @@ export function PrototypeQuoterPage() {
     setMaterials(
       (persisted.costing?.materials ?? []).map((line) => ({
         product_id: line.product_id,
-        quantity_per_prototype: line.quantity_per_prototype,
+        quantity_per_prototype: sinEscalaCampo(line.quantity_per_prototype) ?? "1",
         is_body_material: line.is_body_material,
       })),
     );
@@ -949,6 +951,14 @@ export function PrototypeQuoterPage() {
             <SecondaryButton disabled={busy} onClick={() => markPaid.mutate()}>
               Registrar cobro
             </SecondaryButton>
+          ) : null}
+          {persisted?.payment_status === "PAID" && persisted.prototype_id ? (
+            <Link
+              to={`/prototipos/${persisted.prototype_id}`}
+              className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-zinc-800"
+            >
+              Ir a producción
+            </Link>
           ) : null}
         </div>
       </footer>
