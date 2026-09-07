@@ -5,6 +5,8 @@
  * a partir de ellos: solo los muestra y los reenvia.
  */
 
+import type { KilnMode } from "@/types/quotationBuilder";
+
 export interface LogoInfo {
   content_type: string;
   size_bytes: number;
@@ -77,6 +79,14 @@ export interface CommercialSettings {
    * que se deriva del markup — son dos pasos distintos del costeo.
    */
   production_factor_default: string | number;
+  /**
+   * Fase 009K.3. Si una cotizacion NUEVA nace aplicando el factor. Arranca en
+   * `false`: el factor deja de aplicarse por omision y pasa a ser una
+   * decision consciente de quien cotiza.
+   */
+  production_factor_enabled_default: boolean;
+  /** Fase 009K.3. Modo de horno con el que nace una cotizacion nueva. */
+  kiln_mode_default: KilnMode;
   /** Paso del redondeo contractual. Solo 0,50 o 1,00. */
   rounding_step: string | number;
 

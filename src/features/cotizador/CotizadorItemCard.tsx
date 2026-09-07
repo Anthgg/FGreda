@@ -12,7 +12,7 @@ import { GlazeEstimator } from "@/features/cotizador/GlazeEstimator";
 import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { itemFromProduct } from "@/features/cotizador/draft";
 import type { KilnOut } from "@/types/firings";
-import type { QuotationBuilderItemOut } from "@/types/quotationBuilder";
+import type { KilnMode, QuotationBuilderItemOut } from "@/types/quotationBuilder";
 import { formatMoney } from "@/features/quotations/money";
 
 export type CotizadorItemMode = "PIECES" | "PRODUCTION" | "COSTS" | "MARGIN" | "SUMMARY";
@@ -82,6 +82,8 @@ function FiringToggle({
   kilnValue,
   kilnOptions,
   onKilnChange,
+  ownKiln,
+  inheritedKilnLabel,
   disabled,
   plan,
   currencyCode,
@@ -92,6 +94,15 @@ function FiringToggle({
   kilnValue: string;
   kilnOptions: SelectOption[];
   onKilnChange: (value: string) => void;
+  /**
+   * Fase 009K.3. La pieza elige su horno, o lo hereda del de la cotizacion.
+   *
+   * En modo «todo junto» heredarlo no es una comodidad: es la definicion del
+   * modo. Dejar aqui un selector abierto invitaria a elegir uno distinto para
+   * una pieza que, por definicion, va en la misma hornada que las demas.
+   */
+  ownKiln: boolean;
+  inheritedKilnLabel: string;
   disabled: boolean;
   plan: FiringPlanEntry | null;
   currencyCode: string | undefined;
@@ -116,15 +127,24 @@ function FiringToggle({
 
       {selected ? (
         <div className="mt-3 space-y-2">
-          <SelectField
-            label={`Horno de ${label.toLowerCase()}`}
-            requirement="required"
-            value={kilnValue}
-            options={kilnOptions}
-            onChange={onKilnChange}
-            disabled={disabled}
-            placeholder="Elegir horno…"
-          />
+          {ownKiln ? (
+            <SelectField
+              label={`Horno de ${label.toLowerCase()}`}
+              requirement="required"
+              value={kilnValue}
+              options={kilnOptions}
+              onChange={onKilnChange}
+              disabled={disabled}
+              placeholder="Elegir horno…"
+            />
+          ) : (
+            <p className="rounded-xl bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
+              Horno de la cotización:{" "}
+              <span className="font-semibold text-zinc-900">
+                {inheritedKilnLabel || "sin elegir"}
+              </span>
+            </p>
+          )}
           {plan ? (
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-zinc-600">
               {/* La capacidad del sistema es VOLUMEN en cm3, no un conteo de
@@ -200,6 +220,7 @@ export function CotizadorItemCard({
   currencyCode = "PEN",
   productionSummary,
   headerKilnId = "",
+  kilnMode = "TOGETHER",
   kilns = [],
   disabled,
   excludedProductIds,
@@ -216,6 +237,8 @@ export function CotizadorItemCard({
   productionSummary?: Record<string, unknown> | undefined;
   /** Horno de cabecera de la cotizacion, que una linea puede heredar. */
   headerKilnId?: string | undefined;
+  /** Fase 009K.3. Con `TOGETHER` la pieza hereda el horno de la cotizacion. */
+  kilnMode?: KilnMode | undefined;
   kilns?: KilnOut[] | undefined;
   disabled: boolean;
   excludedProductIds: number[];
@@ -351,6 +374,8 @@ export function CotizadorItemCard({
     value: String(kiln.id),
     label: `${kiln.code} · ${kiln.name}`,
   }));
+  const headerKilnLabel =
+    factorKilnOptions.find((option) => option.value === headerKilnId)?.label ?? "";
   const firingLineOptions = [
     { value: "", label: "Simulación integrada" },
     ...(firingLines.data?.items ?? []).map((line) => ({
@@ -659,6 +684,8 @@ export function CotizadorItemCard({
                   kilnValue={item.lowKilnId}
                   kilnOptions={lowKilnOptions}
                   onKilnChange={(lowKilnId) => patch({ lowKilnId })}
+                  ownKiln={kilnMode === "PER_PRODUCT"}
+                  inheritedKilnLabel={headerKilnLabel}
                   disabled={disabled}
                   plan={firingPlan.LOW}
                   currencyCode={currencyCode}
@@ -670,6 +697,8 @@ export function CotizadorItemCard({
                   kilnValue={item.highKilnId}
                   kilnOptions={highKilnOptions}
                   onKilnChange={(highKilnId) => patch({ highKilnId })}
+                  ownKiln={kilnMode === "PER_PRODUCT"}
+                  inheritedKilnLabel={headerKilnLabel}
                   disabled={disabled}
                   plan={firingPlan.HIGH}
                   currencyCode={currencyCode}

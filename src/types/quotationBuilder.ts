@@ -200,10 +200,28 @@ export interface GlazePlanOut {
   total_estimated_cost: string | null;
 }
 
+/**
+ * Fase 009K.3. Como se carga el horno al planificar la produccion.
+ *
+ * `TOGETHER` es lo que el Cotizador ha hecho siempre: una sola hoja donde
+ * todos los productos comparten sesion y la quema se reparte por volumen.
+ * `PER_PRODUCT` da a cada producto su propia hornada, aunque el horno sea el
+ * mismo, y entonces cada uno paga la quema entera.
+ */
+export type KilnMode = "TOGETHER" | "PER_PRODUCT";
+
 export interface QuotationBuilderDraftIn {
   name?: string;
   customer_id?: number;
   kiln_id?: number;
+  /**
+   * Fase 009K.3. La INTENCION de aplicar el factor de produccion, no su
+   * valor: cuando esta encendido, cuanto vale lo decide Configuracion y lo
+   * resuelve el backend. El navegador no elige el factor de la casa.
+   */
+  production_factor_enabled?: boolean;
+  /** Fase 009K.3. Modo de carga del horno de esta cotizacion. */
+  kiln_mode?: KilnMode;
   items: QuotationBuilderItemIn[];
   /** Fase 009F. Moneda de emision elegida para ESTA cotizacion. */
   currency_code?: "PEN" | "USD";
@@ -356,6 +374,14 @@ export interface QuotationBuilderOut {
   /** Suma de `line_total_gross`. Es EL total: el que se firma. */
   quotation_gross_total: string;
   production_factor: string;
+  /**
+   * Fase 009K.3. Si el factor se aplico. Va al lado del valor y no en su
+   * lugar: apagado el valor efectivo es 1, y un 1 suelto no distingue «no se
+   * aplico» de «se aplico un factor de uno».
+   */
+  production_factor_enabled: boolean;
+  /** Fase 009K.3. Modo con el que se planifico la quema. */
+  kiln_mode: KilnMode;
   rounding_step: string;
   total_fixed_cost: string;
   currency_code_snapshot: string;

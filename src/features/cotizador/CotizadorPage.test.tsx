@@ -11,6 +11,7 @@ import {
   sessionResponse,
 } from "@/test/utils";
 import { KILNS_PAGE } from "@/test/firingsFixtures";
+import { COMMERCIAL_FILLED } from "@/test/settingsFixtures";
 import type { Product } from "@/types/masters";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 
@@ -174,6 +175,8 @@ function builder(overrides: Partial<QuotationBuilderOut> = {}): QuotationBuilder
     quotation_tax_total: "0",
     quotation_gross_total: "0",
     production_factor: "3",
+    production_factor_enabled: false,
+    kiln_mode: "TOGETHER",
     rounding_step: "0.50",
     total_fixed_cost: "0",
     currency_code_snapshot: "PEN",
@@ -199,6 +202,10 @@ function builder(overrides: Partial<QuotationBuilderOut> = {}): QuotationBuilder
 function handler(url: string, init: RequestInit) {
   if (url.includes("/auth/me")) return sessionResponse();
   if (url.includes("/auth/csrf")) return csrfResponse();
+  // Fase 009K.3: la pantalla pide el factor configurado para poder
+  // ensenarlo cuando esta encendido. Sin esta respuesta la peticion daria
+  // 404 y el numero saldria vacio.
+  if (url.includes("/settings/commercial")) return jsonResponse(200, COMMERCIAL_FILLED);
   if (url.includes("/partners")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
   if (url.includes("/kilns")) return jsonResponse(200, KILNS_PAGE);
   if (url.includes("/firing-lines")) return jsonResponse(200, { items: [], total: 0, limit: 100, offset: 0 });
@@ -305,6 +312,19 @@ describe("Cotizador integral", () => {
   // ---------------------------------------------------------------------
 
   /** Deja una pieza lista y abre el paso Produccion. */
+  /**
+   * Fase 009K.3: pasar a «Por producto», que es el modo en el que cada pieza
+   * elige su propio horno.
+   *
+   * Estas pruebas son de 009C y tratan justamente de eso —quema baja y alta
+   * independientes, hornadas y dias por pieza—, asi que su escenario natural
+   * es el modo por producto. En «todo junto» el horno lo pone la cotizacion y
+   * la pieza lo hereda: no hay un selector por pieza que probar.
+   */
+  async function usarHornoPorProducto(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("radio", { name: "Por producto" }));
+  }
+
   async function openProduction(user: ReturnType<typeof userEvent.setup>) {
     await screen.findByRole("heading", { name: "Nuevo cotizador." });
     await user.click(screen.getByRole("button", { name: /Piezas/i }));
@@ -336,6 +356,7 @@ describe("Cotizador integral", () => {
     const fetchSpy = mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
     await openProduction(user);
+    await usarHornoPorProducto(user);
 
     await user.click(screen.getByRole("checkbox", { name: "Quema alta" }));
 
@@ -361,6 +382,7 @@ describe("Cotizador integral", () => {
     const fetchSpy = mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
     await openProduction(user);
+    await usarHornoPorProducto(user);
 
     await user.click(screen.getByRole("checkbox", { name: "Quema baja" }));
 
@@ -400,6 +422,7 @@ describe("Cotizador integral", () => {
     mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
     await openProduction(user);
+    await usarHornoPorProducto(user);
 
     await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
     await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
@@ -423,6 +446,7 @@ describe("Cotizador integral", () => {
     mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
     await openProduction(user);
+    await usarHornoPorProducto(user);
 
     await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
     await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
@@ -448,6 +472,7 @@ describe("Cotizador integral", () => {
     mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
     await openProduction(user);
+    await usarHornoPorProducto(user);
 
     // Quema baja en el pequeno (3 dias/hornada) y alta en el grande (4).
     await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
@@ -474,6 +499,7 @@ describe("Cotizador integral", () => {
     mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
     await openProduction(user);
+    await usarHornoPorProducto(user);
 
     await user.click(screen.getByRole("combobox", { name: "Horno de quema baja" }));
     await user.click(await screen.findByRole("option", { name: /KILN-001/i }));
@@ -926,6 +952,7 @@ describe("Cotizador integral", () => {
     await user.click(await screen.findByText("Plato palta QA"));
 
     await user.click(screen.getByRole("button", { name: /Producción/i }));
+    await usarHornoPorProducto(user);
     expect(screen.queryByRole("combobox", { name: /Horno para simulación/i })).not.toBeInTheDocument();
 
     // Fase 009C: los hornos viven dentro del toggle de cada quema, que ya

@@ -330,6 +330,32 @@ describe("Cotizador de prototipos · wizard", () => {
     }
   });
 
+  it("FCPR01 + FCPR02: 009K.3 no llega al Cotizador de Prototipos", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    renderWithProviders(<PrototypeQuoterPage />);
+
+    // Una CPR se cotiza por los DIAS que alguien va a trabajar: sin factor,
+    // sin margen y sin quema. Las dos decisiones de 009K.3 son del Cotizador
+    // de productos y no tienen aqui nada que decidir; que aparecieran seria
+    // ofrecer una politica que su motor de precios ni siquiera lee.
+    for (const etapa of [
+      "Datos",
+      "Prototipo",
+      "Trabajo",
+      "Materiales",
+      "Costeo",
+      "Resumen",
+      "PDF",
+    ]) {
+      await irA(user, etapa);
+      expect(screen.queryByText(/Factor comercial/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Modo de horno/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("radio", { name: "Todo junto" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("radio", { name: "Por producto" })).not.toBeInTheDocument();
+    }
+  });
+
   it("el secado y el ajuste siguen pidiéndose: son plazo, no costo", async () => {
     const user = userEvent.setup();
     mockApi();

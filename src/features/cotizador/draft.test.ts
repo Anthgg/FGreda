@@ -159,6 +159,8 @@ function savedOutput(): QuotationBuilderOut {
     quotation_tax_total: "0",
     quotation_gross_total: "0",
     production_factor: "3",
+    production_factor_enabled: false,
+    kiln_mode: "TOGETHER",
     rounding_step: "0.50",
     total_fixed_cost: "0",
     currency_code_snapshot: "PEN",

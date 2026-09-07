@@ -446,6 +446,28 @@ describe("sección comercial", () => {
     ).toHaveTextContent("S/ 0.50");
   });
 
+  it("009K.3: los dos valores con que nace una cotización nueva", async () => {
+    // SETTINGS_FACTOR_ENABLED_DEFAULT: DISABLED.
+    // SETTINGS_KILN_MODE_DEFAULT: TOGETHER.
+    //
+    // El factor de arriba —el numero— NO cambia de valor en esta fase: lo que
+    // cambia es que deja de aplicarse solo. Por eso son dos campos y no uno:
+    // cuanto vale, y si se aplica.
+    mockSettings();
+    renderApp(["/configuracion"]);
+
+    await screen.findByLabelText(/razón social/i);
+    await abrirPestana(/comercial/i);
+
+    expect(await screen.findByLabelText(/factor de producción/i)).toHaveValue("3");
+    expect(
+      screen.getByRole("combobox", { name: /factor comercial activado por defecto/i }),
+    ).toHaveTextContent("No");
+    expect(
+      screen.getByRole("combobox", { name: /modo de horno predeterminado/i }),
+    ).toHaveTextContent("Todo junto");
+  });
+
   it("rechaza un factor de producción de cero sin llamar al backend", async () => {
     // CONFIG_FACTOR_UPDATE: la validación de UX evita el viaje; el backend la
     // repite igualmente.
