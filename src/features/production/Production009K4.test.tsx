@@ -326,6 +326,9 @@ function setupBackend(
     }
 
     if (url.includes("/prototypes")) {
+      if (url.includes("/final-quotation") && method === "POST") {
+        return jsonResponse(201, { id: 55, code: "CTZ-2026-000055", status: "DRAFT", items: [] });
+      }
       const conId = url.match(/\/prototypes\/(\d+)/);
       if (conId) {
         const fila = muestras.find((m) => m.id === Number(conId[1])) ?? muestras[0]!;
@@ -520,6 +523,69 @@ describe("009K.4 · la ficha canónica de una orden de muestra", () => {
     );
   });
 
+  it("F12 bis: rechazar también se decide desde la ficha de la orden", async () => {
+    // Aprobar y rechazar dejaron de estar en la vista histórica de la muestra:
+    // se decide mirando la pieza terminada, y la pieza terminada la registra
+    // la orden. Su cobertura se mudó aquí con la acción.
+    const backend = setupBackend({ ordenes: [ordenPRT()] });
+    const user = userEvent.setup();
+    renderApp(["/produccion/501"]);
+
+    await user.click(await screen.findByRole("button", { name: /^Rechazar$/i }));
+
+    await waitFor(() =>
+      expect(
+        backend.enviados.filter((e) => e.url.includes("/prototypes/101/reject")),
+      ).toHaveLength(1),
+    );
+  });
+
+  it("F12 ter: una muestra aprobada ofrece su cotización final desde la orden", async () => {
+    // Aprobar dice que la pieza vale; cotizarla es otra decisión y otro
+    // permiso. Sigue siendo una acción explícita de una persona.
+    const backend = setupBackend({
+      ordenes: [ordenPRT()],
+      muestras: [muestra({ approval: "APPROVED", decided_at: "2026-09-04T10:00:00Z" })],
+    });
+    const user = userEvent.setup();
+    renderApp(["/produccion/501"]);
+
+    await user.click(await screen.findByRole("button", { name: /Crear cotización final/i }));
+
+    await waitFor(() =>
+      expect(
+        backend.enviados.filter((e) => e.url.includes("/prototypes/101/final-quotation")),
+      ).toHaveLength(1),
+    );
+  });
+
+  it("L06: la orden de una sucesora sigue diciendo de qué cobro viene", async () => {
+    // SUCCESSOR_ORDER_ORIGIN_LOST: NO. La sucesora hereda la cotización de
+    // prototipo del padre —repetir una muestra es el mismo encargo, no uno
+    // nuevo—, así que su orden enseña la MISMA CPR y una PRT distinta.
+    setupBackend({
+      ordenes: [
+        ordenPRT({
+          id: 502,
+          code: "OP-2026-000502",
+          prototype_id: 102,
+          prototype_code: "PRT-2026-000102",
+        }),
+      ],
+      muestras: [
+        muestra({ id: 102, code: "PRT-2026-000102", supersedes_prototype_id: 101 }),
+      ],
+    });
+    renderApp(["/produccion/502"]);
+
+    expect((await screen.findAllByText("OP-2026-000502")).length).toBeGreaterThan(0);
+    // El mismo cobro que el primer intento.
+    expect(screen.getAllByText("CPR-2026-000012").length).toBeGreaterThan(0);
+    // Y una muestra distinta.
+    expect(screen.getAllByText("PRT-2026-000102").length).toBeGreaterThan(0);
+    expect(screen.queryByText("PRT-2026-000101")).not.toBeInTheDocument();
+  });
+
   it("F13: la cadena de iteraciones se ve entera desde la ficha", async () => {
     setupBackend({
       ordenes: [ordenPRT()],
@@ -645,24 +711,67 @@ describe("009K.4 · las muestras históricas y el tablero de cotizaciones", () =
     expect((await screen.findAllByText("OP-2026-000501")).length).toBeGreaterThan(0);
   });
 
-  it("F20 + F21 + F22: una muestra SIN orden se lee, y nada más", async () => {
+  it("F20 + F21 + F22 + L01 + L02: una muestra SIN orden se lee, y NADA más", async () => {
+    // LEGACY_PRT_MUTATING_ACTION_COUNT: 0, contado de verdad. «Anular
+    // prototipo» era la última acción mutante que quedaba en esta pantalla y
+    // se fue en el addendum: sólo lectura significa sólo lectura, y un botón
+    // suelto que muta lo histórico es el que nadie recuerda al revisar la
+    // regla. Anular una muestra viva sigue siendo posible donde la ejecución
+    // vive ahora: anulando SU orden.
     const backend = setupBackend({
       muestras: [
-        muestra({ id: 9, code: "PRT-2026-000009", production_order_id: null, production_order_code: null }),
+        muestra({
+          id: 9,
+          code: "PRT-2026-000009",
+          status: "STARTED",
+          production_order_id: null,
+          production_order_code: null,
+        }),
       ],
     });
     renderApp(["/produccion/prototipos/9"]);
 
     expect(await screen.findByText(/Muestra histórica, en sólo lectura/i)).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Iniciar fabricación/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Guardar materiales/i }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Guardar cambios/i })).not.toBeInTheDocument();
-    // Y leerla no le crea la orden que no tiene.
+    for (const mutante of [
+      /Iniciar fabricación/i,
+      /Completar prototipo/i,
+      /Anular prototipo/i,
+      /Guardar materiales/i,
+      /Añadir material/i,
+      /Guardar cambios/i,
+      /Crear orden/i,
+      /Fabricar/i,
+    ]) {
+      expect(screen.queryByRole("button", { name: mutante })).not.toBeInTheDocument();
+    }
+    // Y leerla no le crea la orden que no tiene: ni una sola escritura.
     expect(backend.enviados).toHaveLength(0);
+  });
+
+  it("L03: la muestra histórica sigue enseñando su historia entera", async () => {
+    // Quitar las acciones no puede llevarse por delante los datos: estas once
+    // muestras son el único registro de lo que se fabricó antes de que la
+    // orden existiera.
+    setupBackend({
+      muestras: [
+        muestra({
+          id: 9,
+          code: "PRT-2026-000009",
+          status: "STARTED",
+          production_order_id: null,
+          production_order_code: null,
+          supersedes_prototype_id: 8,
+        }),
+      ],
+    });
+    renderApp(["/produccion/prototipos/9/materiales"]);
+
+    expect(await screen.findByText(/Materiales de la muestra/i)).toBeInTheDocument();
+    expect(screen.getByText("Pasta prototipo")).toBeInTheDocument();
+    // Lo previsto y lo real, los dos: la muestra arrancó por el camino antiguo
+    // y su consumo está escrito.
+    expect(screen.getAllByText("1.25")).toHaveLength(2);
+    expect(screen.getByText("kg")).toBeInTheDocument();
   });
 
   it("F23: /prototipos sigue siendo el tablero de cotizaciones de prototipo", async () => {

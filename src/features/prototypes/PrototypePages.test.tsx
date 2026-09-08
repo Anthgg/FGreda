@@ -440,56 +440,69 @@ describe("Fase 009K · prototipos", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("12. ADMIN aprueba", async () => {
+  it("12. ni ADMIN aprueba o rechaza desde la vista histórica", async () => {
+    // Las acciones de evaluación se mudaron a la ficha de la ORDEN, que es
+    // donde ocurre hoy la fabricación y donde se mira la pieza terminada. Aquí
+    // ya no hay ninguna: `LEGACY_PRT_MUTATING_ACTION_COUNT: 0` no admite
+    // excepciones, y decidir también es mutar.
     const { requests } = installBackend(sample({ status: "COMPLETED" }));
     renderApp(["/prototipos/7/evaluacion"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /^aprobar$/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some(
-          (r) => r.path.endsWith("/approve") && r.method === "POST",
-        ),
-      ).toBe(true),
-    );
+
+    await screen.findAllByText("Evaluación");
+    expect(screen.queryByRole("button", { name: /^aprobar$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^rechazar$/i })).not.toBeInTheDocument();
+    expect(requests.filter((r) => r.method !== "GET")).toHaveLength(0);
   });
 
-  it("13. ADMIN rechaza", async () => {
-    const { requests } = installBackend(sample({ status: "COMPLETED" }));
+  it("13. la evaluación histórica se lee: veredicto y fecha", async () => {
+    // Lo que sí conserva es el DATO. Estas muestras son el único registro de
+    // lo que se decidió sobre ellas.
+    installBackend(
+      sample({
+        status: "COMPLETED",
+        approval: "APPROVED",
+        decided_at: "2026-09-04T10:00:00Z",
+        completed_at: "2026-09-03T12:00:00Z",
+      }),
+    );
     renderApp(["/prototipos/7/evaluacion"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /^rechazar$/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some((r) => r.path.endsWith("/reject") && r.method === "POST"),
-      ).toBe(true),
-    );
+
+    await screen.findAllByText("Evaluación");
+    expect(screen.getByText("2026-09-04")).toBeInTheDocument();
+    expect(screen.getByText("2026-09-03")).toBeInTheDocument();
   });
 
-  it("14. crea successor con un nuevo PRT", async () => {
-    installBackend(sample({ status: "COMPLETED", approval: "REJECTED" }));
+  it("14. una muestra histórica rechazada no ofrece crear la siguiente", async () => {
+    // Repetir una muestra es fabricar otra vez, y fabricar ocurre desde una
+    // orden de producción. Estas no tienen ninguna.
+    const { requests } = installBackend(sample({ status: "COMPLETED", approval: "REJECTED" }));
     renderApp(["/prototipos/7/iteraciones"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /crear nueva iteración/i }),
-    );
+
+    expect(await screen.findByText(/Este es el primer intento/i)).toBeInTheDocument();
     expect(
-      (await screen.findAllByText("PRT-2026-000008")).length,
-    ).toBeGreaterThan(0);
+      screen.queryByRole("button", { name: /crear nueva iteración/i }),
+    ).not.toBeInTheDocument();
+    expect(requests.filter((r) => r.method !== "GET")).toHaveLength(0);
   });
 
-  it("15. ADMIN puede anular CREATED", async () => {
+  it("15. ni ADMIN puede anular una muestra histórica desde aquí", async () => {
+    // Addendum de 009K.4. «Anular prototipo» era la última acción mutante que
+    // quedaba en esta pantalla, y se fue: sólo lectura significa sólo lectura,
+    // y un botón suelto que muta lo histórico es el que nadie recuerda al
+    // revisar la regla. No es un permiso lo que falta —esta sesión es ADMIN—:
+    // es que la acción ya no vive aquí.
+    //
+    // Anular una muestra viva sigue siendo posible donde la ejecución vive
+    // ahora: anulando SU orden de producción, que la arrastra en la misma
+    // transacción.
     const { requests } = installBackend();
     renderApp(["/prototipos/7"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /anular prototipo/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some((r) => r.path.endsWith("/cancel") && r.method === "POST"),
-      ).toBe(true),
-    );
+
+    expect((await screen.findAllByText("PRT-2026-000007")).length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: /anular prototipo/i }),
+    ).not.toBeInTheDocument();
+    expect(requests.filter((r) => r.method !== "GET")).toHaveLength(0);
   });
 
   it("16. traduce códigos de dominio", () => {
@@ -539,33 +552,17 @@ describe("Fase 009K · prototipos", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("K1-2. una muestra aprobada ofrece crear la cotización final", async () => {
-    installBackend(sample({ status: "COMPLETED", approval: "APPROVED" }));
+  it("K1-2. la vista histórica tampoco ofrece cotizar", async () => {
+    // Crear la cotización final es una acción, y las acciones viven en la
+    // ficha de la orden. Una muestra sin orden es historia: se lee.
+    const { requests } = installBackend(sample({ status: "COMPLETED", approval: "APPROVED" }));
     renderApp(["/prototipos/7/evaluacion"]);
-    expect(
-      await screen.findByRole("button", { name: /crear cotización final/i }),
-    ).toBeInTheDocument();
-  });
 
-  it("K1-3. pulsar lleva al borrador que devuelve el backend", async () => {
-    // La idempotencia se siente natural porque 201 y 200 hacen lo mismo:
-    // abrir la cotizacion devuelta. No hay ningun «ya existe» que mostrar.
-    const { requests } = installBackend(
-      sample({ status: "COMPLETED", approval: "APPROVED" }),
-    );
-    renderApp(["/prototipos/7/evaluacion"]);
-    await userEvent.click(
-      await screen.findByRole("button", { name: /crear cotización final/i }),
-    );
-    await waitFor(() =>
-      expect(
-        requests.some(
-          (r) =>
-            r.path.endsWith("/prototypes/7/final-quotation") &&
-            r.method === "POST",
-        ),
-      ).toBe(true),
-    );
+    await screen.findAllByText("Evaluación");
+    expect(
+      screen.queryByRole("button", { name: /crear cotización final/i }),
+    ).not.toBeInTheDocument();
+    expect(requests.filter((r) => r.method !== "GET")).toHaveLength(0);
   });
 
   it("K1-4. el taller no cotiza", async () => {

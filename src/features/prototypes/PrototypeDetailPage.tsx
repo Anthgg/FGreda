@@ -1,21 +1,9 @@
-import { useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 
-import { PrimaryButton, SecondaryButton, TextAreaField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { capabilitiesFor } from "@/features/auth/capabilities";
-import { useSession } from "@/features/auth/useSession";
 import { Alert, ApprovalBadge, StatusBadge } from "@/features/prototypes/PrototypeUi";
 import { describePrototypeError } from "@/features/prototypes/prototypeLabels";
-import {
-  useApprovePrototype,
-  useCreateFinalQuotation,
-  useCancelPrototype,
-  useCreatePrototypeSuccessor,
-  usePrototype,
-  usePrototypes,
-  useRejectPrototype,
-} from "@/features/prototypes/usePrototypes";
+import { usePrototype, usePrototypes } from "@/features/prototypes/usePrototypes";
 import type { Prototype, PrototypeTechnicalSpecifications } from "@/types/prototypes";
 
 /**
@@ -95,10 +83,20 @@ function FichaTecnica({ ficha }: { ficha: PrototypeTechnicalSpecifications }) {
   );
 }
 
+/**
+ * El resumen de una muestra histórica. **Se lee. No se toca.**
+ *
+ * Aquí vivía «Anular prototipo», y se fue en el addendum de 009K.4. La regla
+ * quedó dicha sin excepciones: una muestra sin orden de producción es una que
+ * se fabricó —o se dejó a medias— antes de que la orden fuera el único
+ * documento de ejecución, y sólo lectura significa sólo lectura. Un botón
+ * suelto que muta lo histórico es el que nadie recuerda al revisar la regla.
+ *
+ * Anular una muestra viva sigue siendo posible donde la ejecución vive ahora:
+ * anulando SU orden de producción, que arrastra la muestra en la misma
+ * transacción.
+ */
 function Summary({ prototype }: { prototype: Prototype }) {
-  const cancel = useCancelPrototype(prototype.id);
-  const { data: user } = useSession();
-  const canCancel = capabilitiesFor(user?.role).anularPrototipo && prototype.status === "CREATED";
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -141,8 +139,6 @@ function Summary({ prototype }: { prototype: Prototype }) {
         </div>
       ) : null}
       {prototype.notes ? <div className="rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-700"><p className="text-xs font-semibold uppercase text-zinc-500">Notas</p><p className="mt-2 whitespace-pre-wrap">{prototype.notes}</p></div> : null}
-      {cancel.error ? <Alert>{describePrototypeError(cancel.error)}</Alert> : null}
-      {canCancel ? <SecondaryButton className="border-red-200 text-red-700" disabled={cancel.isPending} onClick={() => cancel.mutate()}>{cancel.isPending ? "Anulando…" : "Anular prototipo"}</SecondaryButton> : null}
     </div>
   );
 }
@@ -205,81 +201,82 @@ function MaterialsReadOnly({ prototype }: { prototype: Prototype }) {
   );
 }
 
-function EvaluationSection({ prototype }: { prototype: Prototype }) {
-  const { data: user } = useSession();
-  const canDecide = capabilitiesFor(user?.role).decidirPrototipo;
-  const approve = useApprovePrototype(prototype.id);
-  const reject = useRejectPrototype(prototype.id);
-  const [note, setNote] = useState("");
-  const pending = prototype.status === "COMPLETED" && prototype.approval === "PENDING";
-  return <div className="space-y-5">
-    <div className="flex items-center gap-3"><h2 className="font-semibold">Evaluación</h2><ApprovalBadge approval={prototype.approval} /></div>
-    {prototype.status !== "COMPLETED" ? <Alert tone="amber">La evaluación estará disponible después de completar la fabricación.</Alert> : null}
-    {pending && !canDecide ? <p className="text-sm text-zinc-600">La decisión corresponde a una persona administradora.</p> : null}
-    {pending && canDecide ? <><TextAreaField label="Nota de evaluación" requirement="optional" value={note} onChange={setNote} /><div className="flex gap-2"><PrimaryButton type="button" disabled={approve.isPending || reject.isPending} onClick={() => approve.mutate(note)}>Aprobar</PrimaryButton><SecondaryButton className="border-red-200 text-red-700" disabled={approve.isPending || reject.isPending} onClick={() => reject.mutate(note)}>Rechazar</SecondaryButton></div></> : null}
-    {approve.error ? <Alert>{describePrototypeError(approve.error)}</Alert> : null}{reject.error ? <Alert>{describePrototypeError(reject.error)}</Alert> : null}
-    {approve.isSuccess ? <Alert tone="green">Prototipo aprobado. No se creó ninguna orden de producción.</Alert> : null}{reject.isSuccess ? <Alert tone="amber">Prototipo rechazado. Puede crear una nueva iteración.</Alert> : null}
-    <FinalQuotationAction prototype={prototype} />
-  </div>;
+/**
+ * La evaluación de una muestra histórica. Se lee.
+ *
+ * Los botones de aprobar y rechazar viven en la ficha de la ORDEN, que es
+ * donde ocurre hoy la fabricación y donde se mira la pieza terminada. Estas
+ * once muestras no tienen orden: se hicieron antes de que existiera, y aquí no
+ * se decide nada sobre ellas —`LEGACY_PRT_MUTATING_ACTION_COUNT: 0` no admite
+ * excepciones, y «decidir» también es mutar—.
+ */
+function EvaluationReadOnly({ prototype }: { prototype: Prototype }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <h2 className="font-semibold">Evaluación</h2>
+        <ApprovalBadge approval={prototype.approval} />
+      </div>
+      <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Info label="Fabricación" value={prototype.status} />
+        <Info
+          label="Decidida"
+          value={prototype.decided_at ? prototype.decided_at.slice(0, 10) : "Sin decidir"}
+        />
+        <Info
+          label="Completada"
+          value={prototype.completed_at ? prototype.completed_at.slice(0, 10) : "—"}
+        />
+      </dl>
+    </div>
+  );
 }
 
 /**
- * La cotización final de una muestra aprobada.
+ * La cadena de intentos de una muestra histórica. Se lee.
  *
- * Es una acción explícita a propósito: aprobar una muestra dice que la pieza
- * vale, no que alguien la haya pedido. Quien decide cotizar es una persona.
+ * Sin «Crear nueva iteración»: repetir una muestra es fabricar otra vez, y
+ * fabricar ocurre desde una orden de producción.
  */
-function FinalQuotationAction({ prototype }: { prototype: Prototype }) {
-  const navigate = useNavigate();
-  const { data: user } = useSession();
-  // Su propia capacidad, no la de decidir la muestra: aprobar y cotizar son
-  // dos permisos distintos aunque hoy los tenga el mismo rol.
-  const puedeCotizar = capabilitiesFor(user?.role).cotizarDesdePrototipo;
-  const crear = useCreateFinalQuotation(prototype.id);
-  const aprobada = prototype.status === "COMPLETED" && prototype.approval === "APPROVED";
-
-  if (!aprobada) return null;
-  return <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-    <p className="text-sm font-semibold text-zinc-900">Cotización final</p>
-    <p className="mt-1 text-xs text-zinc-600">
-      Se abre un borrador nuevo con lo que la muestra demostró: el producto, sus medidas y el
-      material del cuerpo. La cantidad y el cliente los defines tú.
-    </p>
-    {puedeCotizar ? (
-      <PrimaryButton
-        type="button"
-        className="mt-3"
-        disabled={crear.isPending}
-        onClick={() =>
-          crear.mutate(undefined, {
-            // El backend devuelve 201 si la crea y 200 si ya existía. Aquí da
-            // igual: en los dos casos se abre la que devuelve, así que pulsar
-            // dos veces lleva al mismo sitio en vez de dar un error.
-            onSuccess: (cotizacion) => navigate(`/cotizador/${cotizacion.id}`),
-          })
-        }
-      >
-        {crear.isPending ? "Creando…" : "Crear cotización final"}
-      </PrimaryButton>
-    ) : (
-      <p className="mt-3 text-sm text-zinc-600">Cotizar corresponde a una persona administradora.</p>
-    )}
-    {crear.error ? <Alert>{describePrototypeError(crear.error)}</Alert> : null}
-  </div>;
-}
-
-function IterationsSection({ prototype }: { prototype: Prototype }) {
-  const navigate = useNavigate();
-  const successor = useCreatePrototypeSuccessor(prototype.id);
-  const all = usePrototypes({ limit: 200 });
-  const next = all.data?.items.find((row) => row.supersedes_prototype_id === prototype.id);
-  return <div className="space-y-5">
-    <div><h2 className="font-semibold">Iteraciones</h2><p className="mt-1 text-sm text-zinc-500">Cada intento conserva su historia. Una nueva iteración recibe otro código PRT.</p></div>
-    {prototype.supersedes_prototype_id ? <p className="text-sm">Sustituye a: <Link className="font-mono font-semibold hover:underline" to={`/produccion/prototipos/${prototype.supersedes_prototype_id}`}>ver iteración anterior</Link></p> : <p className="text-sm text-zinc-500">Este es el primer intento.</p>}
-    {next ? <p className="text-sm">Iteración posterior: <Link className="font-mono font-semibold hover:underline" to={`/produccion/prototipos/${next.id}`}>{next.code}</Link></p> : null}
-    {prototype.approval === "REJECTED" && !next ? <PrimaryButton type="button" disabled={successor.isPending} onClick={() => successor.mutate(undefined, { onSuccess: (created) => navigate(`/produccion/prototipos/${created.id}`) })}>{successor.isPending ? "Creando…" : "Crear nueva iteración"}</PrimaryButton> : null}
-    {successor.error ? <Alert>{describePrototypeError(successor.error)}</Alert> : null}
-  </div>;
+function IterationsReadOnly({ prototype }: { prototype: Prototype }) {
+  const todas = usePrototypes({ limit: 200 });
+  const siguiente = todas.data?.items.find(
+    (row) => row.supersedes_prototype_id === prototype.id,
+  );
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-semibold">Iteraciones</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Cada intento conserva su historia. Una nueva iteración recibe otro código PRT.
+        </p>
+      </div>
+      {prototype.supersedes_prototype_id ? (
+        <p className="text-sm">
+          Sustituye a:{" "}
+          <Link
+            className="font-mono font-semibold hover:underline"
+            to={`/produccion/prototipos/${prototype.supersedes_prototype_id}`}
+          >
+            ver iteración anterior
+          </Link>
+        </p>
+      ) : (
+        <p className="text-sm text-zinc-500">Este es el primer intento.</p>
+      )}
+      {siguiente ? (
+        <p className="text-sm">
+          Iteración posterior:{" "}
+          <Link
+            className="font-mono font-semibold hover:underline"
+            to={`/produccion/prototipos/${siguiente.id}`}
+          >
+            {siguiente.code}
+          </Link>
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export function PrototypeDetailPage({ section }: { section: PrototypeSection }) {
@@ -310,7 +307,7 @@ export function PrototypeDetailPage({ section }: { section: PrototypeSection }) 
     </Alert>
     <nav aria-label="Secciones del prototipo" className="flex gap-2 overflow-x-auto pb-1">{SECTIONS.map((item) => <Link key={item.key} to={routeFor(id, item.key)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold ${section === item.key ? "bg-black text-white" : "border border-zinc-200 bg-white/70 text-zinc-700"}`}>{item.label}</Link>)}</nav>
     <section className="glass-panel rounded-3xl border border-white/60 p-5 shadow-sm sm:p-6">
-      {section === "materiales" ? <MaterialsReadOnly prototype={row} /> : section === "evaluacion" ? <EvaluationSection prototype={row} /> : section === "iteraciones" ? <IterationsSection prototype={row} /> : <Summary prototype={row} />}
+      {section === "materiales" ? <MaterialsReadOnly prototype={row} /> : section === "evaluacion" ? <EvaluationReadOnly prototype={row} /> : section === "iteraciones" ? <IterationsReadOnly prototype={row} /> : <Summary prototype={row} />}
     </section>
   </div>;
 }
