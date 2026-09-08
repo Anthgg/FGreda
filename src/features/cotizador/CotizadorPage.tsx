@@ -39,6 +39,10 @@ import {
   ProductionFactorField,
 } from "@/features/cotizador/CotizadorPolicyFields";
 import { applyKilnMode } from "@/features/cotizador/kilnMode";
+import {
+  PRODUCTION_FACTOR_LABEL,
+  factorStateLabel,
+} from "@/features/cotizador/productionFactor";
 import { useCommercialSettings } from "@/features/settings/useSettings";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 import { CURRENCY_OPTIONS, exchangeRateLabel, formatMoney } from "@/features/quotations/money";
@@ -204,6 +208,12 @@ export function CotizadorPage() {
   const previewQuery = useCotizadorPreview(previewPayload);
   const stored = persisted ?? query.data;
   const preview = status === "DRAFT" ? previewQuery.data ?? stored : stored;
+  // Fase 009K.4.1. Si los numeros que hay EN PANTALLA llevan factor aplicado.
+  // Manda la respuesta del backend, que es quien los calculo; sin respuesta
+  // todavia, la intencion del borrador. Leerlo del borrador siempre haria que,
+  // durante los 350 ms del debounce, el desglose dijera «aplicado» encima de
+  // unos importes que aun no lo estan.
+  const factorApplied = preview?.production_factor_enabled ?? draft.productionFactorEnabled;
   const readOnly = !canEdit || status !== "DRAFT";
   // El paso Datos es la unica fuente de nombre y cliente: nada aguas abajo
   // (piezas, produccion, costeo...) tiene sentido sin ellos, y el backend ya
@@ -385,6 +395,7 @@ export function CotizadorPage() {
               currencyCode={preview?.currency_code_snapshot}
               productionSummary={preview?.production_summary}
               headerKilnId={draft.kilnId}
+              productionFactorEnabled={factorApplied}
               kilns={kilns.data?.items ?? []}
               disabled={readOnly}
               excludedProductIds={draft.items.filter((_, itemIndex) => itemIndex !== index).map((value) => Number(value.productId)).filter(Number.isInteger)}
@@ -469,6 +480,18 @@ export function CotizadorPage() {
                 </p>
               </div>
             ) : null}
+            {/* Fase 009K.4.1. El resumen decia la moneda y la tasa pero callaba
+                el factor, que es la otra decision que mueve todos los importes
+                de arriba. Se DICE, no se edita: quien quiera cambiarlo vuelve
+                a «Margen y precio», que es donde se decide. */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                {PRODUCTION_FACTOR_LABEL}
+              </p>
+              <p className="text-sm font-semibold text-zinc-900">
+                {factorStateLabel(factorApplied, preview?.production_factor)}
+              </p>
+            </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Subtotal comercial</p><p className="mt-1 text-lg font-bold tabular-nums">{money(preview?.commercial_subtotal, preview?.currency_code_snapshot)}</p></div>

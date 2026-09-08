@@ -788,7 +788,7 @@ describe("009K.4 · las muestras históricas y el tablero de cotizaciones", () =
 // F24 a F26 — lo que esta fase NO toca
 // ---------------------------------------------------------------------------
 describe("009K.4 · regresiones de lo que no se toca", () => {
-  it("F24: el factor comercial de 009K.3 sigue siendo opcional y apagado", () => {
+  it("F24: el factor de producción de 009K.3 sigue siendo opcional y apagado", () => {
     renderWithProviders(
       <ProductionFactorField
         enabled={false}
@@ -798,7 +798,7 @@ describe("009K.4 · regresiones de lo que no se toca", () => {
       />,
     );
 
-    expect(screen.getByText("Factor comercial")).toBeInTheDocument();
+    expect(screen.getByText("Factor de producción")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Desactivado" })).toBeChecked();
     // Y sigue sin prometer una regla automática por tramos, que no existe.
     expect(document.body.textContent).not.toMatch(/1\s*\/\s*2\s*\/\s*3/);

@@ -1,6 +1,12 @@
+import type { ReactNode } from "react";
+
 import { SelectField } from "@/components/form";
 import type { SelectOption } from "@/components/form";
-import { formatDecimalString } from "@/features/firings/labels";
+import {
+  NEUTRAL_FACTOR,
+  PRODUCTION_FACTOR_LABEL,
+  factorMultiplier,
+} from "@/features/cotizador/productionFactor";
 import type { KilnMode } from "@/types/quotationBuilder";
 
 /**
@@ -19,6 +25,7 @@ function Segmented<T extends string>({
   options,
   disabled,
   onChange,
+  children,
 }: {
   legend: string;
   name: string;
@@ -26,6 +33,12 @@ function Segmented<T extends string>({
   options: readonly { value: T; label: string }[];
   disabled: boolean;
   onChange: (value: T) => void;
+  /**
+   * Lo que explica la eleccion. Va DENTRO del `fieldset` a proposito: la
+   * leyenda nombra al grupo entero, asi que la ayuda y el numero quedan
+   * atados al control tambien para quien navega por accesibilidad.
+   */
+  children?: ReactNode;
 }) {
   return (
     <fieldset className="min-w-0">
@@ -55,6 +68,7 @@ function Segmented<T extends string>({
           </label>
         ))}
       </div>
+      {children}
     </fieldset>
   );
 }
@@ -69,6 +83,12 @@ function Segmented<T extends string>({
  *
  * Y no dice «automatico 1/2/3»: esa regla no existe en el sistema. Escribirlo
  * en la pantalla haria que alguien esperara tramos que nadie calcula.
+ *
+ * Fase 009K.4.1: se llama por su nombre —«factor de produccion», el mismo de
+ * Configuracion y del backend— y dice de quien es cada mitad de la decision.
+ * Antes ponia «Factor comercial» y, debajo, «Configuración → Comercial» a
+ * secas: la primera es OTRA cosa en la base (`quotations.commercial_factor`) y
+ * la segunda se leia como que apagarlo o encenderlo se hacia en Ajustes.
  */
 export function ProductionFactorField({
   enabled,
@@ -84,7 +104,7 @@ export function ProductionFactorField({
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-5">
       <Segmented
-        legend="Factor comercial"
+        legend={PRODUCTION_FACTOR_LABEL}
         name="production-factor-enabled"
         value={enabled ? "SI" : "NO"}
         options={[
@@ -93,23 +113,28 @@ export function ProductionFactorField({
         ]}
         disabled={disabled}
         onChange={(value) => onChange(value === "SI")}
-      />
-      <p className="mt-3 text-xs text-zinc-600">
-        {enabled ? (
-          <>
-            Factor configurado:{" "}
-            <span className="font-semibold tabular-nums text-zinc-900">
-              ×{formatDecimalString(configuredFactor, 2)}
-            </span>{" "}
-            · se aplica al costo técnico, antes de los costos fijos y del margen.
-          </>
-        ) : (
-          <>
-            El costo técnico pasa sin multiplicar. El margen, el IGV y el redondeo no cambian.
-          </>
-        )}
-      </p>
-      <p className="mt-1 text-[10px] text-zinc-400">Configuración → Comercial</p>
+      >
+        <p className="mt-3 text-xs text-zinc-600">
+          {enabled
+            ? "Se aplica el factor configurado para producción."
+            : "No se aplica multiplicador de producción."}
+        </p>
+        {/* El numero es de LECTURA: sale de Configuracion y lo aplica el
+            backend. Apagado se ensena el neutro y no el numero configurado —
+            poner «×3» en una cotizacion que multiplica por uno seria anunciar
+            algo que no se aplica. Y va sin simbolo de moneda: el factor no son
+            tres soles, son tres veces el costo tecnico. */}
+        <p className="mt-2 text-xs text-zinc-600">
+          {enabled ? "Factor configurado:" : "Factor efectivo:"}{" "}
+          <span className="font-semibold tabular-nums text-zinc-900">
+            ×{enabled ? factorMultiplier(configuredFactor) : NEUTRAL_FACTOR}
+          </span>
+        </p>
+        <p className="mt-2 text-[11px] text-zinc-500">
+          El valor del factor se define en Configuración; aquí decides si esta cotización lo
+          aplica.
+        </p>
+      </Segmented>
     </div>
   );
 }
