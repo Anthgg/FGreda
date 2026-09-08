@@ -270,9 +270,9 @@ async function abrirProduccion(user: ReturnType<typeof userEvent.setup>) {
 }
 
 // ---------------------------------------------------------------------------
-// FF01–FF08: el factor comercial
+// FF01–FF08: el factor de produccion
 // ---------------------------------------------------------------------------
-describe("Factor comercial opcional", () => {
+describe("Factor de producción opcional", () => {
   it("FF01: nace desactivado", async () => {
     const user = userEvent.setup();
     mockFetch(handler);
@@ -293,7 +293,9 @@ describe("Factor comercial opcional", () => {
 
     // El numero sale de Configuracion, que es su unica autoridad.
     expect(await screen.findByText(/Factor configurado:/i)).toBeInTheDocument();
-    expect(screen.getByText("×3.00")).toBeInTheDocument();
+    // 009K.4.1: el multiplicador se dice «×3», no «×3.00». No es dinero,
+    // y los dos decimales lo hacian parecer un importe.
+    expect(screen.getByText("×3")).toBeInTheDocument();
     await waitFor(() => {
       expect(previewBodies(spy).at(-1)?.production_factor_enabled).toBe(true);
     });

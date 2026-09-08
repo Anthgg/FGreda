@@ -11,6 +11,10 @@ import type { CotizadorItemDraft } from "@/features/cotizador/draft";
 import { GlazeEstimator } from "@/features/cotizador/GlazeEstimator";
 import { describeWarnings } from "@/features/quotations/domainWarnings";
 import { itemFromProduct } from "@/features/cotizador/draft";
+import {
+  PRODUCTION_FACTOR_LABEL,
+  factorStateLabel,
+} from "@/features/cotizador/productionFactor";
 import type { KilnOut } from "@/types/firings";
 import type { KilnMode, QuotationBuilderItemOut } from "@/types/quotationBuilder";
 import { formatMoney } from "@/features/quotations/money";
@@ -221,6 +225,7 @@ export function CotizadorItemCard({
   productionSummary,
   headerKilnId = "",
   kilnMode = "TOGETHER",
+  productionFactorEnabled = false,
   kilns = [],
   disabled,
   excludedProductIds,
@@ -239,6 +244,15 @@ export function CotizadorItemCard({
   headerKilnId?: string | undefined;
   /** Fase 009K.3. Con `TOGETHER` la pieza hereda el horno de la cotizacion. */
   kilnMode?: KilnMode | undefined;
+  /**
+   * Fase 009K.4.1. Si ESTA cotizacion aplica el factor de produccion.
+   *
+   * Viaja como dato y no se deduce del `production_factor` del preview: con el
+   * factor de la casa en uno, un factor aplicado y uno no aplicado devuelven
+   * el mismo numero, y el desglose diria «no aplicado» de una cotizacion que
+   * si lo aplica.
+   */
+  productionFactorEnabled?: boolean | undefined;
   kilns?: KilnOut[] | undefined;
   disabled: boolean;
   excludedProductIds: number[];
@@ -823,7 +837,12 @@ export function CotizadorItemCard({
             </p>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div><p className="text-[11px] text-zinc-500">Costo técnico</p><p className="mt-0.5 text-sm font-bold tabular-nums">{soles(preview?.technical_cost)}</p><p className="text-[10px] text-zinc-400">Material + quema + mano de obra</p></div>
-              <div><p className="text-[11px] text-zinc-500">× Factor de producción</p><p className="mt-0.5 text-sm font-bold tabular-nums">×{formatDecimalString(preview?.production_factor, 2)}</p><p className="text-[10px] text-zinc-400">Configuración → Comercial</p></div>
+              {/* Fase 009K.4.1: el desglose dice si esta cotizacion lo aplica,
+                  no a donde ir a configurarlo. Antes ponia «Configuración →
+                  Comercial» debajo del numero, que se leia como que la
+                  decision era de Ajustes. Aqui solo se LEE: la decision se
+                  toma en «Margen y precio». */}
+              <div><p className="text-[11px] text-zinc-500">{PRODUCTION_FACTOR_LABEL}</p><p className="mt-0.5 text-sm font-bold tabular-nums">{factorStateLabel(productionFactorEnabled, preview?.production_factor)}</p><p className="text-[10px] text-zinc-400">Se decide en «Margen y precio»</p></div>
               <div><p className="text-[11px] text-zinc-500">= Costo factorado</p><p className="mt-0.5 text-sm font-bold tabular-nums">{soles(preview?.factored_cost)}</p></div>
               <div><p className="text-[11px] text-zinc-500">+ Costos fijos asignados</p><p className="mt-0.5 text-sm font-bold tabular-nums">{soles(preview?.fixed_cost_allocation)}</p><p className="text-[10px] text-zinc-400">Parte que le toca del total del lote</p></div>
             </div>

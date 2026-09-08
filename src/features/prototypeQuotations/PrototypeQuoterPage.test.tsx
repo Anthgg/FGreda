@@ -398,6 +398,9 @@ describe("Cotizador de prototipos · wizard", () => {
       "PDF",
     ]) {
       await irA(user, etapa);
+      // T24 (009K.4.1). Se comprueban los DOS nombres: el actual y el que
+      // tuvo hasta 009K.4, para que renombrarlo no deje de mirar aqui.
+      expect(screen.queryByText(/Factor de producci[óo]n/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/Factor comercial/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/Modo de horno/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("radio", { name: "Todo junto" })).not.toBeInTheDocument();
