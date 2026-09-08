@@ -208,6 +208,15 @@ export interface PrototypeQuotation {
   /** La muestra física que nació al cobrar, si ya se cobró. */
   prototype_id: number | null;
   prototype_code: string | null;
+  /**
+   * Fase 009K.4. La orden de producción que nació con ella.
+   *
+   * Es el destino real al que ir después de cobrar. Nula en los cobros
+   * anteriores a esta fase, que crearon muestra pero no orden: a esas no se
+   * les fabrica una ahora, porque nadie eligió su almacén.
+   */
+  production_order_id: number | null;
+  production_order_code: string | null;
 
   updated_at: string | null;
 }

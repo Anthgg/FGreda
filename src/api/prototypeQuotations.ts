@@ -44,13 +44,20 @@ export const cancelPrototypeQuotation = (id: number): Promise<PrototypeQuotation
   apiClient.post(`${BASE}/${id}/cancel`, {});
 
 /**
- * Registra el cobro y habilita la muestra para el taller.
+ * Registra el cobro y deja la muestra lista para el taller.
  *
- * No gasta material: eso ocurre al arrancarla. Devuelve la cotización con la
- * muestra ya asociada.
+ * No gasta material: eso ocurre al arrancar la orden. Devuelve la cotización
+ * con la muestra y con la ORDEN de producción ya asociadas.
+ *
+ * Fase 009K.4: el almacén de salida es obligatorio y viaja explícito. No hay
+ * ubicación por defecto ni aunque hoy sólo exista una; el día que haya dos, un
+ * valor implícito descontaría del almacén equivocado sin avisar.
  */
-export const markPrototypeQuotationPaid = (id: number): Promise<PrototypeQuotation> =>
-  apiClient.post(`${BASE}/${id}/mark-paid`, {});
+export const markPrototypeQuotationPaid = (
+  id: number,
+  stockLocationId: number,
+): Promise<PrototypeQuotation> =>
+  apiClient.post(`${BASE}/${id}/mark-paid`, { stock_location_id: stockLocationId });
 
 /**
  * El documento, para verlo dentro de la pantalla.

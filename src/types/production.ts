@@ -24,7 +24,21 @@ export type ProductionReadinessCode =
   | "PREPARED_STOCK_MISSING"
   | "INSUFFICIENT_STOCK"
   | "UNSUPPORTED_UOM_CONVERSION"
-  | "INVALID_STOCK_LOCATION";
+  | "INVALID_STOCK_LOCATION"
+  // Fase 009K.4. Sólo aparecen en órdenes que fabrican una muestra.
+  | "PROTOTYPE_MISSING"
+  | "MISSING_MATERIAL_LINES"
+  | "PROTOTYPE_QUOTATION_NOT_PAID";
+
+/**
+ * De dónde viene una orden. Fase 009K.4.
+ *
+ * Lo dice el backend en un campo propio. Deducirlo de qué identificador venga
+ * relleno convertiría una regla del dominio en una heurística de pantalla, y la
+ * pantalla acabaría discrepando de la base el día que cambiara cualquiera de
+ * las dos.
+ */
+export type ProductionOrderOrigin = "QUOTATION" | "PROTOTYPE";
 
 export interface ReadinessIssue {
   code: ProductionReadinessCode;
@@ -50,7 +64,8 @@ export interface ProductionReadiness {
 
 export interface ProductionOrderLine {
   id: number;
-  quotation_item_id: number;
+  /** Nulo en las órdenes que fabrican una muestra: no hay ítem que copiar. */
+  quotation_item_id: number | null;
   sort_order: number;
   product_id: number;
   product_name: string;
@@ -75,8 +90,16 @@ export interface ProductionOrderSummary {
   id: number;
   code: string;
   status: ProductionOrderStatus;
-  quotation_id: number;
-  quotation_code: string;
+  origin_type: ProductionOrderOrigin;
+  /** Nulos cuando la orden viene de una muestra. */
+  quotation_id: number | null;
+  quotation_code: string | null;
+  /** Nulos cuando la orden viene de una cotización. */
+  prototype_id: number | null;
+  prototype_code: string | null;
+  /** La cotización de prototipo que autorizó la muestra, si la hubo. */
+  prototype_quotation_id: number | null;
+  prototype_quotation_code: string | null;
   stock_location_id: number;
   stock_location_name: string;
   line_count: number;
@@ -119,7 +142,14 @@ export interface ProductionOrderFilters {
 }
 
 export interface ProductionOrderCreateIn {
-  quotation_id: number;
+  /** Uno de los dos, nunca los dos ni ninguno. Lo impone también la base. */
+  quotation_id?: number;
+  /**
+   * Fase 009K.4. El origen de muestra existe para las ITERACIONES: una muestra
+   * sucesora no tiene cotización de prototipo propia que cobrar, y sin esta
+   * puerta no podría fabricarse por el camino único.
+   */
+  prototype_id?: number;
   /** Obligatoria y explícita: el backend no resuelve un almacén por defecto. */
   stock_location_id: number;
   idempotency_key?: string;

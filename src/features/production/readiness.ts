@@ -9,6 +9,7 @@
  */
 
 import type {
+  ProductionOrderOrigin,
   ProductionOrderStatus,
   ProductionReadinessCode,
   ReadinessIssue,
@@ -48,6 +49,10 @@ const ISSUE_LABEL: Record<ProductionReadinessCode, string> = {
   INSUFFICIENT_STOCK: "Stock insuficiente",
   UNSUPPORTED_UOM_CONVERSION: "No se puede convertir la unidad con los datos disponibles",
   INVALID_STOCK_LOCATION: "El almacén de la orden ya no sirve para descontar",
+  // Fase 009K.4. Sólo salen en órdenes que fabrican una muestra.
+  PROTOTYPE_MISSING: "La muestra de esta orden ya no existe",
+  MISSING_MATERIAL_LINES: "La muestra no tiene materiales elegidos",
+  PROTOTYPE_QUOTATION_NOT_PAID: "La cotización de prototipo no consta cobrada",
 };
 
 export function describeIssue(issue: ReadinessIssue): string {
@@ -78,9 +83,17 @@ export function explainIssue(issue: ReadinessIssue): string | null {
         "El material se lleva en una unidad distinta de los gramos que pide " +
         "la receta, y la equivalencia depende del lote concreto de preparación."
       );
+    case "MISSING_MATERIAL_LINES":
+      return (
+        "El material de una muestra no se deduce de ninguna receta: se elige " +
+        "a mano. Sin líneas no hay nada que descontar."
+      );
+    case "PROTOTYPE_QUOTATION_NOT_PAID":
+      return "La muestra nace del cobro de su cotización de prototipo.";
     case "INSUFFICIENT_STOCK":
     case "MISSING_QUANTITY":
     case "INVALID_STOCK_LOCATION":
+    case "PROTOTYPE_MISSING":
       return null;
   }
 }
@@ -136,13 +149,21 @@ export function estaCobrada(payment: QuotationPaymentStatus | null): boolean {
  * y se pasa aparte en vez de meterla en `ready` a propósito: la disponibilidad
  * mide MATERIAL, y mezclarle una condición administrativa haría que la
  * pantalla dijese «falta material» cuando lo que falta es una factura.
+ *
+ * Fase 009K.4: la del cobro es de la rama de COTIZACIÓN. Una orden nacida de
+ * una muestra se crea DENTRO del propio cobro —no existe sin él— y su
+ * comprobación de pago viaja en la disponibilidad. Exigirle aquí un
+ * `quotation_payment_status` que siempre será nulo escondería para siempre su
+ * botón de arrancar.
  */
 export function canStart(
   status: ProductionOrderStatus,
   ready: boolean,
   payment: QuotationPaymentStatus | null,
+  origin: ProductionOrderOrigin = "QUOTATION",
 ): boolean {
-  return status === "CREATED" && ready && estaCobrada(payment);
+  if (status !== "CREATED" || !ready) return false;
+  return origin === "PROTOTYPE" || estaCobrada(payment);
 }
 
 export function canComplete(status: ProductionOrderStatus): boolean {

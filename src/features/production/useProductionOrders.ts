@@ -10,6 +10,7 @@ import {
   startProductionOrder,
 } from "@/api/production";
 import { MOVEMENTS_KEY, STOCK_KEY } from "@/features/masters/useMasters";
+import { PROTOTYPES_KEY } from "@/features/prototypes/usePrototypes";
 import { QUOTATIONS_KEY } from "@/features/quotations/useQuotations";
 import type { ProductionOrderCreateIn, ProductionOrderFilters } from "@/types/production";
 
@@ -57,6 +58,12 @@ export const useProductionOrderForQuotation = (quotationId: number | null) =>
  * Se invalida también el inventario porque arrancar descuenta material: dejar
  * los saldos en caché haría que la pantalla de stock siguiera mostrando un
  * barniz que ya se gastó.
+ *
+ * Y la MUESTRA, desde 009K.4. Arrancar una orden de prototipo escribe lo
+ * realmente consumido en sus líneas, y completarla o anularla mueve su estado
+ * físico. Sin esto, la ficha de la orden seguiría diciendo «Aún no consta»
+ * junto a un material que acababa de salir del almacén: el dato correcto ya
+ * estaba en el backend y la pantalla enseñaba el de antes.
  */
 function useInvalidateAfterTransition() {
   const qc = useQueryClient();
@@ -64,6 +71,7 @@ function useInvalidateAfterTransition() {
     void qc.invalidateQueries({ queryKey: PRODUCTION_KEY });
     void qc.invalidateQueries({ queryKey: STOCK_KEY });
     void qc.invalidateQueries({ queryKey: MOVEMENTS_KEY });
+    void qc.invalidateQueries({ queryKey: PROTOTYPES_KEY });
   };
 }
 

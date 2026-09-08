@@ -24,6 +24,7 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form";
+import { PrototypePaymentDialog } from "@/features/prototypeQuotations/PrototypePaymentDialog";
 import { CustomerSelectField } from "@/features/quotations/CustomerSelectField";
 import {
   useConsumableProducts,
@@ -160,6 +161,7 @@ export function PrototypeQuoterPage() {
   const [customerLabel, setCustomerLabel] = useState("");
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [costing, setCosting] = useState<PrototypeCostBreakdown | null>(null);
+  const [cobroAbierto, setCobroAbierto] = useState(false);
 
   const preview = usePrototypeQuotationPreview();
   const create = useCreatePrototypeQuotation();
@@ -283,24 +285,33 @@ export function PrototypeQuoterPage() {
   };
 
   /**
-   * Cobrar lleva a la muestra: la cotización comercial ya cumplió su papel y
-   * lo que sigue es taller.
+   * Cobrar y, si sale bien, ir a la orden que acaba de nacer.
    *
-   * La navegación va DENTRO de `onSuccess`. Si el cobro falla, la pantalla se
-   * queda donde está y enseña el error de siempre — mandar a Producción a
-   * alguien cuyo cobro no entró le haría creer que sí.
+   * Fase 009K.4: el destino es `/produccion/{orden}` y no la muestra. La
+   * ejecución física vive en la orden, y mandar aquí a la ficha del prototipo
+   * devolvería a la gente al segundo flujo que esta fase elimina.
    *
-   * Sin `prototype_id` no se navega. Cobrar SIEMPRE materializa la muestra
-   * —`mark_paid` la crea y la devuelve, y es idempotente—, así que esa
-   * ausencia no es un caso legítimo sino una respuesta rara: llevar a la lista
-   * de Producción con la esperanza de que el usuario encuentre la suya sería
-   * adivinar. El cobro sí quedó registrado, y al recargar la cotización
-   * aparece el botón «Ir a producción» con el identificador de verdad.
+   * Si el cobro FALLA no se navega a ninguna parte: se queda en la cotización,
+   * con el diálogo abierto y el error a la vista. Navegar tras un fallo haría
+   * creer que el cobro se registró.
+   *
+   * Y si la respuesta no trae NI orden NI muestra tampoco se navega. Cobrar
+   * siempre materializa las dos —`mark_paid` las crea y las devuelve, y es
+   * idempotente—, así que esa ausencia no es un caso legítimo sino una
+   * respuesta rara: llevar a la lista de Producción con la esperanza de que
+   * alguien encuentre la suya sería adivinar. El cobro sí quedó registrado, y
+   * al recargar la cotización aparece «Ir a producción» con el identificador
+   * de verdad.
    */
-  const handleCobrar = () => {
-    markPaid.mutate(undefined, {
+  const handleCobrar = (stockLocationId: number) => {
+    markPaid.mutate(stockLocationId, {
       onSuccess: (data) => {
-        if (data.prototype_id) {
+        setCobroAbierto(false);
+        if (data.production_order_id) {
+          navigate(`/produccion/${data.production_order_id}`);
+        } else if (data.prototype_id) {
+          // Cobros anteriores a 009K.4: hay muestra pero no hay orden, y no se
+          // le fabrica una ahora. Se ofrece la vista histórica de la muestra.
           navigate(`/produccion/prototipos/${data.prototype_id}`);
         }
       },
@@ -343,11 +354,21 @@ export function PrototypeQuoterPage() {
             ) : null}
             {persisted?.prototype_code ? (
               <Link
-                to={`/produccion/prototipos/${persisted.prototype_id}`}
+                to={
+                  persisted.production_order_id
+                    ? `/produccion/${persisted.production_order_id}`
+                    : `/produccion/prototipos/${persisted.prototype_id}`
+                }
                 className="text-[11px] text-zinc-500 hover:underline"
               >
                 Muestra:{" "}
                 <span className="font-mono">{persisted.prototype_code}</span>
+                {persisted.production_order_code ? (
+                  <>
+                    {" · "}
+                    <span className="font-mono">{persisted.production_order_code}</span>
+                  </>
+                ) : null}
               </Link>
             ) : null}
           </div>
@@ -920,7 +941,7 @@ export function PrototypeQuoterPage() {
           puedeEmitir={Boolean(quotationId) && status === "DRAFT"}
           onGuardar={guardar}
           onEmitir={() => confirm.mutate()}
-          onCobrar={handleCobrar}
+          onCobrar={() => setCobroAbierto(true)}
         />
       ) : null}
 
@@ -973,13 +994,18 @@ export function PrototypeQuoterPage() {
           ) : null}
           {persisted?.status === "CONFIRMED" &&
           persisted.payment_status === "UNPAID" ? (
-            <SecondaryButton disabled={busy} onClick={handleCobrar}>
+            <SecondaryButton disabled={busy} onClick={() => setCobroAbierto(true)}>
               Registrar cobro
             </SecondaryButton>
           ) : null}
-          {persisted?.payment_status === "PAID" && persisted.prototype_id ? (
+          {persisted?.payment_status === "PAID" &&
+          (persisted.production_order_id || persisted.prototype_id) ? (
             <Link
-              to={`/produccion/prototipos/${persisted.prototype_id}`}
+              to={
+                persisted.production_order_id
+                  ? `/produccion/${persisted.production_order_id}`
+                  : `/produccion/prototipos/${persisted.prototype_id}`
+              }
               className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-zinc-800"
             >
               Ir a producción
@@ -987,6 +1013,15 @@ export function PrototypeQuoterPage() {
           ) : null}
         </div>
       </footer>
+
+      {cobroAbierto ? (
+        <PrototypePaymentDialog
+          onConfirm={handleCobrar}
+          onClose={() => setCobroAbierto(false)}
+          pending={markPaid.isPending}
+          error={markPaid.error}
+        />
+      ) : null}
     </div>
   );
 }
