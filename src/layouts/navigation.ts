@@ -40,11 +40,21 @@ export const NAVIGATION: readonly NavigationItem[] = [
     description: "Panel principal y accesos rápidos del taller.",
   },
   {
-    label: "Cotizador",
+    label: "Cotizador V2",
+    to: "/cotizador-v2",
+    enabled: true,
+    icon: "file-text",
+    description: "Motor nuevo del cotizador. En construcción por fases (familia 010).",
+  },
+  {
+    // Fase 010A: el Cotizador de siempre pasa a llamarse Legacy mientras dure
+    // la transicion. Sigue operativo y sus cotizaciones no se tocan; el nombre
+    // solo deja de ser ambiguo ahora que hay dos motores.
+    label: "Cotizador Legacy",
     to: "/cotizador/nuevo",
     enabled: true,
     icon: "file-text",
-    description: "Construir cotizaciones multiproducto con simulación integral.",
+    description: "Cotizador histórico. Se mantiene durante la transición a V2.",
   },
   {
     label: "Cotizaciones",

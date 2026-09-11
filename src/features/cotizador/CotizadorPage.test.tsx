@@ -1079,7 +1079,9 @@ describe("Cotizador integral", () => {
       fetchSpy.mock.calls.some(([url]) => String(url).includes("/quotation-builder/preview")),
     ).toBe(false);
 
-    await user.click(screen.getByRole("link", { name: "Cotizador" }));
+    // Fase 010A: el enlace del Cotizador historico se llama «Cotizador
+    // Legacy» mientras dure la transicion a V2. La pantalla es la misma.
+    await user.click(screen.getByRole("link", { name: "Cotizador Legacy" }));
     expect(await screen.findByRole("heading", { name: "Nuevo cotizador." })).toBeInTheDocument();
     expect(screen.getByLabelText(/Nombre \/ referencia/i)).toBeEnabled();
     expect(screen.getByLabelText(/Nombre \/ referencia/i)).toHaveValue("");
