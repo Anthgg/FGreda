@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
 import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
+import { CotizadorV2Page } from "@/features/cotizadorV2/CotizadorV2Page";
 import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
 import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
@@ -123,6 +124,13 @@ export function AppRoutes() {
           <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
           <Route path="cotizador/nuevo" element={<CotizadorPage />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
+          {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior.
+              `cotizador-v2` no comparte prefijo con `cotizador`, asi que
+              ninguna direccion de un motor puede resolver en la pantalla del
+              otro. El Cotizador de arriba sigue siendo el historico y sus
+              cotizaciones no se recalculan. */}
+          <Route path="cotizador-v2" element={<CotizadorV2Page />} />
+          <Route path="cotizador-v2/:id" element={<CotizadorV2Page />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

@@ -78,6 +78,40 @@ describe("rutas protegidas y Dashboard", () => {
     expect(enlaces).toContain("/cotizaciones");
   });
 
+  it("Fase 010A: el menu distingue el Cotizador V2 del Cotizador Legacy", async () => {
+    mockFetch(() => sessionResponse());
+
+    renderApp(["/"]);
+    await screen.findByRole("heading", { name: /inicio/i });
+
+    // Dos entradas, dos destinos. Que el historico se llame «Legacy» no es
+    // cosmetico: desde 010A hay dos motores y un menu que dijera «Cotizador» a
+    // secas obligaria a adivinar cual se esta abriendo.
+    expect(screen.getByRole("link", { name: "Cotizador V2" })).toHaveAttribute(
+      "href",
+      "/cotizador-v2",
+    );
+    expect(screen.getByRole("link", { name: "Cotizador Legacy" })).toHaveAttribute(
+      "href",
+      "/cotizador/nuevo",
+    );
+  });
+
+  it("Fase 010A: /cotizador-v2 abre el Cotizador V2 y no el historico", async () => {
+    mockFetch((url) =>
+      url.includes("/quotations-v2")
+        ? jsonResponse(200, { items: [], total: 0 })
+        : sessionResponse(),
+    );
+
+    renderApp(["/cotizador-v2"]);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /cotizador v2/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Nuevo cotizador." })).not.toBeInTheDocument();
+  });
+
   it("los modulos hasta Fase 005 son navegables desde el menu", async () => {
     mockFetch(() => sessionResponse());
 
