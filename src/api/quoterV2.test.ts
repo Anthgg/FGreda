@@ -9,8 +9,23 @@ const SRC = resolve(__dirname, "..");
 
 function imports(relativePath: string): string[] {
   const contenido = readFileSync(resolve(SRC, relativePath), "utf-8");
-  return [...contenido.matchAll(/from\s+"([^"]+)"/g)].map((match) => match[1] as string);
+  // Comillas simples tambien: si un formateador las cambia, una regex que
+  // solo mire las dobles dejaria de ver los imports y la prueba pasaria en
+  // verde sin comprobar nada.
+  return [...contenido.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1] as string);
 }
+
+//: Todo el dominio V2 del frontend. La lista crece con cada fase: un modulo
+//: nuevo que no este aqui es un modulo que puede importar Legacy sin que nadie
+//: se entere, y el docstring que promete aislamiento pasaria a ser falso.
+const V2_MODULES = [
+  "api/quoterV2.ts",
+  "api/quoterV2Settings.ts",
+  "types/quoterV2.ts",
+  "types/quoterV2Settings.ts",
+  "features/cotizadorV2/useQuoterV2.ts",
+  "features/settings/useQuoterV2Settings.ts",
+];
 
 describe("cliente del Cotizador V2", () => {
   it("apunta a una ruta que no comparte segmento con el Cotizador Legacy", () => {
@@ -22,7 +37,7 @@ describe("cliente del Cotizador V2", () => {
 
   it("no importa el cliente ni los tipos del Cotizador Legacy", () => {
     const prohibidos = ["@/api/quotations", "@/api/quotationBuilder", "@/types/quotationBuilder"];
-    for (const modulo of ["api/quoterV2.ts", "types/quoterV2.ts", "features/cotizadorV2/useQuoterV2.ts"]) {
+    for (const modulo of V2_MODULES) {
       const encontrados = imports(modulo).filter((ruta) => prohibidos.includes(ruta));
       expect(encontrados, `${modulo} importa Legacy: ${encontrados.join(", ")}`).toHaveLength(0);
     }
