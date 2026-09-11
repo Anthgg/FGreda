@@ -9,6 +9,7 @@ import { CommercialSection } from "@/features/settings/CommercialSection";
 import { CompanySection } from "@/features/settings/CompanySection";
 import { DocumentsSection } from "@/features/settings/DocumentsSection";
 import { describeError } from "@/features/settings/messages";
+import { QuoterV2Section } from "@/features/settings/QuoterV2Section";
 import { SequencesSection } from "@/features/settings/SequencesSection";
 import { UsersSection } from "@/features/settings/UsersSection";
 import {
@@ -18,11 +19,22 @@ import {
   useSequences,
 } from "@/features/settings/useSettings";
 
-type TabId = "empresa" | "comercial" | "documentos" | "numeracion" | "usuarios" | "historial";
+type TabId =
+  | "empresa"
+  | "comercial"
+  | "cotizador-v2"
+  | "documentos"
+  | "numeracion"
+  | "usuarios"
+  | "historial";
 
 const TABS: readonly { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "empresa", label: "Empresa" },
   { id: "comercial", label: "Comercial" },
+  // Fase 010B. Los defaults con los que nace una cotizacion V2. Van aqui y
+  // no dentro del flujo de cotizacion: configurar es decidir para TODAS las
+  // futuras, no para la que se tiene delante.
+  { id: "cotizador-v2", label: "Cotizador V2" },
   { id: "documentos", label: "Documentos" },
   { id: "numeracion", label: "Numeración" },
   // Fase 009K.2. Quién entra y con qué rol es política de la casa, igual que el
@@ -126,6 +138,7 @@ export function SettingsPage() {
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "empresa" ? <CompanySection canEdit={isAdmin} /> : null}
               {tab === "comercial" ? <CommercialSection canEdit={isAdmin} /> : null}
+              {tab === "cotizador-v2" ? <QuoterV2Section canEdit={isAdmin} /> : null}
               {tab === "documentos" ? <DocumentsSection canEdit={isAdmin} /> : null}
               {tab === "numeracion" ? <SequencesSection canEdit={isAdmin} /> : null}
               {tab === "usuarios" ? <UsersSection canEdit={isAdmin} /> : null}

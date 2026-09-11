@@ -23,6 +23,14 @@ export type V2QuotationStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
 /** Por menor / por mayor. Lo elige la persona; el sistema nunca lo cambia solo. */
 export type V2ProductionType = "RETAIL" | "WHOLESALE";
 
+/**
+ * A quién se cotiza, a efectos de TARIFA de horno.
+ *
+ * Un cliente externo y un alumno pagan la misma quema a precios distintos. Se
+ * elige y se guarda: nunca se deduce del nombre del tercero.
+ */
+export type V2CustomerKind = "EXTERNAL" | "STUDENT";
+
 export interface V2QuotationCreateInput {
   name?: string | null;
   customer_id?: number | null;
