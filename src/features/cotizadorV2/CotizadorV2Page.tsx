@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "@/api/client";
 import { PrimaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { V2ProductLines } from "@/features/cotizadorV2/V2ProductLines";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { Badge, EmptyState, MasterHeader, Panel } from "@/features/masters/MasterTable";
 import {
@@ -141,6 +142,25 @@ function V2QuotationDetail({ id }: { id: number }) {
   );
 }
 
+/**
+ * La ficha completa: la cabecera y, debajo, sus materiales.
+ *
+ * Los materiales van fuera del panel de la cabecera a propósito: son otra
+ * cosa. La cabecera dice de quién es la cotización; los materiales, de qué
+ * está hecha.
+ */
+function V2QuotationDetailPage({ id }: { id: number }) {
+  const query = useV2Quotation(id);
+  const editable = query.data?.status === "DRAFT";
+
+  return (
+    <div className="space-y-6">
+      <V2QuotationDetail id={id} />
+      {query.data ? <V2ProductLines quotationId={id} canEdit={editable} /> : null}
+    </div>
+  );
+}
+
 export function CotizadorV2Page() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -187,7 +207,7 @@ export function CotizadorV2Page() {
 
       {isDetail ? (
         validId ? (
-          <V2QuotationDetail id={parsedId} />
+          <V2QuotationDetailPage id={parsedId} />
         ) : (
           <EmptyState message="Esa cotización V2 no existe. Comprueba el enlace." />
         )
