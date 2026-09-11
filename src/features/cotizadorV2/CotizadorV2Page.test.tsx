@@ -116,6 +116,41 @@ describe("Cotizador V2 (Fase 010A)", () => {
     expect(await screen.findByText(/esa cotización v2 no existe/i)).toBeInTheDocument();
   });
 
+  it("una ficha con id no numérico tampoco inventa: no cae en el formulario de alta", async () => {
+    mockV2();
+
+    renderApp(["/cotizador-v2/loquesea"]);
+
+    expect(await screen.findByText(/esa cotización v2 no existe/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /crear cotización v2/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("entrar directo a una ficha no pide además el listado", async () => {
+    const fetchSpy = mockV2();
+
+    renderApp(["/cotizador-v2/7"]);
+    await screen.findByText(COTIZACION_V2.code);
+
+    const listados = fetchSpy.mock.calls
+      .map(([url]) => String(url))
+      .filter((ruta) => /\/quotations-v2(\?|$)/.test(ruta));
+    expect(listados).toHaveLength(0);
+  });
+
+  it("desde la ficha se puede volver al listado", async () => {
+    mockV2();
+
+    renderApp(["/cotizador-v2/7"]);
+    await screen.findByText(COTIZACION_V2.code);
+
+    expect(screen.getByRole("link", { name: /cotizaciones v2/i })).toHaveAttribute(
+      "href",
+      "/cotizador-v2",
+    );
+  });
+
   it("no muestra ningún importe: en 010A todavía no hay motor de cálculo", async () => {
     mockV2({ detail: jsonResponse(200, COTIZACION_V2) });
 

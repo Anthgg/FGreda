@@ -12,10 +12,14 @@ import type { V2QuotationCreateInput } from "@/types/quoterV2";
  */
 export const QUOTER_V2_KEY = ["quotations-v2"] as const;
 
-export const useV2Quotations = (filters: Record<string, unknown> = {}) =>
+export const useV2Quotations = (
+  filters: Record<string, unknown> = {},
+  options: { enabled?: boolean } = {},
+) =>
   useQuery({
     queryKey: [...QUOTER_V2_KEY, filters],
     queryFn: () => fetchV2Quotations(filters),
+    enabled: options.enabled ?? true,
   });
 
 export const useV2Quotation = (id: number | null) =>

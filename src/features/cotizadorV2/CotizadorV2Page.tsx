@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
 import { PrimaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
@@ -108,6 +108,9 @@ function V2QuotationDetail({ id }: { id: number }) {
   return (
     <Panel>
       <div className="flex flex-wrap items-center gap-3">
+        <Link to="/cotizador-v2" className="text-xs text-zinc-500 hover:underline">
+          &larr; Cotizaciones V2
+        </Link>
         <h2 className="text-base font-semibold text-zinc-900">{quotation.code}</h2>
         <EngineBadge />
         <Badge tone={quotation.status === "CONFIRMED" ? "positive" : "warning"}>
@@ -146,11 +149,17 @@ export function CotizadorV2Page() {
   const [productionType, setProductionType] = useState<V2ProductionType>("RETAIL");
   const [notes, setNotes] = useState("");
 
-  const create = useCreateV2Quotation();
-  const listado = useV2Quotations({ limit: 10 });
+  // `/cotizador-v2/loquesea` es una FICHA que no existe, no un alta nueva.
+  // Sin esta distincion la pantalla mostraria el formulario de creacion con
+  // una direccion de detalle en la barra, y nadie entenderia por que.
+  const parsedId = id === undefined ? null : Number(id);
+  const isDetail = id !== undefined;
+  const validId = parsedId !== null && Number.isInteger(parsedId) && parsedId > 0;
 
-  const parsedId = id ? Number(id) : null;
-  const isDetail = parsedId !== null && Number.isFinite(parsedId);
+  const create = useCreateV2Quotation();
+  // Solo en la vista de listado: entrar directo a una ficha no tiene por que
+  // traerse ademas las diez ultimas cotizaciones que nadie va a mirar.
+  const listado = useV2Quotations({ limit: 10 }, { enabled: !isDetail });
 
   const handleCreate = () => {
     create.mutate(
@@ -177,7 +186,11 @@ export function CotizadorV2Page() {
       />
 
       {isDetail ? (
-        <V2QuotationDetail id={parsedId} />
+        validId ? (
+          <V2QuotationDetail id={parsedId} />
+        ) : (
+          <EmptyState message="Esa cotización V2 no existe. Comprueba el enlace." />
+        )
       ) : (
         <>
           <Panel>
