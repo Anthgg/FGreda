@@ -13,6 +13,7 @@ import type { V2CustomerKind, V2ProductionType } from "@/types/quoterV2";
 import {
   FIRING_TYPE_LABEL,
   type FiringType,
+  type V2KilnRate,
   type V2SettingsUpdateInput,
   type V2SettingsValues,
 } from "@/types/quoterV2Settings";
@@ -68,7 +69,29 @@ function toDraft(values: V2SettingsValues): Draft {
 /** Validación de experiencia de usuario. El backend la repite entera. */
 function validate(draft: Draft): Partial<Record<string, string>> {
   const errors: Partial<Record<string, string>> = {};
-  const numero = (campo: string) => Number(String(draft[campo] ?? "").trim());
+  const crudo = (campo: string) => String(draft[campo] ?? "").trim();
+  const numero = (campo: string) => Number(crudo(campo));
+
+  // Un campo vacío NO es un cero: `Number("")` da 0 y pasaría cualquier
+  // comprobación de «>= 0», enviando una cadena vacía que el backend rechaza
+  // con un 422 que el usuario no esperaba.
+  for (const campo of [
+    "workday_hours",
+    "space_service_cost_per_day",
+    "administrative_cost_per_quote",
+    "quotation_validity_days",
+    "default_exchange_rate",
+    "commercial_factor_min",
+    "commercial_factor_default",
+    "commercial_factor_max",
+    "illustration_daily_rate",
+    "illustration_pieces_per_workday",
+  ]) {
+    if (crudo(campo) === "" || Number.isNaN(numero(campo))) {
+      errors[campo] = "Indique un valor.";
+    }
+  }
+  if (Object.keys(errors).length > 0) return errors;
 
   if (!(numero("workday_hours") > 0)) {
     // Cero horas sería una división por cero en cuanto se calcule una tarifa
@@ -96,6 +119,9 @@ function validate(draft: Draft): Partial<Record<string, string>> {
   }
   if (!(porDefecto >= min && porDefecto <= max)) {
     errors.commercial_factor_default = "Tiene que estar entre el mínimo y el máximo.";
+  }
+  if (!(numero("illustration_daily_rate") >= 0)) {
+    errors.illustration_daily_rate = "No puede ser negativo.";
   }
   if (!(numero("illustration_pieces_per_workday") > 0)) {
     errors.illustration_pieces_per_workday = "Indique cuántas piezas se ilustran por jornada.";
@@ -135,16 +161,25 @@ function toPayload(draft: Draft, version: number): V2SettingsUpdateInput {
   return payload;
 }
 
-export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
+function QuoterV2Form({ canEdit }: { canEdit: boolean }) {
   const query = useV2Settings();
   const save = useUpdateV2Settings();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
   const values = query.data?.settings;
+  // El borrador se rellena UNA vez por version cargada, no cada vez que la
+  // consulta devuelve un objeto nuevo. Sin el guardia, cualquier refetch
+  // —volver a la pestaña, una invalidación— reescribiría el formulario con los
+  // valores del servidor y el usuario vería desaparecer lo que estaba
+  // escribiendo, sin ningún aviso.
+  const [loadedVersion, setLoadedVersion] = useState<number | null>(null);
   useEffect(() => {
-    if (values) setDraft(toDraft(values));
-  }, [values]);
+    if (values && values.version !== loadedVersion) {
+      setDraft(toDraft(values));
+      setLoadedVersion(values.version);
+    }
+  }, [values, loadedVersion]);
 
   if (query.isPending) return <Spinner className="size-5" label="Cargando configuración V2..." />;
   if (query.isError || !query.data || !draft) {
@@ -168,7 +203,11 @@ export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    // `noValidate`: la validación del navegador bloquearía el envío de un
+    // campo `required` vacío ANTES de llegar a la nuestra, con un mensaje
+    // que no controlamos y en el idioma del navegador. Con una sola puerta,
+    // los mensajes son los del producto y dicen qué corregir.
+    <form onSubmit={handleSubmit} noValidate className="space-y-8">
       <p className="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-4 text-xs text-zinc-600">
         Estos valores definen con qué nace una cotización <strong>nueva</strong> del Cotizador V2.
         Las cotizaciones que ya existen no cambian: cada una guardó su propia copia al crearse.
@@ -354,8 +393,6 @@ export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
         />
       </FormSection>
 
-      <KilnRatesTable canEdit={canEdit} />
-
       {canEdit ? (
         <div className="mt-8 border-t border-black/[0.04] pt-6">
           {save.isError ? (
@@ -380,6 +417,24 @@ export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
 }
 
 /**
+ * La sección entera: el formulario de configuración y, FUERA de él, la tabla
+ * de hornos.
+ *
+ * Fuera a propósito. Anidada dentro del `<form>`, pulsar Enter mientras se
+ * edita una tarifa dispararía el submit del formulario padre y guardaría la
+ * configuración global en lugar de la fila del horno —con su control de
+ * versiones y todo—, que es justo lo que el usuario no pidió.
+ */
+export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
+  return (
+    <div className="space-y-8">
+      <QuoterV2Form canEdit={canEdit} />
+      <KilnRatesTable canEdit={canEdit} />
+    </div>
+  );
+}
+
+/**
  * Costo real del gas y tarifas comerciales, por horno y tipo de quema.
  *
  * Tres números distintos a propósito: lo que cuesta encender no es lo que se
@@ -395,10 +450,22 @@ function KilnRatesTable({ canEdit }: { canEdit: boolean }) {
   const rates = query.data?.kiln_rates ?? [];
 
   const guardar = (kilnId: number, firingType: FiringType) => {
-    save.mutate(
-      { kilnId, firingType, payload: row },
-      { onSuccess: () => setEditing(null) },
-    );
+    save.mutate({ kilnId, firingType, payload: row }, { onSuccess: () => setEditing(null) });
+  };
+
+  /**
+   * Al entrar en edición se copian los TRES valores actuales, no un objeto
+   * vacío. Con `{}`, cambiar solo una casilla enviaría únicamente esa y las
+   * otras dos dependerían de que el backend las conserve: funciona, pero deja
+   * el contrato al azar de una decisión que está en el otro lado.
+   */
+  const empezarEdicion = (rate: V2KilnRate) => {
+    setRow({
+      gas_cost: rate.gas_cost,
+      external_rate: rate.external_rate,
+      student_rate: rate.student_rate,
+    });
+    setEditing(`${rate.kiln_id}-${rate.firing_type}`);
   };
 
   return (
@@ -407,9 +474,14 @@ function KilnRatesTable({ canEdit }: { canEdit: boolean }) {
       description="Costo real del gas y tarifas de quema. Se configuran por horno; el sistema no adivina cuál es el chico."
     >
       <div className="sm:col-span-2 overflow-x-auto">
+        {save.isError ? (
+          <p role="alert" className="mb-3 text-xs text-red-600">
+            {describeError(save.error)}
+          </p>
+        ) : null}
         {rates.length === 0 ? (
           <p className="text-xs text-zinc-500">
-            Todavía no hay tarifas V2. Dé de alta un horno en Quemas y configure aquí su costo de
+            Todavía no hay hornos activos. Dé uno de alta en Quemas y aquí podrá fijar su costo de
             gas y sus tarifas.
           </p>
         ) : (
@@ -443,11 +515,14 @@ function KilnRatesTable({ canEdit }: { canEdit: boolean }) {
                             onChange={(event) =>
                               setRow((actual) => ({ ...actual, [campo]: event.target.value }))
                             }
+                            disabled={save.isPending}
                             inputMode="decimal"
                             className="w-24 rounded-lg border border-black/10 px-2 py-1"
                           />
-                        ) : (
+                        ) : rate.configured ? (
                           rate[campo]
+                        ) : (
+                          <span className="text-zinc-400">sin configurar</span>
                         )}
                       </td>
                     ))}
@@ -455,14 +530,21 @@ function KilnRatesTable({ canEdit }: { canEdit: boolean }) {
                       <td className="py-2">
                         <button
                           type="button"
+                          disabled={save.isPending}
                           onClick={() =>
                             enEdicion
                               ? guardar(rate.kiln_id, rate.firing_type)
-                              : (setRow({}), setEditing(clave))
+                              : empezarEdicion(rate)
                           }
-                          className="text-xs font-semibold text-zinc-700 underline underline-offset-2 cursor-pointer"
+                          className="text-xs font-semibold text-zinc-700 underline underline-offset-2 cursor-pointer disabled:opacity-40"
                         >
-                          {enEdicion ? "Guardar" : "Editar"}
+                          {enEdicion && save.isPending
+                            ? "Guardando..."
+                            : enEdicion
+                              ? "Guardar"
+                              : rate.configured
+                                ? "Editar"
+                                : "Configurar"}
                         </button>
                       </td>
                     ) : null}

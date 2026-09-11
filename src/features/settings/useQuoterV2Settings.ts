@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchV2Settings, setV2KilnRate, updateV2Settings } from "@/api/quoterV2Settings";
-import { QUOTER_V2_KEY } from "@/features/cotizadorV2/useQuoterV2";
 import type {
   FiringType,
   V2KilnRateInput,
@@ -15,20 +14,18 @@ export const useV2Settings = () =>
   useQuery({ queryKey: V2_SETTINGS_KEY, queryFn: fetchV2Settings });
 
 /**
- * Guardar la configuración invalida también el listado de cotizaciones V2.
+ * Guardar solo refresca la configuración.
  *
- * No porque cambie las que ya existen —no las cambia: cada una se llevó su
- * copia— sino porque la SIGUIENTE nacerá con otros números, y la pantalla que
- * los muestre debe pedirlos de nuevo.
+ * NO invalida el listado de cotizaciones, y eso es exactamente lo que dice el
+ * principio de la fase: las que ya existen no cambian —cada una se llevó su
+ * copia— y la siguiente todavía no está en caché. Invalidarlo sugeriría que
+ * mover un default toca lo ya cotizado, que es justo lo contrario.
  */
 export const useUpdateV2Settings = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (payload: V2SettingsUpdateInput) => updateV2Settings(payload),
-    onSuccess: (data) => {
-      client.setQueryData(V2_SETTINGS_KEY, data);
-      void client.invalidateQueries({ queryKey: QUOTER_V2_KEY });
-    },
+    onSuccess: (data) => client.setQueryData(V2_SETTINGS_KEY, data),
   });
 };
 

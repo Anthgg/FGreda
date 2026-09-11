@@ -59,6 +59,14 @@ export interface V2KilnRate {
   gas_cost: string;
   external_rate: string;
   student_rate: string;
+  /**
+   * Si alguien la puso.
+   *
+   * La rejilla llega completa —todos los hornos, por baja y por alta— aunque
+   * no haya ni una tarifa guardada; es lo que permite configurar la primera.
+   * Los huecos vienen en cero, y este campo los distingue de un cero elegido.
+   */
+  configured: boolean;
 }
 
 export interface V2SettingsPage {

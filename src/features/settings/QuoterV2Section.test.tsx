@@ -48,6 +48,17 @@ const PAGINA = {
       gas_cost: "35.000000",
       external_rate: "200.000000",
       student_rate: "90.000000",
+      configured: true,
+    },
+    {
+      kiln_id: 1,
+      kiln_code: "KILN-001",
+      kiln_name: "Horno chico",
+      firing_type: "HIGH",
+      gas_cost: "0.000000",
+      external_rate: "0.000000",
+      student_rate: "0.000000",
+      configured: false,
     },
   ],
   reference_rates: {
@@ -195,12 +206,96 @@ describe("Configuración del Cotizador V2 (Fase 010B)", () => {
     renderApp(["/configuracion"]);
     await abrirPestana();
 
-    const fila = (await screen.findByText("Horno chico")).closest("tr");
-    expect(fila).not.toBeNull();
+    // La fila de BAJA, que es la que trae los tres numeros configurados.
+    const filas = await screen.findAllByText("Horno chico");
+    const fila = filas
+      .map((celda) => celda.closest("tr"))
+      .find((tr) => tr?.textContent?.includes("Baja"));
+    expect(fila).toBeTruthy();
     const celdas = within(fila as HTMLElement);
     expect(celdas.getByText("35.000000")).toBeInTheDocument();
     expect(celdas.getByText("200.000000")).toBeInTheDocument();
     expect(celdas.getByText("90.000000")).toBeInTheDocument();
+  });
+
+  it("un horno sin tarifa se puede configurar desde la tabla", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+    const user = await abrirPestana();
+
+    // La rejilla llega completa, asi que la fila de alta existe aunque nadie
+    // haya guardado nada todavia. Sin eso no habria por donde empezar.
+    await screen.findAllByText("Horno chico");
+    const botones = screen.getAllByRole("button", { name: /configurar/i });
+    expect(botones.length).toBeGreaterThan(0);
+    await user.click(botones[0] as HTMLElement);
+
+    expect(screen.getAllByLabelText(/gas_cost de Horno chico/i).length).toBeGreaterThan(0);
+  });
+
+  it("una tarifa sin configurar no se confunde con un cero elegido", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+    await abrirPestana();
+
+    await screen.findAllByText("Horno chico");
+    expect(screen.getAllByText(/sin configurar/i).length).toBeGreaterThan(0);
+  });
+
+  it("un fallo al guardar una tarifa se explica, no se pierde en silencio", async () => {
+    mockSettings({ save: errorResponse(422, "VALIDATION_ERROR", "Importe invalido") });
+    renderApp(["/configuracion"]);
+    const user = await abrirPestana();
+
+    await screen.findAllByText("Horno chico");
+    await user.click(screen.getAllByRole("button", { name: /^editar$/i })[0] as HTMLElement);
+    await user.click(screen.getByRole("button", { name: /^guardar$/i }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("editar una tarifa envia los tres importes, no solo el tocado", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+    const user = await abrirPestana();
+
+    await screen.findAllByText("Horno chico");
+    await user.click(screen.getAllByRole("button", { name: /^editar$/i })[0] as HTMLElement);
+    const campo = screen.getByLabelText(/external_rate de Horno chico LOW/i);
+    await user.clear(campo);
+    await user.type(campo, "250");
+    await user.click(screen.getByRole("button", { name: /^guardar$/i }));
+
+    await waitFor(() => {
+      const guardado = fetchSpy.mock.calls.find(([url]) => String(url).includes("/kiln-rates/"));
+      expect(guardado).toBeDefined();
+      const cuerpo = JSON.parse(String((guardado?.[1] as RequestInit).body));
+      expect(cuerpo).toEqual({
+        gas_cost: "35.000000",
+        external_rate: "250",
+        student_rate: "90.000000",
+      });
+    });
+  });
+
+  it("un campo obligatorio vacio no se envia como cero", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+    const user = await abrirPestana();
+
+    // `Number("")` da 0 y pasaria cualquier comprobacion de «>= 0».
+    const campo = await screen.findByLabelText(/espacio y servicios por día/i);
+    await user.clear(campo);
+    expect(campo).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: /guardar configuración v2/i }));
+
+    expect(await screen.findByText(/indique un valor/i)).toBeInTheDocument();
+    const guardados = fetchSpy.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes("/quoter-v2/settings") &&
+        (init as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(guardados).toHaveLength(0);
   });
 
   it("un conflicto de versión se explica en vez de perderse", async () => {
