@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { FormSection, PrimaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
+import { V2MaterialsTable } from "@/features/settings/V2MaterialsTable";
 import {
   useSetV2KilnRate,
   useUpdateV2Settings,
@@ -417,8 +418,8 @@ function QuoterV2Form({ canEdit }: { canEdit: boolean }) {
 }
 
 /**
- * La sección entera: el formulario de configuración y, FUERA de él, la tabla
- * de hornos.
+ * La sección entera: el formulario de configuración y, FUERA de él, las tablas
+ * de hornos y de materiales.
  *
  * Fuera a propósito. Anidada dentro del `<form>`, pulsar Enter mientras se
  * edita una tarifa dispararía el submit del formulario padre y guardaría la
@@ -430,6 +431,7 @@ export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
     <div className="space-y-8">
       <QuoterV2Form canEdit={canEdit} />
       <KilnRatesTable canEdit={canEdit} />
+      <V2MaterialsTable canEdit={canEdit} />
     </div>
   );
 }

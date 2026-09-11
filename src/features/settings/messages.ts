@@ -78,6 +78,24 @@ export function describeError(error: unknown): string {
     case "IDENTITY_LOOKUP_UNAVAILABLE":
       return "La consulta no esta disponible en este momento. Intente mas tarde.";
 
+    // ---- Fase 010C: materiales del Cotizador V2 ----------------------
+    case "V2_MATERIAL_VERSION_CONFLICT":
+      return (
+        "Otra persona valorizo este material mientras usted lo editaba. " +
+        "Recargue para ver su valor actual y vuelva a aplicar el suyo."
+      );
+    case "V2_MATERIAL_KIND_MISMATCH":
+      return "Ese material esta valorizado para otro uso: una pasta no puede cobrarse como esmalte.";
+    case "V2_MATERIAL_PRODUCT_INVALID":
+      return (
+        "Ese producto ya no puede usarse como material: esta inactivo, cambio " +
+        "de tipo o se quedo sin unidad base."
+      );
+    case "V2_MATERIAL_NOT_FOUND":
+      return "Ese material no esta valorizado todavia. Valorícelo en Configuracion y vuelva.";
+    case "V2_QUOTATION_NOT_EDITABLE":
+      return "Esta cotizacion ya no es un borrador, asi que su material quedo fijado.";
+
     // ---- Fase 009E: costeo comercial ---------------------------------
     // El backend ya manda estos con texto humano, pero se fijan aqui para
     // que un cambio de redaccion alla no se lleve por delante la pantalla.

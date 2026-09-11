@@ -8,6 +8,7 @@ import {
   REFERENCE_DATA,
   SEQUENCES,
 } from "@/test/settingsFixtures";
+import { V2_MATERIALS, V2_MATERIAL_PRODUCTS } from "@/test/quoterV2Fixtures";
 import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp } from "@/test/utils";
 
 const CONFIG = {
@@ -88,6 +89,17 @@ function mockSettings(overrides: { page?: Response; save?: Response } = {}) {
     // El resto de Configuración, con las fixtures reales: la pantalla no monta
     // ninguna pestaña hasta que TODAS sus consultas resuelven, asi que una
     // respuesta inventada aqui esconderia la pestaña que se quiere probar.
+    // La pestaña monta tambien la tabla de materiales (010C): sin estas dos
+    // respuestas la pantalla se queda cargando y no se llega al formulario.
+    if (url.includes("/quoter-v2/materials")) return jsonResponse(200, V2_MATERIALS);
+    if (url.includes("/products")) {
+      // El filtro se respeta: la pantalla pregunta por materia prima y por
+      // preparado en dos consultas, y devolver la lista entera a las dos
+      // duplicaria cada material.
+      const tipo = new URL(url, "http://x").searchParams.get("product_type");
+      const items = V2_MATERIAL_PRODUCTS.filter((p) => p.product_type === tipo);
+      return jsonResponse(200, { items, total: items.length, limit: 200, offset: 0 });
+    }
     if (url.includes("/settings/reference-data")) return jsonResponse(200, REFERENCE_DATA);
     if (url.includes("/settings/company/logo")) return new Response(null, { status: 404 });
     if (url.includes("/settings/company")) return jsonResponse(200, COMPANY_FILLED);

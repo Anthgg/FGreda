@@ -21,10 +21,19 @@ function imports(relativePath: string): string[] {
 const V2_MODULES = [
   "api/quoterV2.ts",
   "api/quoterV2Settings.ts",
+  "api/quoterV2Materials.ts",
   "types/quoterV2.ts",
   "types/quoterV2Settings.ts",
+  "types/quoterV2Materials.ts",
   "features/cotizadorV2/useQuoterV2.ts",
+  "features/cotizadorV2/useQuoterV2Materials.ts",
   "features/settings/useQuoterV2Settings.ts",
+  // Tambien las pantallas: el aislamiento se rompe igual de facil desde un
+  // componente que desde un cliente HTTP, y ahi no hay nadie mirando.
+  "features/cotizadorV2/CotizadorV2Page.tsx",
+  "features/cotizadorV2/V2ProductLines.tsx",
+  "features/settings/QuoterV2Section.tsx",
+  "features/settings/V2MaterialsTable.tsx",
 ];
 
 describe("cliente del Cotizador V2", () => {
