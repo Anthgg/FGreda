@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { V2_MATERIAL_PRODUCTS } from "@/test/quoterV2Fixtures";
 import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp } from "@/test/utils";
 
 const USER = {
@@ -67,6 +68,7 @@ const LINEA = {
   glaze_total_weight: "1500.000000",
   glaze_volume_ml: "1500.000000",
   glaze_cost: "300.000000000000000000",
+  materials_cost: "313.000000000000000000",
   warnings: ["V2_GLAZE_REFERENCE_WITHOUT_STOCK"],
 };
 
@@ -88,6 +90,7 @@ const PASTAS = {
       effective_cost_per_unit: "0.001300000000",
       ml_per_gram: null,
       notes: null,
+      version: 1,
       stock: "50000.000000",
     },
   ],
@@ -98,7 +101,9 @@ function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, PASTAS);
-    if (url.includes("/products")) {
+    // Antes que `/products` a secas: la URL de una línea TAMBIÉN lo contiene,
+    // y confundirlas devolvería la página de líneas al catálogo de piezas.
+    if (url.includes("/quotations-v2/7/products")) {
       if ((init.method ?? "GET") !== "GET") {
         return overrides.update ?? jsonResponse(200, LINEA);
       }
@@ -106,6 +111,11 @@ function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
         overrides.lines ??
         jsonResponse(200, { items: [LINEA], materials_cost: "313.000000000000000000" })
       );
+    }
+    if (url.includes("/products")) {
+      const tipo = new URL(url, "http://x").searchParams.get("product_type");
+      const items = V2_MATERIAL_PRODUCTS.filter((p) => p.product_type === tipo);
+      return jsonResponse(200, { items, total: items.length, limit: 200, offset: 0 });
     }
     if (url.includes("/quotations-v2/7")) return jsonResponse(200, COTIZACION);
     if (url.includes("/quotations-v2")) return jsonResponse(200, { items: [], total: 0 });
@@ -122,6 +132,18 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
     await screen.findByText("Arcilla Terranova");
     expect(screen.getByText("10000.000000")).toBeInTheDocument();
     expect(screen.getByText("13.000000000000000000")).toBeInTheDocument();
+  });
+
+  it("el total de la línea lo trae el backend, no lo suma la pantalla", async () => {
+    mockV2();
+
+    renderApp(["/cotizador-v2/7"]);
+
+    // Sumar 13 + 300 aquí sería coma flotante, y con otros importes daría una
+    // cola de decimales que no cuadra con el total del documento.
+    // Aparece dos veces: en el total del documento y en el de la línea. Que
+    // coincidan es justo lo que se está comprobando.
+    expect((await screen.findAllByText("313.000000000000000000")).length).toBe(2);
   });
 
   it("muestra el esmalte al 15 % con su peso y su costo", async () => {
@@ -196,6 +218,77 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
     });
   });
 
+  it("no guarda mientras se teclea: espera a que el campo se abandone", async () => {
+    const fetchSpy = mockV2();
+    renderApp(["/cotizador-v2/7"]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Esmalte B");
+    const cantidad = screen.getByLabelText(/^cantidad/i);
+    await user.clear(cantidad);
+    await user.type(cantidad, "50");
+
+    // Vaciar el campo para escribir otra cifra pasa por la cadena vacía, y
+    // `Number("")` es 0: guardando al vuelo, la cotización se pondría en cero
+    // a mitad de una pulsación.
+    const enVuelo = fetchSpy.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes("/products/11") &&
+        (init as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(enVuelo).toHaveLength(0);
+
+    await user.tab();
+
+    await waitFor(() => {
+      const guardado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/products/11") &&
+          (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(JSON.parse(String((guardado?.[1] as RequestInit).body))).toEqual({ quantity: 50 });
+    });
+  });
+
+  it("una cantidad vacía se explica en vez de mandarse como cero", async () => {
+    const fetchSpy = mockV2();
+    renderApp(["/cotizador-v2/7"]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Esmalte B");
+    await user.clear(screen.getByLabelText(/^cantidad/i));
+    await user.tab();
+
+    expect(await screen.findByText(/vacío no es cero/i)).toBeInTheDocument();
+    const enviados = fetchSpy.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes("/products/11") &&
+        (init as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(enviados).toHaveLength(0);
+  });
+
+  it("una pieza de encargo se puede nombrar al crear la línea", async () => {
+    const fetchSpy = mockV2();
+    renderApp(["/cotizador-v2/7"]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Esmalte B");
+    await user.type(screen.getByLabelText(/nueva línea/i), "Jarra de encargo");
+    await user.click(screen.getByRole("button", { name: /añadir línea/i }));
+
+    await waitFor(() => {
+      const creado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith("/quotations-v2/7/products") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(creado).toBeDefined();
+      const cuerpo = JSON.parse(String((creado?.[1] as RequestInit).body));
+      expect(cuerpo.product_name).toBe("Jarra de encargo");
+    });
+  });
+
   it("un fallo al guardar se explica en vez de perderse", async () => {
     mockV2({ update: errorResponse(422, "V2_MATERIAL_INPUT_INVALID", "Dato invalido") });
     renderApp(["/cotizador-v2/7"]);
@@ -205,6 +298,7 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
     const campo = screen.getByLabelText(/pasta por pieza/i);
     await user.clear(campo);
     await user.type(campo, "600");
+    await user.tab();
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });

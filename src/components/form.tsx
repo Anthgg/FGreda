@@ -79,6 +79,15 @@ interface TextFieldProps {
   requirement?: "required" | "optional" | "automatic" | undefined;
   value: string | null;
   onChange: (value: string) => void;
+  /**
+   * Se avisa al SALIR del campo, no en cada tecla.
+   *
+   * Lo necesita cualquier campo que guarde contra el servidor mientras se
+   * edita: borrando "20" para escribir "50" se pasa por la cadena vacia, y
+   * guardar al vuelo mandaria ese estado intermedio como si fuera la
+   * intencion del usuario.
+   */
+  onBlur?: (() => void) | undefined;
   disabled?: boolean | undefined;
   readOnly?: boolean | undefined;
   /**
@@ -100,6 +109,7 @@ export function TextField({
   requirement,
   value,
   onChange,
+  onBlur,
   disabled = false,
   readOnly = false,
   type = "text",
@@ -124,6 +134,7 @@ export function TextField({
           type={type}
           value={value ?? ""}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
           disabled={disabled}
           readOnly={readOnly}
           required={requirement === "required"}

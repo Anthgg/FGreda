@@ -37,12 +37,22 @@ export interface V2Material {
   effective_cost_per_unit: string;
   ml_per_gram: string | null;
   notes: string | null;
+  /** La versión leída. Se declara al guardar para no pisar a quien llegó antes. */
+  version: number;
 
   /** Se muestra para avisar, NO para bloquear: sin stock se cotiza igual. */
   stock: string;
 }
 
 export interface V2MaterialUpsertInput {
+  /**
+   * La versión que tenía el formulario al abrirse.
+   *
+   * Obligatoria para cambiar una valorización que ya existe; ausente al crear
+   * la primera, que no tiene versión previa que declarar. Sin esto, dos
+   * administradores con la pantalla abierta se pisan en silencio.
+   */
+  expected_version?: number;
   material_kind: V2MaterialKind;
   origin: V2MaterialOrigin;
   purchase_quantity: string;
@@ -88,12 +98,16 @@ export interface V2QuotationProduct {
   glaze_total_weight: string;
   glaze_volume_ml: string;
   glaze_cost: string;
+  /** Pasta más esmalte. Lo suma el backend: aquí sería coma flotante. */
+  materials_cost: string;
 
   warnings: string[];
 }
 
 export interface V2QuotationProductInput {
   product_id?: number | null;
+  /** Para la pieza de encargo, que no existe en el catálogo. */
+  product_name?: string | null;
   quantity?: number;
   body_material_id?: number | null;
   body_unit_weight?: string | null;
@@ -127,4 +141,8 @@ export const WARNING_LABEL: Record<string, string> = {
   V2_GLAZE_NO_ACTIVE_MATERIAL: "No hay ningún esmalte activo valorizado para costear.",
   V2_GLAZE_REFERENCE_WITHOUT_STOCK:
     "El esmalte usado como referencia no tiene stock. Sirve para costear; producción elegirá el real.",
+  V2_BODY_MATERIAL_UNAVAILABLE:
+    "La pasta de esta línea ya no está disponible en el maestro. El costo sigue siendo el que se congeló.",
+  V2_GLAZE_MATERIAL_UNAVAILABLE:
+    "El esmalte de esta línea ya no está disponible en el maestro. El costo sigue siendo el que se congeló.",
 };

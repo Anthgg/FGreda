@@ -52,6 +52,8 @@ const ORIGIN_OPTIONS = (Object.keys(MATERIAL_ORIGIN_LABEL) as V2MaterialOrigin[]
 }));
 
 type Draft = {
+  /** Ausente al valorizar por primera vez: no hay versión previa que declarar. */
+  expected_version: number | null;
   material_kind: string;
   origin: string;
   purchase_quantity: string;
@@ -62,6 +64,7 @@ type Draft = {
 };
 
 const NUEVO: Draft = {
+  expected_version: null,
   material_kind: "BODY",
   origin: "PURCHASE",
   purchase_quantity: "",
@@ -73,6 +76,7 @@ const NUEVO: Draft = {
 
 function toDraft(material: V2Material): Draft {
   return {
+    expected_version: material.version,
     material_kind: material.material_kind,
     origin: material.origin,
     purchase_quantity: material.purchase_quantity,
@@ -118,6 +122,7 @@ function toPayload(draft: Draft): V2MaterialUpsertInput {
   // Vacío significa «no hay decisión», y eso se manda como `null`, no como "".
   const opcional = (valor: string) => (valor.trim() === "" ? null : valor.trim());
   return {
+    ...(draft.expected_version === null ? {} : { expected_version: draft.expected_version }),
     material_kind: draft.material_kind as V2MaterialKind,
     origin: draft.origin as V2MaterialOrigin,
     purchase_quantity: draft.purchase_quantity.trim(),
@@ -174,7 +179,8 @@ function Editor({
   guardando: boolean;
   error: string | null;
 }) {
-  const set = (campo: keyof Draft) => (valor: string) => setDraft({ ...draft, [campo]: valor });
+  const set = (campo: Exclude<keyof Draft, "expected_version">) => (valor: string) =>
+    setDraft({ ...draft, [campo]: valor });
   const unidad = producto.base_uom_code ?? "unidad base";
 
   return (
