@@ -7,6 +7,7 @@ import {
   V2_ILLUSTRATION,
   V2_LABOR_PAGE,
   V2_MATERIAL_PRODUCTS,
+  V2_PRICING,
   V2_TECHNIQUES,
   V2_WORKERS,
 } from "@/test/quoterV2Fixtures";
@@ -63,6 +64,7 @@ function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
       return overrides.labor ?? jsonResponse(200, V2_LABOR_PAGE);
     }
     if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
+    if (url.includes("/pricing")) return jsonResponse(200, V2_PRICING);
     if (url.includes("/firing")) return jsonResponse(200, V2_FIRING);
     if (url.includes("/planning")) return jsonResponse(200, V2_LABOR_PAGE);
     if (url.includes("/quotations-v2/7/products")) {

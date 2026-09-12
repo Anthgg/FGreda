@@ -6,6 +6,7 @@ import { PrimaryButton, SelectField, TextAreaField, TextField } from "@/componen
 import { Spinner } from "@/components/Spinner";
 import { V2FiringPanel } from "@/features/cotizadorV2/V2FiringPanel";
 import { V2LaborLines } from "@/features/cotizadorV2/V2LaborLines";
+import { V2PricingPanel } from "@/features/cotizadorV2/V2PricingPanel";
 import { V2ProductLines } from "@/features/cotizadorV2/V2ProductLines";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { Badge, EmptyState, MasterHeader, Panel } from "@/features/masters/MasterTable";
@@ -50,7 +51,6 @@ const FLOW_STEPS: readonly { phase: string; title: string; detail: string }[] = 
   { phase: "010B", title: "Configuración comercial", detail: "IGV, moneda, vigencia y factor." },
   { phase: "010C", title: "Pastas, materiales y esmaltes", detail: "Costo por gramo y vidriado." },
   { phase: "010D", title: "Trabajadores y técnicas", detail: "Jornada, rendimiento e ilustración." },
-  { phase: "010F", title: "Costos y precio", detail: "Costo real, ×2 y ×3." },
   { phase: "010G", title: "Cotización completa", detail: "Productos y reparto de costos." },
   { phase: "010H", title: "Vigencia y PDF", detail: "Snapshots y documento del cliente." },
 ];
@@ -160,6 +160,7 @@ function V2QuotationDetailPage({ id }: { id: number }) {
       {query.data ? <V2ProductLines quotationId={id} canEdit={editable} /> : null}
       {query.data ? <V2LaborLines quotationId={id} canEdit={editable} /> : null}
       {query.data ? <V2FiringPanel quotationId={id} canEdit={editable} /> : null}
+      {query.data ? <V2PricingPanel quotationId={id} canEdit={editable} /> : null}
     </div>
   );
 }

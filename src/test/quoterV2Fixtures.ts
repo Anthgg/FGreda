@@ -344,3 +344,61 @@ export const V2_FIRING = {
   ],
   warnings: ["V2_FIRING_OVER_CAPACITY", "V2_FIRING_RETAIL_OVER_CAPACITY"],
 };
+
+/**
+ * El resultado económico del caso de prueba, con la estructura del Excel.
+ *
+ * Costo de producción 1.000 a ×3 son 3.000; el reparto 70/30 deja 2.100 y 900.
+ * El IGV se aplica al final, sobre el subtotal ya redondeado.
+ */
+export const V2_PRICING = {
+  materials_cost: "285.360000000000000000",
+  labor_cost: "569.066666666666666000",
+  illustration_cost: "44.000000000000000000",
+  space_cost: "560.000000000000000000",
+  administration_cost: "200.000000",
+  gas_cost: "210.000000000000000000",
+  firing_commercial_cost: "900.000000000000000000",
+  firing_difference: "690.000000000000000000",
+  direct_cost: "854.426666666666666000",
+  real_cost: "1868.426666666666666000",
+  production_cost: "2558.426666666666666000",
+  commercial_factor: "3.000000",
+  factor_min: "2.000000",
+  factor_max: "3.000000",
+  price_min: "5116.853333333333332000",
+  price_target: "7675.279999999999998000",
+  negotiated_price: "7675.279999999999998000",
+  currency_code: "PEN",
+  exchange_rate: null,
+  tax_percent: "18.000000",
+  rounding_step: "0.500000",
+  subtotal: "7693.000000000000000000",
+  tax: "1384.740000000000000000",
+  total: "9077.740000000000000000",
+  rounding_adjustment: "17.720000000000002000",
+  estimated_profit: "5824.573333333333334000",
+  effective_margin_percent: "75.712639",
+  lines: [
+    {
+      line_id: 11,
+      product_name: "Plato palta",
+      quantity: 20,
+      direct_cost: "364.366666666666666000",
+      firing_cost: "448.442906574394463000",
+      gas_cost: "104.636809815950920000",
+      space_cost: "262.815884476534299000",
+      general_cost: "104.054000000000000000",
+      production_cost: "1179.679457717595428000",
+      real_cost: "835.873360959151885000",
+      line_price: "3539.038373152786284000",
+      unit_price_raw: "176.951918657639314000",
+      unit_price: "177.000000",
+      line_subtotal: "3540.000000000000000000",
+      line_tax: "637.200000000000000000",
+      line_total: "4177.200000000000000000",
+      profit: "2704.126639040848115000",
+    },
+  ],
+  warnings: [],
+};
