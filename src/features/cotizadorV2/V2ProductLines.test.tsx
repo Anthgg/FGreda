@@ -7,6 +7,7 @@ import {
   V2_ILLUSTRATION,
   V2_LABOR_PAGE,
   V2_MATERIAL_PRODUCTS,
+  V2_PRICING,
   V2_TECHNIQUES,
   V2_WORKERS,
 } from "@/test/quoterV2Fixtures";
@@ -123,6 +124,7 @@ function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
     if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
     if (url.includes("/labor")) return jsonResponse(200, V2_LABOR_PAGE);
     if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
+    if (url.includes("/pricing")) return jsonResponse(200, V2_PRICING);
     if (url.includes("/firing")) return jsonResponse(200, V2_FIRING);
     // Antes que `/products` a secas: la URL de una línea TAMBIÉN lo contiene,
     // y confundirlas devolvería la página de líneas al catálogo de piezas.

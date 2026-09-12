@@ -43,6 +43,10 @@ const V2_MODULES = [
   "types/quoterV2Firing.ts",
   "features/cotizadorV2/useQuoterV2Firing.ts",
   "features/cotizadorV2/V2FiringPanel.tsx",
+  "api/quoterV2Pricing.ts",
+  "types/quoterV2Pricing.ts",
+  "features/cotizadorV2/useQuoterV2Pricing.ts",
+  "features/cotizadorV2/V2PricingPanel.tsx",
 ];
 
 describe("cliente del Cotizador V2", () => {
