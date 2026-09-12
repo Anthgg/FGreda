@@ -13,6 +13,7 @@ import type {
   V2MaterialUpsertInput,
   V2QuotationProductInput,
 } from "@/types/quoterV2Materials";
+import { V2_STALE_TIME } from "@/features/cotizadorV2/useQuoterV2";
 
 export const V2_MATERIALS_KEY = ["quoter-v2", "materials"] as const;
 export const V2_LINES_KEY = ["quoter-v2", "lines"] as const;
@@ -43,6 +44,7 @@ export const useV2QuotationProducts = (quotationId: number | null) =>
     queryKey: [...V2_LINES_KEY, quotationId],
     queryFn: () => fetchV2QuotationProducts(quotationId as number),
     enabled: quotationId !== null,
+    staleTime: V2_STALE_TIME,
   });
 
 export const useAddV2QuotationProduct = (quotationId: number) => {

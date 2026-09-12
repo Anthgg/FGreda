@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchV2Firing, setV2Firing } from "@/api/quoterV2Firing";
+import { V2_STALE_TIME } from "@/features/cotizadorV2/useQuoterV2";
 import { V2_LINES_KEY } from "@/features/cotizadorV2/useQuoterV2Materials";
 import type { V2FiringInput } from "@/types/quoterV2Firing";
 
@@ -10,6 +11,7 @@ export const useV2Firing = (quotationId: number) =>
   useQuery({
     queryKey: [...V2_FIRING_KEY, quotationId],
     queryFn: () => fetchV2Firing(quotationId),
+    staleTime: V2_STALE_TIME,
   });
 
 /**

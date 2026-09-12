@@ -23,6 +23,7 @@ import type {
   V2WorkerCreateInput,
   V2WorkerUpdateInput,
 } from "@/types/quoterV2Labor";
+import { V2_STALE_TIME } from "@/features/cotizadorV2/useQuoterV2";
 
 export const V2_WORKERS_KEY = ["quoter-v2", "workers"] as const;
 export const V2_TECHNIQUES_KEY = ["quoter-v2", "techniques"] as const;
@@ -85,6 +86,7 @@ export const useV2Labor = (quotationId: number) =>
   useQuery({
     queryKey: [...V2_LABOR_KEY, quotationId],
     queryFn: () => fetchV2Labor(quotationId),
+    staleTime: V2_STALE_TIME,
   });
 
 export const useAddV2Labor = (quotationId: number) => {

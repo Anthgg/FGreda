@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchV2Pricing, setV2Pricing } from "@/api/quoterV2Pricing";
 import { V2_LINES_KEY } from "@/features/cotizadorV2/useQuoterV2Materials";
 import type { V2PricingInput } from "@/types/quoterV2Pricing";
+import { V2_STALE_TIME } from "@/features/cotizadorV2/useQuoterV2";
 
 export const V2_PRICING_KEY = ["quoter-v2", "pricing"] as const;
 
@@ -10,6 +11,7 @@ export const useV2Pricing = (quotationId: number) =>
   useQuery({
     queryKey: [...V2_PRICING_KEY, quotationId],
     queryFn: () => fetchV2Pricing(quotationId),
+    staleTime: V2_STALE_TIME,
   });
 
 /**

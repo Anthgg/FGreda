@@ -131,6 +131,10 @@ export function AppRoutes() {
               cotizaciones no se recalculan. */}
           <Route path="cotizador-v2" element={<CotizadorV2Page />} />
           <Route path="cotizador-v2/:id" element={<CotizadorV2Page />} />
+          {/* El paso vive en la URL y no en la base: asi el boton «atras» del
+              navegador funciona, recargar no pierde el sitio y no hace falta
+              una migracion para guardar un numero que se puede inferir. */}
+          <Route path="cotizador-v2/:id/:step" element={<CotizadorV2Page />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

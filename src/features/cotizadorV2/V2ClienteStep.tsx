@@ -1,0 +1,274 @@
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import { fetchPartners } from "@/api/masters";
+import { DecimalField } from "@/components/DecimalField";
+import { SelectField, TextAreaField, TextField } from "@/components/form";
+import { Spinner } from "@/components/Spinner";
+import { describeError } from "@/features/settings/messages";
+import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
+import {
+  V2_PRODUCTION_TYPE_LABEL,
+  type V2CustomerKind,
+  type V2ProductionType,
+  type V2Quotation,
+} from "@/types/quoterV2";
+
+/**
+ * Paso 1: a quién se cotiza y en qué condiciones. Fase 010G.
+ *
+ * Es el único paso sin un solo número de costo, y es deliberado: quien empieza
+ * una cotización no tiene por qué ver un factor comercial ni un costo de gas
+ * antes de haber elegido el cliente.
+ *
+ * ## Lo de aquí es de ESTA cotización
+ *
+ * Cliente, nombre, moneda, tipo de producción y tipo de cliente. Nada toca un
+ * maestro: cambiar aquí la moneda no cambia la moneda de la casa. Eso vive en
+ * Configuración, y mezclarlo sería la forma más rápida de que una cotización
+ * cambiara el precio de todas las demás.
+ *
+ * ## El tipo de producción mueve el horno sugerido, y solo sugerido
+ *
+ * Por menor apunta al horno chico y por mayor al grande. El backend lo mueve
+ * únicamente si nadie había elegido otro a mano; una decisión explícita manda
+ * sobre un valor por defecto. Y nunca cambia solo por la cantidad de piezas:
+ * esa es la confusión que cerró 010E.
+ */
+
+const TIPOS_CLIENTE: readonly { value: V2CustomerKind; label: string }[] = [
+  { value: "EXTERNAL", label: "Cliente externo" },
+  { value: "STUDENT", label: "Alumno" },
+];
+
+const MONEDAS = [
+  { value: "PEN", label: "Soles (PEN)" },
+  { value: "USD", label: "Dólares (USD)" },
+];
+
+const TIPOS_PRODUCCION: readonly V2ProductionType[] = ["RETAIL", "WHOLESALE"];
+
+const SIN_CLIENTE = "";
+
+/**
+ * Texto que se guarda al SALIR del campo, no en cada tecla.
+ *
+ * La misma razón que en `DecimalField`: escribir un nombre de ocho letras no
+ * son ocho peticiones, y una edición que acaba donde empezó no gasta ninguna.
+ */
+function useTextoDiferido(guardado: string, guardar: (valor: string | null) => void) {
+  const [borrador, setBorrador] = useState(guardado);
+  useEffect(() => setBorrador(guardado), [guardado]);
+  return {
+    borrador,
+    setBorrador,
+    confirmar: () => {
+      if (borrador.trim() === guardado.trim()) return;
+      // Vaciar un texto libre SÍ es retirarlo: a diferencia de un importe, un
+      // nombre en blanco no puede confundirse con un cero.
+      guardar(borrador.trim() === "" ? null : borrador);
+    },
+  };
+}
+
+export function V2ClienteStep({
+  cotizacion,
+  canEdit,
+}: {
+  cotizacion: V2Quotation;
+  canEdit: boolean;
+}) {
+  const guardar = useUpdateV2Quotation(cotizacion.id);
+  const [busqueda, setBusqueda] = useState("");
+
+  const nombre = useTextoDiferido(cotizacion.name ?? "", (name) => guardar.mutate({ name }));
+  const notas = useTextoDiferido(cotizacion.notes ?? "", (notes) => guardar.mutate({ notes }));
+
+  const terceros = useQuery({
+    queryKey: ["quoter-v2", "clientes", busqueda],
+    // Sin texto se traen los primeros veinte: abrir el paso y no ver nada
+    // obligaría a adivinar que hay que escribir algo para que aparezca algo.
+    queryFn: () => fetchPartners({ search: busqueda, active: true, limit: 20 }),
+  });
+
+  const esExtranjera = (cotizacion.currency_code ?? "PEN") !== "PEN";
+
+  // El filtro `role` del backend es exacto, y quien es CLIENT y quien es BOTH
+  // valen igual como cliente: se piden todos y se criban aquí. Ofrecer un
+  // proveedor puro solo serviría para que el guardado lo rechazara después.
+  const opcionesCliente = [
+    { value: SIN_CLIENTE, label: "Sin cliente todavía" },
+    ...(terceros.data?.items ?? [])
+      .filter((tercero) => tercero.role === "CLIENT" || tercero.role === "BOTH")
+      .map((tercero) => ({
+        value: String(tercero.id),
+        label: tercero.document_number
+          ? `${tercero.name} · ${tercero.document_number}`
+          : tercero.name,
+      })),
+  ];
+
+  // El cliente ya elegido puede no estar en la página buscada. Sin esto el
+  // desplegable enseñaría «Seleccionar...» sobre una cotización que sí tiene
+  // cliente, que es la forma más rápida de que alguien lo vuelva a elegir.
+  const idActual = cotizacion.customer_id === null ? SIN_CLIENTE : String(cotizacion.customer_id);
+  if (idActual !== SIN_CLIENTE && !opcionesCliente.some((o) => o.value === idActual)) {
+    opcionesCliente.splice(1, 0, {
+      value: idActual,
+      label: cotizacion.customer_name ?? `Cliente #${idActual}`,
+    });
+  }
+
+  return (
+    <div data-testid="paso-cliente" className="space-y-5">
+      <header>
+        <h2 className="text-sm font-semibold text-zinc-900">Cliente y datos de la cotización</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Lo que se elija aquí vale solo para esta cotización. Los valores de la casa se cambian en
+          Configuración.
+        </p>
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <TextField
+          label="Buscar cliente"
+          requirement="optional"
+          value={busqueda}
+          onChange={setBusqueda}
+          placeholder="Nombre, DNI o RUC"
+          disabled={!canEdit}
+          hint="Se buscan terceros activos con rol de cliente."
+        />
+        <SelectField
+          label="Cliente"
+          requirement="required"
+          value={idActual}
+          options={opcionesCliente}
+          onChange={(valor) =>
+            guardar.mutate({
+              customer_id: valor === SIN_CLIENTE ? null : Number(valor),
+            })
+          }
+          disabled={!canEdit}
+          {...(terceros.isPending ? { hint: "Cargando terceros..." } : {})}
+        />
+
+        <TextField
+          label="Nombre de la cotización"
+          requirement="optional"
+          value={nombre.borrador}
+          onChange={nombre.setBorrador}
+          onBlur={nombre.confirmar}
+          placeholder="Pedido de tazas — setiembre"
+          disabled={!canEdit}
+          maxLength={200}
+          hint="Para reconocerla en el listado. No sale en el documento."
+        />
+        <SelectField
+          label="Tipo de producción"
+          requirement="required"
+          value={cotizacion.production_type}
+          options={TIPOS_PRODUCCION.map((valor) => ({
+            value: valor,
+            label: V2_PRODUCTION_TYPE_LABEL[valor],
+          }))}
+          onChange={(valor) => guardar.mutate({ production_type: valor })}
+          disabled={!canEdit}
+          hint="Sugiere un horno: chico para por menor, grande para por mayor. Puede cambiarlo en el paso de quema."
+        />
+
+        <SelectField
+          label="Tipo de cliente"
+          requirement="required"
+          value={cotizacion.customer_kind ?? "EXTERNAL"}
+          options={TIPOS_CLIENTE}
+          onChange={(valor) => guardar.mutate({ customer_kind: valor })}
+          disabled={!canEdit}
+          hint="Cambia la tarifa de quema que se cobra. El gas que se consume es el mismo."
+        />
+        <SelectField
+          label="Moneda"
+          requirement="required"
+          value={cotizacion.currency_code ?? "PEN"}
+          options={MONEDAS}
+          onChange={(valor) => guardar.mutate({ currency_code: valor })}
+          disabled={!canEdit}
+        />
+
+        {esExtranjera ? (
+          <DecimalField
+            label="Tipo de cambio"
+            requirement="required"
+            value={cotizacion.exchange_rate}
+            onCommit={(valor) => {
+              if (valor !== null) guardar.mutate({ exchange_rate: valor });
+            }}
+            disabled={!canEdit}
+            hint="Se congela en esta cotización: el precio pactado no cambia porque mañana cambie el dólar."
+          />
+        ) : null}
+      </div>
+
+      {/* `TextAreaField` no expone `onBlur`. El de React es `focusout`, que sí
+          burbujea, así que el contenedor sirve para confirmar el borrador al
+          salir del área. Cambiar la primitiva compartida por un solo uso
+          saldría más caro. */}
+      <div onBlur={notas.confirmar}>
+        <TextAreaField
+          label="Notas internas"
+          requirement="optional"
+          value={notas.borrador}
+          onChange={notas.setBorrador}
+          rows={2}
+          disabled={!canEdit}
+          hint="Para el taller. No salen en el documento del cliente."
+        />
+      </div>
+
+      <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-black/[0.06] bg-white/40 p-4 sm:grid-cols-4">
+        <div>
+          <dt className="text-xs text-zinc-500">Código</dt>
+          <dd className="text-sm text-zinc-800">{cotizacion.code}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Vigencia</dt>
+          <dd className="text-sm text-zinc-800">
+            {cotizacion.validity_days === null ? "—" : `${cotizacion.validity_days} días`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">IGV</dt>
+          <dd className="text-sm text-zinc-800">
+            {cotizacion.tax_percent === null ? "—" : `${Number(cotizacion.tax_percent)} %`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Jornada</dt>
+          <dd className="text-sm text-zinc-800">
+            {cotizacion.workday_hours === null ? "—" : `${Number(cotizacion.workday_hours)} h`}
+          </dd>
+        </div>
+      </dl>
+      <p className="text-[11px] text-zinc-400">
+        Estos cuatro quedaron congelados al crear la cotización. Cambiarlos en Configuración no
+        altera las que ya existen.
+      </p>
+
+      {terceros.isError ? (
+        <p role="alert" className="text-xs text-red-600">
+          No se pudieron cargar los terceros. Vuelva a intentarlo.
+        </p>
+      ) : null}
+      {guardar.isError ? (
+        <p role="alert" className="text-xs text-red-600">
+          {describeError(guardar.error)}
+        </p>
+      ) : null}
+      {guardar.isPending ? (
+        <p className="text-xs text-zinc-500">
+          <Spinner className="size-3" label="Guardando..." />
+        </p>
+      ) : null}
+    </div>
+  );
+}

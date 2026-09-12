@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { PrimaryButton, SelectField, TextField } from "@/components/form";
+import { PrimaryButton, SelectField } from "@/components/form";
+import { DecimalField } from "@/components/DecimalField";
 import { Spinner } from "@/components/Spinner";
 import { EmptyState, Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -64,44 +65,6 @@ function Dato({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-/** Campo que solo avisa cuando el usuario termina de escribir. */
-function CampoDiferido({
-  label,
-  value,
-  onCommit,
-  disabled,
-  hint,
-  inputMode,
-  error,
-}: {
-  label: string;
-  value: string;
-  onCommit: (valor: string) => void;
-  disabled: boolean;
-  hint?: string | undefined;
-  inputMode?: "numeric" | "decimal" | undefined;
-  error?: string | undefined;
-}) {
-  const [borrador, setBorrador] = useState(value);
-  useEffect(() => setBorrador(value), [value]);
-
-  return (
-    <TextField
-      label={label}
-      requirement="required"
-      value={borrador}
-      onChange={setBorrador}
-      onBlur={() => {
-        if (borrador !== value) onCommit(borrador);
-      }}
-      disabled={disabled}
-      {...(inputMode ? { inputMode } : {})}
-      {...(hint ? { hint } : {})}
-      {...(error ? { error } : {})}
-    />
-  );
-}
-
 function Tarea({
   tarea,
   quotationId,
@@ -116,21 +79,9 @@ function Tarea({
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
   const productos = useV2QuotationProducts(quotationId);
-  const [invalido, setInvalido] = useState<string | null>(null);
 
   const guardar = (cambios: Record<string, unknown>) =>
     actualizar.mutate({ laborId: tarea.id, payload: cambios });
-
-  /** Un campo vacío no es un cero: es un campo a medio escribir. */
-  const numero = (valor: string, campo: string, mensaje: string) => {
-    const limpio = valor.trim();
-    if (limpio === "" || !Number.isFinite(Number(limpio)) || Number(limpio) < 0) {
-      setInvalido(mensaje);
-      return;
-    }
-    setInvalido(null);
-    guardar({ [campo]: limpio });
-  };
 
   return (
     <div className="rounded-2xl border border-black/[0.06] p-4">
@@ -201,14 +152,13 @@ function Tarea({
           disabled={!canEdit}
           hint="Sin producto: apoya al pedido entero."
         />
-        <CampoDiferido
+        <DecimalField
           label="Piezas por trabajar"
+          requirement="required"
           value={tarea.quantity}
-          onCommit={(valor) => numero(valor, "quantity", "Indique la cantidad. Vacío no es cero.")}
+          onCommit={(valor) => guardar({ quantity: valor })}
           disabled={!canEdit}
-          inputMode="decimal"
           hint={`Se miden en ${tarea.technique_unit}, como dice la técnica.`}
-          {...(invalido ? { error: invalido } : {})}
         />
       </div>
 
@@ -233,14 +183,12 @@ function Tarea({
 
       <div className="mt-4 grid grid-cols-1 gap-4 border-t border-black/[0.04] pt-4 sm:grid-cols-2">
         <div>
-          <CampoDiferido
+          <DecimalField
             label="Horas finales"
+            requirement="required"
             value={tarea.final_hours}
-            onCommit={(valor) =>
-              numero(valor, "final_hours_override", "Indique las horas. Vacío no es cero.")
-            }
+            onCommit={(valor) => guardar({ final_hours_override: valor })}
             disabled={!canEdit}
-            inputMode="decimal"
             hint={
               tarea.hours_overridden
                 ? "Acordadas para este encargo. No cambian el estándar del catálogo."
@@ -260,14 +208,11 @@ function Tarea({
             </button>
           ) : null}
         </div>
-        <CampoDiferido
+        <DecimalField
           label="Tarifa acordada por hora"
           value={tarea.rate_overridden ? tarea.hourly_rate : ""}
-          onCommit={(valor) =>
-            guardar({ hourly_rate_override: valor.trim() === "" ? null : valor.trim() })
-          }
+          onCommit={(valor) => guardar({ hourly_rate_override: valor })}
           disabled={!canEdit}
-          inputMode="decimal"
           hint="Solo para esta cotización. Vacío: se usa el jornal del maestro."
         />
       </div>
@@ -361,15 +306,14 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
           hint="Apagada por defecto. Al apagarla, sus horas y su costo quedan en cero."
         />
         {ilustracion.enabled ? (
-          <CampoDiferido
+          <DecimalField
             label="Piezas a ilustrar"
+            requirement="required"
             value={ilustracion.quantity}
             onCommit={(valor) => {
-              if (valor.trim() === "") return;
-              guardar.mutate({ illustration_quantity: valor.trim() });
+              if (valor !== null) guardar.mutate({ illustration_quantity: valor });
             }}
             disabled={!canEdit}
-            inputMode="decimal"
           />
         ) : null}
       </div>
@@ -433,6 +377,10 @@ export function V2LaborLines({
 
   return (
     <Panel>
+      {/* El identificador acota las consultas de las pruebas a ESTE bloque, como
+          en los paneles de quema y de precio: el flujo monta varios y varios
+          tienen campos e importes con la misma pinta. */}
+      <div data-testid="panel-mano-de-obra">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-zinc-900">Mano de obra</h2>
         <span className="text-xs text-zinc-500">
@@ -457,14 +405,12 @@ export function V2LaborLines({
       <CargaDeJornada carga={pagina.workday_load} />
 
       <div className="mt-4 grid grid-cols-1 gap-4 rounded-2xl border border-black/[0.06] p-4 sm:grid-cols-2">
-        <CampoDiferido
+        <DecimalField
           label="Días efectivos de taller"
           value={pagina.effective_work_days === null ? "" : String(pagina.effective_work_days)}
-          onCommit={(valor) =>
-            planificar.mutate(valor.trim() === "" ? null : Number(valor.trim()))
-          }
+          onCommit={(valor) => planificar.mutate(valor === null ? null : Number(valor))}
           disabled={!canEdit}
-          inputMode="numeric"
+          entero
           hint="Lo decide quien planifica. No es la vigencia de la cotización."
         />
         <Dato
@@ -577,6 +523,7 @@ export function V2LaborLines({
           ) : null}
         </div>
       ) : null}
+      </div>
     </Panel>
   );
 }

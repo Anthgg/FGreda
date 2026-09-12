@@ -103,7 +103,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("enseña las dos bases de costo por separado", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText("Costo real")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("dice cuál lleva el gas y cuál la tarifa de quema", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText(/lleva el gas que se quema/i)).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("enseña el suelo, el objetivo y el negociado a la vez", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText("Precio mínimo ×2")).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("ofrece el factor como multiplicador y no como porcentaje", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     const selector = within(panel).getByRole("combobox", { name: "Factor comercial" });
@@ -159,7 +159,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
       }),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
     const panel = await panelDePrecio();
     const user = userEvent.setup();
     await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
@@ -173,7 +173,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("enseña un factor pactado que no cae en ningun paso", async () => {
     mockV2({ pricing: jsonResponse(200, { ...V2_PRICING, commercial_factor: "2.100000" }) });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByRole("combobox", { name: "Factor comercial" })).toHaveTextContent(
@@ -184,7 +184,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("manda solo el factor al cambiarlo", async () => {
     const fetchMock = mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
     const panel = await panelDePrecio();
     const user = userEvent.setup();
     await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
@@ -204,7 +204,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("dice que el IGV va al final y no es ingreso del taller", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText(/el igv se aplica al final/i)).toBeInTheDocument();
@@ -215,7 +215,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("explica que el subtotal se reconstruye desde los unitarios", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText(/sumando las líneas ya redondeadas/i)).toBeInTheDocument();
@@ -228,7 +228,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("enseña el ajuste por redondeo en vez de esconderlo", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText("Ajuste por redondeo")).toBeInTheDocument();
@@ -238,7 +238,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("reparte el costo por producto y lo deja auditar", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     const linea = V2_PRICING.lines[0]!;
@@ -258,7 +258,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
       }),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     const avisos = within(panel).getByTestId("avisos-precio");
@@ -274,7 +274,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
       }),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     const avisos = within(panel).getByTestId("avisos-precio");
@@ -299,7 +299,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
       return jsonResponse(200, { items: [], total: 0 });
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
     expect(within(panel).getByRole("combobox", { name: "Factor comercial" })).toBeDisabled();
@@ -314,7 +314,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
       ),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/precio"]);
     const panel = await panelDePrecio();
     const user = userEvent.setup();
     await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
