@@ -38,6 +38,19 @@ import { WARNING_LABEL, type V2QuotationProduct } from "@/types/quoterV2Material
 
 const SIN_MATERIAL = "";
 
+/**
+ * Las tres medidas de una pieza, en centímetros.
+ *
+ * Se declaran juntas porque son un solo dato en tres campos: de su producto
+ * sale el volumen, y del volumen las hornadas. Vacío es «todavía sin medir» y
+ * se manda como nulo; un cero sería una pieza plana, que no existe.
+ */
+const MEDIDAS = [
+  { campo: "length_cm", etiqueta: "Largo (cm)" },
+  { campo: "width_cm", etiqueta: "Ancho (cm)" },
+  { campo: "height_cm", etiqueta: "Alto (cm)" },
+] as const;
+
 function Aviso({ codigo }: { codigo: string }) {
   return <li className="text-xs text-amber-700">{WARNING_LABEL[codigo] ?? codigo}</li>;
 }
@@ -198,6 +211,33 @@ function Linea({
           hint="La unidad la fija el maestro del material."
         />
       </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {MEDIDAS.map(({ campo, etiqueta }) => (
+          <CampoDiferido
+            key={campo}
+            label={etiqueta}
+            value={linea[campo] ?? ""}
+            onCommit={(valor) => guardar({ [campo]: valor.trim() === "" ? null : valor.trim() })}
+            disabled={!canEdit}
+            inputMode="decimal"
+          />
+        ))}
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Dato label="Volumen unitario" value={`${linea.unit_volume_cm3} cm³`} />
+        <Dato label="Volumen total" value={`${linea.total_volume_cm3} cm³`} />
+        <Dato
+          label="% del horno"
+          value={`${linea.firing_occupancy_percent} %`}
+          hint="Cuánto ocupa. No es un multiplicador de precio."
+        />
+        <Dato
+          label="Quema asignada"
+          value={linea.firing_commercial_cost}
+          hint={`Gas real: ${linea.firing_gas_cost}`}
+        />
+      </dl>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Dato

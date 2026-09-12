@@ -70,6 +70,23 @@ export interface V2QuotationProduct {
   product_name: string | null;
   quantity: number;
 
+  /**
+   * Medidas de UNA pieza, en centímetros. De aquí sale el volumen que ocupa
+   * horno, y de ahí las hornadas. `null` es «todavía sin medir».
+   */
+  length_cm: string | null;
+  width_cm: string | null;
+  height_cm: string | null;
+  unit_volume_cm3: string;
+  total_volume_cm3: string;
+  /** Cuánto horno ocupa esta línea. Información, NO un multiplicador. */
+  firing_occupancy_percent: string;
+  /** Su participación en el volumen total: la base del reparto de la quema. */
+  firing_volume_share_percent: string;
+  /** Lo que le toca de la tarifa de quema y del gas real. Dos números. */
+  firing_commercial_cost: string;
+  firing_gas_cost: string;
+
   body_material_id: number | null;
   body_material_name: string | null;
   body_unit_weight: string | null;
@@ -109,6 +126,9 @@ export interface V2QuotationProductInput {
   /** Para la pieza de encargo, que no existe en el catálogo. */
   product_name?: string | null;
   quantity?: number;
+  length_cm?: string | null;
+  width_cm?: string | null;
+  height_cm?: string | null;
   body_material_id?: number | null;
   body_unit_weight?: string | null;
   body_cost_per_unit_override?: string | null;

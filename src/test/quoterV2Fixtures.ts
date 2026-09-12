@@ -274,3 +274,73 @@ export const V2_ILLUSTRATION = {
   hours: "12.000000",
   cost: "165.000000000000000000",
 };
+
+/**
+ * El caso canónico de 010E: externo, horno chico, 160 %, baja y alta.
+ *
+ * Dos hornadas a 200 + dos a 250 son S/900 de tarifa; dos a 35 + dos a 70 son
+ * S/210 de gas, y la diferencia es S/690. La segunda hornada va al 60 % de
+ * carga y cuesta exactamente igual que la primera: el horno se enciende entero.
+ */
+export const V2_FIRING = {
+  production_type: "RETAIL",
+  customer_kind: "EXTERNAL",
+  kiln_id: 1,
+  kiln_name: "Horno chico",
+  kiln_capacity_cm3: "17000.000000",
+  total_volume_cm3: "27200.000000",
+  occupancy_percent: "160.000000",
+  firing_count: 2,
+  low_fire_enabled: true,
+  high_fire_enabled: true,
+  low_fire_count: 2,
+  high_fire_count: 2,
+  batch_loads: ["100.000000", "60.000000"],
+  gas_cost_low: "35.000000",
+  gas_cost_high: "70.000000",
+  gas_low_is_override: false,
+  gas_high_is_override: false,
+  commercial_rate_low: "200.000000",
+  commercial_rate_high: "250.000000",
+  commercial_low_is_override: false,
+  commercial_high_is_override: false,
+  gas_total: "210.000000000000000000",
+  commercial_total: "900.000000000000000000",
+  difference: "690.000000000000000000",
+  recommended_kiln_id: 2,
+  kilns: [
+    {
+      kiln_id: 1,
+      code: "KILN-001",
+      name: "Horno chico",
+      capacity_cm3: "17000.000000",
+      active: true,
+      occupancy_percent: "160.000000",
+      firing_count: 2,
+      has_rates: true,
+    },
+    {
+      kiln_id: 2,
+      code: "KILN-002",
+      name: "Horno grande",
+      capacity_cm3: "200000.000000",
+      active: true,
+      occupancy_percent: "13.600000",
+      firing_count: 1,
+      has_rates: true,
+    },
+  ],
+  lines: [
+    {
+      line_id: 11,
+      product_name: "Plato palta",
+      quantity: 20,
+      total_volume_cm3: "27200.000000",
+      occupancy_percent: "160.000000",
+      volume_share_percent: "100.000000",
+      commercial_cost: "900.000000000000000000",
+      gas_cost: "210.000000000000000000",
+    },
+  ],
+  warnings: ["V2_FIRING_OVER_CAPACITY", "V2_FIRING_RETAIL_OVER_CAPACITY"],
+};

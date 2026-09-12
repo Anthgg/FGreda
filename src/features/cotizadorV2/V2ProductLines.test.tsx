@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import {
+  V2_FIRING,
   V2_ILLUSTRATION,
   V2_LABOR_PAGE,
   V2_MATERIAL_PRODUCTS,
@@ -54,6 +55,15 @@ const LINEA = {
   product_id: null,
   product_name: "Plato palta",
   quantity: 20,
+  length_cm: "18.000000",
+  width_cm: "12.000000",
+  height_cm: "3.000000",
+  unit_volume_cm3: "648.000000",
+  total_volume_cm3: "12960.000000",
+  firing_occupancy_percent: "76.235294",
+  firing_volume_share_percent: "100.000000",
+  firing_commercial_cost: "450.000000000000000000",
+  firing_gas_cost: "105.000000000000000000",
   body_material_id: 3,
   body_material_name: "Arcilla Terranova",
   body_unit_weight: "500.000000",
@@ -113,6 +123,7 @@ function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
     if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
     if (url.includes("/labor")) return jsonResponse(200, V2_LABOR_PAGE);
     if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
+    if (url.includes("/firing")) return jsonResponse(200, V2_FIRING);
     // Antes que `/products` a secas: la URL de una línea TAMBIÉN lo contiene,
     // y confundirlas devolvería la página de líneas al catálogo de piezas.
     if (url.includes("/quotations-v2/7/products")) {
