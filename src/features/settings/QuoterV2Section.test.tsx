@@ -8,7 +8,12 @@ import {
   REFERENCE_DATA,
   SEQUENCES,
 } from "@/test/settingsFixtures";
-import { V2_MATERIALS, V2_MATERIAL_PRODUCTS } from "@/test/quoterV2Fixtures";
+import {
+  V2_MATERIALS,
+  V2_MATERIAL_PRODUCTS,
+  V2_TECHNIQUES,
+  V2_WORKERS,
+} from "@/test/quoterV2Fixtures";
 import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp } from "@/test/utils";
 
 const CONFIG = {
@@ -91,6 +96,8 @@ function mockSettings(overrides: { page?: Response; save?: Response } = {}) {
     // respuesta inventada aqui esconderia la pestaña que se quiere probar.
     // La pestaña monta tambien la tabla de materiales (010C): sin estas dos
     // respuestas la pantalla se queda cargando y no se llega al formulario.
+    if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
+    if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, V2_MATERIALS);
     if (url.includes("/products")) {
       // El filtro se respeta: la pantalla pregunta por materia prima y por

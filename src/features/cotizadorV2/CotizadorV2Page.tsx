@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "@/api/client";
 import { PrimaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { V2LaborLines } from "@/features/cotizadorV2/V2LaborLines";
 import { V2ProductLines } from "@/features/cotizadorV2/V2ProductLines";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { Badge, EmptyState, MasterHeader, Panel } from "@/features/masters/MasterTable";
@@ -157,6 +158,7 @@ function V2QuotationDetailPage({ id }: { id: number }) {
     <div className="space-y-6">
       <V2QuotationDetail id={id} />
       {query.data ? <V2ProductLines quotationId={id} canEdit={editable} /> : null}
+      {query.data ? <V2LaborLines quotationId={id} canEdit={editable} /> : null}
     </div>
   );
 }
