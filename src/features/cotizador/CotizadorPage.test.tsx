@@ -661,9 +661,11 @@ describe("Cotizador integral", () => {
     // El backend responde 40 % para el lote de dos piezas. Sumar las
     // ocupaciones fisicas de las sesiones (42 + 42) daria 84, y multiplicar
     // o promediar daria otra cosa: si el frontend calculara, esto fallaria.
+    // 009K.4.2 mantiene esa ocupacion como referencia, pero ya no muestra el
+    // factor de ocupacion como parte del costo.
     expect(await screen.findByText("40.00%")).toBeInTheDocument();
     expect(screen.queryByText("84.00%")).not.toBeInTheDocument();
-    expect(screen.getByText("×1.40")).toBeInTheDocument();
+    expect(screen.queryByText("×1.40")).not.toBeInTheDocument();
   });
 
   it("MULTIPRODUCT_KILN_SUMMARY: el total de la quema no es el de una pieza", async () => {

@@ -19,8 +19,8 @@ import type { QuotationBuilderOut } from "@/types/quotationBuilder";
  * Fase 009K.4.1 — T01 a T23. El factor de produccion visto desde la pantalla.
  *
  * El factor YA era opcional desde 009K.3 y el cableado estaba entero: el
- * borrador lo guarda, el preview lo recalcula y el navegador nunca manda un
- * valor. Lo que fallaba era decirlo. La pantalla lo llamaba «factor
+ * borrador lo guarda, el preview lo recalcula y desde 009K.4.2 el navegador
+ * puede mandar el valor elegido por cotizacion. Antes la pantalla lo llamaba «factor
  * comercial» —que en la base es OTRA columna— y debajo del control ponia
  * «Configuración → Comercial», que se lee como que apagarlo se hace en
  * Ajustes. El desglose del paso 4 ensenaba «×1.00» sin decir si esta
@@ -71,9 +71,14 @@ const FACTOR = String(COMMERCIAL_FILLED.production_factor_default);
  * respuesta que el backend nunca da y encender el factor «funcionaria» sin
  * mover nada.
  */
-function itemOut(input: Record<string, unknown>, index: number, enabled: boolean) {
+function itemOut(
+  input: Record<string, unknown>,
+  index: number,
+  enabled: boolean,
+  productionFactor: string,
+) {
   const tecnico = 100;
-  const factor = enabled ? Number(FACTOR) : 1;
+  const factor = enabled ? Number(productionFactor) : 1;
   const factorado = tecnico * factor;
   const fijos = 20;
   const base = factorado + fijos;
@@ -183,7 +188,10 @@ type PreviewBody = {
 /** La respuesta del backend para un cuerpo dado. */
 function builderPara(body: PreviewBody, overrides: Partial<QuotationBuilderOut> = {}) {
   const enabled = Boolean(body.production_factor_enabled);
-  const items = (body.items ?? []).map((item, index) => itemOut(item, index, enabled));
+  const productionFactor = body.production_factor?.trim() || FACTOR;
+  const items = (body.items ?? []).map((item, index) =>
+    itemOut(item, index, enabled, productionFactor),
+  );
   const subtotal = items.reduce((suma, item) => suma + Number(item.commercial_subtotal), 0);
   return {
     id: null,
@@ -207,9 +215,9 @@ function builderPara(body: PreviewBody, overrides: Partial<QuotationBuilderOut> 
     quotation_net_total: String(subtotal),
     quotation_tax_total: "0",
     quotation_gross_total: String(subtotal),
-    // El backend resuelve la decision y devuelve el factor EFECTIVO: el
-    // configurado encendido, el neutro apagado. Nunca el configurado apagado.
-    production_factor: enabled ? FACTOR : "1",
+    // El backend resuelve la decision y devuelve el factor EFECTIVO: el valor
+    // de esta cotizacion encendido, el neutro apagado.
+    production_factor: enabled ? productionFactor : "1",
     production_factor_enabled: enabled,
     kiln_mode: body.kiln_mode === "PER_PRODUCT" ? "PER_PRODUCT" : "TOGETHER",
     rounding_step: "0.50",
@@ -371,7 +379,7 @@ describe("T01–T09 · el control del factor en «Margen y precio»", () => {
     expect(bloque.queryByText(`×${FACTOR}`)).not.toBeInTheDocument();
   });
 
-  it("T05: encendido dice que se aplica y enseña el factor configurado", async () => {
+  it("T05: encendido dice que se aplica y enseña el factor editable", async () => {
     const user = userEvent.setup();
     const spy = mockFetch(escenario().handler);
     renderApp(["/cotizador/nuevo"]);
@@ -382,13 +390,15 @@ describe("T01–T09 · el control del factor en «Margen y precio»", () => {
 
     const bloque = within(bloqueFactor());
     expect(
-      bloque.getByText("Se aplica el factor configurado para producción."),
+      bloque.getByText("Se aplica el factor elegido para esta cotización."),
     ).toBeInTheDocument();
-    expect(bloque.getByText("Factor configurado:")).toBeInTheDocument();
-    expect(bloque.getByText(`×${FACTOR}`)).toBeInTheDocument();
+    expect(bloque.getByRole("textbox", { name: /Valor del factor/ })).toHaveValue(FACTOR);
+    expect(
+      bloque.getByText(`Sugerido por Configuración: ×${FACTOR}. Valor efectivo: ×${FACTOR}.`),
+    ).toBeInTheDocument();
   });
 
-  it("T06: el valor es de lectura y se dice de quién es cada mitad de la decisión", async () => {
+  it("T06: el valor se edita en la cotización y conserva la referencia de Configuración", async () => {
     const user = userEvent.setup();
     const spy = mockFetch(escenario().handler);
     renderApp(["/cotizador/nuevo"]);
@@ -398,22 +408,17 @@ describe("T01–T09 · el control del factor en «Margen y precio»", () => {
     await preguntadoAlBackend(spy, true);
 
     const bloque = within(bloqueFactor());
-    // Ni caja de texto ni desplegable: cuanto vale el factor de la casa se
-    // decide en Configuracion, y un segundo sitio donde escribirlo serian dos
-    // respuestas a la misma pregunta.
-    expect(bloque.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(bloque.getByRole("textbox", { name: /Valor del factor/ })).toBeInTheDocument();
     expect(bloque.queryByRole("combobox")).not.toBeInTheDocument();
     expect(
-      bloque.getByText(
-        /El valor del factor se define en Configuración; aquí decides si esta cotización lo aplica\./,
-      ),
+      bloque.getByText(/Valor efectivo: ×3/),
     ).toBeInTheDocument();
     // Y ya no queda la atribucion a secas, que se leia como que apagarlo o
     // encenderlo tambien se hacia en Ajustes.
     expect(screen.queryByText("Configuración → Comercial")).not.toBeInTheDocument();
   });
 
-  it("T07: no hay campo numérico para escribir el factor", async () => {
+  it("T07: no hay spinbutton numérico para escribir el factor", async () => {
     const user = userEvent.setup();
     mockFetch(escenario().handler);
     renderApp(["/cotizador/nuevo"]);
@@ -551,7 +556,7 @@ describe("T16–T17 · el payload", () => {
     await preguntadoAlBackend(spy, false);
   });
 
-  it("T17: encendido manda true, y nunca un valor de factor", async () => {
+  it("T17: encendido manda true y el valor editable del factor", async () => {
     const user = userEvent.setup();
     const spy = mockFetch(escenario().handler);
     renderApp(["/cotizador/nuevo"]);
@@ -560,9 +565,10 @@ describe("T16–T17 · el payload", () => {
     await activar(user);
     await preguntadoAlBackend(spy, true);
 
-    for (const cuerpo of cuerposDePreview(spy)) {
-      expect(cuerpo).not.toHaveProperty("production_factor");
-    }
+    expect(cuerposDePreview(spy).at(-1)).toMatchObject({
+      production_factor_enabled: true,
+      production_factor: FACTOR,
+    });
   });
 });
 
@@ -611,8 +617,11 @@ describe("T18–T20 · persistencia del borrador", () => {
     await guardarYReabrir(user);
 
     expect(guardadas()?.production_factor_enabled).toBe(true);
+    expect(guardadas()?.production_factor).toBe(FACTOR);
     expect(screen.getByRole("radio", { name: "Activado" })).toBeChecked();
-    expect(within(bloqueFactor()).getByText(`×${FACTOR}`)).toBeInTheDocument();
+    expect(within(bloqueFactor()).getByRole("textbox", { name: /Valor del factor/ })).toHaveValue(
+      FACTOR,
+    );
   });
 
   it("T20: encendido y apagado antes de guardar, vuelve apagado", async () => {
