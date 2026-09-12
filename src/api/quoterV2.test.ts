@@ -34,6 +34,11 @@ const V2_MODULES = [
   "features/cotizadorV2/V2ProductLines.tsx",
   "features/settings/QuoterV2Section.tsx",
   "features/settings/V2MaterialsTable.tsx",
+  "api/quoterV2Labor.ts",
+  "types/quoterV2Labor.ts",
+  "features/cotizadorV2/useQuoterV2Labor.ts",
+  "features/cotizadorV2/V2LaborLines.tsx",
+  "features/settings/V2WorkforceTable.tsx",
 ];
 
 describe("cliente del Cotizador V2", () => {

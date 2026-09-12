@@ -8,7 +8,13 @@ import {
   REFERENCE_DATA,
   SEQUENCES,
 } from "@/test/settingsFixtures";
-import { V2_CONFIG_PAGE, V2_MATERIALS, V2_MATERIAL_PRODUCTS } from "@/test/quoterV2Fixtures";
+import {
+  V2_CONFIG_PAGE,
+  V2_MATERIALS,
+  V2_MATERIAL_PRODUCTS,
+  V2_TECHNIQUES,
+  V2_WORKERS,
+} from "@/test/quoterV2Fixtures";
 import { csrfResponse, jsonResponse, mockFetch, renderApp } from "@/test/utils";
 
 /**
@@ -29,6 +35,9 @@ function mockSettings(overrides: { save?: Response } = {}) {
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/settings")) return jsonResponse(200, V2_CONFIG_PAGE);
+    // La pestana monta tambien los maestros de 010D.
+    if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
+    if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
     if (url.includes("/quoter-v2/materials")) {
       if ((init.method ?? "GET") === "PUT") {
         return overrides.save ?? jsonResponse(200, V2_MATERIALS.items[0]);

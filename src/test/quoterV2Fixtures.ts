@@ -167,3 +167,110 @@ export const V2_MATERIALS = {
     },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Fase 010D: mano de obra
+// ---------------------------------------------------------------------------
+
+/** S/120 en la jornada de 8 h del taller son S/15 la hora. */
+export const V2_WORKERS = {
+  items: [
+    {
+      id: 1,
+      name: "Celso",
+      worker_type: "INTERNAL",
+      active: true,
+      daily_rate: "120.000000",
+      workday_hours: null,
+      effective_workday_hours: "8.000000",
+      hourly_rate: "15.000000000000",
+      notes: null,
+      version: 1,
+    },
+    {
+      id: 2,
+      name: "Refuerzo externo",
+      worker_type: "EXTERNAL",
+      active: true,
+      daily_rate: "160.000000",
+      workday_hours: null,
+      effective_workday_hours: "8.000000",
+      hourly_rate: "20.000000000000",
+      notes: null,
+      version: 1,
+    },
+  ],
+};
+
+/** 50 piezas por jornada de 8 h son 6,25 por hora. */
+export const V2_TECHNIQUES = {
+  items: [
+    {
+      id: 3,
+      code: "vidriado",
+      name: "Vidriado",
+      active: true,
+      default_capacity_per_workday: "50.000000",
+      unit: "piezas",
+      requires_glaze: true,
+      units_per_hour: "6.250000000000",
+      notes: null,
+      version: 1,
+    },
+  ],
+};
+
+/** 75 piezas a 50 por jornada son 12 horas; a S/15, S/180. */
+export const V2_LABOR_PAGE = {
+  items: [
+    {
+      id: 11,
+      sort_order: 0,
+      v2_quotation_product_id: null,
+      worker_id: 1,
+      worker_name: "Celso",
+      worker_type: "INTERNAL",
+      daily_rate: "120.000000",
+      workday_hours: "8.000000",
+      hourly_rate: "15.000000000000",
+      rate_overridden: false,
+      technique_id: 3,
+      technique_name: "Vidriado",
+      technique_unit: "piezas",
+      standard_capacity: "50.000000",
+      quantity: "75.000000",
+      calculated_hours: "12.000000",
+      final_hours: "12.000000",
+      hours_overridden: false,
+      is_additional_personnel: false,
+      labor_cost: "180.000000000000000000",
+      warnings: ["V2_LABOR_WORKDAY_EXCEEDED"],
+    },
+  ],
+  labor_cost: "180.000000000000000000",
+  workday_load: [
+    {
+      worker_id: 1,
+      worker_name: "Celso",
+      workday_hours: "8.000000",
+      assigned_hours: "12.000000",
+      exceeds_workday: true,
+      minimum_days: 2,
+    },
+  ],
+  suggested_work_days: 2,
+  effective_work_days: null,
+};
+
+/** S/110 por 8 h y 50 piezas: 75 piezas son 12 h y S/165. */
+export const V2_ILLUSTRATION = {
+  enabled: true,
+  quantity: "75.000000",
+  notes: null,
+  daily_rate: "110.000000",
+  workday_hours: "8.000000",
+  capacity_per_workday: "50.000000",
+  hourly_rate: "13.750000000000",
+  hours: "12.000000",
+  cost: "165.000000000000000000",
+};

@@ -2,7 +2,13 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { V2_MATERIAL_PRODUCTS } from "@/test/quoterV2Fixtures";
+import {
+  V2_ILLUSTRATION,
+  V2_LABOR_PAGE,
+  V2_MATERIAL_PRODUCTS,
+  V2_TECHNIQUES,
+  V2_WORKERS,
+} from "@/test/quoterV2Fixtures";
 import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp } from "@/test/utils";
 
 const USER = {
@@ -101,6 +107,12 @@ function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, PASTAS);
+    // La pantalla monta tambien la mano de obra (010D): sin estas respuestas
+    // la vista se queda cargando y no se llega a las lineas de material.
+    if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
+    if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
+    if (url.includes("/labor")) return jsonResponse(200, V2_LABOR_PAGE);
+    if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
     // Antes que `/products` a secas: la URL de una línea TAMBIÉN lo contiene,
     // y confundirlas devolvería la página de líneas al catálogo de piezas.
     if (url.includes("/quotations-v2/7/products")) {
