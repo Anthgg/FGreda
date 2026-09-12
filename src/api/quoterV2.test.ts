@@ -39,6 +39,10 @@ const V2_MODULES = [
   "features/cotizadorV2/useQuoterV2Labor.ts",
   "features/cotizadorV2/V2LaborLines.tsx",
   "features/settings/V2WorkforceTable.tsx",
+  "api/quoterV2Firing.ts",
+  "types/quoterV2Firing.ts",
+  "features/cotizadorV2/useQuoterV2Firing.ts",
+  "features/cotizadorV2/V2FiringPanel.tsx",
 ];
 
 describe("cliente del Cotizador V2", () => {

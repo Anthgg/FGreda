@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import {
+  V2_FIRING,
   V2_ILLUSTRATION,
   V2_LABOR_PAGE,
   V2_MATERIAL_PRODUCTS,
@@ -62,6 +63,7 @@ function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
       return overrides.labor ?? jsonResponse(200, V2_LABOR_PAGE);
     }
     if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
+    if (url.includes("/firing")) return jsonResponse(200, V2_FIRING);
     if (url.includes("/planning")) return jsonResponse(200, V2_LABOR_PAGE);
     if (url.includes("/quotations-v2/7/products")) {
       // Una linea COMPLETA: la pantalla de materiales se monta en la misma
