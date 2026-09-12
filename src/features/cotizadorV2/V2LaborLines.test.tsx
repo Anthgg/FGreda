@@ -64,7 +64,43 @@ function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
     if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
     if (url.includes("/planning")) return jsonResponse(200, V2_LABOR_PAGE);
     if (url.includes("/quotations-v2/7/products")) {
-      return jsonResponse(200, { items: [], materials_cost: "0" });
+      // Una linea COMPLETA: la pantalla de materiales se monta en la misma
+      // pagina, y una respuesta a medias la reventaria —`warnings.map` sobre
+      // `undefined`— llevandose por delante la seccion que se quiere probar.
+      return jsonResponse(200, {
+        items: [
+          {
+            id: 4,
+            sort_order: 0,
+            product_id: null,
+            product_name: "Plato palta",
+            quantity: 20,
+            body_material_id: null,
+            body_material_name: null,
+            body_unit_weight: null,
+            body_uom: null,
+            body_cost_per_unit: null,
+            body_cost_is_override: false,
+            body_total_weight: "0.000000",
+            body_cost: "0.000000000000000000",
+            requires_glaze: false,
+            glaze_material_id: null,
+            glaze_material_name: null,
+            glaze_is_reference: false,
+            glaze_cost_per_unit: null,
+            glaze_cost_is_override: false,
+            glaze_percent: null,
+            glaze_ml_per_gram: null,
+            glaze_conversion_is_fallback: false,
+            glaze_total_weight: "0.000000",
+            glaze_volume_ml: "0.000000",
+            glaze_cost: "0.000000000000000000",
+            materials_cost: "0.000000000000000000",
+            warnings: [],
+          },
+        ],
+        materials_cost: "0.000000000000000000",
+      });
     }
     if (url.includes("/products")) {
       const tipo = new URL(url, "http://x").searchParams.get("product_type");
@@ -236,5 +272,51 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
     await user.tab();
 
     expect(await screen.findAllByRole("alert")).not.toHaveLength(0);
+  });
+
+  it("se puede volver al rendimiento estándar tras acordar horas", async () => {
+    // Sin esto, acordar unas horas sería irreversible: el campo no admite
+    // quedarse vacío —vacío no es cero— y no habría forma de deshacerlo.
+    const acordada = {
+      ...V2_LABOR_PAGE,
+      items: [{ ...V2_LABOR_PAGE.items[0]!, hours_overridden: true, final_hours: "20.000000" }],
+    };
+    const fetchSpy = mockV2({ labor: jsonResponse(200, acordada) });
+    renderApp(["/cotizador-v2/7"]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Celso · Vidriado");
+    await user.click(screen.getByRole("button", { name: /volver al estándar/i }));
+
+    await waitFor(() => {
+      const guardado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/labor/11") && (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(JSON.parse(String((guardado?.[1] as RequestInit).body))).toEqual({
+        final_hours_override: null,
+      });
+    });
+  });
+
+  it("el trabajo se puede vincular a un producto de la cotización", async () => {
+    const fetchSpy = mockV2();
+    renderApp(["/cotizador-v2/7"]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Celso · Vidriado");
+    const selectores = screen.getAllByRole("combobox", { name: "Producto" });
+    await user.click(selectores[0]!);
+    await user.click(await screen.findByRole("option", { name: "Plato palta" }));
+
+    await waitFor(() => {
+      const guardado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/labor/11") && (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(JSON.parse(String((guardado?.[1] as RequestInit).body))).toEqual({
+        v2_quotation_product_id: 4,
+      });
+    });
   });
 });

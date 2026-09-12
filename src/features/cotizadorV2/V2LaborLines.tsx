@@ -15,12 +15,15 @@ import {
   useV2Techniques,
   useV2Workers,
 } from "@/features/cotizadorV2/useQuoterV2Labor";
+import { useV2QuotationProducts } from "@/features/cotizadorV2/useQuoterV2Materials";
 import {
   LABOR_WARNING_LABEL,
   WORKER_TYPE_LABEL,
   type V2LaborLine,
   type V2WorkerLoad,
 } from "@/types/quoterV2Labor";
+
+const SIN_PRODUCTO = "";
 
 /**
  * Mano de obra de una cotización V2: quién hace qué, cuánto tarda y cuánto cuesta.
@@ -112,6 +115,7 @@ function Tarea({
   const borrar = useDeleteV2Labor(quotationId);
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
+  const productos = useV2QuotationProducts(quotationId);
   const [invalido, setInvalido] = useState<string | null>(null);
 
   const guardar = (cambios: Record<string, unknown>) =>
@@ -174,6 +178,29 @@ function Tarea({
           onChange={(valor) => guardar({ technique_id: Number(valor) })}
           disabled={!canEdit}
         />
+        <SelectField
+          label="Producto"
+          requirement="optional"
+          value={
+            tarea.v2_quotation_product_id === null
+              ? SIN_PRODUCTO
+              : String(tarea.v2_quotation_product_id)
+          }
+          options={[
+            { value: SIN_PRODUCTO, label: "Todo el pedido" },
+            ...(productos.data?.items ?? []).map((linea) => ({
+              value: String(linea.id),
+              label: linea.product_name ?? `Línea ${linea.id}`,
+            })),
+          ]}
+          onChange={(valor) =>
+            guardar({
+              v2_quotation_product_id: valor === SIN_PRODUCTO ? null : Number(valor),
+            })
+          }
+          disabled={!canEdit}
+          hint="Sin producto: apoya al pedido entero."
+        />
         <CampoDiferido
           label="Piezas por trabajar"
           value={tarea.quantity}
@@ -205,20 +232,34 @@ function Tarea({
       </dl>
 
       <div className="mt-4 grid grid-cols-1 gap-4 border-t border-black/[0.04] pt-4 sm:grid-cols-2">
-        <CampoDiferido
-          label="Horas finales"
-          value={tarea.final_hours}
-          onCommit={(valor) =>
-            numero(valor, "final_hours_override", "Indique las horas. Vacío no es cero.")
-          }
-          disabled={!canEdit}
-          inputMode="decimal"
-          hint={
-            tarea.hours_overridden
-              ? "Acordadas para este encargo. No cambian el estándar del catálogo."
-              : "Salen del rendimiento estándar. Puede ajustarlas para este encargo."
-          }
-        />
+        <div>
+          <CampoDiferido
+            label="Horas finales"
+            value={tarea.final_hours}
+            onCommit={(valor) =>
+              numero(valor, "final_hours_override", "Indique las horas. Vacío no es cero.")
+            }
+            disabled={!canEdit}
+            inputMode="decimal"
+            hint={
+              tarea.hours_overridden
+                ? "Acordadas para este encargo. No cambian el estándar del catálogo."
+                : "Salen del rendimiento estándar. Puede ajustarlas para este encargo."
+            }
+          />
+          {/* Sin esto, acordar unas horas sería irreversible: el campo no puede
+              quedar vacío —vacío no es cero— así que hace falta una forma
+              explícita de devolver la decisión al rendimiento estándar. */}
+          {canEdit && tarea.hours_overridden ? (
+            <button
+              type="button"
+              onClick={() => guardar({ final_hours_override: null })}
+              className="mt-2 text-xs font-semibold text-zinc-700 underline underline-offset-2 cursor-pointer"
+            >
+              Volver al estándar ({tarea.calculated_hours} h)
+            </button>
+          ) : null}
+        </div>
         <CampoDiferido
           label="Tarifa acordada por hora"
           value={tarea.rate_overridden ? tarea.hourly_rate : ""}
@@ -368,8 +409,10 @@ export function V2LaborLines({
   const planificar = useSetV2Planning(quotationId);
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
+  const productos = useV2QuotationProducts(quotationId);
   const [worker, setWorker] = useState(SIN_SELECCION);
   const [tecnica, setTecnica] = useState(SIN_SELECCION);
+  const [producto, setProducto] = useState(SIN_PRODUCTO);
   const [adicional, setAdicional] = useState(false);
 
   if (query.isPending) return <Spinner className="size-5" label="Cargando mano de obra..." />;
@@ -471,6 +514,21 @@ export function V2LaborLines({
                 className="max-w-xs"
               />
               <SelectField
+                label="Producto"
+                requirement="optional"
+                value={producto}
+                options={[
+                  { value: SIN_PRODUCTO, label: "Todo el pedido" },
+                  ...(productos.data?.items ?? []).map((linea) => ({
+                    value: String(linea.id),
+                    label: linea.product_name ?? `Línea ${linea.id}`,
+                  })),
+                ]}
+                onChange={setProducto}
+                hint="Sin producto: apoya al pedido entero."
+                className="max-w-xs"
+              />
+              <SelectField
                 label="Personal adicional"
                 requirement="optional"
                 value={adicional ? "SI" : "NO"}
@@ -493,11 +551,15 @@ export function V2LaborLines({
                       worker_id: Number(worker),
                       technique_id: Number(tecnica),
                       is_additional_personnel: adicional,
+                      ...(producto === SIN_PRODUCTO
+                        ? {}
+                        : { v2_quotation_product_id: Number(producto) }),
                     },
                     {
                       onSuccess: () => {
                         setWorker(SIN_SELECCION);
                         setTecnica(SIN_SELECCION);
+                        setProducto(SIN_PRODUCTO);
                         setAdicional(false);
                       },
                     },
