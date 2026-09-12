@@ -59,8 +59,11 @@ export function interpretarDecimal(
     return { tipo: "invalido", motivo: "Escriba un número. Puede usar coma o punto." };
   }
 
-  // La coma peruana y el punto son el mismo separador.
-  const canonico = limpio.replace(",", ".");
+  // La coma peruana y el punto son el mismo separador. Y un separador SIN
+  // decimales detras se cae: «2,» es lo que hay en pantalla justo antes de
+  // teclear el decimal, pero «2.» no es una forma canonica y no puede salir
+  // hacia la API. Se acepta lo que se escribio y se manda el numero que es.
+  const canonico = limpio.replace(",", ".").replace(/\.$/, "");
   // «-», «.» o «,» pasan la expresión regular y no son números: son un número a
   // medio escribir, y por eso se tratan como inválidos y no como vacío.
   if (canonico === "" || canonico === "-" || canonico === "." || canonico === "-.") {
@@ -104,7 +107,10 @@ export function interpretarEntero(texto: string): EstadoDecimal {
   if (!/^\d+$/.test(limpio)) {
     return { tipo: "invalido", motivo: "Escriba un número entero, sin decimales." };
   }
-  return { tipo: "valido", canonico: String(Number(limpio)) };
+  // Los ceros de cabeza se quitan con texto, no con `Number`: convertir aqui
+  // seria meter coma flotante en el unico fichero del proyecto que la tiene
+  // prohibida, y «0007» no necesita aritmetica para ser 7.
+  return { tipo: "valido", canonico: limpio.replace(/^0+(?=\d)/, "") };
 }
 
 /**

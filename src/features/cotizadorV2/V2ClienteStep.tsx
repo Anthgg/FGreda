@@ -51,6 +51,22 @@ const TIPOS_PRODUCCION: readonly V2ProductionType[] = ["RETAIL", "WHOLESALE"];
 const SIN_CLIENTE = "";
 
 /**
+ * Espera a que quien escribe pare antes de dejar viajar el texto.
+ *
+ * Sin esto, teclear un nombre de diez letras eran diez peticiones al maestro de
+ * terceros, y diez respuestas que podian llegar desordenadas: la de «Ma» podia
+ * resolverse despues de la de «Maria» y dejar en pantalla la lista equivocada.
+ */
+function useEspera(valor: string, milisegundos = 300): string {
+  const [reposado, setReposado] = useState(valor);
+  useEffect(() => {
+    const temporizador = setTimeout(() => setReposado(valor), milisegundos);
+    return () => clearTimeout(temporizador);
+  }, [valor, milisegundos]);
+  return reposado;
+}
+
+/**
  * Texto que se guarda al SALIR del campo, no en cada tecla.
  *
  * La misma razón que en `DecimalField`: escribir un nombre de ocho letras no
@@ -84,11 +100,12 @@ export function V2ClienteStep({
   const nombre = useTextoDiferido(cotizacion.name ?? "", (name) => guardar.mutate({ name }));
   const notas = useTextoDiferido(cotizacion.notes ?? "", (notes) => guardar.mutate({ notes }));
 
+  const busquedaReposada = useEspera(busqueda);
   const terceros = useQuery({
-    queryKey: ["quoter-v2", "clientes", busqueda],
+    queryKey: ["quoter-v2", "clientes", busquedaReposada],
     // Sin texto se traen los primeros veinte: abrir el paso y no ver nada
     // obligaría a adivinar que hay que escribir algo para que aparezca algo.
-    queryFn: () => fetchPartners({ search: busqueda, active: true, limit: 20 }),
+    queryFn: () => fetchPartners({ search: busquedaReposada, active: true, limit: 20 }),
   });
 
   const esExtranjera = (cotizacion.currency_code ?? "PEN") !== "PEN";

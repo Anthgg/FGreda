@@ -110,19 +110,29 @@ function CampoDeTexto({
   hint?: string | undefined;
 }) {
   const [borrador, setBorrador] = useState(value);
-  // Si el valor guardado cambia por fuera —otra edición, un refetch—, el campo
-  // lo sigue. Mientras se escribe no hay refetch en vuelo, así que esto no
-  // pisa lo que el usuario está tecleando.
-  useEffect(() => setBorrador(value), [value]);
+  const [escribiendo, setEscribiendo] = useState(false);
+  // Si el valor guardado cambia por fuera —otra edición, un refetch— el campo
+  // lo sigue, pero NO mientras alguien lo tiene abierto: desde que cambiar
+  // cualquier cosa invalida la cotización entera, un refresco puede resolverse
+  // a mitad de una palabra, y borrarla sería peor que enseñar un valor viejo
+  // durante los segundos que dura la edición. Al salir se sincroniza igual.
+  useEffect(() => {
+    if (!escribiendo) setBorrador(value);
+  }, [value, escribiendo]);
 
   return (
     <TextField
       label={label}
       requirement="required"
       value={borrador}
+      onFocus={() => setEscribiendo(true)}
       onChange={setBorrador}
       onBlur={() => {
-        if (borrador !== value) onCommit(borrador);
+        setEscribiendo(false);
+        // Se compara y se manda ya recortado: un nombre con espacios al final
+        // es el mismo nombre y no merece ni una petición ni una fila distinta.
+        const limpio = borrador.trim();
+        if (limpio !== value.trim()) onCommit(limpio);
       }}
       disabled={disabled}
       {...(hint ? { hint } : {})}

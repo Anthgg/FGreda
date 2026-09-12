@@ -13,10 +13,15 @@ import type {
   V2MaterialUpsertInput,
   V2QuotationProductInput,
 } from "@/types/quoterV2Materials";
-import { V2_STALE_TIME } from "@/features/cotizadorV2/useQuoterV2";
+import {
+  invalidarCotizacion,
+  V2_LINES_KEY,
+  V2_MATERIALS_KEY,
+  V2_STALE_TIME,
+} from "@/features/cotizadorV2/claves";
 
-export const V2_MATERIALS_KEY = ["quoter-v2", "materials"] as const;
-export const V2_LINES_KEY = ["quoter-v2", "lines"] as const;
+export { V2_LINES_KEY, V2_MATERIALS_KEY } from "@/features/cotizadorV2/claves";
+
 
 export const useV2Materials = (kind?: V2MaterialKind) =>
   useQuery({
@@ -52,8 +57,9 @@ export const useAddV2QuotationProduct = (quotationId: number) => {
   return useMutation({
     mutationFn: (payload: V2QuotationProductInput) =>
       addV2QuotationProduct(quotationId, payload),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: [...V2_LINES_KEY, quotationId] }),
+    // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
+    // hornadas, el reparto de la quema y cada precio unitario.
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };
 
@@ -62,8 +68,9 @@ export const useUpdateV2QuotationProduct = (quotationId: number) => {
   return useMutation({
     mutationFn: (vars: { lineId: number; payload: V2QuotationProductInput }) =>
       updateV2QuotationProduct(quotationId, vars.lineId, vars.payload),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: [...V2_LINES_KEY, quotationId] }),
+    // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
+    // hornadas, el reparto de la quema y cada precio unitario.
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };
 
@@ -71,7 +78,8 @@ export const useDeleteV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (lineId: number) => deleteV2QuotationProduct(quotationId, lineId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: [...V2_LINES_KEY, quotationId] }),
+    // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
+    // hornadas, el reparto de la quema y cada precio unitario.
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };

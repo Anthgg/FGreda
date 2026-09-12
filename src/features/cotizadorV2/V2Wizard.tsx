@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { PrimaryButton, SecondaryButton } from "@/components/form";
@@ -113,10 +114,13 @@ function Indicador({
   onClick: () => void;
 }) {
   const avisos = estado.senales.filter((senal) => senal.severidad !== "error").length;
+  // Tres simbolos DISTINTOS, no dos colores sobre el mismo tic. Un «listo» y
+  // un «con avisos» que solo se diferencian en ambar contra esmeralda son la
+  // misma casilla para quien no distingue esos dos colores.
   const situacion = !estado.completo
     ? { simbolo: "!", texto: "incompleto", clase: "text-red-700 ring-red-300 bg-red-50" }
     : avisos > 0
-      ? { simbolo: "✓", texto: "con avisos", clase: "text-amber-800 ring-amber-300 bg-amber-50" }
+      ? { simbolo: "▲", texto: "con avisos", clase: "text-amber-800 ring-amber-300 bg-amber-50" }
       : { simbolo: "✓", texto: "listo", clase: "text-emerald-800 ring-emerald-300 bg-emerald-50" };
 
   return (
@@ -171,14 +175,39 @@ export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: Pas
 
   const irAPaso = (destino: PasoId) => navigate(`/cotizador-v2/${quotationId}/${destino}`);
 
-  // Sin paso en la URL —o con uno que no existe— se lleva al primero que falte.
-  // Al primero siempre haría repasar lo ya hecho; al último escondería lo que
-  // falta. Se espera a tener datos: decidir sobre una cotización a medio cargar
-  // mandaría a todo el mundo al paso 1.
-  const cargando = cotizacion.isPending || productos.isPending;
-  const actual: PasoId = paso ?? (cargando ? "cliente" : primerPasoIncompleto(estados));
+  // Esperar a las cinco sirve SOLO para decidir a qué paso llevar a quien abre
+  // la ficha sin decirlo: esa decisión necesita saber cuál falta, y con cuatro
+  // de cinco mandaría a la gente al paso equivocado.
+  //
+  // Lo que NO se hace es retener la pantalla entera hasta entonces. Cada panel
+  // resuelve su propia carga, y bloquear el flujo por la consulta más lenta
+  // dejaría mirando una ruedita para ver un paso cuyos datos ya estaban. Que un
+  // paso sin leer no se declare completo lo garantiza `pasos.ts`, no esta
+  // espera.
+  const cargando =
+    cotizacion.isPending ||
+    productos.isPending ||
+    manoDeObra.isPending ||
+    quema.isPending ||
+    precio.isPending;
 
-  if (cargando) return <Spinner className="size-5" label="Cargando la cotización..." />;
+  // Sin paso en la URL se lleva al primero que falte, y se hace UNA vez, con
+  // `replace` para no dejar basura en el historial. Derivarlo en cada render
+  // era peor que inútil: al elegir el cliente, el paso uno pasaba a completo y
+  // la pantalla saltaba sola al dos mientras la persona seguía mirando el uno.
+  useEffect(() => {
+    if (paso !== null || cargando) return;
+    navigate(`/cotizador-v2/${quotationId}/${primerPasoIncompleto(estados)}`, { replace: true });
+    // `estados` se recalcula en cada render; la dependencia real es haber
+    // terminado de cargar, que es cuando ese cálculo significa algo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso, cargando, quotationId, navigate]);
+
+  // Sin paso en la URL no hay nada que pintar todavía: elegir uno aquí sería
+  // decidir por cuenta propia, y la redirección de arriba está a punto de
+  // decirlo. Con paso, se pinta ya.
+  if (paso === null) return <Spinner className="size-5" label="Abriendo la cotización..." />;
+  const actual: PasoId = paso;
 
   const indice = PASOS.findIndex((item) => item.id === actual);
   const anterior = indice > 0 ? PASOS[indice - 1] : undefined;
@@ -209,7 +238,10 @@ export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: Pas
         </nav>
       </Panel>
 
-      {estadoActual && estadoActual.senales.length > 0 ? (
+      {/* Mientras algo sigue llegando no se opina: un paso sin leer figura como
+          incompleto —que es la verdad— pero anunciar «no se pudo leer» sobre
+          una consulta que aún está en vuelo sería una alarma falsa. */}
+      {!cargando && estadoActual && estadoActual.senales.length > 0 ? (
         <ul data-testid="senales-del-paso" className="space-y-1">
           {estadoActual.senales.map((senal, posicion) => (
             <li

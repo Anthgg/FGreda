@@ -23,12 +23,22 @@ import type {
   V2WorkerCreateInput,
   V2WorkerUpdateInput,
 } from "@/types/quoterV2Labor";
-import { V2_STALE_TIME } from "@/features/cotizadorV2/useQuoterV2";
+import {
+  invalidarCotizacion,
+  V2_ILLUSTRATION_KEY,
+  V2_LABOR_KEY,
+  V2_STALE_TIME,
+  V2_TECHNIQUES_KEY,
+  V2_WORKERS_KEY,
+} from "@/features/cotizadorV2/claves";
 
-export const V2_WORKERS_KEY = ["quoter-v2", "workers"] as const;
-export const V2_TECHNIQUES_KEY = ["quoter-v2", "techniques"] as const;
-export const V2_LABOR_KEY = ["quoter-v2", "labor"] as const;
-export const V2_ILLUSTRATION_KEY = ["quoter-v2", "illustration"] as const;
+export {
+  V2_ILLUSTRATION_KEY,
+  V2_LABOR_KEY,
+  V2_TECHNIQUES_KEY,
+  V2_WORKERS_KEY,
+} from "@/features/cotizadorV2/claves";
+
 
 export const useV2Workers = (activeOnly = false) =>
   useQuery({
@@ -93,7 +103,7 @@ export const useAddV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (payload: V2LaborInput) => addV2Labor(quotationId, payload),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...V2_LABOR_KEY, quotationId] }),
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };
 
@@ -102,7 +112,7 @@ export const useUpdateV2Labor = (quotationId: number) => {
   return useMutation({
     mutationFn: (vars: { laborId: number; payload: V2LaborInput }) =>
       updateV2Labor(quotationId, vars.laborId, vars.payload),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...V2_LABOR_KEY, quotationId] }),
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };
 
@@ -110,7 +120,7 @@ export const useDeleteV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (laborId: number) => deleteV2Labor(quotationId, laborId),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...V2_LABOR_KEY, quotationId] }),
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };
 
@@ -118,7 +128,7 @@ export const useSetV2Planning = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (effectiveWorkDays: number | null) => setV2Planning(quotationId, effectiveWorkDays),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...V2_LABOR_KEY, quotationId] }),
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };
 
@@ -132,6 +142,6 @@ export const useSetV2Illustration = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (payload: V2IllustrationInput) => setV2Illustration(quotationId, payload),
-    onSuccess: () => client.invalidateQueries({ queryKey: [...V2_ILLUSTRATION_KEY, quotationId] }),
+    onSuccess: () => invalidarCotizacion(client, quotationId),
   });
 };

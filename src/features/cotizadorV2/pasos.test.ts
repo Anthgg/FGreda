@@ -230,6 +230,77 @@ describe("recomendaciones: el sistema sugiere y no decide", () => {
   });
 });
 
+describe("un paso sin datos no está listo", () => {
+  it("lo que todavía no se ha leído no puede declararse completo", () => {
+    // Cada validación colgaba de `if (dato && ...)`, así que un `undefined`
+    // —la primera pintada, o una petición que falló— dejaba la lista de
+    // señales vacía y el paso pasaba por bueno. El resumen llegaba a anunciar
+    // que una cotización sin horno ni factor podía emitirse.
+    const vacio = evaluarPasos({
+      cotizacion: undefined,
+      productos: undefined,
+      manoDeObra: undefined,
+      quema: undefined,
+      precio: undefined,
+    });
+
+    expect(vacio.every((paso) => !paso.completo)).toBe(true);
+    expect(vacio).toHaveLength(7);
+  });
+
+  it("y el resumen tampoco: es justo el que anunciaría que todo está listo", () => {
+    const estados = evaluarPasos({ ...datos(), precio: undefined });
+    const resumen = estados.find((paso) => paso.id === "resumen");
+    expect(resumen?.completo).toBe(false);
+  });
+});
+
+describe("materiales: una pieza sin pasta cuesta cero y se dice", () => {
+  it("si todas la tienen, no hay nada que decir", () => {
+    expect(estado("materiales", datos()).senales).toHaveLength(0);
+  });
+
+  it("si falta en alguna, avisa sin bloquear", () => {
+    // Costearía sus materiales en cero sin que nada lo dijera. Bloquear sería
+    // excesivo: una pieza comprada y solo quemada no lleva pasta.
+    const paso = estado(
+      "materiales",
+      datos({
+        productos: {
+          items: [LINEA_COMPLETA, { ...LINEA_COMPLETA, id: 12, body_material_id: null }],
+          materials_cost: "13",
+        },
+      }),
+    );
+    expect(paso.completo).toBe(true);
+    expect(paso.senales.some((s) => s.severidad === "aviso")).toBe(true);
+  });
+
+  it("si falta en todas, es un error", () => {
+    const paso = estado(
+      "materiales",
+      datos({
+        productos: {
+          items: [{ ...LINEA_COMPLETA, body_material_id: null }],
+          materials_cost: "0",
+        },
+      }),
+    );
+    expect(paso.completo).toBe(false);
+  });
+});
+
+describe("mano de obra: cero días efectivos es una decisión, no un olvido", () => {
+  it("avisa de que así no se cobra el espacio", () => {
+    const paso = estado(
+      "mano-de-obra",
+      datos({ manoDeObra: { ...V2_LABOR_PAGE, effective_work_days: 0 } }),
+    );
+    expect(paso.completo).toBe(true);
+    expect(paso.senales.some((s) => s.mensaje.match(/espacio/i))).toBe(true);
+  });
+});
+
 describe("a qué paso se lleva a quien abre un borrador", () => {
   it("al primero que esté incompleto", () => {
     const estados = evaluarPasos(datos({ quema: { ...V2_FIRING, kiln_id: null, warnings: [] } }));

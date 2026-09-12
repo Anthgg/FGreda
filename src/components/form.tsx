@@ -88,6 +88,14 @@ interface TextFieldProps {
    * intencion del usuario.
    */
   onBlur?: (() => void) | undefined;
+  /**
+   * Se avisa al ENTRAR en el campo.
+   *
+   * Lo usan los campos diferidos para dejar de sincronizarse con el servidor
+   * mientras alguien escribe: desde 010G un cambio invalida la cotizacion
+   * entera, y un refresco resuelto a mitad de una palabra la borraria.
+   */
+  onFocus?: (() => void) | undefined;
   disabled?: boolean | undefined;
   readOnly?: boolean | undefined;
   /**
@@ -110,6 +118,7 @@ export function TextField({
   value,
   onChange,
   onBlur,
+  onFocus,
   disabled = false,
   readOnly = false,
   type = "text",
@@ -135,6 +144,7 @@ export function TextField({
           value={value ?? ""}
           onChange={(event) => onChange(event.target.value)}
           onBlur={onBlur}
+          onFocus={onFocus}
           disabled={disabled}
           readOnly={readOnly}
           required={requirement === "required"}

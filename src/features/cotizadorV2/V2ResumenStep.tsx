@@ -88,9 +88,10 @@ export function V2ResumenStep({
       .map((senal) => ({ ...senal, paso: estado.id })),
   );
 
-  // Comparado como NÚMERO: un «-0.000000000000000000» no es una pérdida, y el
-  // signo del texto lo pintaría de rojo.
-  const perdida = Number(precio?.estimated_profit ?? 0) < 0;
+  // Quien declara la pérdida es el backend, no una resta hecha aquí. Mirar el
+  // signo de `estimated_profit` sería volver a decidir en la pantalla algo que
+  // el motor económico ya decidió, y con aritmética de coma flotante.
+  const perdida = precio?.warnings.includes("V2_PRICING_SELLING_BELOW_REAL_COST") ?? false;
 
   return (
     <div data-testid="paso-resumen" className="space-y-5">
@@ -292,7 +293,9 @@ export function V2ResumenStep({
             }
           />
           <Cifra
-            label="Ganancia estimada"
+            // «(pérdida)» escrito, no solo el importe en rojo: el color por sí
+            // solo no distingue una venta a pérdida para quien no lo ve.
+            label={perdida ? "Ganancia estimada (pérdida)" : "Ganancia estimada"}
             value={dinero(precio?.estimated_profit)}
             hint={`Margen efectivo ${Number(precio?.effective_margin_percent ?? 0).toFixed(2)} %`}
             {...(perdida ? { tone: "negativo" as const } : {})}

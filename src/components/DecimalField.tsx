@@ -49,6 +49,30 @@ interface DecimalFieldProps {
   className?: string | undefined;
 }
 
+/**
+ * Si dos textos representan la misma cifra.
+ *
+ * Sin pasar por `Number`: se comparan las formas canónicas, que es lo que
+ * viajaría a la API. `paraEditar` ya quita los ceros de cola del lado guardado.
+ */
+function mismoNumero(canonico: string, guardado: string): boolean {
+  if (guardado.trim() === "") return false;
+  const otro = interpretarDecimal(guardado);
+  if (otro.tipo !== "valido") return false;
+  return normalizar(canonico) === normalizar(otro.canonico);
+}
+
+/** La forma mínima de un decimal en texto: sin ceros de cabeza ni de cola. */
+function normalizar(valor: string): string {
+  const negativo = valor.startsWith("-");
+  const cuerpo = negativo ? valor.slice(1) : valor;
+  const [entera = "", decimal = ""] = cuerpo.split(".");
+  const izquierda = entera.replace(/^0+(?=\d)/, "") || "0";
+  const derecha = decimal.replace(/0+$/, "");
+  const texto = derecha === "" ? izquierda : `${izquierda}.${derecha}`;
+  return texto === "0" ? "0" : (negativo ? "-" : "") + texto;
+}
+
 export function DecimalField({
   label,
   value,
@@ -63,16 +87,26 @@ export function DecimalField({
   const guardado = paraEditar(value);
   const [borrador, setBorrador] = useState(guardado);
   const [error, setError] = useState<string | null>(null);
+  const [escribiendo, setEscribiendo] = useState(false);
 
   // Si el valor guardado cambia por fuera —otra edición, un refetch, volver a
-  // un paso— el campo lo sigue. Mientras se escribe no hay refetch en vuelo,
-  // así que esto no pisa lo que el usuario está tecleando.
+  // un paso— el campo lo sigue. Pero NO mientras alguien tiene el campo
+  // abierto: desde que cambiar cualquier cosa invalida la cotización entera,
+  // un refresco puede resolverse a mitad de una palabra, y borrarla sería
+  // peor que enseñar un valor viejo durante los segundos que dura la edición.
+  // Al salir del campo se sincroniza igualmente.
   useEffect(() => {
+    // Ni mientras se escribe ni mientras hay un error en pantalla. Lo segundo
+    // importa tanto como lo primero: al salir del campo con algo que no es un
+    // numero, el error se pinta y el texto se conserva para poder corregirlo.
+    // Sincronizar ahi borraria las dos cosas y dejaria al usuario sin saber
+    // que su ultima edicion no se guardo.
+    if (escribiendo || error !== null) return;
     setBorrador(guardado);
-    setError(null);
-  }, [guardado]);
+  }, [guardado, escribiendo, error]);
 
   const confirmar = () => {
+    setEscribiendo(false);
     if (borrador === guardado) {
       setError(null);
       return;
@@ -83,6 +117,14 @@ export function DecimalField({
 
     if (estado.tipo === "invalido") {
       setError(estado.motivo);
+      return;
+    }
+    // Comparado como NÚMERO y no como texto. Con «5» guardado, escribir «5,0»
+    // —o «05», o «5.»— da distinto carácter a carácter y daba lugar a un
+    // guardado que no cambiaba nada: una petición, un recálculo de toda la
+    // cotización y una entrada de auditoría por reescribir el mismo valor.
+    if (estado.tipo === "valido" && mismoNumero(estado.canonico, guardado)) {
+      setError(null);
       return;
     }
     if (estado.tipo === "vacio") {
@@ -105,6 +147,7 @@ export function DecimalField({
       label={label}
       requirement={requirement}
       value={borrador}
+      onFocus={() => setEscribiendo(true)}
       onChange={(texto) => {
         setBorrador(texto);
         // El error se retira en cuanto se toca el campo: dejarlo puesto

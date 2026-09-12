@@ -261,6 +261,46 @@ describe("Flujo de siete pasos del Cotizador V2 (Fase 010G)", () => {
     expect(guardadosDeCabecera(spy)).toHaveLength(0);
   });
 
+  it("completar un paso NO salta solo al siguiente", async () => {
+    // Sin paso en la URL, el actual se derivaba en cada render: al elegir el
+    // cliente, el paso uno pasaba a completo y la pantalla saltaba sola al dos
+    // mientras la persona seguía mirando el uno. El sistema decidiendo, que es
+    // justo lo que esta fase prohíbe.
+    const spy = mockV2({ cotizacion: { customer_id: null, customer_name: null } });
+    renderApp(["/cotizador-v2/7"]);
+    const user = userEvent.setup();
+
+    await screen.findByTestId("paso-cliente");
+    await user.click(screen.getByRole("combobox", { name: "Cliente" }));
+    await user.click(await screen.findByRole("option", { name: /Cliente demo/ }));
+
+    await waitFor(() => expect(guardadosDeCabecera(spy).length).toBeGreaterThan(0));
+    // Sigue en el paso uno: la cotización cambió, la pantalla no.
+    expect(screen.getByTestId("paso-cliente")).toBeInTheDocument();
+  });
+
+  it("cambiar algo vuelve a pedir el precio: el backend recalcula en cascada", async () => {
+    // Cada cambio dentro de la cotización mueve el motor económico entero.
+    // Si la mutación solo invalidara su propia clave, el resumen enseñaría un
+    // total viejo junto a unas líneas nuevas y las dos cifras no cuadrarían.
+    const spy = mockV2();
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+
+    await screen.findByTestId("paso-cliente");
+    const lecturasDePrecioAntes = spy.mock.calls.filter(([url]) =>
+      String(url).includes("/pricing"),
+    ).length;
+
+    await user.click(screen.getByRole("combobox", { name: "Tipo de cliente" }));
+    await user.click(await screen.findByRole("option", { name: "Alumno" }));
+
+    await waitFor(() => {
+      const ahora = spy.mock.calls.filter(([url]) => String(url).includes("/pricing")).length;
+      expect(ahora).toBeGreaterThan(lecturasDePrecioAntes);
+    });
+  });
+
   it("un error del paso se explica arriba y se marca como falta", async () => {
     mockV2({ cotizacion: { customer_id: null, customer_name: null } });
 
@@ -276,7 +316,10 @@ describe("Flujo de siete pasos del Cotizador V2 (Fase 010G)", () => {
 
     renderApp(["/cotizador-v2/7/quema"]);
 
-    const senales = await screen.findByTestId("senales-del-paso");
+    // Se espera al texto, no al contenedor: el contenedor aparece en cuanto el
+    // paso se pinta y los datos llegan después.
+    expect(await screen.findByText(/supera el horno/i)).toBeInTheDocument();
+    const senales = screen.getByTestId("senales-del-paso");
     expect(within(senales).getByText(/supera el horno/i)).toBeInTheDocument();
     const barra = screen.getByTestId("pasos-cotizacion");
     const quema = within(barra).getByRole("button", { name: /5\. Quema/ });
@@ -290,8 +333,11 @@ describe("Flujo de siete pasos del Cotizador V2 (Fase 010G)", () => {
 
     renderApp(["/cotizador-v2/7/quema"]);
 
+    // El aviso aparece dos veces: en el panel de quema, que lista los codigos
+    // del backend, y en la barra de señales del paso, que ademas les pone
+    // severidad. Lo que se comprueba aqui es lo segundo.
     const senales = await screen.findByTestId("senales-del-paso");
-    expect(within(senales).getByText(/Recomendación:/)).toBeInTheDocument();
+    expect(await within(senales).findByText(/Recomendación:/)).toBeInTheDocument();
     expect(within(senales).getByText(/horno más chico/i)).toBeInTheDocument();
   });
 });
@@ -326,7 +372,8 @@ describe("El resumen (paso 7)", () => {
 
     renderApp(["/cotizador-v2/7/resumen"]);
 
-    const precio = await screen.findByTestId("resumen-precio");
+    expect(await screen.findByText("S/ 9077.74")).toBeInTheDocument();
+    const precio = screen.getByTestId("resumen-precio");
     expect(within(precio).getByText("S/ 9077.74")).toBeInTheDocument();
     expect(within(precio).queryByText(/9077\.740000000000000000/)).not.toBeInTheDocument();
   });
@@ -336,8 +383,9 @@ describe("El resumen (paso 7)", () => {
 
     renderApp(["/cotizador-v2/7/resumen"]);
 
-    const precio = await screen.findByTestId("resumen-precio");
     // Subtotal 7693 + IGV 1384.74 = 9077.74. La pantalla los pinta, no los suma.
+    expect(await screen.findByText("S/ 7693.00")).toBeInTheDocument();
+    const precio = screen.getByTestId("resumen-precio");
     expect(within(precio).getByText("S/ 7693.00")).toBeInTheDocument();
     expect(within(precio).getByText("S/ 9077.74")).toBeInTheDocument();
   });

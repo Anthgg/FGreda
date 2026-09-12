@@ -49,10 +49,13 @@ describe("interpretación de un campo decimal", () => {
     }
   });
 
-  it("admite un decimal a medio escribir que ya tiene parte entera", () => {
-    // «2,» es lo que hay en pantalla justo antes de teclear el decimal. Que se
-    // acepte como 2 evita que el campo se ponga en rojo mientras se escribe.
-    expect(interpretarDecimal("2,")).toEqual({ tipo: "valido", canonico: "2." });
+  it("admite un decimal a medio escribir y lo manda sin el separador suelto", () => {
+    // «2,» es lo que hay en pantalla justo antes de teclear el decimal: que se
+    // acepte evita que el campo se ponga en rojo mientras se escribe. Pero lo
+    // que sale hacia la API es «2», porque «2.» no es una forma canonica y
+    // tabular justo ahi no puede mandar un separador colgando.
+    expect(interpretarDecimal("2,")).toEqual({ tipo: "valido", canonico: "2" });
+    expect(interpretarDecimal("2.")).toEqual({ tipo: "valido", canonico: "2" });
   });
 
   it("rechaza lo que no es un número y dice por qué", () => {
@@ -106,6 +109,17 @@ describe("el texto canónico que viaja a la API", () => {
 describe("enteros", () => {
   it("acepta un entero", () => {
     expect(interpretarEntero("20")).toEqual({ tipo: "valido", canonico: "20" });
+  });
+
+  it("quita los ceros de cabeza sin pasar por Number", () => {
+    expect(interpretarEntero("0007")).toEqual({ tipo: "valido", canonico: "7" });
+    expect(interpretarEntero("0")).toEqual({ tipo: "valido", canonico: "0" });
+    // Dieciocho digitos sobreviven enteros: `Number` habria redondeado los
+    // ultimos y nadie lo habria notado hasta ver la cantidad equivocada.
+    expect(interpretarEntero("123456789012345678")).toEqual({
+      tipo: "valido",
+      canonico: "123456789012345678",
+    });
   });
 
   it("el vacío sigue siendo ausencia", () => {

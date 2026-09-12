@@ -71,6 +71,23 @@ export interface DatosDelFlujo {
   readonly precio: V2Pricing | undefined;
 }
 
+/**
+ * Un paso cuyos datos todavia no han llegado NO esta completo.
+ *
+ * Parece obvio y no lo era: como cada validacion colgaba de `if (dato && ...)`,
+ * un `undefined` —la primera pintada, o una peticion que fallo— dejaba la lista
+ * de senales vacia y el paso se daba por bueno. El resumen llegaba a anunciar
+ * que una cotizacion sin horno, sin dias y sin factor podia emitirse.
+ *
+ * Se dice una vez aqui en vez de repetir la comprobacion en los siete sitios,
+ * que es justo como se cuela el octavo.
+ */
+const sinDatos = (id: PasoId): EstadoPaso => ({
+  id,
+  completo: false,
+  senales: [{ severidad: "error", mensaje: "Todavia no se pudo leer este paso." }],
+});
+
 const error = (mensaje: string): Senal => ({ severidad: "error", mensaje });
 const aviso = (mensaje: string): Senal => ({ severidad: "aviso", mensaje });
 const recomendacion = (mensaje: string): Senal => ({ severidad: "recomendacion", mensaje });
@@ -93,12 +110,13 @@ function esPositivo(valor: string | null | undefined): boolean {
 }
 
 function pasoCliente(datos: DatosDelFlujo): EstadoPaso {
-  const senales: Senal[] = [];
   const ctz = datos.cotizacion;
-  if (ctz && ctz.customer_id === null) {
+  if (!ctz) return sinDatos("cliente");
+  const senales: Senal[] = [];
+  if (ctz.customer_id === null) {
     senales.push(error("Falta el cliente de la cotización."));
   }
-  if (ctz && ctz.currency_code !== "PEN" && !esPositivo(ctz.exchange_rate)) {
+  if (ctz.currency_code !== "PEN" && !esPositivo(ctz.exchange_rate)) {
     // En moneda extranjera el tipo de cambio es obligatorio: sin él la
     // cotización no puede convertirse y el motor tendría que leer el de hoy,
     // que es justo lo que los snapshots impiden.
@@ -108,8 +126,9 @@ function pasoCliente(datos: DatosDelFlujo): EstadoPaso {
 }
 
 function pasoProductos(datos: DatosDelFlujo): EstadoPaso {
+  if (!datos.productos) return sinDatos("productos");
   const senales: Senal[] = [];
-  const lineas = datos.productos?.items ?? [];
+  const lineas = datos.productos.items;
   if (lineas.length === 0) {
     senales.push(error("Añada al menos un producto."));
   }
@@ -125,10 +144,22 @@ function pasoProductos(datos: DatosDelFlujo): EstadoPaso {
 }
 
 function pasoMateriales(datos: DatosDelFlujo): EstadoPaso {
+  if (!datos.productos) return sinDatos("materiales");
   const senales: Senal[] = [];
-  const lineas = datos.productos?.items ?? [];
-  if (lineas.length > 0 && lineas.every((linea) => linea.body_material_id === null)) {
+  const lineas = datos.productos.items;
+  const sinPasta = lineas.filter((linea) => linea.body_material_id === null).length;
+  if (lineas.length > 0 && sinPasta === lineas.length) {
     senales.push(error("Ninguna pieza tiene pasta asignada."));
+  } else if (sinPasta > 0) {
+    // Que UNA pieza se quede sin pasta no bloquea —puede ser comprada y solo
+    // quemada— pero costearia sus materiales en cero sin que nada lo dijera.
+    senales.push(
+      aviso(
+        sinPasta === 1
+          ? "Una pieza no tiene pasta asignada: sus materiales cuestan cero."
+          : `${sinPasta} piezas no tienen pasta asignada: sus materiales cuestan cero.`,
+      ),
+    );
   }
   for (const linea of lineas) {
     if (linea.warnings.includes("V2_GLAZE_REFERENCE_WITHOUT_STOCK")) {
@@ -144,33 +175,39 @@ function pasoMateriales(datos: DatosDelFlujo): EstadoPaso {
 }
 
 function pasoManoDeObra(datos: DatosDelFlujo): EstadoPaso {
-  const senales: Senal[] = [];
   const pagina = datos.manoDeObra;
-  if (pagina && pagina.items.length === 0) {
+  if (!pagina) return sinDatos("mano-de-obra");
+  const senales: Senal[] = [];
+  if (pagina.items.length === 0) {
     // Una cotización sin mano de obra es rara pero no imposible: una pieza
     // comprada y solo quemada existe. Se avisa.
     senales.push(aviso("No hay trabajo asignado todavía."));
   }
-  if (pagina?.workday_load.some((carga) => carga.exceeds_workday)) {
+  if (pagina.workday_load.some((carga) => carga.exceeds_workday)) {
     senales.push(
       aviso("A alguien se le asignaron más horas de las que caben en su jornada. Usted decide."),
     );
   }
-  if (pagina && pagina.effective_work_days === null) {
+  if (pagina.effective_work_days === null) {
     // Sin días efectivos no entra el espacio, y el precio sale corto. Es una
     // decisión humana: el sistema sugiere el mínimo y no elige.
     senales.push(error("Falta decidir los días efectivos de taller."));
+  } else if (pagina.effective_work_days === 0) {
+    // Cero es una decisión válida —un encargo que no ocupa taller— pero deja el
+    // costo de espacio en cero, y eso se dice en vez de pasar callando.
+    senales.push(aviso("Con cero días efectivos no se cobra nada por el espacio."));
   }
   return { id: "mano-de-obra", completo: !senales.some((s) => s.severidad === "error"), senales };
 }
 
 function pasoQuema(datos: DatosDelFlujo): EstadoPaso {
-  const senales: Senal[] = [];
   const quema = datos.quema;
-  if (quema && quema.kiln_id === null) {
+  if (!quema) return sinDatos("quema");
+  const senales: Senal[] = [];
+  if (quema.kiln_id === null) {
     senales.push(error("Elija el horno de la cotización."));
   }
-  for (const codigo of quema?.warnings ?? []) {
+  for (const codigo of quema.warnings) {
     if (codigo === "V2_FIRING_KILN_NOT_SELECTED") continue;
     if (codigo === "V2_FIRING_RATES_MISSING") {
       senales.push(error("El horno no tiene tarifas configuradas: la quema costearía cero."));
@@ -201,23 +238,25 @@ const MENSAJE_QUEMA: Record<string, string> = {
 };
 
 function pasoPrecio(datos: DatosDelFlujo): EstadoPaso {
-  const senales: Senal[] = [];
   const precio = datos.precio;
-  if (precio && precio.commercial_factor === null) {
+  if (!precio) return sinDatos("precio");
+  const senales: Senal[] = [];
+  if (precio.commercial_factor === null) {
     senales.push(error("Elija el factor comercial."));
   }
-  if (precio?.warnings.includes("V2_PRICING_SELLING_BELOW_REAL_COST")) {
+  if (precio.warnings.includes("V2_PRICING_SELLING_BELOW_REAL_COST")) {
     senales.push(aviso("El precio está por debajo del costo real: se vendería a pérdida."));
   }
-  if (precio?.warnings.includes("V2_PRICING_TAX_NOT_SET")) {
+  if (precio.warnings.includes("V2_PRICING_TAX_NOT_SET")) {
     senales.push(aviso("La configuración de la empresa no declara IGV."));
   }
   return { id: "precio", completo: !senales.some((s) => s.severidad === "error"), senales };
 }
 
 function pasoResumen(datos: DatosDelFlujo): EstadoPaso {
+  if (!datos.precio) return sinDatos("resumen");
   const senales: Senal[] = [];
-  if (datos.precio && !esPositivo(datos.precio.total)) {
+  if (!esPositivo(datos.precio.total)) {
     senales.push(aviso("Todavía no hay un total que resumir."));
   }
   return { id: "resumen", completo: true, senales };

@@ -72,6 +72,24 @@ describe("DecimalField", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it("escribir la misma cifra de otra forma tampoco gasta una petición", async () => {
+    // «500» guardado y «500,0» escrito son el mismo número. Comparando texto
+    // no lo eran, y cada visita al campo mandaba un guardado que no cambiaba
+    // nada: una petición, un recálculo de la cotización entera y una entrada
+    // de auditoría por reescribir el mismo valor.
+    const onCommit = vi.fn();
+    render(<DecimalField label="Peso" value="500.000000" onCommit={onCommit} />);
+    const user = userEvent.setup();
+
+    for (const forma of ["500,0", "0500", "500."]) {
+      await user.clear(screen.getByLabelText(/^Peso/));
+      await user.type(screen.getByLabelText(/^Peso/), forma);
+      await user.tab();
+    }
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it("enseña el valor guardado sin los ceros de cola", () => {
     render(<DecimalField label="Costo" value="0.001300" onCommit={vi.fn()} />);
     expect(screen.getByLabelText(/^Costo/)).toHaveValue("0.0013");
@@ -125,7 +143,14 @@ describe("DecimalField", () => {
     await user.tab();
     expect(screen.getByText(/coma o punto/i)).toBeInTheDocument();
 
+    // `user.type` CONCATENA: sin limpiar antes, el campo quedaria en «abc1» y
+    // la prueba pasaria por el motivo equivocado —cualquier tecla retira el
+    // error— sin comprobar nunca que lo escrito ya es valido.
+    await user.clear(screen.getByLabelText(/^Peso/));
     await user.type(screen.getByLabelText(/^Peso/), "1");
+    expect(screen.queryByText(/coma o punto/i)).toBeNull();
+
+    await user.tab();
     expect(screen.queryByText(/coma o punto/i)).toBeNull();
   });
 });
