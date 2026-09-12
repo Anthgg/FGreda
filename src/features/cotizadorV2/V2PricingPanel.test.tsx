@@ -147,6 +147,40 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     expect(within(panel).queryByLabelText(/porcentaje/i)).toBeNull();
   });
 
+  it("ofrece los factores que la configuracion permite, no una lista fija", async () => {
+    // El suelo de ×2 es regla cerrada; el techo NO: ×3 es solo el valor por
+    // defecto y la casa puede subirlo. Con el maximo en ×10 el selector tiene
+    // que ofrecerlos, o el taller no podria elegir lo que acaba de habilitar.
+    mockV2({
+      pricing: jsonResponse(200, {
+        ...V2_PRICING,
+        factor_min: "2.000000",
+        factor_max: "10.000000",
+      }),
+    });
+
+    renderApp(["/cotizador-v2/7"]);
+    const panel = await panelDePrecio();
+    const user = userEvent.setup();
+    await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
+
+    expect(await screen.findByRole("option", { name: "×10.00" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "×4.00" })).toBeInTheDocument();
+    // Y el suelo sigue siendo x2: por debajo no se ofrece nada.
+    expect(screen.queryByRole("option", { name: "×1.75" })).toBeNull();
+  });
+
+  it("enseña un factor pactado que no cae en ningun paso", async () => {
+    mockV2({ pricing: jsonResponse(200, { ...V2_PRICING, commercial_factor: "2.100000" }) });
+
+    renderApp(["/cotizador-v2/7"]);
+
+    const panel = await panelDePrecio();
+    expect(within(panel).getByRole("combobox", { name: "Factor comercial" })).toHaveTextContent(
+      "×2.10",
+    );
+  });
+
   it("manda solo el factor al cambiarlo", async () => {
     const fetchMock = mockV2();
 

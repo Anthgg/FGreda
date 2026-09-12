@@ -308,6 +308,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
       if (url.includes("/labor")) return jsonResponse(200, V2_LABOR_PAGE);
       if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
       if (url.includes("/firing")) return jsonResponse(200, V2_FIRING);
+      if (url.includes("/pricing")) return jsonResponse(200, V2_PRICING);
       if (url.includes("/quotations-v2/7/products")) {
         return jsonResponse(200, { items: [], materials_cost: "0.000000000000000000" });
       }
