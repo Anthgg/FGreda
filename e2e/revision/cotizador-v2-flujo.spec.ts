@@ -258,10 +258,18 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     const alto = page.getByLabel(/alto \(cm\)/i).last();
     await alto.fill("20,5");
     await alto.blur();
+    // Primero se espera a que la app diga que TODO esta guardado, y despues se
+    // comprueba el valor exacto. Antes era un `poll` de 15 s que mezclaba dos
+    // preguntas —si el valor es correcto y si llego a tiempo— y fallo 2 de 17
+    // corridas completas: esta es la prueba con la cola de escrituras mas larga
+    // (cantidad, tres medidas y el alto, en fila detras del bloqueo de la
+    // cabecera). Separadas, un valor incorrecto sigue fallando; la lentitud de
+    // la cola deja de ser azar.
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+      timeout: 30_000,
+    });
     // Vuelve normalizada del backend, con punto y sin ceros de cola sobrantes.
-    await expect
-      .poll(async () => Number(await alto.inputValue()), { timeout: 15_000 })
-      .toBe(20.5);
+    await expect(alto).toHaveValue("20.5");
 
     // Y un peso de pasta con coma, en otro paso y otro componente: la regla es
     // una sola para todo el flujo, no cuatro parecidas.
@@ -274,7 +282,10 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     const peso = page.getByLabel(/pasta por pieza/i).first();
     await peso.fill("1,25");
     await peso.blur();
-    await expect.poll(async () => Number(await peso.inputValue()), { timeout: 15_000 }).toBe(1.25);
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+      timeout: 30_000,
+    });
+    await expect(peso).toHaveValue("1.25");
 
     // Lo que NO se acepta: una cantidad de piezas con decimales. Truncar
     // «10,5 piezas» dejaria media pieza menos sin que nada lo dijera.
