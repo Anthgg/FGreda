@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useIsMutating } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { PrimaryButton, SecondaryButton } from "@/components/form";
@@ -152,8 +153,43 @@ function Indicador({
   );
 }
 
+/**
+ * Cuántos guardados siguen en vuelo, y la protección de la recarga mientras los haya.
+ *
+ * Lo encontró la E2E de la revisión, no una prueba de componente. Cada escritura
+ * sobre una cotización toma el bloqueo de su cabecera, así que varias seguidas
+ * se ponen en fila: la sexta de un recorrido rápido espera varios segundos. Si en
+ * ese intervalo alguien recargaba la página, el navegador abortaba la petición
+ * pendiente y el cambio se perdía EN SILENCIO, mientras la pantalla seguía
+ * diciendo que todo se guarda solo.
+ *
+ * Dos remedios, los dos necesarios:
+ *
+ * - **decir la verdad**: «guardando» mientras quede algo pendiente, «guardado»
+ *   solo cuando no. Una promesa de autoguardado que no distingue esos dos
+ *   estados es la que hace que alguien recargue a mitad;
+ * - **frenar la recarga y el cierre** mientras haya guardados pendientes. El
+ *   navegador pregunta antes de salir; navegar entre pasos no se frena, porque
+ *   dentro de la aplicación las peticiones siguen su curso.
+ */
+function useGuardadosPendientes(): number {
+  const pendientes = useIsMutating();
+  useEffect(() => {
+    if (pendientes === 0) return;
+    const avisar = (evento: BeforeUnloadEvent) => {
+      evento.preventDefault();
+      // Algunos navegadores solo preguntan si `returnValue` tiene contenido.
+      evento.returnValue = "";
+    };
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [pendientes]);
+  return pendientes;
+}
+
 export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: PasoId | null }) {
   const navigate = useNavigate();
+  const guardadosPendientes = useGuardadosPendientes();
 
   // Las cinco consultas del flujo. Cada panel pide además las suyas, pero
   // TanStack las comparte por clave: esto no duplica ni una petición, y da a
@@ -286,11 +322,22 @@ export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: Pas
             </SecondaryButton>
           ) : null}
         </div>
-        {/* No hay botón de «guardar borrador»: cada campo guarda al salir de él,
-            así que no queda nada pendiente que un botón pudiera confirmar. Uno
-            que no hiciera nada solo serviría para que alguien creyera que sin
-            pulsarlo se pierde el trabajo. */}
-        <p className="text-[11px] text-zinc-400">Los cambios se guardan solos al salir de cada campo.</p>
+        {/* No hay botón de «guardar borrador»: cada campo guarda al salir de él.
+            Lo que sí hay es el ESTADO de esos guardados, porque «se guarda solo»
+            sin distinguir pendiente de hecho es lo que invita a recargar a mitad. */}
+        <p
+          data-testid="estado-guardado"
+          role="status"
+          aria-live="polite"
+          className={[
+            "text-[11px]",
+            guardadosPendientes > 0 ? "font-medium text-amber-700" : "text-zinc-500",
+          ].join(" ")}
+        >
+          {guardadosPendientes > 0
+            ? "Guardando cambios… no cierre ni recargue la página."
+            : "Todos los cambios guardados."}
+        </p>
         <div>
           {siguiente ? (
             <PrimaryButton type="button" onClick={() => irAPaso(siguiente.id)}>

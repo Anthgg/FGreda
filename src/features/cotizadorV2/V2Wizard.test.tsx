@@ -301,6 +301,38 @@ describe("Flujo de siete pasos del Cotizador V2 (Fase 010G)", () => {
     });
   });
 
+  it("dice «guardando» mientras hay una escritura en vuelo, y no antes de tiempo «guardado»", async () => {
+    // Lo encontro la E2E de la revision: las escrituras de una cotizacion se
+    // ponen en fila detras del bloqueo de su cabecera, y una recarga a mitad
+    // perdia el cambio en silencio mientras la pantalla prometia que todo se
+    // guarda solo. La promesa tiene que distinguir pendiente de hecho.
+    let soltar: (() => void) | undefined;
+    const base = mockV2({ cotizacion: { customer_id: null, customer_name: null } });
+    const original = base.getMockImplementation();
+    base.mockImplementation(async (entrada, init) => {
+      const url = typeof entrada === "string" ? entrada : entrada.toString();
+      if (url.endsWith("/quotations-v2/7") && init?.method === "PUT") {
+        await new Promise<void>((resolver) => {
+          soltar = resolver;
+        });
+      }
+      return original!(entrada, init);
+    });
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+
+    const estado = await screen.findByTestId("estado-guardado");
+    expect(estado).toHaveTextContent(/todos los cambios guardados/i);
+
+    await user.click(screen.getByRole("combobox", { name: "Tipo de cliente" }));
+    await user.click(await screen.findByRole("option", { name: "Alumno" }));
+
+    await waitFor(() => expect(estado).toHaveTextContent(/guardando/i));
+
+    soltar?.();
+    await waitFor(() => expect(estado).toHaveTextContent(/todos los cambios guardados/i));
+  });
+
   it("un error del paso se explica arriba y se marca como falta", async () => {
     mockV2({ cotizacion: { customer_id: null, customer_name: null } });
 
