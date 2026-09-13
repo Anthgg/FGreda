@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts } from "@/api/masters";
 import { PrimaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { useBorradorProtegido } from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { EmptyState, Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -111,14 +112,37 @@ function CampoDeTexto({
 }) {
   const [borrador, setBorrador] = useState(value);
   const [escribiendo, setEscribiendo] = useState(false);
+  // Lo enviado y lo que había guardado al enviarlo: se sigue enseñando lo
+  // enviado hasta que lo guardado cambie o coincida. Ver `DecimalField`.
+  const [enviado, setEnviado] = useState<{ valor: string; antes: string } | null>(null);
   // Si el valor guardado cambia por fuera —otra edición, un refetch— el campo
   // lo sigue, pero NO mientras alguien lo tiene abierto: desde que cambiar
   // cualquier cosa invalida la cotización entera, un refresco puede resolverse
   // a mitad de una palabra, y borrarla sería peor que enseñar un valor viejo
   // durante los segundos que dura la edición. Al salir se sincroniza igual.
   useEffect(() => {
-    if (!escribiendo) setBorrador(value);
-  }, [value, escribiendo]);
+    if (escribiendo) return;
+    if (enviado !== null) {
+      const alcanzado = value !== enviado.antes || value.trim() === enviado.valor;
+      if (!alcanzado) return;
+      setEnviado(null);
+    }
+    setBorrador(value);
+  }, [value, escribiendo, enviado]);
+
+  const confirmar = () => {
+    setEscribiendo(false);
+    // Se compara y se manda ya recortado: un nombre con espacios al final es el
+    // mismo nombre y no merece ni una petición ni una fila distinta.
+    const limpio = borrador.trim();
+    if (limpio !== value.trim()) {
+      setEnviado({ valor: limpio, antes: value });
+      onCommit(limpio);
+    }
+  };
+  // Lo tecleado sin salir del campo cuenta como cambio sin guardar, y se
+  // confirma si el campo se desmonta sin blur.
+  useBorradorProtegido(borrador.trim() !== value.trim(), confirmar);
 
   return (
     <TextField
@@ -127,13 +151,7 @@ function CampoDeTexto({
       value={borrador}
       onFocus={() => setEscribiendo(true)}
       onChange={setBorrador}
-      onBlur={() => {
-        setEscribiendo(false);
-        // Se compara y se manda ya recortado: un nombre con espacios al final
-        // es el mismo nombre y no merece ni una petición ni una fila distinta.
-        const limpio = borrador.trim();
-        if (limpio !== value.trim()) onCommit(limpio);
-      }}
+      onBlur={confirmar}
       disabled={disabled}
       {...(hint ? { hint } : {})}
     />

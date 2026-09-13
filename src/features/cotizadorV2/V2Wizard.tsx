@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useIsMutating } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { PrimaryButton, SecondaryButton } from "@/components/form";
@@ -16,6 +15,9 @@ import { useV2Firing } from "@/features/cotizadorV2/useQuoterV2Firing";
 import { useV2Labor } from "@/features/cotizadorV2/useQuoterV2Labor";
 import { useV2QuotationProducts } from "@/features/cotizadorV2/useQuoterV2Materials";
 import { useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
+import { DESTINO_DE_GUARDADO } from "@/features/cotizadorV2/claves";
+import { useEstadoDeGuardado } from "@/features/cotizadorV2/useEstadoDeGuardado";
+import { describeError } from "@/features/settings/messages";
 import {
   PASOS,
   evaluarPasos,
@@ -153,43 +155,12 @@ function Indicador({
   );
 }
 
-/**
- * Cuántos guardados siguen en vuelo, y la protección de la recarga mientras los haya.
- *
- * Lo encontró la E2E de la revisión, no una prueba de componente. Cada escritura
- * sobre una cotización toma el bloqueo de su cabecera, así que varias seguidas
- * se ponen en fila: la sexta de un recorrido rápido espera varios segundos. Si en
- * ese intervalo alguien recargaba la página, el navegador abortaba la petición
- * pendiente y el cambio se perdía EN SILENCIO, mientras la pantalla seguía
- * diciendo que todo se guarda solo.
- *
- * Dos remedios, los dos necesarios:
- *
- * - **decir la verdad**: «guardando» mientras quede algo pendiente, «guardado»
- *   solo cuando no. Una promesa de autoguardado que no distingue esos dos
- *   estados es la que hace que alguien recargue a mitad;
- * - **frenar la recarga y el cierre** mientras haya guardados pendientes. El
- *   navegador pregunta antes de salir; navegar entre pasos no se frena, porque
- *   dentro de la aplicación las peticiones siguen su curso.
- */
-function useGuardadosPendientes(): number {
-  const pendientes = useIsMutating();
-  useEffect(() => {
-    if (pendientes === 0) return;
-    const avisar = (evento: BeforeUnloadEvent) => {
-      evento.preventDefault();
-      // Algunos navegadores solo preguntan si `returnValue` tiene contenido.
-      evento.returnValue = "";
-    };
-    window.addEventListener("beforeunload", avisar);
-    return () => window.removeEventListener("beforeunload", avisar);
-  }, [pendientes]);
-  return pendientes;
-}
-
 export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: PasoId | null }) {
   const navigate = useNavigate();
-  const guardadosPendientes = useGuardadosPendientes();
+  // El estado REAL de los guardados de ESTA cotización: escrituras en vuelo,
+  // errores que nadie ha resuelto y borradores tecleados sin enviar. Protege la
+  // recarga y el cierre mientras haya cualquiera de los tres.
+  const guardado = useEstadoDeGuardado(quotationId);
 
   // Las cinco consultas del flujo. Cada panel pide además las suyas, pero
   // TanStack las comparte por clave: esto no duplica ni una petición, y da a
@@ -274,6 +245,54 @@ export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: Pas
         </nav>
       </Panel>
 
+      {/* Un guardado rechazado se avisa en TODOS los pasos, no solo en el panel
+          que lo lanzó: si ya se ha cambiado de paso, ese panel no existe y el
+          error se habría perdido con él. Se queda hasta que el mismo dato se
+          guarde con éxito o el usuario lo descarte a sabiendas. */}
+      {guardado.fallidos.length > 0 ? (
+        <div
+          data-testid="guardados-fallidos"
+          role="alert"
+          className="rounded-2xl border border-red-300 bg-red-50 p-4 text-xs text-red-800"
+        >
+          <p className="font-semibold">
+            {guardado.fallidos.length === 1
+              ? "Un cambio NO se guardó."
+              : `${guardado.fallidos.length} cambios NO se guardaron.`}{" "}
+            Lo que ve en pantalla puede no ser lo que hay en el servidor.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {guardado.fallidos.map((fallo) => {
+              const destino = DESTINO_DE_GUARDADO[fallo.tipo];
+              return (
+                <li key={fallo.firma} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>
+                    No se pudo guardar <strong>{destino?.que ?? "un cambio"}</strong>:{" "}
+                    {describeError(fallo.error)}
+                  </span>
+                  {destino ? (
+                    <button
+                      type="button"
+                      onClick={() => irAPaso(destino.paso)}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Ir a corregirlo
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => guardado.descartar(fallo.firma)}
+                    className="text-red-700 underline underline-offset-2"
+                  >
+                    Descartar este cambio
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Mientras algo sigue llegando no se opina: un paso sin leer figura como
           incompleto —que es la verdad— pero anunciar «no se pudo leer» sobre
           una consulta que aún está en vuelo sería una alarma falsa. */}
@@ -331,12 +350,23 @@ export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: Pas
           aria-live="polite"
           className={[
             "text-[11px]",
-            guardadosPendientes > 0 ? "font-medium text-amber-700" : "text-zinc-500",
+            guardado.fallidos.length > 0
+              ? "font-semibold text-red-700"
+              : guardado.hayRiesgo
+                ? "font-medium text-amber-700"
+                : "text-zinc-500",
           ].join(" ")}
         >
-          {guardadosPendientes > 0
-            ? "Guardando cambios… no cierre ni recargue la página."
-            : "Todos los cambios guardados."}
+          {/* Por orden de gravedad: un rechazo manda sobre un guardado en
+              curso, y este sobre un borrador que aún no ha salido. «Guardados»
+              solo cuando no queda NADA de lo anterior. */}
+          {guardado.fallidos.length > 0
+            ? "Hay cambios que no se guardaron. Revíselos antes de salir."
+            : guardado.enVuelo > 0
+              ? "Guardando cambios… no cierre ni recargue la página."
+              : guardado.borradores > 0
+                ? "Hay cambios sin guardar: se guardan al salir del campo."
+                : "Todos los cambios guardados."}
         </p>
         <div>
           {siguiente ? (

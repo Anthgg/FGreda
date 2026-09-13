@@ -335,6 +335,11 @@ describe("Líneas de una cotización V2: piezas y materiales (010C, 010G)", () =
     await user.type(campo, "600");
     await user.tab();
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // El panel lo explica y el asistente lo recoge en un aviso que sobrevive a
+    // cambiar de paso: un error que vive solo en el panel se pierde con el.
+    expect((await screen.findAllByRole("alert")).length).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByTestId("guardados-fallidos")).toHaveTextContent(
+      /una línea de producto/i,
+    );
   });
 });

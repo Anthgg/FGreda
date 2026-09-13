@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchV2Pricing, setV2Pricing } from "@/api/quoterV2Pricing";
 import type { V2PricingInput } from "@/types/quoterV2Pricing";
 import {
+  claveDeGuardado,
   invalidarCotizacion,
+  RECORDAR_GUARDADO,
   V2_PRICING_KEY,
   V2_STALE_TIME,
 } from "@/features/cotizadorV2/claves";
@@ -28,6 +30,8 @@ export const useV2Pricing = (quotationId: number) =>
 export const useSetV2Pricing = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "precio"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2PricingInput) => setV2Pricing(quotationId, payload),
     onSuccess: () => invalidarCotizacion(client, quotationId),
   });

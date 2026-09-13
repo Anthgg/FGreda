@@ -71,3 +71,91 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): v
     void client.invalidateQueries({ queryKey: [...clave, quotationId] });
   }
 }
+
+/**
+ * Qué escribe una mutación de la cotización. Cada tipo es un sitio distinto
+ * donde un guardado puede fallar, y el asistente los nombra al avisar.
+ */
+export type TipoDeGuardado =
+  | "cabecera"
+  | "linea-anadir"
+  | "linea-editar"
+  | "linea-borrar"
+  | "tarea-anadir"
+  | "tarea-editar"
+  | "tarea-borrar"
+  | "planificacion"
+  | "ilustracion"
+  | "quema"
+  | "precio";
+
+/** Raíz de las escrituras de UNA cotización. Filtra el estado de guardado. */
+export const guardadosDeCotizacion = (quotationId: number) =>
+  ["cotizacion-v2", "guardado", quotationId] as const;
+
+/** Clave de una escritura concreta. */
+export const claveDeGuardado = (quotationId: number, tipo: TipoDeGuardado) =>
+  [...guardadosDeCotizacion(quotationId), tipo] as const;
+
+/**
+ * Cuánto tiempo se recuerda una escritura terminada.
+ *
+ * Para siempre, mientras dure la pestaña. Por defecto TanStack olvida una
+ * mutación sin observadores a los cinco minutos, y un error que se olvida es
+ * una protección que desaparece sola: el aviso de «no se pudo guardar» se
+ * esfumaba y la recarga volvía a perder el cambio sin preguntar.
+ */
+export const RECORDAR_GUARDADO = Number.POSITIVE_INFINITY;
+
+function claves(objeto: unknown): string {
+  return objeto && typeof objeto === "object" ? Object.keys(objeto).sort().join(",") : "";
+}
+
+/**
+ * A qué DATO afecta una escritura, para saber si un éxito posterior resuelve un error.
+ *
+ * Un fallo al guardar los días efectivos queda resuelto cuando esos días se
+ * guardan después con éxito, no cuando se guarda el nombre de la cotización. Por
+ * eso la firma distingue el tipo, la fila afectada y los campos que viajaban.
+ * Un alta es siempre distinta de otra: una línea que no se pudo añadir no se da
+ * por añadida porque se añada otra.
+ */
+export function firmaDeGuardado(tipo: string, variables: unknown): string {
+  const v = variables as Record<string, unknown> | number | null | undefined;
+  switch (tipo) {
+    case "linea-editar":
+    case "tarea-editar": {
+      const objeto = (v ?? {}) as Record<string, unknown>;
+      const fila = objeto.lineId ?? objeto.laborId;
+      return `${tipo}:${String(fila)}:${claves(objeto.payload)}`;
+    }
+    case "linea-borrar":
+    case "tarea-borrar":
+      return `${tipo}:${String(v)}`;
+    case "linea-anadir":
+    case "tarea-anadir":
+      return `${tipo}:${JSON.stringify(v)}`;
+    case "planificacion":
+      return tipo;
+    default:
+      return `${tipo}:${claves(v)}`;
+  }
+}
+
+/** Dónde se arregla cada tipo de escritura, y cómo se le llama al usuario. */
+export const DESTINO_DE_GUARDADO: Record<
+  TipoDeGuardado,
+  { paso: "cliente" | "productos" | "materiales" | "mano-de-obra" | "quema" | "precio"; que: string }
+> = {
+  cabecera: { paso: "cliente", que: "los datos de la cotización" },
+  "linea-anadir": { paso: "productos", que: "una línea nueva" },
+  "linea-editar": { paso: "productos", que: "una línea de producto" },
+  "linea-borrar": { paso: "productos", que: "quitar una línea" },
+  "tarea-anadir": { paso: "mano-de-obra", que: "una tarea nueva" },
+  "tarea-editar": { paso: "mano-de-obra", que: "una tarea" },
+  "tarea-borrar": { paso: "mano-de-obra", que: "quitar una tarea" },
+  planificacion: { paso: "mano-de-obra", que: "los días efectivos" },
+  ilustracion: { paso: "mano-de-obra", que: "la ilustración" },
+  quema: { paso: "quema", que: "la quema" },
+  precio: { paso: "precio", que: "el factor comercial" },
+};

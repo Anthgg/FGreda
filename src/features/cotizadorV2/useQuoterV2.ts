@@ -7,8 +7,10 @@ import {
   updateV2Quotation,
 } from "@/api/quoterV2";
 import {
+  claveDeGuardado,
   invalidarCotizacion,
   QUOTER_V2_KEY,
+  RECORDAR_GUARDADO,
   V2_STALE_TIME,
 } from "@/features/cotizadorV2/claves";
 import type { V2QuotationCreateInput, V2QuotationUpdateInput } from "@/types/quoterV2";
@@ -47,6 +49,8 @@ export const useV2Quotation = (id: number | null) =>
 export const useUpdateV2Quotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(id, "cabecera"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationUpdateInput) => updateV2Quotation(id, payload),
     onSuccess: () => invalidarCotizacion(client, id),
   });

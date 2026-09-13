@@ -90,6 +90,41 @@ describe("DecimalField", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it("tras salir del campo sigue ensenando lo enviado, no el valor anterior", async () => {
+    // Revision de Codex: al salir, el campo volvia a pintar lo guardado ANTES
+    // mientras el guardado nuevo seguia en vuelo. Quien volvia a entrar
+    // enseguida editaba el valor viejo y lo acababa guardando.
+    const onCommit = vi.fn();
+    render(<DecimalField label="Peso" value="500.000000" onCommit={onCommit} />);
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Peso/));
+    await user.type(screen.getByLabelText(/^Peso/), "300");
+    await user.tab();
+
+    // El padre todavia no ha recibido el valor nuevo: sigue diciendo 500.
+    expect(onCommit).toHaveBeenCalledWith("300");
+    expect(screen.getByLabelText(/^Peso/)).toHaveValue("300");
+  });
+
+  it("si se desmonta con cambios sin salir del campo, los confirma", async () => {
+    // Revision de Codex: volver atras con el navegador o cambiar de ruta no
+    // pasa por un blur, y lo tecleado desaparecia con el componente.
+    const onCommit = vi.fn();
+    const { unmount } = render(
+      <DecimalField label="Peso" value="500.000000" onCommit={onCommit} />,
+    );
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Peso/));
+    await user.type(screen.getByLabelText(/^Peso/), "250");
+    expect(onCommit).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith("250");
+  });
+
   it("enseña el valor guardado sin los ceros de cola", () => {
     render(<DecimalField label="Costo" value="0.001300" onCommit={vi.fn()} />);
     expect(screen.getByLabelText(/^Costo/)).toHaveValue("0.0013");

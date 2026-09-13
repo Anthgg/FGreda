@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPartners } from "@/api/masters";
+import { useBorradorProtegido } from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
@@ -75,16 +76,42 @@ function useEspera(valor: string, milisegundos = 300): string {
  */
 function useTextoDiferido(guardado: string, guardar: (valor: string | null) => void) {
   const [borrador, setBorrador] = useState(guardado);
-  useEffect(() => setBorrador(guardado), [guardado]);
+  const [escribiendo, setEscribiendo] = useState(false);
+  // Lo enviado y lo que había guardado al enviarlo: tras salir del campo se
+  // sigue enseñando lo enviado hasta que lo guardado cambie o coincida. Sin
+  // esto el campo volvía a pintar el valor ANTERIOR hasta el refetch, y quien
+  // volvía a entrar enseguida editaba el viejo.
+  const [enviado, setEnviado] = useState<{ valor: string; antes: string } | null>(null);
+  // No se sincroniza con lo guardado mientras el campo está abierto. Lo encontró
+  // Codex: escribir «Feria», salir —se guarda—, volver a entrar y seguir con
+  // «Feria de octubre»; al llegar el refetch lo guardado pasa a «Feria» y, sin
+  // esta guarda, el efecto borraba « de octubre» sin blur y sin aviso. Los
+  // campos numéricos y los de las líneas ya lo hacían; este se había quedado.
+  useEffect(() => {
+    if (escribiendo) return;
+    if (enviado !== null) {
+      const alcanzado = guardado !== enviado.antes || guardado.trim() === enviado.valor.trim();
+      if (!alcanzado) return;
+      setEnviado(null);
+    }
+    setBorrador(guardado);
+  }, [guardado, escribiendo, enviado]);
+
+  const confirmar = () => {
+    setEscribiendo(false);
+    if (borrador.trim() === guardado.trim()) return;
+    // Vaciar un texto libre SÍ es retirarlo: a diferencia de un importe, un
+    // nombre en blanco no puede confundirse con un cero.
+    setEnviado({ valor: borrador, antes: guardado });
+    guardar(borrador.trim() === "" ? null : borrador);
+  };
+  useBorradorProtegido(borrador.trim() !== guardado.trim(), confirmar);
+
   return {
     borrador,
     setBorrador,
-    confirmar: () => {
-      if (borrador.trim() === guardado.trim()) return;
-      // Vaciar un texto libre SÍ es retirarlo: a diferencia de un importe, un
-      // nombre en blanco no puede confundirse con un cero.
-      guardar(borrador.trim() === "" ? null : borrador);
-    },
+    alEntrar: () => setEscribiendo(true),
+    confirmar,
   };
 }
 
@@ -176,6 +203,7 @@ export function V2ClienteStep({
           requirement="optional"
           value={nombre.borrador}
           onChange={nombre.setBorrador}
+          onFocus={nombre.alEntrar}
           onBlur={nombre.confirmar}
           placeholder="Pedido de tazas — setiembre"
           disabled={!canEdit}
@@ -231,7 +259,7 @@ export function V2ClienteStep({
           burbujea, así que el contenedor sirve para confirmar el borrador al
           salir del área. Cambiar la primitiva compartida por un solo uso
           saldría más caro. */}
-      <div onBlur={notas.confirmar}>
+      <div onFocus={notas.alEntrar} onBlur={notas.confirmar}>
         <TextAreaField
           label="Notas internas"
           requirement="optional"

@@ -320,6 +320,9 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
     await user.click(await screen.findByRole("option", { name: "×2.00" }));
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // El panel lo explica, y el asistente lo recoge en un aviso que sobrevive
+    // a cambiar de paso: un error que vive solo en el panel se pierde con el.
+    expect(await within(panel).findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByTestId("guardados-fallidos")).toHaveTextContent(/factor comercial/i);
   });
 });

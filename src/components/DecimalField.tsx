@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { useBorradorProtegido } from "@/components/borradores";
 import { TextField } from "@/components/form";
 import {
   interpretarDecimal,
@@ -88,6 +89,12 @@ export function DecimalField({
   const [borrador, setBorrador] = useState(guardado);
   const [error, setError] = useState<string | null>(null);
   const [escribiendo, setEscribiendo] = useState(false);
+  // Lo último que se mandó y lo que había guardado en ese momento. Mientras lo
+  // guardado no cambie ni coincida con lo enviado, el campo sigue enseñando lo
+  // enviado. Sin esto, al salir del campo se volvía a pintar el valor ANTERIOR
+  // hasta que llegaba el refetch; quien volvía a entrar enseguida editaba el
+  // viejo, y como mientras se escribe ya no se sincroniza, lo guardaba después.
+  const [enviado, setEnviado] = useState<{ valor: string; antes: string } | null>(null);
 
   // Si el valor guardado cambia por fuera —otra edición, un refetch, volver a
   // un paso— el campo lo sigue. Pero NO mientras alguien tiene el campo
@@ -102,8 +109,17 @@ export function DecimalField({
     // Sincronizar ahi borraria las dos cosas y dejaria al usuario sin saber
     // que su ultima edicion no se guardo.
     if (escribiendo || error !== null) return;
+    if (enviado !== null) {
+      const alcanzado =
+        guardado !== enviado.antes ||
+        (enviado.valor === "" ? guardado === "" : mismoNumero(enviado.valor, guardado));
+      // Si lo guardado no se ha movido, el envío sigue en vuelo o falló: en los
+      // dos casos lo correcto es seguir enseñando lo que escribió el usuario.
+      if (!alcanzado) return;
+      setEnviado(null);
+    }
     setBorrador(guardado);
-  }, [guardado, escribiendo, error]);
+  }, [guardado, escribiendo, error, enviado]);
 
   const confirmar = () => {
     setEscribiendo(false);
@@ -135,12 +151,30 @@ export function DecimalField({
         return;
       }
       setError(null);
+      setEnviado({ valor: "", antes: guardado });
       onCommit(null);
       return;
     }
     setError(null);
+    setEnviado({ valor: estado.canonico, antes: guardado });
     onCommit(estado.canonico);
   };
+
+  // Si lo que se ve difiere de lo guardado, hay algo que perder. Se declara
+  // aunque todavía no se haya salido del campo: teclear «2» y recargar sin
+  // blur no lanza ninguna petición, y sin esto la protección de salida no lo
+  // veía. Un texto que no es un número también cuenta: no está guardado.
+  const estadoActual: EstadoDecimal = entero
+    ? interpretarEntero(borrador)
+    : interpretarDecimal(borrador, { permitirNegativo });
+  const sucio =
+    borrador !== guardado &&
+    (estadoActual.tipo === "invalido" ||
+      (estadoActual.tipo === "vacio" && guardado !== "") ||
+      (estadoActual.tipo === "valido" && !mismoNumero(estadoActual.canonico, guardado)));
+  // Al desmontarse con cambios —atrás/adelante del navegador, cambio de ruta—
+  // no hay blur: se confirma igual, como si se hubiera salido del campo.
+  useBorradorProtegido(sucio, confirmar);
 
   return (
     <TextField

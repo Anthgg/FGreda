@@ -14,7 +14,9 @@ import type {
   V2QuotationProductInput,
 } from "@/types/quoterV2Materials";
 import {
+  claveDeGuardado,
   invalidarCotizacion,
+  RECORDAR_GUARDADO,
   V2_LINES_KEY,
   V2_MATERIALS_KEY,
   V2_STALE_TIME,
@@ -55,6 +57,8 @@ export const useV2QuotationProducts = (quotationId: number | null) =>
 export const useAddV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "linea-anadir"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationProductInput) =>
       addV2QuotationProduct(quotationId, payload),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
@@ -66,6 +70,8 @@ export const useAddV2QuotationProduct = (quotationId: number) => {
 export const useUpdateV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "linea-editar"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { lineId: number; payload: V2QuotationProductInput }) =>
       updateV2QuotationProduct(quotationId, vars.lineId, vars.payload),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
@@ -77,6 +83,8 @@ export const useUpdateV2QuotationProduct = (quotationId: number) => {
 export const useDeleteV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "linea-borrar"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (lineId: number) => deleteV2QuotationProduct(quotationId, lineId),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.

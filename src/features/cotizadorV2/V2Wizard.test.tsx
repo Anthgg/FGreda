@@ -333,6 +333,151 @@ describe("Flujo de siete pasos del Cotizador V2 (Fase 010G)", () => {
     await waitFor(() => expect(estado).toHaveTextContent(/todos los cambios guardados/i));
   });
 
+  it("un guardado RECHAZADO no aparenta guardado, sobrevive a cambiar de paso y protege la salida", async () => {
+    // BLOCKER de la revision de Codex. Con un 500 el contador de peticiones
+    // volvia a cero y el pie decia «Todos los cambios guardados»; el error vivia
+    // solo en el panel, y al cambiar de paso desaparecia con el. Recargar
+    // entonces perdia el cambio sin preguntar.
+    const base = mockV2();
+    const original = base.getMockImplementation();
+    base.mockImplementation(async (entrada, init) => {
+      const url = typeof entrada === "string" ? entrada : entrada.toString();
+      if (url.endsWith("/quotations-v2/7") && init?.method === "PUT") {
+        return jsonResponse(500, { error: { code: "INTERNAL", message: "Fallo del servidor" } });
+      }
+      return original!(entrada, init);
+    });
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+
+    await screen.findByTestId("paso-cliente");
+    await user.click(screen.getByRole("combobox", { name: "Tipo de cliente" }));
+    await user.click(await screen.findByRole("option", { name: "Alumno" }));
+
+    const aviso = await screen.findByTestId("guardados-fallidos");
+    expect(aviso).toHaveTextContent(/NO se guard/i);
+    expect(aviso).toHaveTextContent(/los datos de la cotizaci\u00f3n/i);
+    expect(screen.getByTestId("estado-guardado")).toHaveTextContent(/no se guardaron/i);
+    expect(screen.getByTestId("estado-guardado")).not.toHaveTextContent(/todos los cambios guardados/i);
+
+    // Cambiar de paso desmonta el panel que lanzo la escritura: el aviso sigue.
+    const barra = screen.getByTestId("pasos-cotizacion");
+    await user.click(within(barra).getByRole("button", { name: /5\. Quema/i }));
+    await screen.findByTestId("panel-quema");
+    expect(screen.getByTestId("guardados-fallidos")).toBeInTheDocument();
+
+    // Y recargar o cerrar pregunta antes.
+    const salida = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(salida);
+    expect(salida.defaultPrevented).toBe(true);
+  });
+
+  it("guardar despues el MISMO dato con exito resuelve el aviso; otro dato no", async () => {
+    let fallar = true;
+    const base = mockV2();
+    const original = base.getMockImplementation();
+    base.mockImplementation(async (entrada, init) => {
+      const url = typeof entrada === "string" ? entrada : entrada.toString();
+      if (url.endsWith("/quotations-v2/7") && init?.method === "PUT") {
+        const cuerpo = JSON.parse(String(init.body));
+        // Solo falla el tipo de cliente, y solo la primera vez.
+        if (fallar && "customer_kind" in cuerpo) {
+          fallar = false;
+          return jsonResponse(500, { error: { code: "INTERNAL", message: "Fallo" } });
+        }
+      }
+      return original!(entrada, init);
+    });
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+    await screen.findByTestId("paso-cliente");
+
+    await user.click(screen.getByRole("combobox", { name: "Tipo de cliente" }));
+    await user.click(await screen.findByRole("option", { name: "Alumno" }));
+    await screen.findByTestId("guardados-fallidos");
+
+    // Guardar OTRO dato con exito no arregla el que fallo.
+    await user.click(screen.getByRole("combobox", { name: "Moneda" }));
+    await user.click(await screen.findByRole("option", { name: /d\u00f3lares/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("estado-guardado")).not.toHaveTextContent(/guardando/i),
+    );
+    expect(screen.getByTestId("guardados-fallidos")).toBeInTheDocument();
+
+    // Volver a guardar el tipo de cliente, esta vez con exito, si.
+    await user.click(screen.getByRole("combobox", { name: "Tipo de cliente" }));
+    await user.click(await screen.findByRole("option", { name: "Alumno" }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("guardados-fallidos")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("lo tecleado SIN salir del campo tambien protege la salida", async () => {
+    // BLOCKER de la revision de Codex. Los campos guardan al salir; mientras se
+    // escribe no hay peticion en vuelo, y la proteccion no veia nada: teclear y
+    // recargar sin blur perdia el cambio en silencio.
+    mockV2();
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+    await screen.findByTestId("paso-cliente");
+
+    const sinCambios = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(sinCambios);
+    expect(sinCambios.defaultPrevented).toBe(false);
+
+    await user.type(screen.getByLabelText(/nombre de la cotizaci\u00f3n/i), " de feria");
+
+    expect(screen.getByTestId("estado-guardado")).toHaveTextContent(/cambios sin guardar/i);
+    const conCambios = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(conCambios);
+    expect(conCambios.defaultPrevented).toBe(true);
+  });
+
+  it("volver a escribir en el nombre mientras llega el refetch no borra lo nuevo", async () => {
+    // Hallazgo de Codex sobre el paso de cliente: escribir, salir (se guarda),
+    // volver a entrar y seguir escribiendo; al llegar el refetch, lo guardado
+    // cambia y el efecto pisaba lo que se estaba tecleando.
+    let soltar: (() => void) | undefined;
+    let nombreGuardado = "Pedido demo";
+    const base = mockV2();
+    const original = base.getMockImplementation();
+    base.mockImplementation(async (entrada, init) => {
+      const url = typeof entrada === "string" ? entrada : entrada.toString();
+      if (url.endsWith("/quotations-v2/7") && init?.method === "PUT") {
+        const cuerpo = JSON.parse(String(init.body));
+        await new Promise<void>((resolver) => {
+          soltar = resolver;
+        });
+        if ("name" in cuerpo) nombreGuardado = cuerpo.name;
+      }
+      if (url.endsWith("/quotations-v2/7")) {
+        const respuesta = await original!(entrada, init);
+        const datos = await respuesta.json();
+        return jsonResponse(200, { ...datos, name: nombreGuardado });
+      }
+      return original!(entrada, init);
+    });
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+    await screen.findByTestId("paso-cliente");
+
+    const campo = screen.getByLabelText(/nombre de la cotizaci\u00f3n/i);
+    await user.clear(campo);
+    await user.type(campo, "Feria");
+    await user.tab();
+    await waitFor(() => expect(soltar).toBeDefined());
+
+    // Se vuelve a entrar y se sigue escribiendo ANTES de que el guardado vuelva.
+    await user.click(campo);
+    await user.type(campo, " de octubre");
+    soltar?.();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("estado-guardado")).not.toHaveTextContent(/guardando/i),
+    );
+    expect(campo).toHaveValue("Feria de octubre");
+  });
+
   it("un error del paso se explica arriba y se marca como falta", async () => {
     mockV2({ cotizacion: { customer_id: null, customer_name: null } });
 

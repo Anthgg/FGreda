@@ -24,7 +24,9 @@ import type {
   V2WorkerUpdateInput,
 } from "@/types/quoterV2Labor";
 import {
+  claveDeGuardado,
   invalidarCotizacion,
+  RECORDAR_GUARDADO,
   V2_ILLUSTRATION_KEY,
   V2_LABOR_KEY,
   V2_STALE_TIME,
@@ -102,6 +104,8 @@ export const useV2Labor = (quotationId: number) =>
 export const useAddV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "tarea-anadir"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2LaborInput) => addV2Labor(quotationId, payload),
     onSuccess: () => invalidarCotizacion(client, quotationId),
   });
@@ -110,6 +114,8 @@ export const useAddV2Labor = (quotationId: number) => {
 export const useUpdateV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "tarea-editar"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { laborId: number; payload: V2LaborInput }) =>
       updateV2Labor(quotationId, vars.laborId, vars.payload),
     onSuccess: () => invalidarCotizacion(client, quotationId),
@@ -119,6 +125,8 @@ export const useUpdateV2Labor = (quotationId: number) => {
 export const useDeleteV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "tarea-borrar"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (laborId: number) => deleteV2Labor(quotationId, laborId),
     onSuccess: () => invalidarCotizacion(client, quotationId),
   });
@@ -127,6 +135,8 @@ export const useDeleteV2Labor = (quotationId: number) => {
 export const useSetV2Planning = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "planificacion"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (effectiveWorkDays: number | null) => setV2Planning(quotationId, effectiveWorkDays),
     onSuccess: () => invalidarCotizacion(client, quotationId),
   });
@@ -141,6 +151,8 @@ export const useV2Illustration = (quotationId: number) =>
 export const useSetV2Illustration = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "ilustracion"),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2IllustrationInput) => setV2Illustration(quotationId, payload),
     onSuccess: () => invalidarCotizacion(client, quotationId),
   });
