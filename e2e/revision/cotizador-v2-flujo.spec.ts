@@ -287,6 +287,19 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     });
     await expect(peso).toHaveValue("1.25");
 
+    // Un valor que la COLUMNA normaliza: `NUMERIC(..., 6)` guarda `20,5000004`
+    // como `20.500000`. Tercera revision de Codex: el campo seguia ensenando lo
+    // tecleado mientras el pie decia «guardado». Al terminar el guardado tiene
+    // que ensenar lo que de verdad quedo en la base.
+    await paso(page, 2, "Productos").click();
+    const altoNormalizado = page.getByLabel(/alto \(cm\)/i).last();
+    await altoNormalizado.fill("20,5000004");
+    await altoNormalizado.blur();
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+      timeout: 30_000,
+    });
+    await expect(altoNormalizado).toHaveValue("20.5");
+
     // Lo que NO se acepta: una cantidad de piezas con decimales. Truncar
     // «10,5 piezas» dejaria media pieza menos sin que nada lo dijera.
     await paso(page, 2, "Productos").click();
