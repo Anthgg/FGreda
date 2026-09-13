@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import type { ResultadoDeGuardado } from "@/components/borradores";
+
 /**
  * Las claves de caché del Cotizador V2, y qué invalida qué.
  *
@@ -59,7 +61,11 @@ export const V2_STALE_TIME = 30_000;
  * no cambian porque alguien edite una línea, y refrescarlos aquí sería pedir
  * cuatro listas enteras cada vez que se teclea un peso.
  */
-export function invalidarCotizacion(client: QueryClient, quotationId: number): void {
+export function invalidarCotizacion(client: QueryClient, quotationId: number): Promise<void> {
+  // Devuelve la promesa, y las mutaciones la devuelven desde `onSuccess`: así una
+  // escritura no se da por terminada hasta que el refetch ha traído lo guardado
+  // de verdad. Mientras tanto sigue contando como «guardando», que es la verdad.
+  const refrescos: Promise<void>[] = [];
   for (const clave of [
     QUOTER_V2_KEY,
     V2_LINES_KEY,
@@ -68,8 +74,9 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): v
     V2_FIRING_KEY,
     V2_PRICING_KEY,
   ]) {
-    void client.invalidateQueries({ queryKey: [...clave, quotationId] });
+    refrescos.push(client.invalidateQueries({ queryKey: [...clave, quotationId] }));
   }
+  return Promise.all(refrescos).then(() => undefined);
 }
 
 /**
@@ -163,3 +170,27 @@ export const DESTINO_DE_GUARDADO: Record<
   quema: { paso: "quema", que: "la quema" },
   precio: { paso: "precio", que: "el factor comercial" },
 };
+
+/**
+ * Guarda y devuelve el resultado al campo que lo pidió, sin rechazar nunca.
+ *
+ * `mutateAsync` resuelve después del `onSuccess`, que espera al refetch: cuando
+ * el campo recibe `ok`, lo guardado ya es lo definitivo y puede enseñarlo tal
+ * cual lo normalizó el backend. Un fallo no rechaza la promesa —el campo no la
+ * espera con `catch`, y un rechazo sin atender ensucia la consola—: devuelve
+ * `ok: false` y la firma, para que un descarte sepa a qué campo revertir.
+ */
+export async function esperarGuardado<V>(
+  mutacion: { mutateAsync: (variables: V) => Promise<unknown> },
+  tipo: TipoDeGuardado,
+  variables: V,
+): Promise<ResultadoDeGuardado> {
+  // Las firmas de edición no dependen del intento; las altas no pasan por aquí.
+  const firma = firmaDeGuardado(tipo, variables, 0);
+  try {
+    await mutacion.mutateAsync(variables);
+    return { ok: true, firma };
+  } catch {
+    return { ok: false, firma };
+  }
+}

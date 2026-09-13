@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { anunciarDescarte } from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 
 /**
@@ -168,6 +169,75 @@ describe("DecimalField", () => {
     // Llega el del segundo: ahora si coincide, y se ensena lo guardado.
     rerender(<DecimalField label="Alto" value="20.500000" onCommit={onCommit} />);
     expect(campo()).toHaveValue("20.5");
+  });
+
+  it("si el backend normaliza lo guardado, al terminar el guardado ensena lo guardado", async () => {
+    // BLOCKER de la tercera revision de Codex. La columna es NUMERIC(...,6):
+    // `20,5000004` se guarda como `20.500000`. Con la regla de coincidencia
+    // exacta el campo no lo reconocia nunca y seguia ensenando lo tecleado,
+    // mientras el pie decia «guardado». Ahora el campo recibe el resultado de SU
+    // guardado y, al terminar bien, se alinea con lo guardado.
+    let terminar: (resultado: { ok: boolean; firma: string }) => void = () => undefined;
+    const onCommit = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; firma: string }>((resolver) => {
+          terminar = resolver;
+        }),
+    );
+    const { rerender } = render(<DecimalField label="Alto" value="20.000000" onCommit={onCommit} />);
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Alto/));
+    await user.type(screen.getByLabelText(/^Alto/), "20,5000004");
+    await user.tab();
+    expect(onCommit).toHaveBeenCalledWith("20.5000004");
+
+    // Llega lo guardado, normalizado por la columna, y termina el guardado.
+    rerender(<DecimalField label="Alto" value="20.500000" onCommit={onCommit} />);
+    await act(async () => terminar({ ok: true, firma: "linea-editar:7:height_cm" }));
+
+    expect(screen.getByLabelText(/^Alto/)).toHaveValue("20.5");
+  });
+
+  it("si el guardado falla, conserva lo tecleado; un descarte de OTRO dato no lo toca", async () => {
+    let terminar: (resultado: { ok: boolean; firma: string }) => void = () => undefined;
+    const onCommit = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; firma: string }>((resolver) => {
+          terminar = resolver;
+        }),
+    );
+    render(<DecimalField label="Alto" value="20.000000" onCommit={onCommit} />);
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Alto/));
+    await user.type(screen.getByLabelText(/^Alto/), "33");
+    await user.tab();
+    await act(async () => terminar({ ok: false, firma: "linea-editar:7:height_cm" }));
+    expect(screen.getByLabelText(/^Alto/)).toHaveValue("33");
+
+    // Se descarta un fallo de OTRO campo: este no se mueve.
+    act(() => anunciarDescarte("linea-editar:7:width_cm"));
+    expect(screen.getByLabelText(/^Alto/)).toHaveValue("33");
+
+    // Se descarta el SUYO: vuelve a lo guardado.
+    act(() => anunciarDescarte("linea-editar:7:height_cm"));
+    expect(screen.getByLabelText(/^Alto/)).toHaveValue("20");
+  });
+
+  it("un campo con el guardado EN VUELO no escucha ningun descarte", async () => {
+    // Tercera revision de Codex: la senal global revertia tambien un campo con
+    // un envio en vuelo que iba a tener exito.
+    const onCommit = vi.fn(() => new Promise<{ ok: boolean; firma: string }>(() => undefined));
+    render(<DecimalField label="Alto" value="20.000000" onCommit={onCommit} />);
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Alto/));
+    await user.type(screen.getByLabelText(/^Alto/), "44");
+    await user.tab();
+
+    act(() => anunciarDescarte("linea-editar:7:height_cm"));
+    expect(screen.getByLabelText(/^Alto/)).toHaveValue("44");
   });
 
   it("un campo que pasa a deshabilitado no confirma al desmontarse", async () => {

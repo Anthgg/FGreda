@@ -4,7 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts } from "@/api/masters";
 import { PrimaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { useBorradorProtegido, useDescartes } from "@/components/borradores";
+import {
+  seguirEnvio,
+  useBorradorProtegido,
+  useUltimoDescarte,
+  type ResultadoDeGuardado,
+} from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { EmptyState, Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -15,6 +20,7 @@ import {
   useV2Materials,
   useV2QuotationProducts,
 } from "@/features/cotizadorV2/useQuoterV2Materials";
+import { esperarGuardado } from "@/features/cotizadorV2/claves";
 import { WARNING_LABEL, type V2QuotationProduct } from "@/types/quoterV2Materials";
 
 /**
@@ -106,7 +112,7 @@ function CampoDeTexto({
 }: {
   label: string;
   value: string;
-  onCommit: (valor: string) => void;
+  onCommit: (valor: string) => void | Promise<ResultadoDeGuardado>;
   disabled: boolean;
   hint?: string | undefined;
 }) {
@@ -132,6 +138,29 @@ function CampoDeTexto({
     setBorrador(value);
   }, [value, escribiendo, enviado]);
 
+  // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
+  // que el campo enseña. Si sale bien, lo guardado ya es lo definitivo —la
+  // escritura espera al refetch— y el campo lo enseña tal cual lo normalizó el
+  // backend: `20,5000004` pasa a `20.5`. Si falla, se recuerda su firma para
+  // que un descarte sepa que es este campo el que tiene que revertir.
+  const envios = useRef(0);
+  const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
+  const seguir = (resultado: unknown) => {
+    const secuencia = ++envios.current;
+    seguirEnvio(
+      resultado,
+      () => envios.current === secuencia,
+      (final) => {
+        if (final.ok) {
+          setFirmaFallida(null);
+          setEnviado(null);
+        } else {
+          setFirmaFallida(final.firma);
+        }
+      },
+    );
+  };
+
   const confirmar = () => {
     setEscribiendo(false);
     // Se compara y se manda ya recortado: un nombre con espacios al final es el
@@ -139,7 +168,7 @@ function CampoDeTexto({
     const limpio = borrador.trim();
     if (limpio !== value.trim()) {
       setEnviado({ valor: limpio });
-      onCommit(limpio);
+      seguir(onCommit(limpio));
     }
   };
   // Lo tecleado sin salir del campo cuenta como cambio sin guardar, y se
@@ -153,14 +182,18 @@ function CampoDeTexto({
     (enviado === null || limpioAhora !== enviado.valor.trim());
   useBorradorProtegido(sucio, confirmar);
 
-  const descartes = useDescartes();
-  const descartesVistos = useRef(descartes);
+  // El descarte es DIRIGIDO: solo vuelve a lo guardado el campo cuyo último
+  // envío falló con la firma descartada. Un campo con un envío en vuelo no lo
+  // escucha, porque su guardado todavía puede salir bien.
+  const descarte = useUltimoDescarte();
+  const descarteVisto = useRef(descarte.n);
   useEffect(() => {
-    if (descartes === descartesVistos.current) return;
-    descartesVistos.current = descartes;
-    if (escribiendo || enviado === null) return;
+    if (descarte.n === descarteVisto.current) return;
+    descarteVisto.current = descarte.n;
+    if (escribiendo || firmaFallida === null || firmaFallida !== descarte.firma) return;
+    setFirmaFallida(null);
     setEnviado(null);
-  }, [descartes, escribiendo, enviado]);
+  }, [descarte, escribiendo, firmaFallida]);
 
   return (
     <TextField
@@ -201,6 +234,10 @@ function Linea({
 
   const guardar = (cambios: Record<string, unknown>) =>
     actualizar.mutate({ lineId: linea.id, payload: cambios });
+  // Para los campos diferidos: el campo recibe el resultado de SU guardado y,
+  // al terminar bien, enseña lo guardado tal cual lo normalizó el backend.
+  const guardarYEsperar = (cambios: Record<string, unknown>) =>
+    esperarGuardado(actualizar, "linea-editar", { lineId: linea.id, payload: cambios });
 
   return (
     <div className="rounded-2xl border border-black/[0.06] p-4">
@@ -226,7 +263,7 @@ function Linea({
             <CampoDeTexto
               label="Nombre de la pieza"
               value={linea.product_name ?? ""}
-              onCommit={(valor) => guardar({ product_name: valor })}
+              onCommit={(valor) => guardarYEsperar({ product_name: valor })}
               disabled={!canEdit || linea.product_id !== null}
               {...(linea.product_id !== null
                 ? { hint: "Lo fija el catálogo: esta línea cuelga de un producto." }
@@ -240,7 +277,7 @@ function Linea({
                 // Siendo obligatorio, `DecimalField` nunca llama aquí con el
                 // campo vacío: lo explica en pantalla. Mandar un 0 en su lugar
                 // convertiría un borrado a medias en «cero piezas».
-                if (valor !== null) guardar({ quantity: Number(valor) });
+                return valor !== null ? guardarYEsperar({ quantity: Number(valor) }) : undefined;
               }}
               disabled={!canEdit}
               entero
@@ -253,7 +290,7 @@ function Linea({
                 key={campo}
                 label={etiqueta}
                 value={linea[campo]}
-                onCommit={(valor) => guardar({ [campo]: valor })}
+                onCommit={(valor) => guardarYEsperar({ [campo]: valor })}
                 disabled={!canEdit}
               />
             ))}
@@ -291,7 +328,7 @@ function Linea({
             <DecimalField
               label={`Pasta por pieza${linea.body_uom ? ` (${linea.body_uom})` : ""}`}
               value={linea.body_unit_weight}
-              onCommit={(valor) => guardar({ body_unit_weight: valor })}
+              onCommit={(valor) => guardarYEsperar({ body_unit_weight: valor })}
               disabled={!canEdit}
               hint="La unidad la fija el maestro del material."
             />

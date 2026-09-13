@@ -7,6 +7,7 @@ import {
   useSetV2Firing,
   useV2Firing,
 } from "@/features/cotizadorV2/useQuoterV2Firing";
+import { esperarGuardado } from "@/features/cotizadorV2/claves";
 import {
   CUSTOMER_KIND_LABEL,
   FIRING_WARNING_LABEL,
@@ -309,7 +310,9 @@ export function V2FiringPanel({
               <DecimalField
                 label="Tarifa baja"
                 value={quema.commercial_rate_low ?? ""}
-                onCommit={(valor) => guardar.mutate({ commercial_rate_low_override: valor })}
+                onCommit={(valor) =>
+                  esperarGuardado(guardar, "quema", { commercial_rate_low_override: valor })
+                }
                 disabled={!canEdit}
                 {...(quema.commercial_low_is_override
                   ? {
@@ -320,7 +323,9 @@ export function V2FiringPanel({
               <DecimalField
                 label="Tarifa alta"
                 value={quema.commercial_rate_high ?? ""}
-                onCommit={(valor) => guardar.mutate({ commercial_rate_high_override: valor })}
+                onCommit={(valor) =>
+                  esperarGuardado(guardar, "quema", { commercial_rate_high_override: valor })
+                }
                 disabled={!canEdit}
                 {...(quema.commercial_high_is_override
                   ? {
@@ -346,7 +351,9 @@ export function V2FiringPanel({
               <DecimalField
                 label="Gas baja"
                 value={quema.gas_cost_low ?? ""}
-              onCommit={(valor) => guardar.mutate({ gas_cost_low_override: valor })}
+              onCommit={(valor) =>
+                esperarGuardado(guardar, "quema", { gas_cost_low_override: valor })
+              }
                 disabled={!canEdit}
                 {...(quema.gas_low_is_override
                   ? {
@@ -357,7 +364,9 @@ export function V2FiringPanel({
               <DecimalField
                 label="Gas alta"
                 value={quema.gas_cost_high ?? ""}
-              onCommit={(valor) => guardar.mutate({ gas_cost_high_override: valor })}
+              onCommit={(valor) =>
+                esperarGuardado(guardar, "quema", { gas_cost_high_override: valor })
+              }
                 disabled={!canEdit}
                 {...(quema.gas_high_is_override
                   ? {

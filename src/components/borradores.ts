@@ -38,27 +38,62 @@ function marcar(id: string, sucio: boolean): void {
   avisar();
 }
 
-let descartes = 0;
+/**
+ * Lo que un campo diferido recibe cuando SU guardado termina.
+ *
+ * Tercera revisión de Codex. El campo intentaba ADIVINAR si su envío había
+ * terminado comparando lo guardado con lo enviado, y ninguna regla de
+ * comparación servía para todo: «cambió» pintaba el valor intermedio de un
+ * guardado anterior, y «coincide» no reconocía nunca un valor que el backend
+ * normaliza —`20,5000004` se guarda como `20.500000`—, así que el pie decía
+ * «guardado» con lo NO guardado a la vista. Ahora el campo no adivina: quien
+ * guarda le devuelve el resultado, y la escritura no termina hasta que el
+ * refetch ha traído lo guardado de verdad.
+ */
+export interface ResultadoDeGuardado {
+  readonly ok: boolean;
+  /** A qué dato afectó, para que un descarte revierta solo ese campo. */
+  readonly firma: string;
+}
 
 /**
- * Avisa a los campos de que el usuario descartó un guardado rechazado.
+ * Sigue un envío y avisa al terminar, solo si sigue siendo el último del campo.
  *
- * Re-revisión de Codex: «Descartar este cambio» quitaba el aviso pero el campo
- * seguía enseñando el valor que el servidor rechazó, y el pie podía decir
- * «guardado» con ese valor a la vista. Los campos que tienen algo enviado sin
- * confirmar vuelven a lo guardado al recibir la señal.
+ * Con dos envíos del mismo campo en fila, el que termina primero es el viejo:
+ * su resultado ya no dice nada de lo que el campo enseña.
  */
-export function anunciarDescarte(): void {
-  descartes += 1;
+export function seguirEnvio(
+  resultado: unknown,
+  sigueVigente: () => boolean,
+  alTerminar: (resultado: ResultadoDeGuardado) => void,
+): void {
+  if (!resultado || typeof (resultado as Promise<unknown>).then !== "function") return;
+  void (resultado as Promise<ResultadoDeGuardado | undefined>).then((final) => {
+    if (final && sigueVigente()) alTerminar(final);
+  });
+}
+
+let descarte: { readonly n: number; readonly firma: string } = { n: 0, firma: "" };
+
+/**
+ * Avisa de que el usuario descartó un guardado rechazado, y de CUÁL.
+ *
+ * Solo el campo cuyo último envío falló con esa firma vuelve a lo guardado.
+ * Tercera revisión de Codex: la señal global revertía también un campo con un
+ * envío EN VUELO que iba a tener éxito, y durante unos segundos enseñaba el
+ * valor viejo como si lo hubiera afectado el descarte.
+ */
+export function anunciarDescarte(firma: string): void {
+  descarte = { n: descarte.n + 1, firma };
   avisar();
 }
 
-/** Contador de descartes, para que un campo reaccione cuando cambia. */
-export function useDescartes(): number {
+/** El último descarte anunciado, para que un campo compare su firma. */
+export function useUltimoDescarte(): { readonly n: number; readonly firma: string } {
   return useSyncExternalStore(
     suscribir,
-    () => descartes,
-    () => 0,
+    () => descarte,
+    () => descarte,
   );
 }
 

@@ -16,6 +16,7 @@ import {
   useV2Techniques,
   useV2Workers,
 } from "@/features/cotizadorV2/useQuoterV2Labor";
+import { esperarGuardado } from "@/features/cotizadorV2/claves";
 import { useV2QuotationProducts } from "@/features/cotizadorV2/useQuoterV2Materials";
 import {
   LABOR_WARNING_LABEL,
@@ -82,6 +83,9 @@ function Tarea({
 
   const guardar = (cambios: Record<string, unknown>) =>
     actualizar.mutate({ laborId: tarea.id, payload: cambios });
+  // Para los campos diferidos: el campo recibe el resultado de SU guardado.
+  const guardarYEsperar = (cambios: Record<string, unknown>) =>
+    esperarGuardado(actualizar, "tarea-editar", { laborId: tarea.id, payload: cambios });
 
   return (
     <div className="rounded-2xl border border-black/[0.06] p-4">
@@ -156,7 +160,7 @@ function Tarea({
           label="Piezas por trabajar"
           requirement="required"
           value={tarea.quantity}
-          onCommit={(valor) => guardar({ quantity: valor })}
+          onCommit={(valor) => guardarYEsperar({ quantity: valor })}
           disabled={!canEdit}
           hint={`Se miden en ${tarea.technique_unit}, como dice la técnica.`}
         />
@@ -187,7 +191,7 @@ function Tarea({
             label="Horas finales"
             requirement="required"
             value={tarea.final_hours}
-            onCommit={(valor) => guardar({ final_hours_override: valor })}
+            onCommit={(valor) => guardarYEsperar({ final_hours_override: valor })}
             disabled={!canEdit}
             hint={
               tarea.hours_overridden
@@ -211,7 +215,7 @@ function Tarea({
         <DecimalField
           label="Tarifa acordada por hora"
           value={tarea.rate_overridden ? tarea.hourly_rate : ""}
-          onCommit={(valor) => guardar({ hourly_rate_override: valor })}
+          onCommit={(valor) => guardarYEsperar({ hourly_rate_override: valor })}
           disabled={!canEdit}
           hint="Solo para esta cotización. Vacío: se usa el jornal del maestro."
         />
@@ -310,9 +314,11 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
             label="Piezas a ilustrar"
             requirement="required"
             value={ilustracion.quantity}
-            onCommit={(valor) => {
-              if (valor !== null) guardar.mutate({ illustration_quantity: valor });
-            }}
+            onCommit={(valor) =>
+              valor !== null
+                ? esperarGuardado(guardar, "ilustracion", { illustration_quantity: valor })
+                : undefined
+            }
             disabled={!canEdit}
           />
         ) : null}
@@ -408,7 +414,9 @@ export function V2LaborLines({
         <DecimalField
           label="Días efectivos de taller"
           value={pagina.effective_work_days === null ? "" : String(pagina.effective_work_days)}
-          onCommit={(valor) => planificar.mutate(valor === null ? null : Number(valor))}
+          onCommit={(valor) =>
+            esperarGuardado(planificar, "planificacion", valor === null ? null : Number(valor))
+          }
           disabled={!canEdit}
           entero
           hint="Lo decide quien planifica. No es la vigencia de la cotización."

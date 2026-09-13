@@ -148,8 +148,8 @@ export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
         cache.remove(mutation);
       }
     }
-    // Y los campos que enseñan lo rechazado vuelven a lo guardado.
-    anunciarDescarte();
+    // Y el campo que enseña lo rechazado vuelve a lo guardado. Solo ese.
+    anunciarDescarte(firma);
   };
 
   return { enVuelo, fallidos, borradores, hayRiesgo, descartar };

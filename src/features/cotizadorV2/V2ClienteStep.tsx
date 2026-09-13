@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPartners } from "@/api/masters";
-import { useBorradorProtegido, useDescartes } from "@/components/borradores";
+import {
+  seguirEnvio,
+  useBorradorProtegido,
+  useUltimoDescarte,
+  type ResultadoDeGuardado,
+} from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
 import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
+import { esperarGuardado } from "@/features/cotizadorV2/claves";
 import {
   V2_PRODUCTION_TYPE_LABEL,
   type V2CustomerKind,
@@ -76,7 +82,7 @@ function useEspera(valor: string, milisegundos = 300): string {
  */
 function useTextoDiferido(
   guardado: string,
-  guardar: (valor: string | null) => void,
+  guardar: (valor: string | null) => void | Promise<ResultadoDeGuardado>,
   habilitado: boolean,
 ) {
   const [borrador, setBorrador] = useState(guardado);
@@ -103,13 +109,36 @@ function useTextoDiferido(
     setBorrador(guardado);
   }, [guardado, escribiendo, enviado]);
 
+  // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
+  // que el campo enseña. Si sale bien, lo guardado ya es lo definitivo —la
+  // escritura espera al refetch— y el campo lo enseña tal cual lo normalizó el
+  // backend: `20,5000004` pasa a `20.5`. Si falla, se recuerda su firma para
+  // que un descarte sepa que es este campo el que tiene que revertir.
+  const envios = useRef(0);
+  const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
+  const seguir = (resultado: unknown) => {
+    const secuencia = ++envios.current;
+    seguirEnvio(
+      resultado,
+      () => envios.current === secuencia,
+      (final) => {
+        if (final.ok) {
+          setFirmaFallida(null);
+          setEnviado(null);
+        } else {
+          setFirmaFallida(final.firma);
+        }
+      },
+    );
+  };
+
   const confirmar = () => {
     setEscribiendo(false);
     if (borrador.trim() === guardado.trim()) return;
     // Vaciar un texto libre SÍ es retirarlo: a diferencia de un importe, un
     // nombre en blanco no puede confundirse con un cero.
     setEnviado({ valor: borrador });
-    guardar(borrador.trim() === "" ? null : borrador);
+    seguir(guardar(borrador.trim() === "" ? null : borrador));
   };
   // Lo YA enviado no cuenta como borrador, y sin permiso de edición no se
   // declara ni se confirma nada. Ver `DecimalField`.
@@ -119,14 +148,18 @@ function useTextoDiferido(
     (enviado === null || borrador.trim() !== enviado.valor.trim());
   useBorradorProtegido(sucio, confirmar);
 
-  const descartes = useDescartes();
-  const descartesVistos = useRef(descartes);
+  // El descarte es DIRIGIDO: solo vuelve a lo guardado el campo cuyo último
+  // envío falló con la firma descartada. Un campo con un envío en vuelo no lo
+  // escucha, porque su guardado todavía puede salir bien.
+  const descarte = useUltimoDescarte();
+  const descarteVisto = useRef(descarte.n);
   useEffect(() => {
-    if (descartes === descartesVistos.current) return;
-    descartesVistos.current = descartes;
-    if (escribiendo || enviado === null) return;
+    if (descarte.n === descarteVisto.current) return;
+    descarteVisto.current = descarte.n;
+    if (escribiendo || firmaFallida === null || firmaFallida !== descarte.firma) return;
+    setFirmaFallida(null);
     setEnviado(null);
-  }, [descartes, escribiendo, enviado]);
+  }, [descarte, escribiendo, firmaFallida]);
 
   return {
     borrador,
@@ -148,12 +181,12 @@ export function V2ClienteStep({
 
   const nombre = useTextoDiferido(
     cotizacion.name ?? "",
-    (name) => guardar.mutate({ name }),
+    (name) => esperarGuardado(guardar, "cabecera", { name }),
     canEdit,
   );
   const notas = useTextoDiferido(
     cotizacion.notes ?? "",
-    (notes) => guardar.mutate({ notes }),
+    (notes) => esperarGuardado(guardar, "cabecera", { notes }),
     canEdit,
   );
 
@@ -275,9 +308,11 @@ export function V2ClienteStep({
             label="Tipo de cambio"
             requirement="required"
             value={cotizacion.exchange_rate}
-            onCommit={(valor) => {
-              if (valor !== null) guardar.mutate({ exchange_rate: valor });
-            }}
+            onCommit={(valor) =>
+              valor !== null
+                ? esperarGuardado(guardar, "cabecera", { exchange_rate: valor })
+                : undefined
+            }
             disabled={!canEdit}
             hint="Se congela en esta cotización: el precio pactado no cambia porque mañana cambie el dólar."
           />

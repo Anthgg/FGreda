@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useBorradorProtegido, useDescartes } from "@/components/borradores";
+import {
+  seguirEnvio,
+  useBorradorProtegido,
+  useUltimoDescarte,
+  type ResultadoDeGuardado,
+} from "@/components/borradores";
 import { TextField } from "@/components/form";
 import {
   interpretarDecimal,
@@ -40,7 +45,12 @@ interface DecimalFieldProps {
   /** El valor guardado, tal y como viene del backend. */
   value: string | null | undefined;
   /** Se llama al salir del campo, solo si el valor cambió y es válido. */
-  onCommit: (canonico: string | null) => void;
+  /**
+   * Si devuelve el resultado del guardado, el campo sabe cuándo terminó el SUYO
+   * y enseña lo guardado tal cual lo normalizó el backend. Sin resultado, se
+   * guía por la coincidencia con lo guardado.
+   */
+  onCommit: (canonico: string | null) => void | Promise<ResultadoDeGuardado>;
   disabled?: boolean | undefined;
   requirement?: "required" | "optional" | undefined;
   hint?: string | undefined;
@@ -124,6 +134,29 @@ export function DecimalField({
     setBorrador(guardado);
   }, [guardado, escribiendo, error, enviado]);
 
+  // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
+  // que el campo enseña. Si sale bien, lo guardado ya es lo definitivo —la
+  // escritura espera al refetch— y el campo lo enseña tal cual lo normalizó el
+  // backend: `20,5000004` pasa a `20.5`. Si falla, se recuerda su firma para
+  // que un descarte sepa que es este campo el que tiene que revertir.
+  const envios = useRef(0);
+  const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
+  const seguir = (resultado: unknown) => {
+    const secuencia = ++envios.current;
+    seguirEnvio(
+      resultado,
+      () => envios.current === secuencia,
+      (final) => {
+        if (final.ok) {
+          setFirmaFallida(null);
+          setEnviado(null);
+        } else {
+          setFirmaFallida(final.firma);
+        }
+      },
+    );
+  };
+
   const confirmar = () => {
     setEscribiendo(false);
     if (borrador === guardado) {
@@ -155,12 +188,12 @@ export function DecimalField({
       }
       setError(null);
       setEnviado({ valor: "" });
-      onCommit(null);
+      seguir(onCommit(null));
       return;
     }
     setError(null);
     setEnviado({ valor: estado.canonico });
-    onCommit(estado.canonico);
+    seguir(onCommit(estado.canonico));
   };
 
   // Si lo que se ve difiere de lo guardado, hay algo que perder. Se declara
@@ -193,17 +226,19 @@ export function DecimalField({
   // no hay blur: se confirma igual, como si se hubiera salido del campo.
   useBorradorProtegido(sucio, confirmar);
 
-  // Si el usuario descarta un guardado rechazado, lo enviado sin confirmar se
-  // abandona y el campo vuelve a lo guardado. No mientras escribe.
-  const descartes = useDescartes();
-  const descartesVistos = useRef(descartes);
+  // El descarte es DIRIGIDO: solo vuelve a lo guardado el campo cuyo último
+  // envío falló con la firma descartada. Un campo con un envío en vuelo no lo
+  // escucha, porque su guardado todavía puede salir bien.
+  const descarte = useUltimoDescarte();
+  const descarteVisto = useRef(descarte.n);
   useEffect(() => {
-    if (descartes === descartesVistos.current) return;
-    descartesVistos.current = descartes;
-    if (escribiendo || enviado === null) return;
+    if (descarte.n === descarteVisto.current) return;
+    descarteVisto.current = descarte.n;
+    if (escribiendo || firmaFallida === null || firmaFallida !== descarte.firma) return;
+    setFirmaFallida(null);
     setEnviado(null);
     setError(null);
-  }, [descartes, escribiendo, enviado]);
+  }, [descarte, escribiendo, firmaFallida]);
 
   return (
     <TextField
