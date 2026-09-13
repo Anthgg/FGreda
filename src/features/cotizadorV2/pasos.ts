@@ -105,6 +105,19 @@ const RECOMENDACIONES = new Set([
   "V2_FIRING_LARGER_KILN_SUGGESTED",
 ]);
 
+/**
+ * Si una cotizacion esta en moneda extranjera. Una sola regla para todo el flujo.
+ *
+ * Una moneda NULA es la base, no una extranjera. Comparar `currency_code !== "PEN"`
+ * a pelo trataba el nulo como divisa: el paso de cliente exigia un tipo de
+ * cambio mientras el formulario, que si lee el nulo como soles, escondia el
+ * campo para ponerlo. La cotizacion quedaba incompleta sin forma visible de
+ * arreglarla. Tres pantallas preguntan esto, y por eso la respuesta vive aqui.
+ */
+export function esMonedaExtranjera(codigo: string | null | undefined): boolean {
+  return (codigo ?? "PEN") !== "PEN";
+}
+
 function esPositivo(valor: string | null | undefined): boolean {
   return valor !== null && valor !== undefined && Number(valor) > 0;
 }
@@ -116,7 +129,7 @@ function pasoCliente(datos: DatosDelFlujo): EstadoPaso {
   if (ctz.customer_id === null) {
     senales.push(error("Falta el cliente de la cotización."));
   }
-  if (ctz.currency_code !== "PEN" && !esPositivo(ctz.exchange_rate)) {
+  if (esMonedaExtranjera(ctz.currency_code) && !esPositivo(ctz.exchange_rate)) {
     // En moneda extranjera el tipo de cambio es obligatorio: sin él la
     // cotización no puede convertirse y el motor tendría que leer el de hoy,
     // que es justo lo que los snapshots impiden.

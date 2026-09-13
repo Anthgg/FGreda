@@ -1,5 +1,6 @@
 import { formatMoney } from "@/features/quotations/money";
 import {
+  esMonedaExtranjera,
   PASOS,
   type DatosDelFlujo,
   type EstadoPaso,
@@ -152,7 +153,7 @@ export function V2ResumenStep({
             hint="Decide la tarifa de quema."
           />
         </dl>
-        {cotizacion && cotizacion.currency_code !== "PEN" ? (
+        {cotizacion && esMonedaExtranjera(cotizacion.currency_code) ? (
           <p className="mt-3 text-[11px] text-zinc-500">
             Emitida en {cotizacion.currency_code} con un tipo de cambio de{" "}
             {cotizacion.exchange_rate ?? "—"}, congelado en esta cotización.

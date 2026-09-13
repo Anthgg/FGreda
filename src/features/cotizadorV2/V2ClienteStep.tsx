@@ -6,6 +6,7 @@ import { DecimalField } from "@/components/DecimalField";
 import { SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
+import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
 import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
 import {
   V2_PRODUCTION_TYPE_LABEL,
@@ -108,7 +109,7 @@ export function V2ClienteStep({
     queryFn: () => fetchPartners({ search: busquedaReposada, active: true, limit: 20 }),
   });
 
-  const esExtranjera = (cotizacion.currency_code ?? "PEN") !== "PEN";
+  const esExtranjera = esMonedaExtranjera(cotizacion.currency_code);
 
   // El filtro `role` del backend es exacto, y quien es CLIENT y quien es BOTH
   // valen igual como cliente: se piden todos y se criban aquí. Ofrecer un

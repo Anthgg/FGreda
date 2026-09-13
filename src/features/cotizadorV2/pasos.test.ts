@@ -142,6 +142,18 @@ describe("errores: impiden avanzar", () => {
     expect(paso.completo).toBe(false);
   });
 
+  it("una moneda nula es la base: no pide tipo de cambio", () => {
+    // El formulario lee el nulo como soles y esconde el tipo de cambio. Si el
+    // paso lo exigiera igualmente, la cotización quedaría incompleta sin
+    // ninguna forma visible de arreglarla.
+    const paso = estado(
+      "cliente",
+      datos({ cotizacion: { ...COTIZACION_COMPLETA, currency_code: null, exchange_rate: null } }),
+    );
+    expect(paso.completo).toBe(true);
+    expect(paso.senales).toHaveLength(0);
+  });
+
   it("una cotización sin productos no está lista", () => {
     const paso = estado("productos", datos({ productos: { items: [], materials_cost: "0" } }));
     expect(paso.completo).toBe(false);
