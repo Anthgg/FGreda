@@ -432,8 +432,13 @@ jobs:
           DATABASE_URL: postgresql://greda:greda@localhost:5432/greda_e2e
           FRONTEND_ORIGINS: http://localhost:4173
           COOKIE_SECURE: "false"
+        # Con el Python del entorno y NO con `uv run`: `uv run` retiene el
+        # bloqueo de la cache de uv mientras vive, y el paso posterior de
+        # setup-uv («Pruning cache...») se quedaba cinco minutos esperandolo y
+        # fallaba con codigo 2 cuando las E2E ya habian pasado.
         run: |
-          nohup uv run python -m tests.e2e.servidor_revision --port 8000 > ../backend.log 2>&1 &
+          nohup .venv/bin/python -m tests.e2e.servidor_revision --port 8000 > ../backend.log 2>&1 &
+          echo $! > ../backend.pid
           for intento in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8000/api/v1/auth/csrf -o /dev/null; then
               echo "Backend de la revision operativo"
@@ -463,6 +468,7 @@ jobs:
       - name: Servir la app construida
         run: |
           nohup npx vite preview --port 4173 --strictPort --host 127.0.0.1 > preview.log 2>&1 &
+          echo $! > preview.pid
           for intento in $(seq 1 30); do
             if curl -fsS http://localhost:4173/ -o /dev/null && curl -fsS http://localhost:4173/api/v1/auth/csrf -o /dev/null; then
               echo "App y proxy /api operativos"
@@ -481,6 +487,27 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:4173
         run: npx playwright test -c playwright.revision.config.ts
+
+      - name: Apagar backend y app
+        # Siempre, pase lo que pase arriba: un proceso que sobrevive al ultimo
+        # paso se queda con puertos, ficheros y la cache de uv, y el fallo
+        # aparece despues en un paso de limpieza que no tiene nada que ver.
+        if: always()
+        run: |
+          for fichero in backend.pid preview.pid; do
+            if [ -f "$fichero" ]; then
+              kill "$(cat "$fichero")" 2>/dev/null || true
+            fi
+          done
+          pkill -f "tests.e2e.servidor_revision" 2>/dev/null || true
+          pkill -f "vite preview" 2>/dev/null || true
+          sleep 2
+          if pgrep -f "tests.e2e.servidor_revision|vite preview" >/dev/null; then
+            echo "Quedaron procesos vivos:"
+            pgrep -af "tests.e2e.servidor_revision|vite preview"
+            exit 1
+          fi
+          echo "Backend y app apagados"
 
       - name: Reporte y logs
         if: always()
