@@ -312,5 +312,58 @@ describe("comprobaciones de frescura en curso", () => {
     unmount();
     q.desuscribir();
   });
+
+  it("una invalidación tras una escritura directa también cuenta hasta que llega el dato", async () => {
+    // Sexta revisión de Codex: las escrituras con `mutate` no pasan por
+    // `esperarGuardado`, y el pie decía «guardado» con los derivados viejos.
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+    q.responder(0);
+    await hastaQue(() => q.datos() === 1);
+
+    const { result, unmount } = renderHook(() => useComprobacionesEnCurso(COTIZACION));
+    let invalidacion: Promise<void> | undefined;
+    act(() => {
+      invalidacion = invalidarCotizacion(q.client, COTIZACION);
+    });
+    expect(result.current).toBe(1);
+    await act(async () => {
+      await hastaQue(() => q.pendientes.length === 2);
+    });
+    expect(result.current).toBe(1);
+
+    q.fijarServidor(2);
+    q.responder(1);
+    await act(async () => {
+      await invalidacion;
+    });
+    expect(result.current).toBe(0);
+    expect(q.datos()).toBe(2);
+    unmount();
+    q.desuscribir();
+  });
+
+  it("también se descuenta si el refetch falla", async () => {
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+    q.responder(0);
+    await hastaQue(() => q.datos() === 1);
+
+    const { result, unmount } = renderHook(() => useComprobacionesEnCurso(COTIZACION));
+    let invalidacion: Promise<void> | undefined;
+    act(() => {
+      invalidacion = invalidarCotizacion(q.client, COTIZACION);
+    });
+    await act(async () => {
+      await hastaQue(() => q.pendientes.length === 2);
+    });
+    q.fallar(1);
+    await act(async () => {
+      await invalidacion;
+    });
+    expect(result.current).toBe(0);
+    unmount();
+    q.desuscribir();
+  });
 });
 

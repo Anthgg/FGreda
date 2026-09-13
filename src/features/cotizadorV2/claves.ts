@@ -101,7 +101,15 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): P
         : invalidacion,
     );
   }
-  return Promise.all(refrescos).then(() => undefined);
+  // Mientras el refresco dura, la cotización sigue «guardando». Sexta revisión de
+  // Codex: las escrituras directas con `mutate` no pasan por `esperarGuardado`, y
+  // al terminar el PUT el pie volvía a «Todos los cambios guardados» con los
+  // derivados todavía viejos en pantalla. Se cuenta aquí, síncrono dentro del
+  // `onSuccess`, antes de que la mutación deje de estar pendiente: no hay hueco.
+  cambiarComprobaciones(quotationId, +1);
+  return Promise.all(refrescos)
+    .then(() => undefined)
+    .finally(() => cambiarComprobaciones(quotationId, -1));
 }
 
 /**
