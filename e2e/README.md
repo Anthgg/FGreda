@@ -1,5 +1,35 @@
 # E2E (Playwright) — Cotizador Greda
 
+> **Dos suites, dos preguntas distintas (desde la Fase 010G).**
+>
+> | | Smoke de produccion | E2E de la revision |
+> |---|---|---|
+> | Pregunta | ¿Sigue en pie lo desplegado? | ¿Funciona lo que trae esta rama? |
+> | Specs | `e2e/*.spec.ts` | `e2e/revision/*.spec.ts` |
+> | Config | `playwright.config.ts` | `playwright.revision.config.ts` |
+> | Target | produccion (`E2E_BASE_URL` o la URL real) | la app construida de la rama, en `localhost` |
+> | Backend | el desplegado | `Anthgg/BGreda` en `BACKEND_REF`, levantado en el job |
+> | Job de CI | «Smoke de produccion (Chromium)» | «E2E de la revision (Chromium)» |
+> | Sin credenciales | se omite (aviso visible) | nunca se omite: las genera el job |
+>
+> Una prueba FUNCIONAL de algo nuevo va en `e2e/revision/`. Ponerla junto al
+> smoke la mandaria contra produccion, que todavia no tiene ese cambio: fallaria
+> por la razon equivocada o, sin credenciales, se saltaria dejando un verde vacio.
+>
+> Correrla en local:
+>
+> ```bash
+> # backend (en BGreda), contra un PostgreSQL local ya migrado
+> GREDA_E2E_REVISION=1 DATABASE_URL=postgresql://.../greda_e2e >   FRONTEND_ORIGINS=http://localhost:4173 COOKIE_SECURE=false >   E2E_EMAIL=e2e@example.com E2E_PASSWORD=<aleatoria> >   python -m tests.e2e.servidor_revision --port 8000
+>
+> # frontend (en FGreda)
+> VITE_API_BASE_URL=http://localhost:4173 npm run build
+> npx vite preview --port 4173 --strictPort
+> E2E_BASE_URL=http://localhost:4173 E2E_EMAIL=... E2E_PASSWORD=... >   npx playwright test -c playwright.revision.config.ts
+> ```
+>
+> Lo que sigue describe el **smoke de produccion**.
+
 Suite Playwright que corre **contra un ambiente real** (por defecto, producción:
 `https://fgreda-web-303244958634.southamerica-west1.run.app`). No usa mocks ni
 un backend de prueba: todo lo que hace la suite hace requests reales a BGreda.

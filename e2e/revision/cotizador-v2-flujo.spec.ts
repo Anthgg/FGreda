@@ -1,10 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login } from "./helpers/auth";
-import { hasE2ECredentials, testName } from "./helpers/fixtures";
+import { login } from "../helpers/auth";
+import { testName } from "../helpers/fixtures";
 
 /**
- * Fase 010G — el flujo de siete pasos del Cotizador V2, contra el ambiente real.
+ * Fase 010G — el flujo de siete pasos del Cotizador V2, contra LA REVISION.
+ *
+ * Estas pruebas NO corren contra produccion. Viven en `e2e/revision/`, que el
+ * smoke de produccion ignora, y las ejecuta `playwright.revision.config.ts`
+ * contra la aplicacion construida desde la propia rama y un backend levantado
+ * desde la revision compatible. Probar contra produccion una pantalla que
+ * produccion todavia no tiene no valida nada: o falla por la razon equivocada o,
+ * peor, se salta y deja un verde vacio.
  *
  * Cuatro recorridos, uno por cada cosa que solo se rompe de punta a punta y que
  * las pruebas de componente no pueden ver porque alli el backend es una
@@ -43,7 +50,7 @@ async function nuevoBorrador(page: Page, etiqueta: string): Promise<string> {
 async function elegirCliente(page: Page): Promise<void> {
   await paso(page, 1, "Cliente").click();
   await expect(page.getByTestId("paso-cliente")).toBeVisible();
-  await page.getByRole("combobox", { name: "Cliente" }).click();
+  await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
   // La primera opcion es «Sin cliente todavía»: se salta.
   const primero = page.getByRole("option").nth(1);
   await expect(primero).toBeVisible();
@@ -78,7 +85,9 @@ async function anadirPieza(
 }
 
 test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
-  test.skip(!hasE2ECredentials, "E2E_EMAIL/E2E_PASSWORD no configuradas");
+  // Sin `test.skip` por falta de credenciales: en el gate de revision las
+  // credenciales las genera el propio workflow, y si faltan la configuracion
+  // aborta antes de empezar. Un salto aqui convertiria un entorno roto en verde.
 
   test("CASO 1 FLUJO COMPLETO: los siete pasos y una recarga que no pierde nada", async ({
     page,
@@ -92,7 +101,7 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     // Materiales: la pasta se elige en el paso 3, no en el 2.
     await paso(page, 3, "Materiales").click();
     await expect(page.getByText(/no descuenta inventario/i)).toBeVisible();
-    await page.getByRole("combobox", { name: "Pasta" }).first().click();
+    await page.getByRole("combobox", { name: "Pasta", exact: true }).first().click();
     const primeraPasta = page.getByRole("option").nth(1);
     await expect(primeraPasta).toBeVisible();
     await primeraPasta.click();
@@ -113,18 +122,37 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     await paso(page, 7, "Resumen").click();
     const resumen = page.getByTestId("paso-resumen");
     await expect(resumen).toBeVisible();
-    const totalAntes = await page.getByTestId("resumen-precio").innerText();
+
+    // Se espera lo mismo que ve una persona: que la pantalla diga que todo esta
+    // guardado. Las escrituras de una cotizacion se ponen en fila detras del
+    // bloqueo de su cabecera, y esta prueba encontro que recargar antes de que
+    // terminaran perdia los dias efectivos EN SILENCIO. La app ahora lo dice y
+    // frena la recarga; la prueba respeta ese contrato en vez de adivinar tiempos.
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+      timeout: 30_000,
+    });
+    const precio = page.getByTestId("resumen-precio");
+    // Y se espera a que el precio sea el recalculado, no el que habia en cache
+    // mientras se refrescaba: «S/ —» es un precio que todavia no ha llegado.
+    await expect(precio).not.toContainText("S/ —");
+    // Lo que motivo la correccion: los dias efectivos tienen que haber llegado
+    // al servidor y volver en el resumen.
+    await expect(resumen.getByText("Por 2 días efectivos.")).toBeVisible();
+    const totalAntes = await precio.innerText();
 
     // La recarga: el paso vive en la URL y los datos en el servidor, asi que
     // esto tiene que devolver exactamente la misma pantalla.
     await page.reload();
     await expect(page.getByTestId("paso-resumen")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("resumen-precio")).not.toContainText("S/ —");
     expect(await page.getByTestId("resumen-precio").innerText()).toBe(totalAntes);
+    await expect(page.getByTestId("paso-resumen").getByText("Por 2 días efectivos.")).toBeVisible();
 
     // Y volver al primer paso no reescribe nada: navegar no es editar.
     await paso(page, 1, "Cliente").click();
     await expect(page.getByTestId("paso-cliente")).toBeVisible();
     await paso(page, 7, "Resumen").click();
+    await expect(page.getByTestId("resumen-precio")).not.toContainText("S/ —");
     expect(await page.getByTestId("resumen-precio").innerText()).toBe(totalAntes);
 
     expect(page.url().startsWith(url.split("/").slice(0, -1).join("/"))).toBeTruthy();
@@ -157,7 +185,7 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     await nuevoBorrador(page, "V2-USD");
     await elegirCliente(page);
 
-    await page.getByRole("combobox", { name: "Moneda" }).click();
+    await page.getByRole("combobox", { name: "Moneda", exact: true }).click();
     await page.getByRole("option", { name: /d[oó]lares/i }).click();
 
     const cambio = page.getByLabel(/tipo de cambio/i);
@@ -201,7 +229,7 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     // Y un peso de pasta con coma, en otro paso y otro componente: la regla es
     // una sola para todo el flujo, no cuatro parecidas.
     await paso(page, 3, "Materiales").click();
-    await page.getByRole("combobox", { name: "Pasta" }).first().click();
+    await page.getByRole("combobox", { name: "Pasta", exact: true }).first().click();
     const primeraPasta = page.getByRole("option").nth(1);
     await expect(primeraPasta).toBeVisible();
     await primeraPasta.click();

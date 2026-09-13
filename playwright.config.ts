@@ -14,6 +14,10 @@ const baseURL = process.env.E2E_BASE_URL ?? "https://fgreda-web-303244958634.sou
 
 export default defineConfig({
   testDir: "./e2e",
+  // `e2e/revision/` son pruebas FUNCIONALES de la rama, no smoke de produccion.
+  // Ejecutarlas aqui las mandaria contra produccion, que no tiene la revision:
+  // las corre `playwright.revision.config.ts` contra la app construida de la PR.
+  testIgnore: ["**/revision/**"],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false, // los specs comparten datos de produccion (cotizaciones, terceros); evitar carreras

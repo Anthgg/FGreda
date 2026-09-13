@@ -50,6 +50,7 @@ desktop.ini
 
 # ---- Playwright ----
 /playwright-report/
+/playwright-report-revision/
 /test-results/
 # Salidas de `playwright test --output=<dir>`: al pasar un directorio propio
 # los artefactos caen fuera de /test-results/ y acaban en un commit.
