@@ -362,7 +362,9 @@ jobs:
     env:
       # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
       # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      BACKEND_REF: feat/phase-010g-e2e-revision
+      # `main`: el servidor de revision ya esta fusionado (Anthgg/BGreda#59), asi
+      # que se prueba la combinacion que queda desplegable.
+      BACKEND_REF: main
     services:
       postgres:
         image: postgres:16-alpine
