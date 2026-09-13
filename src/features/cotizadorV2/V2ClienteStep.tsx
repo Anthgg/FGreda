@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPartners } from "@/api/masters";
-import { useBorradorProtegido } from "@/components/borradores";
+import { useBorradorProtegido, useDescartes } from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
@@ -74,14 +74,18 @@ function useEspera(valor: string, milisegundos = 300): string {
  * La misma razón que en `DecimalField`: escribir un nombre de ocho letras no
  * son ocho peticiones, y una edición que acaba donde empezó no gasta ninguna.
  */
-function useTextoDiferido(guardado: string, guardar: (valor: string | null) => void) {
+function useTextoDiferido(
+  guardado: string,
+  guardar: (valor: string | null) => void,
+  habilitado: boolean,
+) {
   const [borrador, setBorrador] = useState(guardado);
   const [escribiendo, setEscribiendo] = useState(false);
-  // Lo enviado y lo que había guardado al enviarlo: tras salir del campo se
-  // sigue enseñando lo enviado hasta que lo guardado cambie o coincida. Sin
-  // esto el campo volvía a pintar el valor ANTERIOR hasta el refetch, y quien
+  // Lo enviado: tras salir del campo se sigue enseñando hasta que lo guardado
+  // coincida con ello. Sin esto el campo volvía a pintar el valor ANTERIOR hasta
+  // el refetch, y quien
   // volvía a entrar enseguida editaba el viejo.
-  const [enviado, setEnviado] = useState<{ valor: string; antes: string } | null>(null);
+  const [enviado, setEnviado] = useState<{ valor: string } | null>(null);
   // No se sincroniza con lo guardado mientras el campo está abierto. Lo encontró
   // Codex: escribir «Feria», salir —se guarda—, volver a entrar y seguir con
   // «Feria de octubre»; al llegar el refetch lo guardado pasa a «Feria» y, sin
@@ -90,7 +94,9 @@ function useTextoDiferido(guardado: string, guardar: (valor: string | null) => v
   useEffect(() => {
     if (escribiendo) return;
     if (enviado !== null) {
-      const alcanzado = guardado !== enviado.antes || guardado.trim() === enviado.valor.trim();
+      // Solo si COINCIDE: que lo guardado cambie por un envío anterior no
+      // alcanza este. Ver `DecimalField`.
+      const alcanzado = guardado.trim() === enviado.valor.trim();
       if (!alcanzado) return;
       setEnviado(null);
     }
@@ -102,10 +108,25 @@ function useTextoDiferido(guardado: string, guardar: (valor: string | null) => v
     if (borrador.trim() === guardado.trim()) return;
     // Vaciar un texto libre SÍ es retirarlo: a diferencia de un importe, un
     // nombre en blanco no puede confundirse con un cero.
-    setEnviado({ valor: borrador, antes: guardado });
+    setEnviado({ valor: borrador });
     guardar(borrador.trim() === "" ? null : borrador);
   };
-  useBorradorProtegido(borrador.trim() !== guardado.trim(), confirmar);
+  // Lo YA enviado no cuenta como borrador, y sin permiso de edición no se
+  // declara ni se confirma nada. Ver `DecimalField`.
+  const sucio =
+    habilitado &&
+    borrador.trim() !== guardado.trim() &&
+    (enviado === null || borrador.trim() !== enviado.valor.trim());
+  useBorradorProtegido(sucio, confirmar);
+
+  const descartes = useDescartes();
+  const descartesVistos = useRef(descartes);
+  useEffect(() => {
+    if (descartes === descartesVistos.current) return;
+    descartesVistos.current = descartes;
+    if (escribiendo || enviado === null) return;
+    setEnviado(null);
+  }, [descartes, escribiendo, enviado]);
 
   return {
     borrador,
@@ -125,8 +146,16 @@ export function V2ClienteStep({
   const guardar = useUpdateV2Quotation(cotizacion.id);
   const [busqueda, setBusqueda] = useState("");
 
-  const nombre = useTextoDiferido(cotizacion.name ?? "", (name) => guardar.mutate({ name }));
-  const notas = useTextoDiferido(cotizacion.notes ?? "", (notes) => guardar.mutate({ notes }));
+  const nombre = useTextoDiferido(
+    cotizacion.name ?? "",
+    (name) => guardar.mutate({ name }),
+    canEdit,
+  );
+  const notas = useTextoDiferido(
+    cotizacion.notes ?? "",
+    (notes) => guardar.mutate({ notes }),
+    canEdit,
+  );
 
   const busquedaReposada = useEspera(busqueda);
   const terceros = useQuery({

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchProducts } from "@/api/masters";
 import { PrimaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { useBorradorProtegido } from "@/components/borradores";
+import { useBorradorProtegido, useDescartes } from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { EmptyState, Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -112,9 +112,9 @@ function CampoDeTexto({
 }) {
   const [borrador, setBorrador] = useState(value);
   const [escribiendo, setEscribiendo] = useState(false);
-  // Lo enviado y lo que había guardado al enviarlo: se sigue enseñando lo
-  // enviado hasta que lo guardado cambie o coincida. Ver `DecimalField`.
-  const [enviado, setEnviado] = useState<{ valor: string; antes: string } | null>(null);
+  // Lo enviado: se sigue enseñando hasta que lo guardado coincida con ello.
+  // Ver `DecimalField`.
+  const [enviado, setEnviado] = useState<{ valor: string } | null>(null);
   // Si el valor guardado cambia por fuera —otra edición, un refetch— el campo
   // lo sigue, pero NO mientras alguien lo tiene abierto: desde que cambiar
   // cualquier cosa invalida la cotización entera, un refresco puede resolverse
@@ -123,7 +123,9 @@ function CampoDeTexto({
   useEffect(() => {
     if (escribiendo) return;
     if (enviado !== null) {
-      const alcanzado = value !== enviado.antes || value.trim() === enviado.valor;
+      // Solo si COINCIDE: que lo guardado cambie por un envío anterior no
+      // alcanza este. Ver `DecimalField`.
+      const alcanzado = value.trim() === enviado.valor;
       if (!alcanzado) return;
       setEnviado(null);
     }
@@ -136,13 +138,29 @@ function CampoDeTexto({
     // mismo nombre y no merece ni una petición ni una fila distinta.
     const limpio = borrador.trim();
     if (limpio !== value.trim()) {
-      setEnviado({ valor: limpio, antes: value });
+      setEnviado({ valor: limpio });
       onCommit(limpio);
     }
   };
   // Lo tecleado sin salir del campo cuenta como cambio sin guardar, y se
-  // confirma si el campo se desmonta sin blur.
-  useBorradorProtegido(borrador.trim() !== value.trim(), confirmar);
+  // confirma si el campo se desmonta sin blur. Lo YA enviado no cuenta —si no,
+  // un desmontaje con el envío en vuelo lo mandaba dos veces— y un campo
+  // deshabilitado no declara ni confirma nada. Ver `DecimalField`.
+  const limpioAhora = borrador.trim();
+  const sucio =
+    !disabled &&
+    limpioAhora !== value.trim() &&
+    (enviado === null || limpioAhora !== enviado.valor.trim());
+  useBorradorProtegido(sucio, confirmar);
+
+  const descartes = useDescartes();
+  const descartesVistos = useRef(descartes);
+  useEffect(() => {
+    if (descartes === descartesVistos.current) return;
+    descartesVistos.current = descartes;
+    if (escribiendo || enviado === null) return;
+    setEnviado(null);
+  }, [descartes, escribiendo, enviado]);
 
   return (
     <TextField

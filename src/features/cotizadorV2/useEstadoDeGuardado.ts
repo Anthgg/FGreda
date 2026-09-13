@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useMutationState, useQueryClient, type Mutation } from "@tanstack/react-query";
 
-import { useBorradoresSinGuardar } from "@/components/borradores";
+import { anunciarDescarte, useBorradoresSinGuardar } from "@/components/borradores";
 import {
   firmaDeGuardado,
   guardadosDeCotizacion,
@@ -71,7 +71,7 @@ export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
     select: (mutation) => {
       const tipo = String(mutation.options.mutationKey?.[3]) as TipoDeGuardado;
       return {
-        firma: firmaDeGuardado(tipo, mutation.state.variables),
+        firma: firmaDeGuardado(tipo, mutation.state.variables, mutation.mutationId),
         tipo,
         status: mutation.state.status,
         submittedAt: mutation.state.submittedAt,
@@ -97,6 +97,32 @@ export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
     return { enVuelo: pendientes, fallidos: conError };
   }, [escrituras]);
 
+  // Poda. Las escrituras se recuerdan sin límite para que un error no se
+  // olvide solo, pero eso guardaba también cada éxito para siempre
+  // (re-revisión de Codex). Se conserva solo lo que todavía dice algo: lo que
+  // está en vuelo y el ÚLTIMO error de cada dato. Una firma con algo en vuelo no
+  // se toca: si la escritura antigua fallara después de que la nueva tuviera
+  // éxito, borrar la nueva haría aparecer un error falso.
+  useEffect(() => {
+    const cache = client.getMutationCache();
+    const todas = cache.findAll({ mutationKey: guardadosDeCotizacion(quotationId) });
+    const firmaDe = (m: (typeof todas)[number]) =>
+      firmaDeGuardado(String(m.options.mutationKey?.[3]), m.state.variables, m.mutationId);
+    const conVuelo = new Set(todas.filter((m) => m.state.status === "pending").map(firmaDe));
+    const ultima = new Map<string, (typeof todas)[number]>();
+    for (const m of todas) {
+      const firma = firmaDe(m);
+      const previa = ultima.get(firma);
+      if (!previa || m.state.submittedAt >= previa.state.submittedAt) ultima.set(firma, m);
+    }
+    for (const m of todas) {
+      const firma = firmaDe(m);
+      if (conVuelo.has(firma)) continue;
+      const esUltimoError = ultima.get(firma) === m && m.state.status === "error";
+      if (!esUltimoError) cache.remove(m);
+    }
+  }, [client, quotationId, escrituras]);
+
   const hayRiesgo = enVuelo > 0 || fallidos.length > 0 || borradores > 0;
 
   // Proteger recargar y cerrar mientras haya riesgo. Un único oyente mientras
@@ -118,8 +144,12 @@ export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
     const cache = client.getMutationCache();
     for (const mutation of cache.findAll({ mutationKey: guardadosDeCotizacion(quotationId) })) {
       const tipo = String(mutation.options.mutationKey?.[3]);
-      if (firmaDeGuardado(tipo, mutation.state.variables) === firma) cache.remove(mutation);
+      if (firmaDeGuardado(tipo, mutation.state.variables, mutation.mutationId) === firma) {
+        cache.remove(mutation);
+      }
     }
+    // Y los campos que enseñan lo rechazado vuelven a lo guardado.
+    anunciarDescarte();
   };
 
   return { enVuelo, fallidos, borradores, hayRiesgo, descartar };

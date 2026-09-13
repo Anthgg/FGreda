@@ -38,6 +38,30 @@ function marcar(id: string, sucio: boolean): void {
   avisar();
 }
 
+let descartes = 0;
+
+/**
+ * Avisa a los campos de que el usuario descartó un guardado rechazado.
+ *
+ * Re-revisión de Codex: «Descartar este cambio» quitaba el aviso pero el campo
+ * seguía enseñando el valor que el servidor rechazó, y el pie podía decir
+ * «guardado» con ese valor a la vista. Los campos que tienen algo enviado sin
+ * confirmar vuelven a lo guardado al recibir la señal.
+ */
+export function anunciarDescarte(): void {
+  descartes += 1;
+  avisar();
+}
+
+/** Contador de descartes, para que un campo reaccione cuando cambia. */
+export function useDescartes(): number {
+  return useSyncExternalStore(
+    suscribir,
+    () => descartes,
+    () => 0,
+  );
+}
+
 /** Cuántos campos enseñan ahora mismo un valor que no está guardado. */
 export function useBorradoresSinGuardar(): number {
   return useSyncExternalStore(

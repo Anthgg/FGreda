@@ -125,6 +125,69 @@ describe("DecimalField", () => {
     expect(onCommit).toHaveBeenCalledExactlyOnceWith("250");
   });
 
+  it("salir del campo y desmontarse enseguida guarda UNA vez, no dos", async () => {
+    // Re-revision de Codex, reproducida antes de corregirla: tras el blur lo
+    // guardado no cambia hasta el refetch, el campo seguia contando como
+    // «sucio» y, al desmontarse con el envio en vuelo —un clic directo en otro
+    // paso—, confirmaba OTRA VEZ. onCommit llegaba dos veces con "300".
+    const onCommit = vi.fn();
+    const { unmount } = render(
+      <DecimalField label="Peso" value="500.000000" onCommit={onCommit} />,
+    );
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Peso/));
+    await user.type(screen.getByLabelText(/^Peso/), "300");
+    await user.tab();
+    unmount();
+
+    expect(onCommit.mock.calls).toEqual([["300"]]);
+  });
+
+  it("el refetch de un guardado ANTERIOR no pisa lo enviado despues", async () => {
+    // Dos guardados del mismo campo en fila: «20» y enseguida «20,5». Si el
+    // refetch del primero llega con el segundo aun en vuelo, lo guardado pasa a
+    // «20»; dar por alcanzado lo enviado solo porque lo guardado cambio pintaba
+    // ese valor intermedio y viejo, y quien volvia a entrar editaba lo obsoleto.
+    const onCommit = vi.fn();
+    const { rerender } = render(<DecimalField label="Alto" value="" onCommit={onCommit} />);
+    const user = userEvent.setup();
+    const campo = () => screen.getByLabelText(/^Alto/);
+
+    await user.type(campo(), "20");
+    await user.tab();
+    await user.clear(campo());
+    await user.type(campo(), "20,5");
+    await user.tab();
+    expect(onCommit.mock.calls).toEqual([["20"], ["20.5"]]);
+
+    // Llega el refetch del PRIMER guardado.
+    rerender(<DecimalField label="Alto" value="20.000000" onCommit={onCommit} />);
+    expect(campo()).toHaveValue("20,5");
+
+    // Llega el del segundo: ahora si coincide, y se ensena lo guardado.
+    rerender(<DecimalField label="Alto" value="20.500000" onCommit={onCommit} />);
+    expect(campo()).toHaveValue("20.5");
+  });
+
+  it("un campo que pasa a deshabilitado no confirma al desmontarse", async () => {
+    // Re-revision de Codex: si la cotizacion deja de ser editable con un
+    // borrador a medias, confirmar al desmontar escribiria contra una
+    // cotizacion ya emitida y dejaria un error artificial.
+    const onCommit = vi.fn();
+    const { rerender, unmount } = render(
+      <DecimalField label="Peso" value="500.000000" onCommit={onCommit} />,
+    );
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Peso/));
+    await user.type(screen.getByLabelText(/^Peso/), "250");
+    rerender(<DecimalField label="Peso" value="500.000000" onCommit={onCommit} disabled />);
+    unmount();
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it("enseña el valor guardado sin los ceros de cola", () => {
     render(<DecimalField label="Costo" value="0.001300" onCommit={vi.fn()} />);
     expect(screen.getByLabelText(/^Costo/)).toHaveValue("0.0013");

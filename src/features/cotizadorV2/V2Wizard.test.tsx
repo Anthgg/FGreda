@@ -412,6 +412,38 @@ describe("Flujo de siete pasos del Cotizador V2 (Fase 010G)", () => {
     );
   });
 
+  it("descartar un guardado rechazado devuelve el campo a lo guardado y no finge nada", async () => {
+    // Re-revision de Codex: «Descartar este cambio» quitaba el aviso pero el
+    // campo seguia ensenando el valor que el servidor rechazo.
+    const base = mockV2();
+    const original = base.getMockImplementation();
+    base.mockImplementation(async (entrada, init) => {
+      const url = typeof entrada === "string" ? entrada : entrada.toString();
+      if (url.endsWith("/quotations-v2/7") && init?.method === "PUT") {
+        return jsonResponse(422, { error: { code: "VALIDATION_ERROR", message: "No valido" } });
+      }
+      return original!(entrada, init);
+    });
+    renderApp(["/cotizador-v2/7/cliente"]);
+    const user = userEvent.setup();
+    await screen.findByTestId("paso-cliente");
+
+    const campo = screen.getByLabelText(/nombre de la cotizaci\u00f3n/i);
+    await user.clear(campo);
+    await user.type(campo, "Rechazado");
+    await user.tab();
+
+    const aviso = await screen.findByTestId("guardados-fallidos");
+    // Con el rechazo, el campo sigue ensenando lo que escribio el usuario.
+    expect(campo).toHaveValue("Rechazado");
+
+    await user.click(within(aviso).getByRole("button", { name: "Descartar este cambio" }));
+
+    await waitFor(() => expect(screen.queryByTestId("guardados-fallidos")).not.toBeInTheDocument());
+    await waitFor(() => expect(campo).toHaveValue("Pedido demo"));
+    expect(screen.getByTestId("estado-guardado")).toHaveTextContent(/todos los cambios guardados/i);
+  });
+
   it("lo tecleado SIN salir del campo tambien protege la salida", async () => {
     // BLOCKER de la revision de Codex. Los campos guardan al salir; mientras se
     // escribe no hay peticion en vuelo, y la proteccion no veia nada: teclear y

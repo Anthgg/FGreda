@@ -117,10 +117,14 @@ function claves(objeto: unknown): string {
  * Un fallo al guardar los días efectivos queda resuelto cuando esos días se
  * guardan después con éxito, no cuando se guarda el nombre de la cotización. Por
  * eso la firma distingue el tipo, la fila afectada y los campos que viajaban.
- * Un alta es siempre distinta de otra: una línea que no se pudo añadir no se da
- * por añadida porque se añada otra.
+ *
+ * Un alta es siempre distinta de otra, y por eso su firma es el INTENTO
+ * (`mutationId`), no su contenido. Re-revisión de Codex: con la firma por
+ * contenido, fallar al añadir «Taza» y añadir después otra «Taza» idéntica con
+ * éxito borraba el error de la primera. Una línea que no se pudo añadir no se da
+ * por añadida porque se añada otra; su aviso solo se quita descartándolo.
  */
-export function firmaDeGuardado(tipo: string, variables: unknown): string {
+export function firmaDeGuardado(tipo: string, variables: unknown, intento: number): string {
   const v = variables as Record<string, unknown> | number | null | undefined;
   switch (tipo) {
     case "linea-editar":
@@ -134,7 +138,7 @@ export function firmaDeGuardado(tipo: string, variables: unknown): string {
       return `${tipo}:${String(v)}`;
     case "linea-anadir":
     case "tarea-anadir":
-      return `${tipo}:${JSON.stringify(v)}`;
+      return `${tipo}:#${intento}`;
     case "planificacion":
       return tipo;
     default:

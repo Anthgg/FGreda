@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useBorradorProtegido } from "@/components/borradores";
+import { useBorradorProtegido, useDescartes } from "@/components/borradores";
 import { TextField } from "@/components/form";
 import {
   interpretarDecimal,
@@ -89,12 +89,12 @@ export function DecimalField({
   const [borrador, setBorrador] = useState(guardado);
   const [error, setError] = useState<string | null>(null);
   const [escribiendo, setEscribiendo] = useState(false);
-  // Lo último que se mandó y lo que había guardado en ese momento. Mientras lo
-  // guardado no cambie ni coincida con lo enviado, el campo sigue enseñando lo
-  // enviado. Sin esto, al salir del campo se volvía a pintar el valor ANTERIOR
+  // Lo último que se mandó. Mientras lo guardado no coincida con ello, el campo
+  // sigue enseñando lo enviado. Sin esto, al salir del campo se volvía a pintar
+  // el valor ANTERIOR
   // hasta que llegaba el refetch; quien volvía a entrar enseguida editaba el
   // viejo, y como mientras se escribe ya no se sincroniza, lo guardaba después.
-  const [enviado, setEnviado] = useState<{ valor: string; antes: string } | null>(null);
+  const [enviado, setEnviado] = useState<{ valor: string } | null>(null);
 
   // Si el valor guardado cambia por fuera —otra edición, un refetch, volver a
   // un paso— el campo lo sigue. Pero NO mientras alguien tiene el campo
@@ -110,11 +110,14 @@ export function DecimalField({
     // que su ultima edicion no se guardo.
     if (escribiendo || error !== null) return;
     if (enviado !== null) {
+      // Alcanzado solo si lo guardado COINCIDE con lo enviado. Que simplemente
+      // haya cambiado no basta: con «20» y luego «20,5» en fila, el refetch del
+      // primero llegaba mientras el segundo iba en vuelo, lo guardado pasaba a
+      // «20» y el campo enseñaba ese valor intermedio y viejo; quien volvía a
+      // entrar editaba lo obsoleto. Si no coincide, el envío sigue en vuelo o
+      // falló, y en los dos casos lo correcto es seguir enseñando lo escrito.
       const alcanzado =
-        guardado !== enviado.antes ||
-        (enviado.valor === "" ? guardado === "" : mismoNumero(enviado.valor, guardado));
-      // Si lo guardado no se ha movido, el envío sigue en vuelo o falló: en los
-      // dos casos lo correcto es seguir enseñando lo que escribió el usuario.
+        enviado.valor === "" ? guardado === "" : mismoNumero(enviado.valor, guardado);
       if (!alcanzado) return;
       setEnviado(null);
     }
@@ -151,12 +154,12 @@ export function DecimalField({
         return;
       }
       setError(null);
-      setEnviado({ valor: "", antes: guardado });
+      setEnviado({ valor: "" });
       onCommit(null);
       return;
     }
     setError(null);
-    setEnviado({ valor: estado.canonico, antes: guardado });
+    setEnviado({ valor: estado.canonico });
     onCommit(estado.canonico);
   };
 
@@ -167,14 +170,40 @@ export function DecimalField({
   const estadoActual: EstadoDecimal = entero
     ? interpretarEntero(borrador)
     : interpretarDecimal(borrador, { permitirNegativo });
+  // «Sucio» es lo que todavía NO ha salido. Se compara con lo ENVIADO si lo
+  // hay, no solo con lo guardado: re-revisión de Codex. Tras el blur lo
+  // guardado no cambia hasta el refetch, así que comparar solo con lo guardado
+  // dejaba el campo «sucio» con el envío en vuelo, y si se desmontaba en ese
+  // intervalo —un clic directo en otro paso— confirmaba OTRA VEZ: doble PUT,
+  // doble recálculo, doble auditoría. Lo enviado ya lo vigila el estado de
+  // guardado de la cotización, en vuelo o fallido.
+  //
+  // Y un campo deshabilitado no declara nada ni confirma nada: si la
+  // cotización deja de ser editable, intentar guardar al desmontar solo
+  // produciría un error artificial contra una cotización ya emitida.
+  const referencia = enviado !== null ? enviado.valor : guardado;
   const sucio =
+    !disabled &&
     borrador !== guardado &&
     (estadoActual.tipo === "invalido" ||
-      (estadoActual.tipo === "vacio" && guardado !== "") ||
-      (estadoActual.tipo === "valido" && !mismoNumero(estadoActual.canonico, guardado)));
+      (estadoActual.tipo === "vacio" && referencia !== "") ||
+      (estadoActual.tipo === "valido" &&
+        !(referencia !== "" && mismoNumero(estadoActual.canonico, referencia))));
   // Al desmontarse con cambios —atrás/adelante del navegador, cambio de ruta—
   // no hay blur: se confirma igual, como si se hubiera salido del campo.
   useBorradorProtegido(sucio, confirmar);
+
+  // Si el usuario descarta un guardado rechazado, lo enviado sin confirmar se
+  // abandona y el campo vuelve a lo guardado. No mientras escribe.
+  const descartes = useDescartes();
+  const descartesVistos = useRef(descartes);
+  useEffect(() => {
+    if (descartes === descartesVistos.current) return;
+    descartesVistos.current = descartes;
+    if (escribiendo || enviado === null) return;
+    setEnviado(null);
+    setError(null);
+  }, [descartes, escribiendo, enviado]);
 
   return (
     <TextField
