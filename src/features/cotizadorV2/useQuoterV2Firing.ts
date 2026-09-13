@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchV2Firing, setV2Firing } from "@/api/quoterV2Firing";
 import {
+  alcanceDeGuardado,
   claveDeGuardado,
   invalidarCotizacion,
   RECORDAR_GUARDADO,
@@ -32,6 +33,7 @@ export const useSetV2Firing = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "quema"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2FiringInput) => setV2Firing(quotationId, payload),
     onSuccess: () => {

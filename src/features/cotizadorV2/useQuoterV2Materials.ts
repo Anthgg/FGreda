@@ -14,6 +14,7 @@ import type {
   V2QuotationProductInput,
 } from "@/types/quoterV2Materials";
 import {
+  alcanceDeGuardado,
   claveDeGuardado,
   invalidarCotizacion,
   RECORDAR_GUARDADO,
@@ -58,6 +59,7 @@ export const useAddV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "linea-anadir"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationProductInput) =>
       addV2QuotationProduct(quotationId, payload),
@@ -73,6 +75,7 @@ export const useUpdateV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "linea-editar"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { lineId: number; payload: V2QuotationProductInput }) =>
       updateV2QuotationProduct(quotationId, vars.lineId, vars.payload),
@@ -88,6 +91,7 @@ export const useDeleteV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "linea-borrar"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (lineId: number) => deleteV2QuotationProduct(quotationId, lineId),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las

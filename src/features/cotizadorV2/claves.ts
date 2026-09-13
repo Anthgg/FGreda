@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { useQueryClient, type Query, type QueryClient } from "@tanstack/react-query";
 
 import type { ResultadoDeGuardado } from "@/components/borradores";
@@ -67,6 +68,15 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): P
   // llegado: si un refetch FALLA, TanStack se traga el error (`catch(noop)`) y
   // la promesa resuelve con el dato viejo. Esa garantía la da
   // `asegurarFrescura`, que la comprueba.
+  //
+  // Y una consulta en su CARGA INICIAL necesita un fetch más. Quinta revisión de
+  // Codex, comprobada en `query-core/src/query.ts`: TanStack solo cancela un
+  // fetch en curso si la consulta ya tiene datos; sin ellos devuelve la promesa
+  // en curso. Ese GET empezó antes del guardado, y al resolver limpia la marca
+  // de invalidación: la consulta se quedaba con datos ANTERIORES al cambio
+  // hasta la siguiente invalidación. Se espera a que termine y se pide otro,
+  // que ya empieza después.
+  const cache = client.getQueryCache();
   const refrescos: Promise<void>[] = [];
   for (const clave of [
     QUOTER_V2_KEY,
@@ -76,7 +86,20 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): P
     V2_FIRING_KEY,
     V2_PRICING_KEY,
   ]) {
-    refrescos.push(client.invalidateQueries({ queryKey: [...clave, quotationId] }));
+    const queryKey = [...clave, quotationId];
+    const consulta = cache.find({ queryKey, exact: true });
+    const cargaInicialEnCurso =
+      consulta !== undefined &&
+      consulta.state.data === undefined &&
+      consulta.state.fetchStatus === "fetching";
+    const invalidacion = client.invalidateQueries({ queryKey });
+    refrescos.push(
+      cargaInicialEnCurso
+        ? invalidacion.then(() =>
+            client.refetchQueries({ queryKey, exact: true, type: "active" }, { cancelRefetch: false }),
+          )
+        : invalidacion,
+    );
   }
   return Promise.all(refrescos).then(() => undefined);
 }
@@ -105,6 +128,24 @@ export const guardadosDeCotizacion = (quotationId: number) =>
 /** Clave de una escritura concreta. */
 export const claveDeGuardado = (quotationId: number, tipo: TipoDeGuardado) =>
   [...guardadosDeCotizacion(quotationId), tipo] as const;
+
+/**
+ * La fila en la que esperan las escrituras de UNA cotización: de una en una, en
+ * el orden en que se pidieron.
+ *
+ * Lo encontró la E2E de la revisión, en el trace de un fallo intermitente de
+ * CASO 4: el campo «alto» envió `20` al salir y, 165 ms después, `20.5`. Las
+ * dos peticiones viajaron a la vez, esperaron el bloqueo de la cabecera en el
+ * backend y este las confirmó AL REVÉS: quedó `20`, el campo lo enseñó y el pie
+ * dijo «Todos los cambios guardados». El usuario perdía su último cambio.
+ *
+ * El backend ya las ejecuta de una en una —bloqueo pesimista—, pero no en el
+ * orden de llegada. Con un `scope` común, TanStack no envía una escritura hasta
+ * que termina la anterior: el orden del servidor pasa a ser el del usuario y no
+ * se pierde velocidad, porque en paralelo tampoco se ganaba. Mientras espera,
+ * la escritura cuenta como pendiente: «Guardando cambios…» y salida protegida.
+ */
+export const alcanceDeGuardado = (quotationId: number) => ({ id: `cotizacion-v2:${quotationId}` });
 
 /**
  * Cuánto tiempo se recuerda una escritura terminada.
@@ -181,56 +222,121 @@ function esDeLaCotizacion(queryKey: readonly unknown[], quotationId: number): bo
   return alcances.some((clave) => clave[1] === queryKey[1]) && queryKey[2] === quotationId;
 }
 
-/** Cuántas veces se vuelve a esperar un dato que un refetch ajeno cancelo. */
+/** Cuántas veces se vuelve a mirar una consulta que todavía no tiene su dato. */
 const INTENTOS_DE_FRESCURA = 5;
+
+function refetchExacto(client: QueryClient, consulta: Query): Promise<void> {
+  // `refetchQueries` y no `consulta.fetch`: pasa por la misma vía que el resto
+  // de la aplicación, y la regla de arquitectura que reserva las llamadas de
+  // red al cliente centralizado no tiene que abrir una excepción. Sin cancelar:
+  // si hay un fetch en curso, se engancha a él.
+  return client.refetchQueries(
+    { queryKey: consulta.queryKey, exact: true, type: "active" },
+    { cancelRefetch: false },
+  );
+}
 
 /**
  * Espera a que las consultas ACTIVAS de la cotización tengan un dato obtenido
- * después de este instante, y dice si lo consiguió.
+ * por un fetch que empezó DESPUÉS del guardado, y dice si lo consiguió.
  *
- * Se llama justo cuando `mutateAsync` resuelve. En ese momento el `onSuccess`
- * ya disparó la invalidación, que cancela los refetch anteriores al commit, así
- * que cualquier fetch en curso o futuro empezó DESPUÉS del guardado: lo que
- * resuelva a partir de aquí es fresco. Para cada consulta vieja se engancha al
- * fetch en curso sin cancelarlo (`cancelRefetch: false`) o lanza uno, y vuelve
- * a mirar, hasta cinco veces. En esta versión de TanStack un fetch cancelado
- * por otra invalidación se engancha al nuevo; el bucle no depende de ese
- * detalle interno.
+ * Se llama justo cuando `mutateAsync` resuelve. La frescura no se infiere de
+ * una marca de tiempo —la quinta revisión de Codex tumbó esa versión—, sino de
+ * saber qué fetch empezó cuándo:
  *
- * Devuelve `false` si alguna consulta FALLÓ al refrescar o se agotaron los
- * intentos: el guardado se hizo, pero la pantalla no tiene su dato.
+ * - una consulta que YA TENÍA datos: la invalidación del `onSuccess` canceló su
+ *   fetch anterior, así que el que está en curso empezó después del commit. Se
+ *   engancha a él, o lanza uno si no hay ninguno;
+ * - una consulta en su CARGA INICIAL, sin datos: TanStack no cancela ese fetch
+ *   (no hay datos que conservar) y pudo empezar ANTES del guardado. Se espera a
+ *   que termine sin creerle, y se lanza OTRO, que empieza con certeza después.
+ *
+ * Para cada consulta, la frontera son sus contadores de actualización justo
+ * antes del fetch que cuenta —no marcas de tiempo: dos cosas en el mismo
+ * milisegundo empataban—. Fresco si llegó un dato después; no fresco si llegó
+ * un error y ningún dato. Un error de un fetch anterior al guardado no cuenta.
  *
  * Solo las activas: las de un panel desmontado quedan invalidadas y se
  * refrescan al volver a montarse, y ningún campo suyo espera nada.
  */
 export async function asegurarFrescura(client: QueryClient, quotationId: number): Promise<boolean> {
-  const desde = Date.now();
   const filtro = {
     type: "active" as const,
-    predicate: (consulta: Query) => esDeLaCotizacion(consulta.queryKey, quotationId),
+    // Las desactivadas no se refrescan (`refetchQueries` las salta): esperarlas
+    // agotaría los intentos y daría un «no fresco» que no dice nada.
+    predicate: (consulta: Query) =>
+      esDeLaCotizacion(consulta.queryKey, quotationId) && !consulta.isDisabled() && !consulta.isStatic(),
   };
-  for (let intento = 0; intento < INTENTOS_DE_FRESCURA; intento += 1) {
-    const consultas = client.getQueryCache().findAll(filtro);
-    if (consultas.some((consulta) => consulta.state.errorUpdatedAt >= desde)) return false;
-    const viejas = consultas.filter((consulta) => consulta.state.dataUpdatedAt < desde);
-    if (viejas.length === 0) return true;
-    // `refetchQueries` y no `consulta.fetch`: pasa por la misma via que el resto
-    // de la aplicacion, y la regla de arquitectura que reserva las llamadas de
-    // red al cliente centralizado no tiene que abrir una excepcion. Se traga los
-    // errores; por eso se mira `errorUpdatedAt` en la vuelta siguiente.
-    await Promise.all(
-      viejas.map((consulta) =>
-        client.refetchQueries(
-          { queryKey: consulta.queryKey, exact: true, type: "active" },
-          { cancelRefetch: false },
-        ),
-      ),
-    );
+  const frontera = new Map<Query, { datos: number; errores: number }>();
+  const marcar = (consulta: Query) =>
+    frontera.set(consulta, {
+      datos: consulta.state.dataUpdateCount,
+      errores: consulta.state.errorUpdateCount,
+    });
+
+  const sinDatos: Query[] = [];
+  for (const consulta of client.getQueryCache().findAll(filtro)) {
+    if (consulta.state.data === undefined) sinDatos.push(consulta);
+    else marcar(consulta);
   }
-  const consultas = client.getQueryCache().findAll(filtro);
-  return (
-    !consultas.some((consulta) => consulta.state.errorUpdatedAt >= desde) &&
-    consultas.every((consulta) => consulta.state.dataUpdatedAt >= desde)
+  if (sinDatos.length > 0) {
+    // Se deja terminar la carga inicial, que pudo empezar antes del guardado...
+    await Promise.all(sinDatos.map((consulta) => refetchExacto(client, consulta)));
+    // ...y la frontera de estas consultas pasa a ser el fetch que empieza AHORA.
+    for (const consulta of sinDatos) marcar(consulta);
+    await Promise.all(sinDatos.map((consulta) => refetchExacto(client, consulta)));
+  }
+
+  const estado = () => {
+    let fallo = false;
+    const viejas: Query[] = [];
+    for (const [consulta, base] of frontera) {
+      // Una consulta que dejó de estar activa ya no la espera ningún campo.
+      if (!consulta.isActive()) continue;
+      if (consulta.state.dataUpdateCount > base.datos) continue;
+      if (consulta.state.errorUpdateCount > base.errores) fallo = true;
+      else viejas.push(consulta);
+    }
+    return { fallo, viejas };
+  };
+
+  for (let intento = 0; intento < INTENTOS_DE_FRESCURA; intento += 1) {
+    const { fallo, viejas } = estado();
+    if (fallo) return false;
+    if (viejas.length === 0) return true;
+    await Promise.all(viejas.map((consulta) => refetchExacto(client, consulta)));
+  }
+  const { fallo, viejas } = estado();
+  return !fallo && viejas.length === 0;
+}
+
+// --- comprobaciones de frescura en curso, por cotización ----------------------
+
+const comprobaciones = new Map<number, number>();
+const oyentesDeComprobacion = new Set<() => void>();
+
+function cambiarComprobaciones(quotationId: number, delta: number): void {
+  const siguiente = (comprobaciones.get(quotationId) ?? 0) + delta;
+  if (siguiente <= 0) comprobaciones.delete(quotationId);
+  else comprobaciones.set(quotationId, siguiente);
+  for (const oyente of oyentesDeComprobacion) oyente();
+}
+
+/**
+ * Cuántos guardados de la cotización esperan todavía a que su dato llegue.
+ *
+ * El PUT ya terminó, pero la pantalla todavía no enseña lo guardado. Quinta
+ * revisión de Codex: sin esto el pie decía «Todos los cambios guardados» en
+ * ese intervalo. Cuenta como «guardando», que es lo que el usuario ve.
+ */
+export function useComprobacionesEnCurso(quotationId: number): number {
+  return useSyncExternalStore(
+    (oyente) => {
+      oyentesDeComprobacion.add(oyente);
+      return () => oyentesDeComprobacion.delete(oyente);
+    },
+    () => comprobaciones.get(quotationId) ?? 0,
+    () => 0,
   );
 }
 
@@ -239,9 +345,9 @@ export async function asegurarFrescura(client: QueryClient, quotationId: number)
  *
  * `ok` dice si el SERVIDOR aceptó el cambio; `fresco`, si la pantalla ya tiene
  * el dato posterior a ese cambio, comprobado con `asegurarFrescura`. El campo
- * solo se alinea con lo guardado cuando las dos cosas son ciertas. Un fallo no
- * rechaza la promesa: devuelve `ok: false` y la firma, para que un descarte
- * sepa a qué campo revertir.
+ * solo se alinea con lo guardado cuando las dos cosas son ciertas. Mientras se
+ * comprueba, cuenta como «guardando». Un fallo no rechaza la promesa: devuelve
+ * `ok: false` y la firma, para que un descarte sepa a qué campo revertir.
  */
 export async function esperarGuardado<V>(
   contexto: { client: QueryClient; quotationId: number },
@@ -256,8 +362,13 @@ export async function esperarGuardado<V>(
   } catch {
     return { ok: false, firma };
   }
-  const fresco = await asegurarFrescura(contexto.client, contexto.quotationId);
-  return { ok: true, firma, fresco };
+  cambiarComprobaciones(contexto.quotationId, +1);
+  try {
+    const fresco = await asegurarFrescura(contexto.client, contexto.quotationId);
+    return { ok: true, firma, fresco };
+  } finally {
+    cambiarComprobaciones(contexto.quotationId, -1);
+  }
 }
 
 /** `esperarGuardado` ya atado al cliente y a la cotización del componente. */

@@ -1,7 +1,14 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { asegurarFrescura, V2_LABOR_KEY } from "@/features/cotizadorV2/claves";
+import {
+  asegurarFrescura,
+  esperarGuardado,
+  invalidarCotizacion,
+  useComprobacionesEnCurso,
+  V2_LABOR_KEY,
+} from "@/features/cotizadorV2/claves";
 
 /**
  * La garantía de que un campo solo se alinea con un dato POSTERIOR a su guardado.
@@ -180,4 +187,130 @@ describe("asegurarFrescura", () => {
     await expect(asegurarFrescura(q.client, 8)).resolves.toBe(true);
     q.desuscribir();
   });
+
+  it("una CARGA INICIAL anterior al guardado no cuenta como fresca: espera otro fetch", async () => {
+    // Quinta revisión de Codex. Sin datos previos, TanStack no cancela el fetch
+    // en curso; si empezó antes del commit y responde después, su marca de
+    // tiempo es posterior al guardado, pero su dato es ANTERIOR.
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+    // El GET inicial sigue en vuelo cuando el guardado termina.
+    await new Promise((r) => setTimeout(r, 2));
+    const promesa = asegurarFrescura(q.client, COTIZACION);
+    let resuelta = false;
+    void promesa.then(() => {
+      resuelta = true;
+    });
+
+    // Responde con lo que había ANTES del guardado.
+    q.responder(0);
+    await hastaQue(() => q.pendientes.length === 2);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(q.datos()).toBe(1);
+    expect(resuelta).toBe(false);
+
+    // Solo el fetch que empezó después trae lo guardado.
+    q.fijarServidor(2);
+    q.responder(1);
+    await expect(promesa).resolves.toBe(true);
+    expect(q.datos()).toBe(2);
+    q.desuscribir();
+  });
+
+  it("el error de una carga inicial anterior al guardado no lo marca como no fresco", async () => {
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+    await new Promise((r) => setTimeout(r, 2));
+    const promesa = asegurarFrescura(q.client, COTIZACION);
+
+    q.fallar(0);
+    await hastaQue(() => q.pendientes.length === 2);
+    q.fijarServidor(2);
+    q.responder(1);
+
+    await expect(promesa).resolves.toBe(true);
+    expect(q.datos()).toBe(2);
+    q.desuscribir();
+  });
+
+  it("si el fetch posterior de una carga inicial falla, no es fresco", async () => {
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+    const promesa = asegurarFrescura(q.client, COTIZACION);
+    q.responder(0);
+    await hastaQue(() => q.pendientes.length === 2);
+    q.fallar(1);
+    await expect(promesa).resolves.toBe(false);
+    q.desuscribir();
+  });
+
+  it("no espera consultas desactivadas", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    clientes.push(client);
+    const observador = new QueryObserver(client, {
+      queryKey: CLAVE,
+      queryFn: () => Promise.resolve(1),
+      enabled: false,
+    });
+    const desuscribir = observador.subscribe(() => undefined);
+    await expect(asegurarFrescura(client, COTIZACION)).resolves.toBe(true);
+    desuscribir();
+  });
 });
+
+describe("invalidarCotizacion", () => {
+  it("tras una carga inicial en vuelo pide otro fetch, que empieza después del guardado", async () => {
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+
+    const invalidacion = invalidarCotizacion(q.client, COTIZACION);
+    // La carga inicial, anterior al guardado, responde con el dato viejo.
+    q.responder(0);
+    await hastaQue(() => q.pendientes.length === 2);
+    expect(q.pendientes).toHaveLength(2);
+
+    q.fijarServidor(2);
+    q.responder(1);
+    await invalidacion;
+    expect(q.datos()).toBe(2);
+    q.desuscribir();
+  });
+});
+
+describe("comprobaciones de frescura en curso", () => {
+  it("un guardado aceptado cuenta mientras su dato no ha llegado", async () => {
+    const q = consultaControlada();
+    await hastaQue(() => q.pendientes.length === 1);
+    q.responder(0);
+    await hastaQue(() => q.datos() === 1);
+
+    const { result, unmount } = renderHook(() => useComprobacionesEnCurso(COTIZACION));
+    expect(result.current).toBe(0);
+
+    await new Promise((r) => setTimeout(r, 2));
+    let resultado: Promise<unknown> | undefined;
+    act(() => {
+      resultado = esperarGuardado(
+        { client: q.client, quotationId: COTIZACION },
+        { mutateAsync: () => Promise.resolve() },
+        "planificacion",
+        { effective_work_days: 2 },
+      );
+    });
+    // El PUT terminó y la comprobación ha lanzado su refetch: todavía «guardando».
+    await act(async () => {
+      await hastaQue(() => q.pendientes.length === 2);
+    });
+    expect(result.current).toBe(1);
+
+    q.fijarServidor(2);
+    q.responder(1);
+    await act(async () => {
+      await resultado;
+    });
+    expect(result.current).toBe(0);
+    unmount();
+    q.desuscribir();
+  });
+});
+

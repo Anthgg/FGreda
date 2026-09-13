@@ -135,10 +135,11 @@ export function DecimalField({
   }, [guardado, escribiendo, error, enviado]);
 
   // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
-  // que el campo enseña. Si sale bien, lo guardado ya es lo definitivo —la
-  // escritura espera al refetch— y el campo lo enseña tal cual lo normalizó el
-  // backend: `20,5000004` pasa a `20.5`. Si falla, se recuerda su firma para
-  // que un descarte sepa que es este campo el que tiene que revertir.
+  // que el campo enseña. Si el servidor lo aceptó Y la pantalla ya tiene el
+  // dato posterior al guardado (`fresco`), el campo enseña lo guardado tal cual
+  // lo normalizó el backend: `20,5000004` pasa a `20.5`. Aceptado sin dato
+  // fresco, sigue enseñando lo enviado. Si falla, se recuerda su firma para que
+  // un descarte sepa que es este campo el que tiene que revertir.
   const envios = useRef(0);
   const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
   const seguir = (resultado: unknown) => {

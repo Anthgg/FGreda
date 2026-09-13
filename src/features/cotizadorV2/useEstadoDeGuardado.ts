@@ -5,6 +5,7 @@ import { anunciarDescarte, useBorradoresSinGuardar } from "@/components/borrador
 import {
   firmaDeGuardado,
   guardadosDeCotizacion,
+  useComprobacionesEnCurso,
   type TipoDeGuardado,
 } from "@/features/cotizadorV2/claves";
 
@@ -65,6 +66,9 @@ interface Resumen {
 export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
   const client = useQueryClient();
   const borradores = useBorradoresSinGuardar();
+  // Guardados cuyo PUT terminó pero cuyo dato todavía no ha llegado a la
+  // pantalla: siguen siendo «guardando», no «guardado».
+  const comprobando = useComprobacionesEnCurso(quotationId);
 
   const escrituras = useMutationState<Resumen>({
     filters: { mutationKey: guardadosDeCotizacion(quotationId) },
@@ -94,8 +98,8 @@ export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
     const conError = [...ultima.values()]
       .filter((escritura) => escritura.status === "error")
       .map(({ firma, tipo, error }) => ({ firma, tipo, error }));
-    return { enVuelo: pendientes, fallidos: conError };
-  }, [escrituras]);
+    return { enVuelo: pendientes + comprobando, fallidos: conError };
+  }, [escrituras, comprobando]);
 
   // Poda. Las escrituras se recuerdan sin límite para que un error no se
   // olvide solo, pero eso guardaba también cada éxito para siempre
@@ -143,6 +147,10 @@ export function useEstadoDeGuardado(quotationId: number): EstadoDeGuardado {
   const descartar = (firma: string) => {
     const cache = client.getMutationCache();
     for (const mutation of cache.findAll({ mutationKey: guardadosDeCotizacion(quotationId) })) {
+      // Una escritura pendiente no se toca: puede estar esperando su turno en la
+      // fila de la cotización, y sacarla de la caché la dejaría sin enviar y a
+      // quien la espera, esperando para siempre.
+      if (mutation.state.status === "pending") continue;
       const tipo = String(mutation.options.mutationKey?.[3]);
       if (firmaDeGuardado(tipo, mutation.state.variables, mutation.mutationId) === firma) {
         cache.remove(mutation);

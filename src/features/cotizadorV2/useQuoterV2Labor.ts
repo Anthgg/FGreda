@@ -24,6 +24,7 @@ import type {
   V2WorkerUpdateInput,
 } from "@/types/quoterV2Labor";
 import {
+  alcanceDeGuardado,
   claveDeGuardado,
   invalidarCotizacion,
   RECORDAR_GUARDADO,
@@ -105,6 +106,7 @@ export const useAddV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "tarea-anadir"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2LaborInput) => addV2Labor(quotationId, payload),
     onSuccess: () => {
@@ -117,6 +119,7 @@ export const useUpdateV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "tarea-editar"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { laborId: number; payload: V2LaborInput }) =>
       updateV2Labor(quotationId, vars.laborId, vars.payload),
@@ -130,6 +133,7 @@ export const useDeleteV2Labor = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "tarea-borrar"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (laborId: number) => deleteV2Labor(quotationId, laborId),
     onSuccess: () => {
@@ -142,6 +146,7 @@ export const useSetV2Planning = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "planificacion"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (effectiveWorkDays: number | null) => setV2Planning(quotationId, effectiveWorkDays),
     onSuccess: () => {
@@ -160,6 +165,7 @@ export const useSetV2Illustration = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "ilustracion"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2IllustrationInput) => setV2Illustration(quotationId, payload),
     onSuccess: () => {

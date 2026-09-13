@@ -7,6 +7,7 @@ import {
   updateV2Quotation,
 } from "@/api/quoterV2";
 import {
+  alcanceDeGuardado,
   claveDeGuardado,
   invalidarCotizacion,
   QUOTER_V2_KEY,
@@ -50,6 +51,7 @@ export const useUpdateV2Quotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(id, "cabecera"),
+    scope: alcanceDeGuardado(id),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationUpdateInput) => updateV2Quotation(id, payload),
     onSuccess: () => {

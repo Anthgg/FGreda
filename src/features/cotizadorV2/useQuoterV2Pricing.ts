@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchV2Pricing, setV2Pricing } from "@/api/quoterV2Pricing";
 import type { V2PricingInput } from "@/types/quoterV2Pricing";
 import {
+  alcanceDeGuardado,
   claveDeGuardado,
   invalidarCotizacion,
   RECORDAR_GUARDADO,
@@ -31,6 +32,7 @@ export const useSetV2Pricing = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationKey: claveDeGuardado(quotationId, "precio"),
+    scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2PricingInput) => setV2Pricing(quotationId, payload),
     onSuccess: () => {

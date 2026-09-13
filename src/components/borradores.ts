@@ -47,8 +47,9 @@ function marcar(id: string, sucio: boolean): void {
  * guardado anterior, y «coincide» no reconocía nunca un valor que el backend
  * normaliza —`20,5000004` se guarda como `20.500000`—, así que el pie decía
  * «guardado» con lo NO guardado a la vista. Ahora el campo no adivina: quien
- * guarda le devuelve el resultado, y la escritura no termina hasta que el
- * refetch ha traído lo guardado de verdad.
+ * guarda le devuelve si el servidor lo aceptó (`ok`) y si la pantalla ya tiene
+ * el dato posterior a ese guardado (`fresco`), y el campo solo se alinea con lo
+ * guardado cuando las dos cosas son ciertas.
  */
 export interface ResultadoDeGuardado {
   readonly ok: boolean;
