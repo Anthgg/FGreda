@@ -7,7 +7,7 @@ import {
   useSetV2Firing,
   useV2Firing,
 } from "@/features/cotizadorV2/useQuoterV2Firing";
-import { esperarGuardado } from "@/features/cotizadorV2/claves";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import {
   CUSTOMER_KIND_LABEL,
   FIRING_WARNING_LABEL,
@@ -156,6 +156,7 @@ export function V2FiringPanel({
 }) {
   const query = useV2Firing(quotationId);
   const guardar = useSetV2Firing(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
 
   if (query.isPending)
     return <Spinner className="size-5" label="Cargando quema..." />;

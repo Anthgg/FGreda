@@ -199,6 +199,30 @@ describe("DecimalField", () => {
     expect(screen.getByLabelText(/^Alto/)).toHaveValue("20.5");
   });
 
+  it("guardado aceptado pero SIN dato fresco: sigue ensenando lo enviado, no lo viejo", async () => {
+    // Cuarta revision de Codex: si el refetch falla, TanStack se traga el error.
+    // Alinearse entonces con lo guardado pintaria el valor ANTERIOR sobre un
+    // cambio que el servidor si acepto.
+    let terminar: (resultado: { ok: boolean; firma: string; fresco?: boolean }) => void = () =>
+      undefined;
+    const onCommit = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; firma: string; fresco?: boolean }>((resolver) => {
+          terminar = resolver;
+        }),
+    );
+    render(<DecimalField label="Alto" value="20.000000" onCommit={onCommit} />);
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Alto/));
+    await user.type(screen.getByLabelText(/^Alto/), "25");
+    await user.tab();
+    await act(async () => terminar({ ok: true, firma: "linea-editar:7:height_cm", fresco: false }));
+
+    // El dato de la pantalla sigue diciendo 20: el campo no se alinea con eso.
+    expect(screen.getByLabelText(/^Alto/)).toHaveValue("25");
+  });
+
   it("si el guardado falla, conserva lo tecleado; un descarte de OTRO dato no lo toca", async () => {
     let terminar: (resultado: { ok: boolean; firma: string }) => void = () => undefined;
     const onCommit = vi.fn(

@@ -54,6 +54,14 @@ export interface ResultadoDeGuardado {
   readonly ok: boolean;
   /** A qué dato afectó, para que un descarte revierta solo ese campo. */
   readonly firma: string;
+  /**
+   * Si lo guardado que ve la pantalla es POSTERIOR a este guardado. Solo
+   * entonces el campo puede alinearse con ello. `false` con `ok: true` es un
+   * guardado que el servidor aceptó pero cuyo refetch no llegó —falló o se
+   * agotaron los intentos—: el campo sigue enseñando lo enviado, que es lo que
+   * el servidor guardó, en vez de alinearse con un dato viejo.
+   */
+  readonly fresco?: boolean;
 }
 
 /**
@@ -68,9 +76,16 @@ export function seguirEnvio(
   alTerminar: (resultado: ResultadoDeGuardado) => void,
 ): void {
   if (!resultado || typeof (resultado as Promise<unknown>).then !== "function") return;
-  void (resultado as Promise<ResultadoDeGuardado | undefined>).then((final) => {
-    if (final && sigueVigente()) alTerminar(final);
-  });
+  void (resultado as Promise<ResultadoDeGuardado | undefined>).then(
+    (final) => {
+      if (final && sigueVigente()) alTerminar(final);
+    },
+    // Una promesa que rechaza —quien guarde sin `esperarGuardado`— cuenta como
+    // fallo sin firma: el campo conserva lo tecleado y no se da nada por hecho.
+    () => {
+      if (sigueVigente()) alTerminar({ ok: false, firma: "" });
+    },
+  );
 }
 
 let descarte: { readonly n: number; readonly firma: string } = { n: 0, firma: "" };

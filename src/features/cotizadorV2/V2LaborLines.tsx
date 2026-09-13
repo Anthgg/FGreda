@@ -16,7 +16,7 @@ import {
   useV2Techniques,
   useV2Workers,
 } from "@/features/cotizadorV2/useQuoterV2Labor";
-import { esperarGuardado } from "@/features/cotizadorV2/claves";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { useV2QuotationProducts } from "@/features/cotizadorV2/useQuoterV2Materials";
 import {
   LABOR_WARNING_LABEL,
@@ -76,6 +76,7 @@ function Tarea({
   canEdit: boolean;
 }) {
   const actualizar = useUpdateV2Labor(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
   const borrar = useDeleteV2Labor(quotationId);
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
@@ -283,6 +284,7 @@ function CargaDeJornada({ carga }: { carga: V2WorkerLoad[] }) {
 function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: boolean }) {
   const query = useV2Illustration(quotationId);
   const guardar = useSetV2Illustration(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
 
   if (query.isPending) return <Spinner className="size-5" label="Cargando ilustración..." />;
   if (query.isError || !query.data) return null;
@@ -357,6 +359,7 @@ export function V2LaborLines({
   const query = useV2Labor(quotationId);
   const anadir = useAddV2Labor(quotationId);
   const planificar = useSetV2Planning(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
   const productos = useV2QuotationProducts(quotationId);

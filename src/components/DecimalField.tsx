@@ -149,7 +149,10 @@ export function DecimalField({
       (final) => {
         if (final.ok) {
           setFirmaFallida(null);
-          setEnviado(null);
+          // Solo con un dato posterior a ESTE guardado. Si el refetch no llegó,
+          // se sigue enseñando lo enviado: alinearse con lo que hay pintaría
+          // el valor viejo, y quien volviera a entrar editaría lo obsoleto.
+          if (final.fresco !== false) setEnviado(null);
         } else {
           setFirmaFallida(final.firma);
         }

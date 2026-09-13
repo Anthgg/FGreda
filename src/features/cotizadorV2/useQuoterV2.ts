@@ -52,7 +52,9 @@ export const useUpdateV2Quotation = (id: number) => {
     mutationKey: claveDeGuardado(id, "cabecera"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationUpdateInput) => updateV2Quotation(id, payload),
-    onSuccess: () => invalidarCotizacion(client, id),
+    onSuccess: () => {
+      void invalidarCotizacion(client, id);
+    },
   });
 };
 

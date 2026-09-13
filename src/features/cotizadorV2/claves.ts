@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { useQueryClient, type Query, type QueryClient } from "@tanstack/react-query";
 
 import type { ResultadoDeGuardado } from "@/components/borradores";
 
@@ -62,9 +62,11 @@ export const V2_STALE_TIME = 30_000;
  * cuatro listas enteras cada vez que se teclea un peso.
  */
 export function invalidarCotizacion(client: QueryClient, quotationId: number): Promise<void> {
-  // Devuelve la promesa, y las mutaciones la devuelven desde `onSuccess`: así una
-  // escritura no se da por terminada hasta que el refetch ha traído lo guardado
-  // de verdad. Mientras tanto sigue contando como «guardando», que es la verdad.
+  // Devuelve la promesa por si alguien quiere esperarla, pero las mutaciones NO
+  // la esperan desde `onSuccess`. Esperarla no garantiza que el dato haya
+  // llegado: si un refetch FALLA, TanStack se traga el error (`catch(noop)`) y
+  // la promesa resuelve con el dato viejo. Esa garantía la da
+  // `asegurarFrescura`, que la comprueba.
   const refrescos: Promise<void>[] = [];
   for (const clave of [
     QUOTER_V2_KEY,
@@ -171,16 +173,78 @@ export const DESTINO_DE_GUARDADO: Record<
   precio: { paso: "precio", que: "el factor comercial" },
 };
 
+/** Si una clave de consulta pertenece a los datos de UNA cotización. */
+function esDeLaCotizacion(queryKey: readonly unknown[], quotationId: number): boolean {
+  if (queryKey[0] === QUOTER_V2_KEY[0]) return queryKey[1] === quotationId;
+  if (queryKey[0] !== "quoter-v2") return false;
+  const alcances = [V2_LINES_KEY, V2_LABOR_KEY, V2_ILLUSTRATION_KEY, V2_FIRING_KEY, V2_PRICING_KEY];
+  return alcances.some((clave) => clave[1] === queryKey[1]) && queryKey[2] === quotationId;
+}
+
+/** Cuántas veces se vuelve a esperar un dato que un refetch ajeno cancelo. */
+const INTENTOS_DE_FRESCURA = 5;
+
+/**
+ * Espera a que las consultas ACTIVAS de la cotización tengan un dato obtenido
+ * después de este instante, y dice si lo consiguió.
+ *
+ * Se llama justo cuando `mutateAsync` resuelve. En ese momento el `onSuccess`
+ * ya disparó la invalidación, que cancela los refetch anteriores al commit, así
+ * que cualquier fetch en curso o futuro empezó DESPUÉS del guardado: lo que
+ * resuelva a partir de aquí es fresco. Para cada consulta vieja se engancha al
+ * fetch en curso sin cancelarlo (`cancelRefetch: false`) o lanza uno, y vuelve
+ * a mirar, hasta cinco veces. En esta versión de TanStack un fetch cancelado
+ * por otra invalidación se engancha al nuevo; el bucle no depende de ese
+ * detalle interno.
+ *
+ * Devuelve `false` si alguna consulta FALLÓ al refrescar o se agotaron los
+ * intentos: el guardado se hizo, pero la pantalla no tiene su dato.
+ *
+ * Solo las activas: las de un panel desmontado quedan invalidadas y se
+ * refrescan al volver a montarse, y ningún campo suyo espera nada.
+ */
+export async function asegurarFrescura(client: QueryClient, quotationId: number): Promise<boolean> {
+  const desde = Date.now();
+  const filtro = {
+    type: "active" as const,
+    predicate: (consulta: Query) => esDeLaCotizacion(consulta.queryKey, quotationId),
+  };
+  for (let intento = 0; intento < INTENTOS_DE_FRESCURA; intento += 1) {
+    const consultas = client.getQueryCache().findAll(filtro);
+    if (consultas.some((consulta) => consulta.state.errorUpdatedAt >= desde)) return false;
+    const viejas = consultas.filter((consulta) => consulta.state.dataUpdatedAt < desde);
+    if (viejas.length === 0) return true;
+    // `refetchQueries` y no `consulta.fetch`: pasa por la misma via que el resto
+    // de la aplicacion, y la regla de arquitectura que reserva las llamadas de
+    // red al cliente centralizado no tiene que abrir una excepcion. Se traga los
+    // errores; por eso se mira `errorUpdatedAt` en la vuelta siguiente.
+    await Promise.all(
+      viejas.map((consulta) =>
+        client.refetchQueries(
+          { queryKey: consulta.queryKey, exact: true, type: "active" },
+          { cancelRefetch: false },
+        ),
+      ),
+    );
+  }
+  const consultas = client.getQueryCache().findAll(filtro);
+  return (
+    !consultas.some((consulta) => consulta.state.errorUpdatedAt >= desde) &&
+    consultas.every((consulta) => consulta.state.dataUpdatedAt >= desde)
+  );
+}
+
 /**
  * Guarda y devuelve el resultado al campo que lo pidió, sin rechazar nunca.
  *
- * `mutateAsync` resuelve después del `onSuccess`, que espera al refetch: cuando
- * el campo recibe `ok`, lo guardado ya es lo definitivo y puede enseñarlo tal
- * cual lo normalizó el backend. Un fallo no rechaza la promesa —el campo no la
- * espera con `catch`, y un rechazo sin atender ensucia la consola—: devuelve
- * `ok: false` y la firma, para que un descarte sepa a qué campo revertir.
+ * `ok` dice si el SERVIDOR aceptó el cambio; `fresco`, si la pantalla ya tiene
+ * el dato posterior a ese cambio, comprobado con `asegurarFrescura`. El campo
+ * solo se alinea con lo guardado cuando las dos cosas son ciertas. Un fallo no
+ * rechaza la promesa: devuelve `ok: false` y la firma, para que un descarte
+ * sepa a qué campo revertir.
  */
 export async function esperarGuardado<V>(
+  contexto: { client: QueryClient; quotationId: number },
   mutacion: { mutateAsync: (variables: V) => Promise<unknown> },
   tipo: TipoDeGuardado,
   variables: V,
@@ -189,8 +253,19 @@ export async function esperarGuardado<V>(
   const firma = firmaDeGuardado(tipo, variables, 0);
   try {
     await mutacion.mutateAsync(variables);
-    return { ok: true, firma };
   } catch {
     return { ok: false, firma };
   }
+  const fresco = await asegurarFrescura(contexto.client, contexto.quotationId);
+  return { ok: true, firma, fresco };
+}
+
+/** `esperarGuardado` ya atado al cliente y a la cotización del componente. */
+export function useEsperarGuardado(quotationId: number) {
+  const client = useQueryClient();
+  return <V>(
+    mutacion: { mutateAsync: (variables: V) => Promise<unknown> },
+    tipo: TipoDeGuardado,
+    variables: V,
+  ) => esperarGuardado({ client, quotationId }, mutacion, tipo, variables);
 }

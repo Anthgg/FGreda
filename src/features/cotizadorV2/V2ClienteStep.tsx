@@ -14,7 +14,7 @@ import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
 import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
-import { esperarGuardado } from "@/features/cotizadorV2/claves";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import {
   V2_PRODUCTION_TYPE_LABEL,
   type V2CustomerKind,
@@ -124,7 +124,10 @@ function useTextoDiferido(
       (final) => {
         if (final.ok) {
           setFirmaFallida(null);
-          setEnviado(null);
+          // Solo con un dato posterior a ESTE guardado. Si el refetch no llegó,
+          // se sigue enseñando lo enviado: alinearse con lo que hay pintaría
+          // el valor viejo, y quien volviera a entrar editaría lo obsoleto.
+          if (final.fresco !== false) setEnviado(null);
         } else {
           setFirmaFallida(final.firma);
         }
@@ -177,6 +180,7 @@ export function V2ClienteStep({
   canEdit: boolean;
 }) {
   const guardar = useUpdateV2Quotation(cotizacion.id);
+  const esperarGuardado = useEsperarGuardado(cotizacion.id);
   const [busqueda, setBusqueda] = useState("");
 
   const nombre = useTextoDiferido(

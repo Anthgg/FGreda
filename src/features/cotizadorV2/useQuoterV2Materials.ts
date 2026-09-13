@@ -63,7 +63,9 @@ export const useAddV2QuotationProduct = (quotationId: number) => {
       addV2QuotationProduct(quotationId, payload),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
@@ -76,7 +78,9 @@ export const useUpdateV2QuotationProduct = (quotationId: number) => {
       updateV2QuotationProduct(quotationId, vars.lineId, vars.payload),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
@@ -88,6 +92,8 @@ export const useDeleteV2QuotationProduct = (quotationId: number) => {
     mutationFn: (lineId: number) => deleteV2QuotationProduct(quotationId, lineId),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };

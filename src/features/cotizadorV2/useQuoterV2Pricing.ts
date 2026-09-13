@@ -33,6 +33,8 @@ export const useSetV2Pricing = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "precio"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2PricingInput) => setV2Pricing(quotationId, payload),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };

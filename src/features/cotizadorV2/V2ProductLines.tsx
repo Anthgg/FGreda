@@ -20,7 +20,7 @@ import {
   useV2Materials,
   useV2QuotationProducts,
 } from "@/features/cotizadorV2/useQuoterV2Materials";
-import { esperarGuardado } from "@/features/cotizadorV2/claves";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { WARNING_LABEL, type V2QuotationProduct } from "@/types/quoterV2Materials";
 
 /**
@@ -153,7 +153,10 @@ function CampoDeTexto({
       (final) => {
         if (final.ok) {
           setFirmaFallida(null);
-          setEnviado(null);
+          // Solo con un dato posterior a ESTE guardado. Si el refetch no llegó,
+          // se sigue enseñando lo enviado: alinearse con lo que hay pintaría
+          // el valor viejo, y quien volviera a entrar editaría lo obsoleto.
+          if (final.fresco !== false) setEnviado(null);
         } else {
           setFirmaFallida(final.firma);
         }
@@ -221,6 +224,7 @@ function Linea({
   vista: VistaDeLinea;
 }) {
   const actualizar = useUpdateV2QuotationProduct(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
   const borrar = useDeleteV2QuotationProduct(quotationId);
   const pastas = useV2Materials("BODY");
 

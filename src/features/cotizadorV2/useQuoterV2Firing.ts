@@ -34,6 +34,8 @@ export const useSetV2Firing = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "quema"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2FiringInput) => setV2Firing(quotationId, payload),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };

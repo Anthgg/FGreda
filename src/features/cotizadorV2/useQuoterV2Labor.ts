@@ -107,7 +107,9 @@ export const useAddV2Labor = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "tarea-anadir"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2LaborInput) => addV2Labor(quotationId, payload),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
@@ -118,7 +120,9 @@ export const useUpdateV2Labor = (quotationId: number) => {
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { laborId: number; payload: V2LaborInput }) =>
       updateV2Labor(quotationId, vars.laborId, vars.payload),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
@@ -128,7 +132,9 @@ export const useDeleteV2Labor = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "tarea-borrar"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (laborId: number) => deleteV2Labor(quotationId, laborId),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
@@ -138,7 +144,9 @@ export const useSetV2Planning = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "planificacion"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (effectiveWorkDays: number | null) => setV2Planning(quotationId, effectiveWorkDays),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
@@ -154,6 +162,8 @@ export const useSetV2Illustration = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "ilustracion"),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2IllustrationInput) => setV2Illustration(quotationId, payload),
-    onSuccess: () => invalidarCotizacion(client, quotationId),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
