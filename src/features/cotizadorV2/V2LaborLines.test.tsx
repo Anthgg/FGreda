@@ -121,7 +121,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("muestra las horas y el costo que calculó el backend", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     // 75 piezas a 50 por jornada de 8 h son 12 horas; a S/15 la hora, S/180.
     await screen.findByText("Celso · Vidriado");
@@ -132,7 +132,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("dice de dónde sale la tarifa por hora", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     // No hay un precio por técnica: la tarifa es el jornal entre la jornada.
     expect(await screen.findByText(/120.000000 por jornada de 8.000000 h/)).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("avisa cuando el trabajo no cabe en la jornada, sin bloquear", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     expect(await screen.findByText(/superan la jornada configurada/i)).toBeInTheDocument();
     // Y el costo sigue siendo el de las horas: ningún recargo automático.
@@ -151,7 +151,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("el aviso no propone una solución: la decide una persona", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     expect(await screen.findByText(/decida si se hace en un día largo/i)).toBeInTheDocument();
     // Los días efectivos siguen sin decidir: el sistema sugiere, no elige.
@@ -163,7 +163,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("suma las horas por persona en toda la cotización", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     // Quien hace tres técnicas para el mismo pedido trabaja UNA jornada.
     expect(await screen.findByText(/jornada por persona/i)).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("el rendimiento se presenta como estándar del catálogo", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     expect(
       await screen.findByText(/no cambia por lo que se produzca/i),
@@ -182,7 +182,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
 
   it("no guarda mientras se teclea: espera a que el campo se abandone", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
     await screen.findByText("Celso · Vidriado");
@@ -209,7 +209,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
 
   it("una cantidad vacía se explica en vez de mandarse como cero", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
     await screen.findByText("Celso · Vidriado");
@@ -226,7 +226,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
 
   it("retirar la tarifa acordada viaja como nulo, no como cadena vacía", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
     await screen.findByText("Celso · Vidriado");
@@ -248,7 +248,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("la ilustración va aparte de las técnicas y se cobra por horas", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     expect(await screen.findByText(/ilustrar no es tornear/i)).toBeInTheDocument();
     // 75 piezas son 12 horas y S/165, no dos jornadas de S/110.
@@ -259,14 +259,14 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("dice que añadir personal no reduce el plazo", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     expect(await screen.findByText(/no reduce el plazo/i)).toBeInTheDocument();
   });
 
   it("un fallo al guardar se explica en vez de perderse", async () => {
     mockV2({ update: errorResponse(422, "V2_LABOR_INPUT_INVALID", "Dato invalido") });
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
     await screen.findByText("Celso · Vidriado");
@@ -286,7 +286,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
       items: [{ ...V2_LABOR_PAGE.items[0]!, hours_overridden: true, final_hours: "20.000000" }],
     };
     const fetchSpy = mockV2({ labor: jsonResponse(200, acordada) });
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
     await screen.findByText("Celso · Vidriado");
@@ -305,7 +305,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
 
   it("el trabajo se puede vincular a un producto de la cotización", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
     await screen.findByText("Celso · Vidriado");

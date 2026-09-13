@@ -4,10 +4,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "@/api/client";
 import { PrimaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { V2FiringPanel } from "@/features/cotizadorV2/V2FiringPanel";
-import { V2LaborLines } from "@/features/cotizadorV2/V2LaborLines";
-import { V2PricingPanel } from "@/features/cotizadorV2/V2PricingPanel";
-import { V2ProductLines } from "@/features/cotizadorV2/V2ProductLines";
+import { V2Wizard } from "@/features/cotizadorV2/V2Wizard";
+import { esPasoValido, type PasoId } from "@/features/cotizadorV2/pasos";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { Badge, EmptyState, MasterHeader, Panel } from "@/features/masters/MasterTable";
 import {
@@ -22,17 +20,21 @@ import {
 } from "@/types/quoterV2";
 
 /**
- * Cotizador V2 — armazón de la familia 010.
+ * Cotizador V2: alta, listado y la ficha de siete pasos.
  *
- * Lo que esta pantalla hace hoy: abrir una cotización V2, listarlas y leer una.
- * Lo que deliberadamente NO hace: calcular. En 010A no existe todavía el motor,
- * y una pantalla que enseñara un total lo estaría inventando.
+ * Esta pantalla no es una copia del Cotizador histórico. Clonar aquella
+ * interfaz para ir modificándola habría traído de vuelta, campo a campo, las
+ * decisiones de las que V2 nace libre —el factor por ocupación de horno, entre
+ * otras—.
  *
- * Tampoco es una copia del Cotizador histórico. Clonar aquella interfaz para
- * ir modificándola habría traído de vuelta, campo a campo, las decisiones de
- * las que V2 nace libre —el factor por ocupación de horno, entre otras—. Los
- * pasos del flujo se declaran abajo para fijar la estructura, y cada fase
- * habilita el suyo.
+ * Desde 010G la ficha es un camino y no una pila de paneles: el asistente vive
+ * en `V2Wizard` y el paso actual viaja en la URL. Aquí queda lo de alrededor
+ * —crear una cotización, listarlas y la cabecera de la ficha—, que no es parte
+ * del flujo.
+ *
+ * Sigue sin calcular nada: todos los importes llegan del backend. Una pantalla
+ * que multiplicara por su cuenta tendría una aritmética de coma flotante
+ * compitiendo con la de `Decimal`, y nadie sabría cuál manda.
  */
 
 const PRODUCTION_TYPE_OPTIONS: readonly { value: V2ProductionType; label: string }[] = [
@@ -41,18 +43,61 @@ const PRODUCTION_TYPE_OPTIONS: readonly { value: V2ProductionType; label: string
 ];
 
 /**
- * Los pasos del flujo V2 y la fase que enciende cada uno.
+ * De qué se ocupa cada fase de la familia 010, y cuál falta.
  *
- * Están a la vista, y deshabilitados, por la misma razón por la que el menú
- * principal enseña módulos que aún no existen: quien usa el sistema ve a dónde
- * va, y quien lo construye no tiene que adivinar dónde encaja lo siguiente.
+ * Se enseña por la misma razón por la que el menú principal lista módulos que
+ * aún no existen: quien usa el sistema ve a dónde va. Lo pendiente se marca
+ * como pendiente y no se pinta apagado sin más: siete casillas grises no
+ * distinguen lo que falta de lo que ya funciona.
  */
-const FLOW_STEPS: readonly { phase: string; title: string; detail: string }[] = [
-  { phase: "010B", title: "Configuración comercial", detail: "IGV, moneda, vigencia y factor." },
-  { phase: "010C", title: "Pastas, materiales y esmaltes", detail: "Costo por gramo y vidriado." },
-  { phase: "010D", title: "Trabajadores y técnicas", detail: "Jornada, rendimiento e ilustración." },
-  { phase: "010G", title: "Cotización completa", detail: "Productos y reparto de costos." },
-  { phase: "010H", title: "Vigencia y PDF", detail: "Snapshots y documento del cliente." },
+const FLOW_STEPS: readonly {
+  phase: string;
+  title: string;
+  detail: string;
+  listo: boolean;
+}[] = [
+  {
+    phase: "010B",
+    title: "Configuración comercial",
+    detail: "IGV, moneda, vigencia y factor.",
+    listo: true,
+  },
+  {
+    phase: "010C",
+    title: "Pastas, materiales y esmaltes",
+    detail: "Costo por gramo y vidriado.",
+    listo: true,
+  },
+  {
+    phase: "010D",
+    title: "Trabajadores y técnicas",
+    detail: "Jornada, rendimiento e ilustración.",
+    listo: true,
+  },
+  {
+    phase: "010E",
+    title: "Quema",
+    detail: "Horno, hornadas, gas real y tarifa.",
+    listo: true,
+  },
+  {
+    phase: "010F",
+    title: "Motor económico",
+    detail: "Costo, factor, redondeo, IGV y moneda.",
+    listo: true,
+  },
+  {
+    phase: "010G",
+    title: "Flujo de siete pasos",
+    detail: "Del cliente al resumen, en orden.",
+    listo: true,
+  },
+  {
+    phase: "010H",
+    title: "Vigencia y PDF",
+    detail: "Snapshots y documento del cliente.",
+    listo: false,
+  },
 ];
 
 function EngineBadge() {
@@ -69,22 +114,29 @@ function EngineBadge() {
 function FlowOutline() {
   return (
     <Panel>
-      <h2 className="text-sm font-semibold text-zinc-900">Flujo del Cotizador V2</h2>
+      <h2 className="text-sm font-semibold text-zinc-900">Qué hay construido</h2>
       <p className="mt-1 text-xs text-zinc-500">
-        Cada paso se habilita con su fase. Lo que no está disponible no se calcula: no hay
-        importes provisionales.
+        Lo que no está disponible no se calcula: no hay importes provisionales.
       </p>
       <ol className="mt-4 space-y-2">
         {FLOW_STEPS.map((step) => (
           <li
             key={step.phase}
-            className="flex items-start gap-3 rounded-xl border border-black/5 px-3 py-2 opacity-60"
+            className={[
+              "flex items-start gap-3 rounded-xl border border-black/5 px-3 py-2",
+              step.listo ? "" : "opacity-60",
+            ].join(" ")}
           >
             <span className="mt-0.5 rounded-md bg-black/5 px-2 py-0.5 text-[11px] font-semibold text-zinc-600">
               {step.phase}
             </span>
             <span>
-              <span className="block text-sm font-medium text-zinc-800">{step.title}</span>
+              <span className="block text-sm font-medium text-zinc-800">
+                {step.title}
+                {step.listo ? null : (
+                  <span className="ml-2 text-[11px] font-normal text-zinc-500">(pendiente)</span>
+                )}
+              </span>
               <span className="block text-xs text-zinc-500">{step.detail}</span>
             </span>
           </li>
@@ -144,29 +196,25 @@ function V2QuotationDetail({ id }: { id: number }) {
 }
 
 /**
- * La ficha completa: la cabecera y, debajo, sus materiales.
+ * La ficha: la cabecera de la cotización y, debajo, el asistente.
  *
- * Los materiales van fuera del panel de la cabecera a propósito: son otra
- * cosa. La cabecera dice de quién es la cotización; los materiales, de qué
- * está hecha.
+ * La cabecera va aparte del flujo a propósito: dice de quién es la cotización
+ * y en qué estado está, y eso vale en los siete pasos. Meterla dentro del paso
+ * uno la escondería en los otros seis.
  */
-function V2QuotationDetailPage({ id }: { id: number }) {
+function V2QuotationDetailPage({ id, paso }: { id: number; paso: PasoId | null }) {
   const query = useV2Quotation(id);
-  const editable = query.data?.status === "DRAFT";
 
   return (
     <div className="space-y-6">
       <V2QuotationDetail id={id} />
-      {query.data ? <V2ProductLines quotationId={id} canEdit={editable} /> : null}
-      {query.data ? <V2LaborLines quotationId={id} canEdit={editable} /> : null}
-      {query.data ? <V2FiringPanel quotationId={id} canEdit={editable} /> : null}
-      {query.data ? <V2PricingPanel quotationId={id} canEdit={editable} /> : null}
+      {query.data ? <V2Wizard quotationId={id} paso={paso} /> : null}
     </div>
   );
 }
 
 export function CotizadorV2Page() {
-  const { id } = useParams();
+  const { id, step } = useParams();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
@@ -179,6 +227,9 @@ export function CotizadorV2Page() {
   const parsedId = id === undefined ? null : Number(id);
   const isDetail = id !== undefined;
   const validId = parsedId !== null && Number.isInteger(parsedId) && parsedId > 0;
+  // Un paso que no existe no es un error que merezca una pantalla: se cae al
+  // primero que falte, que es lo mismo que hace una ficha abierta sin paso.
+  const paso = esPasoValido(step) ? step : null;
 
   const create = useCreateV2Quotation();
   // Solo en la vista de listado: entrar directo a una ficha no tiene por que
@@ -211,7 +262,7 @@ export function CotizadorV2Page() {
 
       {isDetail ? (
         validId ? (
-          <V2QuotationDetailPage id={parsedId} />
+          <V2QuotationDetailPage id={parsedId} paso={paso} />
         ) : (
           <EmptyState message="Esa cotización V2 no existe. Comprueba el enlace." />
         )

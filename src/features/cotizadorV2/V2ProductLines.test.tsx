@@ -148,11 +148,11 @@ function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
   });
 }
 
-describe("Materiales de una cotización V2 (Fase 010C)", () => {
+describe("Líneas de una cotización V2: piezas y materiales (010C, 010G)", () => {
   it("muestra el costo de pasta ya calculado por el backend", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     await screen.findByText("Arcilla Terranova");
     expect(screen.getByText("10000.000000")).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
   it("el total de la línea lo trae el backend, no lo suma la pantalla", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     // Sumar 13 + 300 aquí sería coma flotante, y con otros importes daría una
     // cola de decimales que no cuadra con el total del documento.
@@ -174,7 +174,7 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
   it("muestra el esmalte al 15 % con su peso y su costo", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     await screen.findByText("Esmalte B");
     expect(screen.getByText("15.000000 %")).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
   it("deja claro que el esmalte propuesto es una referencia de costeo", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     // La distinción importa: producción usará otro esmalte y el precio no
     // cambiará por eso.
@@ -198,7 +198,7 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
   it("avisa cuando el esmalte de referencia no tiene stock, sin bloquear", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     expect(await screen.findByText(/no tiene stock/i)).toBeInTheDocument();
     // Y el costo sigue ahí: sin stock se cotiza igual.
@@ -208,7 +208,7 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
   it("dice cuándo la conversión g/ml es la de reserva", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     expect(await screen.findByText(/1 g = 1 ml/i)).toBeInTheDocument();
   });
@@ -216,14 +216,14 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
   it("recuerda que cotizar no descuenta inventario", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
 
     expect(await screen.findByText(/no descuenta inventario/i)).toBeInTheDocument();
   });
 
   it("apagar el esmalte se manda al backend, no se calcula en pantalla", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
     const user = userEvent.setup();
 
     await screen.findByText("Esmalte B");
@@ -245,11 +245,10 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
 
   it("no guarda mientras se teclea: espera a que el campo se abandone", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/productos"]);
     const user = userEvent.setup();
 
-    await screen.findByText("Esmalte B");
-    const cantidad = screen.getByLabelText(/^cantidad/i);
+    const cantidad = await screen.findByLabelText(/^cantidad/i);
     await user.clear(cantidad);
     await user.type(cantidad, "50");
 
@@ -277,11 +276,10 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
 
   it("una cantidad vacía se explica en vez de mandarse como cero", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/productos"]);
     const user = userEvent.setup();
 
-    await screen.findByText("Esmalte B");
-    await user.clear(screen.getByLabelText(/^cantidad/i));
+    await user.clear(await screen.findByLabelText(/^cantidad/i));
     await user.tab();
 
     expect(await screen.findByText(/vacío no es cero/i)).toBeInTheDocument();
@@ -295,11 +293,10 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
 
   it("una pieza de encargo se puede nombrar al crear la línea", async () => {
     const fetchSpy = mockV2();
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/productos"]);
     const user = userEvent.setup();
 
-    await screen.findByText("Esmalte B");
-    await user.type(screen.getByLabelText(/nueva línea/i), "Jarra de encargo");
+    await user.type(await screen.findByLabelText(/nueva línea/i), "Jarra de encargo");
     await user.click(screen.getByRole("button", { name: /añadir línea/i }));
 
     await waitFor(() => {
@@ -314,9 +311,22 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
     });
   });
 
+  it("el paso de materiales no ofrece añadir ni quitar líneas", async () => {
+    // Quien llega aquí ya decidió qué piezas hay. Ofrecer otra vez el alta
+    // invita a crear la misma línea dos veces, y quitarla desde aquí borra un
+    // trabajo que se estaba materializando.
+    mockV2();
+
+    renderApp(["/cotizador-v2/7/materiales"]);
+
+    await screen.findByText("Esmalte B");
+    expect(screen.queryByRole("button", { name: /añadir línea/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /quitar/i })).not.toBeInTheDocument();
+  });
+
   it("un fallo al guardar se explica en vez de perderse", async () => {
     mockV2({ update: errorResponse(422, "V2_MATERIAL_INPUT_INVALID", "Dato invalido") });
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/materiales"]);
     const user = userEvent.setup();
 
     await screen.findByText("Esmalte B");
@@ -325,6 +335,11 @@ describe("Materiales de una cotización V2 (Fase 010C)", () => {
     await user.type(campo, "600");
     await user.tab();
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // El panel lo explica y el asistente lo recoge en un aviso que sobrevive a
+    // cambiar de paso: un error que vive solo en el panel se pierde con el.
+    expect((await screen.findAllByRole("alert")).length).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByTestId("guardados-fallidos")).toHaveTextContent(
+      /una línea de producto/i,
+    );
   });
 });

@@ -13,9 +13,18 @@ import type {
   V2MaterialUpsertInput,
   V2QuotationProductInput,
 } from "@/types/quoterV2Materials";
+import {
+  alcanceDeGuardado,
+  claveDeGuardado,
+  invalidarCotizacion,
+  RECORDAR_GUARDADO,
+  V2_LINES_KEY,
+  V2_MATERIALS_KEY,
+  V2_STALE_TIME,
+} from "@/features/cotizadorV2/claves";
 
-export const V2_MATERIALS_KEY = ["quoter-v2", "materials"] as const;
-export const V2_LINES_KEY = ["quoter-v2", "lines"] as const;
+export { V2_LINES_KEY, V2_MATERIALS_KEY } from "@/features/cotizadorV2/claves";
+
 
 export const useV2Materials = (kind?: V2MaterialKind) =>
   useQuery({
@@ -43,33 +52,52 @@ export const useV2QuotationProducts = (quotationId: number | null) =>
     queryKey: [...V2_LINES_KEY, quotationId],
     queryFn: () => fetchV2QuotationProducts(quotationId as number),
     enabled: quotationId !== null,
+    staleTime: V2_STALE_TIME,
   });
 
 export const useAddV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "linea-anadir"),
+    scope: alcanceDeGuardado(quotationId),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationProductInput) =>
       addV2QuotationProduct(quotationId, payload),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: [...V2_LINES_KEY, quotationId] }),
+    // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
+    // hornadas, el reparto de la quema y cada precio unitario.
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
 export const useUpdateV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "linea-editar"),
+    scope: alcanceDeGuardado(quotationId),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { lineId: number; payload: V2QuotationProductInput }) =>
       updateV2QuotationProduct(quotationId, vars.lineId, vars.payload),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: [...V2_LINES_KEY, quotationId] }),
+    // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
+    // hornadas, el reparto de la quema y cada precio unitario.
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };
 
 export const useDeleteV2QuotationProduct = (quotationId: number) => {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "linea-borrar"),
+    scope: alcanceDeGuardado(quotationId),
+    gcTime: RECORDAR_GUARDADO,
     mutationFn: (lineId: number) => deleteV2QuotationProduct(quotationId, lineId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: [...V2_LINES_KEY, quotationId] }),
+    // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
+    // hornadas, el reparto de la quema y cada precio unitario.
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
   });
 };

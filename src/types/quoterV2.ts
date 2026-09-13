@@ -48,8 +48,50 @@ export interface V2Quotation {
   customer_name: string | null;
   name: string | null;
   notes: string | null;
+
+  /**
+   * La copia congelada de la configuración, tal y como estaba al crear.
+   *
+   * El backend la manda desde 010B y este tipo la ignoraba: la pantalla
+   * enseñaba los valores de hoy en vez de aquellos con los que se armó ESTA
+   * cotización, que es justo lo que los snapshots existen para evitar.
+   */
+  customer_kind: V2CustomerKind | null;
+  tax_percent: string | null;
+  currency_code: string | null;
+  currency_symbol: string | null;
+  /** Solo en moneda extranjera. En la base no hay nada que convertir. */
+  exchange_rate: string | null;
+  validity_days: number | null;
+  workday_hours: string | null;
+  space_service_cost_per_day: string | null;
+  administrative_cost: string | null;
+  commercial_factor: string | null;
+  commercial_factor_min: string | null;
+  commercial_factor_max: string | null;
+  low_fire_enabled: boolean | null;
+  high_fire_enabled: boolean | null;
+  settings_version: number | null;
+
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Cambio de la CABECERA de un borrador. Fase 010G.
+ *
+ * Existe porque el flujo deja volver atrás: quien está eligiendo el horno puede
+ * darse cuenta de que el cliente está mal y regresar al primer paso. Semántica
+ * parcial: lo ausente se conserva, y NAVEGAR no es editar.
+ */
+export interface V2QuotationUpdateInput {
+  name?: string | null;
+  customer_id?: number | null;
+  production_type?: V2ProductionType;
+  customer_kind?: V2CustomerKind;
+  currency_code?: string;
+  exchange_rate?: string | null;
+  notes?: string | null;
 }
 
 export interface V2QuotationListItem {

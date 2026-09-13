@@ -110,7 +110,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("muestra las hornadas y los dos totales que calculó el backend", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     // 160 % de ocupación son dos hornadas: 2 x 200 + 2 x 250 = 900.
@@ -122,7 +122,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("no mezcla el costo del gas con la tarifa de quema", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(within(panel).getByText(/tarifa de quema \(lo que se cobra\)/i)).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("enseña la diferencia y dice que no es el margen de la cotización", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(within(panel).getByText("690.000000000000000000")).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("dice que cada hornada se cobra entera y que no hay factor por ocupación", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(within(panel).getByText(/cada hornada necesaria se cobra entera/i)).toBeInTheDocument();
@@ -152,7 +152,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("enseña la carga de cada hornada sin usarla para repartir el costo", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(within(panel).getByText("Hornada 1")).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("muestra las recomendaciones sin aplicarlas", async () => {
     mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     const avisos = within(panel).getByTestId("avisos-quema");
@@ -183,7 +183,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("manda solo el campo que cambió al elegir otro horno", async () => {
     const fetchMock = mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
     const panel = await panelDeQuema();
     const user = userEvent.setup();
     // `SelectField` expone su disparador como `combobox` con `aria-label`.
@@ -212,7 +212,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
       }),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
     const panel = await panelDeQuema();
     const campo = within(panel).getByLabelText(/gas baja/i);
     await userEvent.clear(campo);
@@ -233,7 +233,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("no manda nada mientras se escribe una tarifa", async () => {
     const fetchMock = mockV2();
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
     const panel = await panelDeQuema();
     await userEvent.type(within(panel).getByLabelText(/gas baja/i), "5");
 
@@ -252,7 +252,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
       }),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(within(panel).getByText(/acordada en esta cotización/i)).toBeInTheDocument();
@@ -288,7 +288,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
       }),
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(within(panel).getByText("40.000000")).toBeInTheDocument();
@@ -318,7 +318,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
       return jsonResponse(200, { items: [], total: 0 });
     });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
     expect(
@@ -330,12 +330,15 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   it("un fallo al guardar se explica en vez de perderse", async () => {
     mockV2({ update: errorResponse(409, "V2_FIRING_QUOTATION_NOT_EDITABLE", "Ya no es borrador") });
 
-    renderApp(["/cotizador-v2/7"]);
+    renderApp(["/cotizador-v2/7/quema"]);
     const panel = await panelDeQuema();
     const user = userEvent.setup();
     await user.click(within(panel).getByRole("combobox", { name: "Quema alta" }));
     await user.click(await screen.findByRole("option", { name: "No" }));
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // El panel lo explica, y el asistente lo recoge en un aviso que sobrevive
+    // a cambiar de paso: un error que vive solo en el panel se pierde con el.
+    expect(await within(panel).findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByTestId("guardados-fallidos")).toHaveTextContent(/la quema/i);
   });
 });

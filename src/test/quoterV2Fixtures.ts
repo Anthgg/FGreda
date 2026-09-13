@@ -1,3 +1,7 @@
+import type { V2Firing } from "@/types/quoterV2Firing";
+import type { V2Illustration, V2LaborPage } from "@/types/quoterV2Labor";
+import type { V2Pricing } from "@/types/quoterV2Pricing";
+
 /**
  * Fixtures del Cotizador V2, compartidas entre pruebas.
  *
@@ -221,7 +225,7 @@ export const V2_TECHNIQUES = {
 };
 
 /** 75 piezas a 50 por jornada son 12 horas; a S/15, S/180. */
-export const V2_LABOR_PAGE = {
+export const V2_LABOR_PAGE: V2LaborPage = {
   items: [
     {
       id: 11,
@@ -263,7 +267,7 @@ export const V2_LABOR_PAGE = {
 };
 
 /** S/110 por 8 h y 50 piezas: 75 piezas son 12 h y S/165. */
-export const V2_ILLUSTRATION = {
+export const V2_ILLUSTRATION: V2Illustration = {
   enabled: true,
   quantity: "75.000000",
   notes: null,
@@ -282,7 +286,7 @@ export const V2_ILLUSTRATION = {
  * S/210 de gas, y la diferencia es S/690. La segunda hornada va al 60 % de
  * carga y cuesta exactamente igual que la primera: el horno se enciende entero.
  */
-export const V2_FIRING = {
+export const V2_FIRING: V2Firing = {
   production_type: "RETAIL",
   customer_kind: "EXTERNAL",
   kiln_id: 1,
@@ -351,7 +355,7 @@ export const V2_FIRING = {
  * Costo de producción 1.000 a ×3 son 3.000; el reparto 70/30 deja 2.100 y 900.
  * El IGV se aplica al final, sobre el subtotal ya redondeado.
  */
-export const V2_PRICING = {
+export const V2_PRICING: V2Pricing = {
   materials_cost: "285.360000000000000000",
   labor_cost: "569.066666666666666000",
   illustration_cost: "44.000000000000000000",

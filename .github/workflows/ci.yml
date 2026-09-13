@@ -280,10 +280,16 @@ jobs:
           sh -n "$script" && echo "  $script: sintaxis OK"
 
   playwright-e2e:
-    name: Playwright E2E (Chromium)
-    # La suite corre contra un ambiente real (por defecto, produccion), no
-    # contra un mock. Solo se ejecuta en pull_request para no disparar
-    # trafico/datos de prueba en cada push a main.
+    name: Smoke de produccion (Chromium)
+    # SMOKE DE PRODUCCION, no validacion de la PR. Corre contra el ambiente
+    # desplegado (por defecto, produccion) y por eso NO puede validar una rama:
+    # prueba lo que ya esta desplegado, no lo que trae el cambio. Las pruebas
+    # funcionales de una rama viven en e2e/revision/, que esta configuracion
+    # ignora, y las valida el job «E2E de la revision» de abajo.
+    #
+    # Hasta la Fase 010G se llamaba «Playwright E2E (Chromium)» y parecia un
+    # gate de la PR. Sin secrets de produccion se omite entero y sale en verde
+    # sin ejecutar nada, que es justo como se leyo mal.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -304,7 +310,9 @@ jobs:
         id: creds
         run: |
           if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
-            echo "E2E_EMAIL/E2E_PASSWORD no configurados: se omite Playwright en este PR."
+            # Aviso visible y no solo un eco: un job omitido que sale en verde
+            # se lee como «pasaron las E2E», y aqui no se ejecuto ninguna.
+            echo "::warning title=Smoke de produccion omitido::Sin E2E_EMAIL/E2E_PASSWORD no se ejecuto ninguna prueba contra produccion. Este verde no valida nada."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -327,6 +335,208 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
+          retention-days: 7
+
+  e2e-revision:
+    name: E2E de la revision (Chromium)
+    # Fase 010G. Las pruebas funcionales de una rama se ejecutan contra la
+    # aplicacion CONSTRUIDA DESDE ESA RAMA, hablando con un backend levantado
+    # desde la revision compatible sobre un PostgreSQL efimero. Nada de esto toca
+    # produccion: ni la app, ni la base, ni la autenticacion.
+    #
+    # - frontend: `npm run build` de este checkout, servido con `vite preview`
+    #   en :4173; `/api` lo reenvia a :8000 el proxy de vite.config.ts, asi que
+    #   las cookies son del mismo origen, como en produccion con nginx;
+    # - backend: checkout de Anthgg/BGreda en BACKEND_REF, `alembic upgrade head`
+    #   y `tests/e2e/servidor_revision.py`, que siembra lo minimo por la API y
+    #   autentica con los dobles de las pruebas de base de datos;
+    # - credenciales: aleatorias en cada corrida, contra esa autenticacion
+    #   simulada. No hay secretos que puedan faltar, asi que este job NUNCA se
+    #   omite: si el entorno no levanta, falla.
+    #
+    # Sin reintentos y sin continue-on-error: un gate que pasa a la segunda
+    # esconde justo la intermitencia que tendria que ensenar.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
+      # la rama del frontend necesita; el job imprime el SHA exacto que uso.
+      # `main`: el servidor de revision ya esta fusionado (Anthgg/BGreda#59), asi
+      # que se prueba la combinacion que queda desplegable.
+      BACKEND_REF: main
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: greda
+          POSTGRES_PASSWORD: greda
+          POSTGRES_DB: greda_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U greda"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout del frontend (esta revision)
+        uses: actions/checkout@v4
+
+      - name: Checkout del backend (BACKEND_REF)
+        uses: actions/checkout@v4
+        with:
+          repository: Anthgg/BGreda
+          ref: ${{ env.BACKEND_REF }}
+          path: backend
+
+      - name: Revisiones que se prueban
+        run: |
+          FRONT="$(git rev-parse HEAD)"
+          BACK="$(git -C backend rev-parse HEAD)"
+          echo "Frontend: $FRONT"
+          echo "Backend:  $BACK ($BACKEND_REF)"
+          {
+            echo "### E2E de la revision"
+            echo "- Frontend: $FRONT"
+            echo "- Backend: $BACK ($BACKEND_REF)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Dependencias del backend
+        working-directory: backend
+        run: uv sync --frozen --python 3.12
+
+      - name: Migraciones hasta la cabeza
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://greda:greda@localhost:5432/greda_e2e
+        run: uv run alembic upgrade head
+
+      - name: Credenciales aleatorias de la corrida
+        run: |
+          EMAIL="e2e-$(openssl rand -hex 4)@example.com"
+          CLAVE="$(openssl rand -hex 24)"
+          echo "::add-mask::$CLAVE"
+          echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$CLAVE" >> "$GITHUB_ENV"
+
+      - name: Levantar el backend de la revision
+        working-directory: backend
+        env:
+          GREDA_E2E_REVISION: "1"
+          DATABASE_URL: postgresql://greda:greda@localhost:5432/greda_e2e
+          FRONTEND_ORIGINS: http://localhost:4173
+          COOKIE_SECURE: "false"
+        # Con el Python del entorno y NO con `uv run`: `uv run` retiene el
+        # bloqueo de la cache de uv mientras vive, y el paso posterior de
+        # setup-uv («Pruning cache...») se quedaba cinco minutos esperandolo y
+        # fallaba con codigo 2 cuando las E2E ya habian pasado.
+        run: |
+          # `setsid` le da su PROPIO grupo de procesos: el PID guardado es el del
+          # grupo, y el apagado puede matar exactamente eso y nada mas.
+          setsid nohup .venv/bin/python -m tests.e2e.servidor_revision --port 8000 > ../backend.log 2>&1 < /dev/null &
+          echo $! > ../backend.pid
+          for intento in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/auth/csrf -o /dev/null; then
+              echo "Backend de la revision operativo"
+              grep "siembra completa" ../backend.log
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "El backend no respondio"
+          cat ../backend.log
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias del frontend
+        run: npm ci
+
+      - name: Construir el frontend de esta revision
+        # Mismo origen que `vite preview`: /api lo reenvia su proxy al backend.
+        env:
+          VITE_API_BASE_URL: http://localhost:4173
+        run: npm run build
+
+      - name: Servir la app construida
+        run: |
+          # Grupo propio tambien aqui: `npx` lanza a `node` como hijo, y matar
+          # solo a `npx` dejaba vivo el servidor.
+          setsid nohup npx vite preview --port 4173 --strictPort --host 127.0.0.1 > preview.log 2>&1 < /dev/null &
+          echo $! > preview.pid
+          for intento in $(seq 1 30); do
+            if curl -fsS http://localhost:4173/ -o /dev/null && curl -fsS http://localhost:4173/api/v1/auth/csrf -o /dev/null; then
+              echo "App y proxy /api operativos"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "La app no respondio"
+          cat preview.log
+          exit 1
+
+      - name: Instalar Chromium (Playwright)
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E de la revision
+        env:
+          E2E_BASE_URL: http://localhost:4173
+        run: npx playwright test -c playwright.revision.config.ts
+
+      - name: Apagar backend y app
+        # Siempre, pase lo que pase arriba: un proceso que sobrevive al ultimo
+        # paso se queda con puertos, ficheros y la cache de uv, y el fallo
+        # aparece despues en un paso de limpieza que no tiene nada que ver.
+        if: always()
+        # Mata SOLO los grupos que este job creo, por su PID guardado; nada de
+        # `pkill` por patron, que podria alcanzar un proceso ajeno. Es un paso
+        # aparte del de Playwright: si las E2E fallan, ese paso ya ha puesto el
+        # job en rojo y esto no lo cambia; si pasan, este paso solo puede ponerlo
+        # en rojo por una razon real, que quede algo vivo.
+        run: |
+          quedan=0
+          for fichero in backend.pid preview.pid; do
+            [ -f "$fichero" ] || continue
+            grupo="$(cat "$fichero")"
+            kill -TERM -- "-$grupo" 2>/dev/null || true
+            for intento in $(seq 1 10); do
+              kill -0 -- "-$grupo" 2>/dev/null || break
+              sleep 1
+            done
+            if kill -0 -- "-$grupo" 2>/dev/null; then
+              kill -KILL -- "-$grupo" 2>/dev/null || true
+              sleep 1
+            fi
+            if kill -0 -- "-$grupo" 2>/dev/null; then
+              echo "Sigue vivo el grupo $grupo ($fichero):"
+              ps -o pid,pgid,cmd -g "$grupo" || true
+              quedan=1
+            fi
+          done
+          [ "$quedan" -eq 0 ] || exit 1
+          echo "Backend y app apagados"
+
+      - name: Reporte y logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-revision
+          path: |
+            playwright-report-revision/
+            test-results/
+            backend.log
+            preview.log
           retention-days: 7
 
   playwright-e2e-full-matrix:

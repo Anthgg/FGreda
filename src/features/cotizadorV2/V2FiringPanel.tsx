@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-
-import { SelectField, TextField } from "@/components/form";
+import { SelectField } from "@/components/form";
+import { DecimalField } from "@/components/DecimalField";
 import { Spinner } from "@/components/Spinner";
 import { Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -8,6 +7,7 @@ import {
   useSetV2Firing,
   useV2Firing,
 } from "@/features/cotizadorV2/useQuoterV2Firing";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import {
   CUSTOMER_KIND_LABEL,
   FIRING_WARNING_LABEL,
@@ -40,12 +40,6 @@ import type { V2CustomerKind } from "@/types/quoterV2";
 
 const SIN_HORNO = "";
 
-/** Los cuatro importes que se pueden pactar dentro de una cotización. */
-type CampoDeTarifa =
-  | "gas_cost_low_override"
-  | "gas_cost_high_override"
-  | "commercial_rate_low_override"
-  | "commercial_rate_high_override";
 
 function Aviso({ codigo }: { codigo: string }) {
   return (
@@ -70,42 +64,6 @@ function Dato({
       <dd className="text-sm text-zinc-800">{value}</dd>
       {hint ? <dd className="text-[11px] text-zinc-500">{hint}</dd> : null}
     </div>
-  );
-}
-
-/** Campo que solo avisa cuando el usuario termina de escribir. */
-function CampoDiferido({
-  label,
-  value,
-  onCommit,
-  disabled,
-  hint,
-  error,
-}: {
-  label: string;
-  value: string;
-  onCommit: (valor: string) => void;
-  disabled: boolean;
-  hint?: string | undefined;
-  error?: string | undefined;
-}) {
-  const [borrador, setBorrador] = useState(value);
-  useEffect(() => setBorrador(value), [value]);
-
-  return (
-    <TextField
-      label={label}
-      requirement="optional"
-      value={borrador}
-      onChange={setBorrador}
-      onBlur={() => {
-        if (borrador !== value) onCommit(borrador);
-      }}
-      disabled={disabled}
-      inputMode="decimal"
-      {...(hint ? { hint } : {})}
-      {...(error ? { error } : {})}
-    />
   );
 }
 
@@ -198,7 +156,7 @@ export function V2FiringPanel({
 }) {
   const query = useV2Firing(quotationId);
   const guardar = useSetV2Firing(quotationId);
-  const [invalido, setInvalido] = useState<string | null>(null);
+  const esperarGuardado = useEsperarGuardado(quotationId);
 
   if (query.isPending)
     return <Spinner className="size-5" label="Cargando quema..." />;
@@ -217,30 +175,6 @@ export function V2FiringPanel({
   const recomendado = quema.kilns.find(
     (horno) => horno.kiln_id === quema.recommended_kiln_id,
   );
-
-  /**
-   * Un campo vacío RETIRA el acuerdo; un texto que no es número no se manda.
-   *
-   * Vaciar y mandar `null` no es lo mismo que no mandar nada: el nulo explícito
-   * devuelve la tarifa al maestro y la ausencia la conserva. Confundirlos es el
-   * error que 010C pagó caro.
-   */
-  const tarifa = (valor: string, campo: CampoDeTarifa) => {
-    const limpio = valor.trim();
-    if (limpio === "") {
-      setInvalido(null);
-      guardar.mutate({ [campo]: null });
-      return;
-    }
-    if (!Number.isFinite(Number(limpio)) || Number(limpio) < 0) {
-      setInvalido(
-        "Escriba un importe válido, o deje el campo vacío para volver al maestro.",
-      );
-      return;
-    }
-    setInvalido(null);
-    guardar.mutate({ [campo]: limpio });
-  };
 
   return (
     <Panel>
@@ -374,11 +308,11 @@ export function V2FiringPanel({
               Por hornada completa, según el tipo de cliente.
             </p>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <CampoDiferido
+              <DecimalField
                 label="Tarifa baja"
                 value={quema.commercial_rate_low ?? ""}
                 onCommit={(valor) =>
-                  tarifa(valor, "commercial_rate_low_override")
+                  esperarGuardado(guardar, "quema", { commercial_rate_low_override: valor })
                 }
                 disabled={!canEdit}
                 {...(quema.commercial_low_is_override
@@ -387,11 +321,11 @@ export function V2FiringPanel({
                     }
                   : {})}
               />
-              <CampoDiferido
+              <DecimalField
                 label="Tarifa alta"
                 value={quema.commercial_rate_high ?? ""}
                 onCommit={(valor) =>
-                  tarifa(valor, "commercial_rate_high_override")
+                  esperarGuardado(guardar, "quema", { commercial_rate_high_override: valor })
                 }
                 disabled={!canEdit}
                 {...(quema.commercial_high_is_override
@@ -415,10 +349,12 @@ export function V2FiringPanel({
               gas.
             </p>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <CampoDiferido
+              <DecimalField
                 label="Gas baja"
                 value={quema.gas_cost_low ?? ""}
-                onCommit={(valor) => tarifa(valor, "gas_cost_low_override")}
+              onCommit={(valor) =>
+                esperarGuardado(guardar, "quema", { gas_cost_low_override: valor })
+              }
                 disabled={!canEdit}
                 {...(quema.gas_low_is_override
                   ? {
@@ -426,10 +362,12 @@ export function V2FiringPanel({
                     }
                   : {})}
               />
-              <CampoDiferido
+              <DecimalField
                 label="Gas alta"
                 value={quema.gas_cost_high ?? ""}
-                onCommit={(valor) => tarifa(valor, "gas_cost_high_override")}
+              onCommit={(valor) =>
+                esperarGuardado(guardar, "quema", { gas_cost_high_override: valor })
+              }
                 disabled={!canEdit}
                 {...(quema.gas_high_is_override
                   ? {
@@ -453,12 +391,6 @@ export function V2FiringPanel({
         </p>
 
         <Reparto quema={quema} />
-
-        {invalido ? (
-          <p role="alert" className="mt-3 text-xs text-red-600">
-            {invalido}
-          </p>
-        ) : null}
         {guardar.isError ? (
           <p role="alert" className="mt-3 text-xs text-red-600">
             {describeError(guardar.error)}

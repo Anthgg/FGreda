@@ -1,16 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { createV2Quotation, fetchV2Quotation, fetchV2Quotations } from "@/api/quoterV2";
-import type { V2QuotationCreateInput } from "@/types/quoterV2";
+import {
+  createV2Quotation,
+  fetchV2Quotation,
+  fetchV2Quotations,
+  updateV2Quotation,
+} from "@/api/quoterV2";
+import {
+  alcanceDeGuardado,
+  claveDeGuardado,
+  invalidarCotizacion,
+  QUOTER_V2_KEY,
+  RECORDAR_GUARDADO,
+  V2_STALE_TIME,
+} from "@/features/cotizadorV2/claves";
+import type { V2QuotationCreateInput, V2QuotationUpdateInput } from "@/types/quoterV2";
 
-/**
- * Clave de caché propia.
- *
- * Distinta de la del Cotizador histórico a propósito: si compartieran clave,
- * crear una cotización V2 invalidaría el listado Legacy —y al revés—, y las
- * dos pantallas empezarían a refrescarse por cosas que no les han pasado.
- */
-export const QUOTER_V2_KEY = ["quotations-v2"] as const;
+// Se reexportan para no obligar a cada pantalla a saber que las claves
+// viven en otro fichero desde 010G.
+export { QUOTER_V2_KEY, V2_STALE_TIME } from "@/features/cotizadorV2/claves";
+
+
 
 export const useV2Quotations = (
   filters: Record<string, unknown> = {},
@@ -27,7 +37,28 @@ export const useV2Quotation = (id: number | null) =>
     queryKey: [...QUOTER_V2_KEY, id],
     queryFn: () => fetchV2Quotation(id as number),
     enabled: id !== null,
+    staleTime: V2_STALE_TIME,
   });
+
+/**
+ * Cambiar la cabecera invalida TODO lo que cuelga de ella.
+ *
+ * La moneda y el tipo de producción mueven el horno y, con él, cada precio
+ * unitario. Sin esta invalidación el resumen seguiría enseñando las cifras de
+ * antes junto a una cabecera nueva.
+ */
+export const useUpdateV2Quotation = (id: number) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: claveDeGuardado(id, "cabecera"),
+    scope: alcanceDeGuardado(id),
+    gcTime: RECORDAR_GUARDADO,
+    mutationFn: (payload: V2QuotationUpdateInput) => updateV2Quotation(id, payload),
+    onSuccess: () => {
+      void invalidarCotizacion(client, id);
+    },
+  });
+};
 
 export const useCreateV2Quotation = () => {
   const client = useQueryClient();

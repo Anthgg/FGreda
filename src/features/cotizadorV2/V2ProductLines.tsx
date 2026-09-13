@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchProducts } from "@/api/masters";
 import { PrimaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import {
+  seguirEnvio,
+  useBorradorProtegido,
+  useUltimoDescarte,
+  type ResultadoDeGuardado,
+} from "@/components/borradores";
+import { DecimalField } from "@/components/DecimalField";
 import { EmptyState, Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
 import {
@@ -13,20 +20,33 @@ import {
   useV2Materials,
   useV2QuotationProducts,
 } from "@/features/cotizadorV2/useQuoterV2Materials";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { WARNING_LABEL, type V2QuotationProduct } from "@/types/quoterV2Materials";
 
 /**
- * Materiales de una cotización V2: qué pasta, cuánta, y si lleva esmalte.
+ * Las líneas de una cotización V2, en DOS vistas sobre los mismos datos.
+ *
+ * Desde 010G esto se mira en dos pasos del flujo y no en una pantalla larga:
+ *
+ * - **`vista="piezas"`** (paso 2) — qué se hace, cuántas y de qué medida. Es
+ *   el único sitio donde se añaden y se quitan líneas;
+ * - **`vista="materiales"`** (paso 3) — de qué está hecha cada una: pasta,
+ *   cuánta lleva, y si va esmaltada.
+ *
+ * Son dos vistas y no dos componentes porque la línea es UNA. Partirla en dos
+ * ficheros obligaría a duplicar el guardado, y dos guardados sobre la misma
+ * fila es la forma conocida de que uno pise al otro. El paso de materiales no
+ * deja añadir ni quitar: quien llega ahí ya decidió qué piezas hay, y ofrecer
+ * el alta otra vez invita a crear la misma línea dos veces.
  *
  * Lo que se ve aquí son **importes ya calculados por el backend**. La pantalla
  * no multiplica pesos por costos ni suma los dos materiales: si lo hiciera,
  * habría dos aritméticas que podrían discrepar —y en JavaScript la segunda
  * sería de coma flotante— y nadie sabría cuál manda.
  *
- * Los campos de texto guardan **al salir del campo**, no en cada tecla. La
- * diferencia no es de rendimiento: borrando «20» para escribir «50» se pasa
- * por la cadena vacía, y `Number("")` es 0. Guardando al vuelo, la cotización
- * entera se pondría en cero a mitad de una pulsación.
+ * Los campos numéricos son `DecimalField`, que es de toda la familia V2: acepta
+ * la coma peruana, guarda al salir del campo y distingue el vacío del cero.
+ * Hasta 010G esta pantalla llevaba su propia copia, y las copias divergen.
  *
  * El esmalte merece una nota. Cuando nadie elige uno, el sistema propone el
  * activo más caro por gramo: pecar por arriba es recuperable —si al final se
@@ -37,6 +57,9 @@ import { WARNING_LABEL, type V2QuotationProduct } from "@/types/quoterV2Material
  */
 
 const SIN_MATERIAL = "";
+
+/** Cuál de los dos pasos está pintando estas líneas. */
+export type VistaDeLinea = "piezas" | "materiales";
 
 /**
  * Las tres medidas de una pieza, en centímetros.
@@ -74,48 +97,118 @@ function Dato({
 }
 
 /**
- * Campo de texto que solo avisa cuando el usuario termina.
+ * Campo de TEXTO que solo avisa cuando el usuario termina.
  *
- * `value` es el valor guardado; mientras se escribe manda el borrador local.
- * Al salir del campo se compara con lo guardado y solo entonces se envía: una
- * edición que acaba donde empezó no gasta una petición ni un recálculo.
+ * Queda aquí y no se comparte porque es para texto libre —el nombre de una
+ * pieza de encargo—. Todo lo numérico usa `DecimalField`, que además acepta la
+ * coma decimal y distingue un campo vacío de un cero.
  */
-function CampoDiferido({
+function CampoDeTexto({
   label,
   value,
   onCommit,
   disabled,
   hint,
-  inputMode,
-  error,
 }: {
   label: string;
   value: string;
-  onCommit: (valor: string) => void;
+  onCommit: (valor: string) => void | Promise<ResultadoDeGuardado>;
   disabled: boolean;
   hint?: string | undefined;
-  inputMode?: "numeric" | "decimal" | undefined;
-  error?: string | undefined;
 }) {
   const [borrador, setBorrador] = useState(value);
-  // Si el valor guardado cambia por fuera —otra edición, un refetch—, el campo
-  // lo sigue. Mientras se escribe no hay refetch en vuelo, así que esto no
-  // pisa lo que el usuario está tecleando.
-  useEffect(() => setBorrador(value), [value]);
+  const [escribiendo, setEscribiendo] = useState(false);
+  // Lo enviado: se sigue enseñando hasta que lo guardado coincida con ello.
+  // Ver `DecimalField`.
+  const [enviado, setEnviado] = useState<{ valor: string } | null>(null);
+  // Si el valor guardado cambia por fuera —otra edición, un refetch— el campo
+  // lo sigue, pero NO mientras alguien lo tiene abierto: desde que cambiar
+  // cualquier cosa invalida la cotización entera, un refresco puede resolverse
+  // a mitad de una palabra, y borrarla sería peor que enseñar un valor viejo
+  // durante los segundos que dura la edición. Al salir se sincroniza igual.
+  useEffect(() => {
+    if (escribiendo) return;
+    if (enviado !== null) {
+      // Solo si COINCIDE: que lo guardado cambie por un envío anterior no
+      // alcanza este. Ver `DecimalField`.
+      const alcanzado = value.trim() === enviado.valor;
+      if (!alcanzado) return;
+      setEnviado(null);
+    }
+    setBorrador(value);
+  }, [value, escribiendo, enviado]);
+
+  // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
+  // que el campo enseña. Si el servidor lo aceptó Y la pantalla ya tiene el
+  // dato posterior al guardado (`fresco`), el campo enseña lo guardado tal cual
+  // lo normalizó el backend: `20,5000004` pasa a `20.5`. Aceptado sin dato
+  // fresco, sigue enseñando lo enviado. Si falla, se recuerda su firma para que
+  // un descarte sepa que es este campo el que tiene que revertir.
+  const envios = useRef(0);
+  const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
+  const seguir = (resultado: unknown) => {
+    const secuencia = ++envios.current;
+    seguirEnvio(
+      resultado,
+      () => envios.current === secuencia,
+      (final) => {
+        if (final.ok) {
+          setFirmaFallida(null);
+          // Solo con un dato posterior a ESTE guardado. Si el refetch no llegó,
+          // se sigue enseñando lo enviado: alinearse con lo que hay pintaría
+          // el valor viejo, y quien volviera a entrar editaría lo obsoleto.
+          if (final.fresco !== false) setEnviado(null);
+        } else {
+          setFirmaFallida(final.firma);
+        }
+      },
+    );
+  };
+
+  const confirmar = () => {
+    setEscribiendo(false);
+    // Se compara y se manda ya recortado: un nombre con espacios al final es el
+    // mismo nombre y no merece ni una petición ni una fila distinta.
+    const limpio = borrador.trim();
+    if (limpio !== value.trim()) {
+      setEnviado({ valor: limpio });
+      seguir(onCommit(limpio));
+    }
+  };
+  // Lo tecleado sin salir del campo cuenta como cambio sin guardar, y se
+  // confirma si el campo se desmonta sin blur. Lo YA enviado no cuenta —si no,
+  // un desmontaje con el envío en vuelo lo mandaba dos veces— y un campo
+  // deshabilitado no declara ni confirma nada. Ver `DecimalField`.
+  const limpioAhora = borrador.trim();
+  const sucio =
+    !disabled &&
+    limpioAhora !== value.trim() &&
+    (enviado === null || limpioAhora !== enviado.valor.trim());
+  useBorradorProtegido(sucio, confirmar);
+
+  // El descarte es DIRIGIDO: solo vuelve a lo guardado el campo cuyo último
+  // envío falló con la firma descartada. Un campo con un envío en vuelo no lo
+  // escucha, porque su guardado todavía puede salir bien.
+  const descarte = useUltimoDescarte();
+  const descarteVisto = useRef(descarte.n);
+  useEffect(() => {
+    if (descarte.n === descarteVisto.current) return;
+    descarteVisto.current = descarte.n;
+    if (escribiendo || firmaFallida === null || firmaFallida !== descarte.firma) return;
+    setFirmaFallida(null);
+    setEnviado(null);
+  }, [descarte, escribiendo, firmaFallida]);
 
   return (
     <TextField
       label={label}
       requirement="required"
       value={borrador}
+      onFocus={() => setEscribiendo(true)}
       onChange={setBorrador}
-      onBlur={() => {
-        if (borrador !== value) onCommit(borrador);
-      }}
+      onBlur={confirmar}
       disabled={disabled}
-      {...(inputMode ? { inputMode } : {})}
       {...(hint ? { hint } : {})}
-      {...(error ? { error } : {})}
     />
   );
 }
@@ -124,15 +217,17 @@ function Linea({
   linea,
   quotationId,
   canEdit,
+  vista,
 }: {
   linea: V2QuotationProduct;
   quotationId: number;
   canEdit: boolean;
+  vista: VistaDeLinea;
 }) {
   const actualizar = useUpdateV2QuotationProduct(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
   const borrar = useDeleteV2QuotationProduct(quotationId);
   const pastas = useV2Materials("BODY");
-  const [invalido, setInvalido] = useState<string | null>(null);
 
   const opcionesPasta = [
     { value: SIN_MATERIAL, label: "Sin pasta" },
@@ -144,17 +239,10 @@ function Linea({
 
   const guardar = (cambios: Record<string, unknown>) =>
     actualizar.mutate({ lineId: linea.id, payload: cambios });
-
-  /** Una cantidad vacía no es cero: es un campo a medio escribir. */
-  const guardarCantidad = (valor: string) => {
-    const limpio = valor.trim();
-    if (limpio === "" || !Number.isFinite(Number(limpio)) || Number(limpio) < 0) {
-      setInvalido("Indique cuántas piezas. Vacío no es cero.");
-      return;
-    }
-    setInvalido(null);
-    guardar({ quantity: Number(limpio) });
-  };
+  // Para los campos diferidos: el campo recibe el resultado de SU guardado y,
+  // al terminar bien, enseña lo guardado tal cual lo normalizó el backend.
+  const guardarYEsperar = (cambios: Record<string, unknown>) =>
+    esperarGuardado(actualizar, "linea-editar", { lineId: linea.id, payload: cambios });
 
   return (
     <div className="rounded-2xl border border-black/[0.06] p-4">
@@ -162,7 +250,7 @@ function Linea({
         <h3 className="text-sm font-semibold text-zinc-900">
           {linea.product_name ?? "Línea sin nombre"}
         </h3>
-        {canEdit ? (
+        {canEdit && vista === "piezas" ? (
           <button
             type="button"
             onClick={() => borrar.mutate(linea.id)}
@@ -174,83 +262,95 @@ function Linea({
         ) : null}
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <CampoDiferido
-          label="Nombre de la pieza"
-          value={linea.product_name ?? ""}
-          onCommit={(valor) => guardar({ product_name: valor })}
-          disabled={!canEdit || linea.product_id !== null}
-          {...(linea.product_id !== null
-            ? { hint: "Lo fija el catálogo: esta línea cuelga de un producto." }
-            : {})}
-        />
-        <CampoDiferido
-          label="Cantidad"
-          value={String(linea.quantity)}
-          onCommit={guardarCantidad}
-          disabled={!canEdit}
-          inputMode="numeric"
-          {...(invalido ? { error: invalido } : {})}
-        />
-        <SelectField
-          label="Pasta"
-          requirement="required"
-          value={linea.body_material_id ? String(linea.body_material_id) : SIN_MATERIAL}
-          options={opcionesPasta}
-          onChange={(valor) =>
-            guardar({ body_material_id: valor === SIN_MATERIAL ? null : Number(valor) })
-          }
-          disabled={!canEdit}
-        />
-        <CampoDiferido
-          label={`Pasta por pieza${linea.body_uom ? ` (${linea.body_uom})` : ""}`}
-          value={linea.body_unit_weight ?? ""}
-          onCommit={(valor) => guardar({ body_unit_weight: valor.trim() === "" ? null : valor })}
-          disabled={!canEdit}
-          inputMode="decimal"
-          hint="La unidad la fija el maestro del material."
-        />
-      </div>
+      {vista === "piezas" ? (
+        <>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <CampoDeTexto
+              label="Nombre de la pieza"
+              value={linea.product_name ?? ""}
+              onCommit={(valor) => guardarYEsperar({ product_name: valor })}
+              disabled={!canEdit || linea.product_id !== null}
+              {...(linea.product_id !== null
+                ? { hint: "Lo fija el catálogo: esta línea cuelga de un producto." }
+                : {})}
+            />
+            <DecimalField
+              label="Cantidad"
+              requirement="required"
+              value={String(linea.quantity)}
+              onCommit={(valor) => {
+                // Siendo obligatorio, `DecimalField` nunca llama aquí con el
+                // campo vacío: lo explica en pantalla. Mandar un 0 en su lugar
+                // convertiría un borrado a medias en «cero piezas».
+                return valor !== null ? guardarYEsperar({ quantity: Number(valor) }) : undefined;
+              }}
+              disabled={!canEdit}
+              entero
+            />
+          </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {MEDIDAS.map(({ campo, etiqueta }) => (
-          <CampoDiferido
-            key={campo}
-            label={etiqueta}
-            value={linea[campo] ?? ""}
-            onCommit={(valor) => guardar({ [campo]: valor.trim() === "" ? null : valor.trim() })}
-            disabled={!canEdit}
-            inputMode="decimal"
-          />
-        ))}
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Dato label="Volumen unitario" value={`${linea.unit_volume_cm3} cm³`} />
-        <Dato label="Volumen total" value={`${linea.total_volume_cm3} cm³`} />
-        <Dato
-          label="% del horno"
-          value={`${linea.firing_occupancy_percent} %`}
-          hint="Cuánto ocupa. No es un multiplicador de precio."
-        />
-        <Dato
-          label="Quema asignada"
-          value={linea.firing_commercial_cost}
-          hint={`Gas real: ${linea.firing_gas_cost}`}
-        />
-      </dl>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {MEDIDAS.map(({ campo, etiqueta }) => (
+              <DecimalField
+                key={campo}
+                label={etiqueta}
+                value={linea[campo]}
+                onCommit={(valor) => guardarYEsperar({ [campo]: valor })}
+                disabled={!canEdit}
+              />
+            ))}
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Dato label="Volumen unitario" value={`${linea.unit_volume_cm3} cm³`} />
+            <Dato label="Volumen total" value={`${linea.total_volume_cm3} cm³`} />
+            <Dato
+              label="% del horno"
+              value={`${linea.firing_occupancy_percent} %`}
+              hint="Cuánto ocupa. No es un multiplicador de precio."
+            />
+            <Dato
+              label="Quema asignada"
+              value={linea.firing_commercial_cost}
+              hint={`Gas real: ${linea.firing_gas_cost}`}
+            />
+          </dl>
+        </>
+      ) : null}
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Dato
-          label="Costo por unidad"
-          value={linea.body_cost_per_unit ?? "—"}
-          hint={linea.body_cost_is_override ? "Ajustado en esta cotización" : undefined}
-        />
-        <Dato label="Peso total" value={linea.body_total_weight} />
-        <Dato label="Costo de pasta" value={linea.body_cost} />
-        <Dato label="Costo de materiales" value={linea.materials_cost} />
-      </dl>
+      {vista === "materiales" ? (
+        <>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <SelectField
+              label="Pasta"
+              requirement="required"
+              value={linea.body_material_id ? String(linea.body_material_id) : SIN_MATERIAL}
+              options={opcionesPasta}
+              onChange={(valor) =>
+                guardar({ body_material_id: valor === SIN_MATERIAL ? null : Number(valor) })
+              }
+              disabled={!canEdit}
+            />
+            <DecimalField
+              label={`Pasta por pieza${linea.body_uom ? ` (${linea.body_uom})` : ""}`}
+              value={linea.body_unit_weight}
+              onCommit={(valor) => guardarYEsperar({ body_unit_weight: valor })}
+              disabled={!canEdit}
+              hint="La unidad la fija el maestro del material."
+            />
+          </div>
 
-      <div className="mt-4 border-t border-black/[0.04] pt-4">
+          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Dato
+              label="Costo por unidad"
+              value={linea.body_cost_per_unit ?? "—"}
+              hint={linea.body_cost_is_override ? "Ajustado en esta cotización" : undefined}
+            />
+            <Dato label="Peso total" value={linea.body_total_weight} />
+            <Dato label="Costo de pasta" value={linea.body_cost} />
+            <Dato label="Costo de materiales" value={linea.materials_cost} />
+          </dl>
+
+          <div className="mt-4 border-t border-black/[0.04] pt-4">
         <SelectField
           label="Esmalte"
           requirement="required"
@@ -297,8 +397,10 @@ function Linea({
               </p>
             ) : null}
           </>
-        ) : null}
-      </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
 
       {linea.warnings.length > 0 ? (
         <ul className="mt-3 space-y-1">
@@ -320,9 +422,11 @@ function Linea({
 export function V2ProductLines({
   quotationId,
   canEdit,
+  vista = "materiales",
 }: {
   quotationId: number;
   canEdit: boolean;
+  vista?: VistaDeLinea;
 }) {
   const query = useV2QuotationProducts(quotationId);
   const anadir = useAddV2QuotationProduct(quotationId);
@@ -375,26 +479,48 @@ export function V2ProductLines({
   return (
     <Panel>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-zinc-900">Materiales</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">
+          {vista === "piezas" ? "Productos y piezas" : "Materiales"}
+        </h2>
         <span className="text-xs text-zinc-500">
-          Costo de materiales: <strong>{pagina.materials_cost}</strong>
+          {vista === "piezas" ? (
+            `${pagina.items.length} ${pagina.items.length === 1 ? "línea" : "líneas"}`
+          ) : (
+            <>
+              Costo de materiales: <strong>{pagina.materials_cost}</strong>
+            </>
+          )}
         </span>
       </div>
       <p className="mt-1 text-xs text-zinc-500">
-        Cotizar no descuenta inventario. El consumo ocurre en producción.
+        {vista === "piezas"
+          ? "Qué se hace, cuántas y de qué medida. De las medidas sale cuánto horno ocupa cada pieza."
+          : "Cotizar no descuenta inventario. El consumo ocurre en producción."}
       </p>
 
       {pagina.items.length === 0 ? (
-        <EmptyState message="Todavía no hay líneas en esta cotización." />
+        <EmptyState
+          message={
+            vista === "piezas"
+              ? "Todavía no hay líneas en esta cotización."
+              : "No hay líneas que materializar. Añádalas en el paso de productos."
+          }
+        />
       ) : (
         <div className="mt-4 space-y-4">
           {pagina.items.map((linea) => (
-            <Linea key={linea.id} linea={linea} quotationId={quotationId} canEdit={canEdit} />
+            <Linea
+              key={linea.id}
+              linea={linea}
+              quotationId={quotationId}
+              canEdit={canEdit}
+              vista={vista}
+            />
           ))}
         </div>
       )}
 
-      {canEdit ? (
+      {canEdit && vista === "piezas" ? (
         <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-black/[0.04] pt-4">
           <SelectField
             label="Pieza del catálogo"

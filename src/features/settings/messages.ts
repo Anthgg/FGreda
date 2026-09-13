@@ -94,7 +94,79 @@ export function describeError(error: unknown): string {
     case "V2_MATERIAL_NOT_FOUND":
       return "Ese material no esta valorizado todavia. Valorícelo en Configuracion y vuelva.";
     case "V2_QUOTATION_NOT_EDITABLE":
-      return "Esta cotizacion ya no es un borrador, asi que su material quedo fijado.";
+    case "V2_FIRING_QUOTATION_NOT_EDITABLE":
+    case "V2_PRICING_QUOTATION_NOT_EDITABLE":
+      return (
+        "Esta cotizacion ya no es un borrador: comprometio un precio con un " +
+        "cliente y por eso quedo fijada."
+      );
+    case "V2_QUOTATION_NOT_FOUND":
+    case "V2_FIRING_QUOTATION_NOT_FOUND":
+    case "V2_PRICING_QUOTATION_NOT_FOUND":
+      return "Esa cotizacion V2 ya no existe. Compruebe el enlace.";
+
+    // ---- Fase 010G: la cabecera del borrador -------------------------
+    case "V2_CUSTOMER_NOT_FOUND":
+      return "Ese cliente no existe o esta archivado. Elija otro de la lista.";
+    case "V2_CUSTOMER_ROLE_REQUIRED":
+      return (
+        "Ese tercero no tiene rol de cliente. Un proveedor no puede encabezar " +
+        "una cotizacion."
+      );
+
+    // ---- Fase 010D: mano de obra -------------------------------------
+    case "V2_LABOR_VERSION_CONFLICT":
+      return (
+        "Otra persona cambio este trabajador o esta tecnica mientras usted " +
+        "editaba. Recargue y vuelva a aplicar lo suyo."
+      );
+    case "V2_LABOR_NOT_FOUND":
+      return "Esa tarea ya no existe en la cotizacion. Actualice la lista.";
+    case "V2_LABOR_RESOURCE_INACTIVE":
+      return (
+        "Ese trabajador o esa tecnica estan dados de baja. Lo ya cotizado no " +
+        "cambia, pero no se pueden asignar tareas nuevas."
+      );
+    case "V2_WORKER_NOT_FOUND":
+      return "Ese trabajador no existe. Registrelo en Configuracion y vuelva.";
+    case "V2_TECHNIQUE_NOT_FOUND":
+      return "Esa tecnica no existe. Registrela en Configuracion y vuelva.";
+    case "V2_LABOR_INPUT_INVALID":
+      return error.message;
+
+    // ---- Fase 010E: la quema -----------------------------------------
+    case "V2_FIRING_KILN_NOT_FOUND":
+    case "V2_KILN_NOT_FOUND":
+      return "Ese horno no existe. Elija otro de la lista.";
+    case "V2_FIRING_KILN_INACTIVE":
+    case "V2_KILN_INACTIVE":
+      return (
+        "Ese horno esta dado de baja. Las cotizaciones que ya lo usaban " +
+        "conservan su costo, pero no se puede elegir de nuevo."
+      );
+    case "V2_FIRING_INPUT_INVALID":
+      return error.message;
+
+    // ---- Fase 010F: el factor y el precio ----------------------------
+    case "V2_FACTOR_OUT_OF_RANGE":
+    case "V2_PRICING_FACTOR_OUT_OF_RANGE":
+      return (
+        "Ese factor esta fuera del rango permitido. El minimo de x2 es una " +
+        "regla del negocio; el maximo se configura en Configuracion."
+      );
+    case "V2_PRICING_INPUT_INVALID":
+      return error.message;
+
+    // ---- Fase 010B: la configuracion del Cotizador V2 ----------------
+    case "V2_SETTINGS_VERSION_CONFLICT":
+      return (
+        "Otra persona cambio la configuracion del Cotizador V2 mientras usted " +
+        "editaba. Recargue para ver la actual y vuelva a aplicar la suya."
+      );
+    case "V2_SETTINGS_NOT_FOUND":
+      return "La configuracion del Cotizador V2 todavia no existe.";
+    case "V2_MATERIAL_UOM_MISSING":
+      return "Ese material no declara unidad base, asi que no se puede costear por peso.";
 
     // ---- Fase 009E: costeo comercial ---------------------------------
     // El backend ya manda estos con texto humano, pero se fijan aqui para
