@@ -437,7 +437,9 @@ jobs:
         # setup-uv («Pruning cache...») se quedaba cinco minutos esperandolo y
         # fallaba con codigo 2 cuando las E2E ya habian pasado.
         run: |
-          nohup .venv/bin/python -m tests.e2e.servidor_revision --port 8000 > ../backend.log 2>&1 &
+          # `setsid` le da su PROPIO grupo de procesos: el PID guardado es el del
+          # grupo, y el apagado puede matar exactamente eso y nada mas.
+          setsid nohup .venv/bin/python -m tests.e2e.servidor_revision --port 8000 > ../backend.log 2>&1 < /dev/null &
           echo $! > ../backend.pid
           for intento in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8000/api/v1/auth/csrf -o /dev/null; then
@@ -467,7 +469,9 @@ jobs:
 
       - name: Servir la app construida
         run: |
-          nohup npx vite preview --port 4173 --strictPort --host 127.0.0.1 > preview.log 2>&1 &
+          # Grupo propio tambien aqui: `npx` lanza a `node` como hijo, y matar
+          # solo a `npx` dejaba vivo el servidor.
+          setsid nohup npx vite preview --port 4173 --strictPort --host 127.0.0.1 > preview.log 2>&1 < /dev/null &
           echo $! > preview.pid
           for intento in $(seq 1 30); do
             if curl -fsS http://localhost:4173/ -o /dev/null && curl -fsS http://localhost:4173/api/v1/auth/csrf -o /dev/null; then
@@ -493,20 +497,32 @@ jobs:
         # paso se queda con puertos, ficheros y la cache de uv, y el fallo
         # aparece despues en un paso de limpieza que no tiene nada que ver.
         if: always()
+        # Mata SOLO los grupos que este job creo, por su PID guardado; nada de
+        # `pkill` por patron, que podria alcanzar un proceso ajeno. Es un paso
+        # aparte del de Playwright: si las E2E fallan, ese paso ya ha puesto el
+        # job en rojo y esto no lo cambia; si pasan, este paso solo puede ponerlo
+        # en rojo por una razon real, que quede algo vivo.
         run: |
+          quedan=0
           for fichero in backend.pid preview.pid; do
-            if [ -f "$fichero" ]; then
-              kill "$(cat "$fichero")" 2>/dev/null || true
+            [ -f "$fichero" ] || continue
+            grupo="$(cat "$fichero")"
+            kill -TERM -- "-$grupo" 2>/dev/null || true
+            for intento in $(seq 1 10); do
+              kill -0 -- "-$grupo" 2>/dev/null || break
+              sleep 1
+            done
+            if kill -0 -- "-$grupo" 2>/dev/null; then
+              kill -KILL -- "-$grupo" 2>/dev/null || true
+              sleep 1
+            fi
+            if kill -0 -- "-$grupo" 2>/dev/null; then
+              echo "Sigue vivo el grupo $grupo ($fichero):"
+              ps -o pid,pgid,cmd -g "$grupo" || true
+              quedan=1
             fi
           done
-          pkill -f "tests.e2e.servidor_revision" 2>/dev/null || true
-          pkill -f "vite preview" 2>/dev/null || true
-          sleep 2
-          if pgrep -f "tests.e2e.servidor_revision|vite preview" >/dev/null; then
-            echo "Quedaron procesos vivos:"
-            pgrep -af "tests.e2e.servidor_revision|vite preview"
-            exit 1
-          fi
+          [ "$quedan" -eq 0 ] || exit 1
           echo "Backend y app apagados"
 
       - name: Reporte y logs

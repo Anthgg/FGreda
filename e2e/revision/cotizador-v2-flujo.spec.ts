@@ -84,6 +84,43 @@ async function anadirPieza(
   }
 }
 
+/**
+ * Prepara una cotizacion con una pieza que ocupa UNA hornada del horno chico y
+ * deja la pantalla en el paso de mano de obra.
+ *
+ * Los importes esperados salen de la siembra del backend de revision: horno
+ * chico con tarifa externa 200 + 250 = S/450 por una hornada, espacio a S/140
+ * por dia, administracion S/200 y factor x3. Sin pasta ni tareas, el resto es
+ * cero. Con 2 dias efectivos: espacio S/280, produccion 450 + 280 + 200 = S/930,
+ * subtotal 930 x 3 = S/2790 (unitario 139,50, ya en el escalon de S/0,50).
+ */
+async function cotizacionHastaManoDeObra(page: Page, etiqueta: string): Promise<void> {
+  await login(page);
+  await nuevoBorrador(page, etiqueta);
+  await elegirCliente(page);
+  await anadirPieza(page, testName("Plato"), "20", ["18", "12", "3"]);
+  await paso(page, 4, "Mano de obra").click();
+  await expect(page.getByTestId("panel-mano-de-obra")).toBeVisible();
+  await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+    timeout: 30_000,
+  });
+}
+
+/**
+ * Intenta recargar y devuelve el dialogo que el navegador levanta, sin aceptarlo.
+ *
+ * No se usa `page.reload()`: si el dialogo se rechaza, la navegacion se cancela y
+ * esa promesa no se resolveria nunca. La recarga se pide desde la pagina y lo que
+ * se espera es el DIALOGO, que es justo lo que se esta probando.
+ */
+async function intentarRecargar(page: Page) {
+  const dialogo = page.waitForEvent("dialog", { timeout: 10_000 });
+  void page.evaluate(() => window.location.reload()).catch(() => undefined);
+  return dialogo;
+}
+
+const RUTA_PLANIFICACION = "**/api/v1/quotations-v2/*/planning";
+
 test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
   // Sin `test.skip` por falta de credenciales: en el gate de revision las
   // credenciales las genera el propio workflow, y si faltan la configuracion
@@ -246,5 +283,142 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     await cantidad.fill("10,5");
     await cantidad.blur();
     await expect(page.getByText(/sin decimales|n[uú]mero entero/i).first()).toBeVisible();
+  });
+  test("CASO 5 RECARGA CON GUARDADO EN VUELO: el navegador pregunta, y lo guardado persiste con sus importes", async ({
+    page,
+  }) => {
+    // El bug real de 010G, recorrido de punta a punta: cambiar los dias
+    // efectivos, intentar recargar ANTES de que el guardado termine, no perder
+    // nada, dejar que termine, recargar y comprobar los importes exactos.
+    await cotizacionHastaManoDeObra(page, "V2-Recarga");
+
+    // El guardado de los dias se queda retenido hasta que la prueba lo suelte.
+    let soltar: () => void = () => undefined;
+    const retenido = new Promise<void>((resolver) => {
+      soltar = resolver;
+    });
+    // Se espera a que el manejador haya CONTINUADO la peticion antes de retirar
+    // la ruta: retirarla con la peticion aun retenida la da por atendida y el
+    // `continue` posterior falla con «Route is already handled».
+    let continuada: () => void = () => undefined;
+    const peticionContinuada = new Promise<void>((resolver) => {
+      continuada = resolver;
+    });
+    await page.route(RUTA_PLANIFICACION, async (ruta) => {
+      await retenido;
+      await ruta.continue();
+      continuada();
+    });
+
+    const dias = page.getByLabel(/d[ií]as efectivos/i);
+    await dias.fill("2");
+    await dias.blur();
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/guardando/i);
+
+    // Recargar con el guardado en vuelo: el navegador tiene que preguntar.
+    const dialogo = await intentarRecargar(page);
+    expect(dialogo.type()).toBe("beforeunload");
+    await dialogo.dismiss();
+
+    // Rechazado el dialogo, seguimos donde estabamos y con lo tecleado.
+    await expect(page.getByTestId("panel-mano-de-obra")).toBeVisible();
+    await expect(dias).toHaveValue("2");
+
+    // Termina la persistencia.
+    soltar();
+    await peticionContinuada;
+    await page.unroute(RUTA_PLANIFICACION);
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+      timeout: 30_000,
+    });
+
+    // Ahora si se recarga, y sin dialogo: ya no hay nada que perder.
+    await page.reload();
+    await expect(page.getByTestId("panel-mano-de-obra")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel(/d[ií]as efectivos/i)).toHaveValue("2");
+
+    // El resumen lo refleja con los importes exactos, leidos del servidor.
+    await paso(page, 7, "Resumen").click();
+    const resumen = page.getByTestId("paso-resumen");
+    await expect(resumen).toBeVisible();
+    await expect(resumen.getByText("Por 2 días efectivos.")).toBeVisible();
+    await expect(resumen).toContainText("S/ 280.00");
+    const precio = page.getByTestId("resumen-precio");
+    await expect(precio).toContainText("S/ 930.00");
+    await expect(precio).toContainText("S/ 2790.00");
+  });
+
+  test("CASO 6 GUARDADO RECHAZADO: no aparenta guardado, sobrevive al cambio de paso y protege la salida", async ({
+    page,
+  }) => {
+    await cotizacionHastaManoDeObra(page, "V2-Error");
+
+    // El backend rechaza los dias efectivos.
+    await page.route(RUTA_PLANIFICACION, (ruta) =>
+      ruta.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "INTERNAL", message: "Fallo simulado" } }),
+      }),
+    );
+
+    const dias = page.getByLabel(/d[ií]as efectivos/i);
+    await dias.fill("3");
+    await dias.blur();
+
+    const aviso = page.getByTestId("guardados-fallidos");
+    await expect(aviso).toBeVisible();
+    await expect(aviso).toContainText(/los días efectivos/i);
+    const estado = page.getByTestId("estado-guardado");
+    await expect(estado).toHaveText(/no se guardaron/i);
+    await expect(estado).not.toHaveText(/todos los cambios guardados/i);
+
+    // Cambiar de paso desmonta el panel que fallo: el aviso sigue.
+    await paso(page, 7, "Resumen").click();
+    await expect(page.getByTestId("paso-resumen")).toBeVisible();
+    await expect(aviso).toBeVisible();
+
+    // Y recargar pregunta.
+    const dialogo = await intentarRecargar(page);
+    expect(dialogo.type()).toBe("beforeunload");
+    await dialogo.dismiss();
+    await expect(aviso).toBeVisible();
+
+    // El backend vuelve a aceptar; volver a guardar el MISMO dato resuelve el aviso.
+    await page.unroute(RUTA_PLANIFICACION);
+    await aviso.getByRole("button", { name: "Ir a corregirlo" }).click();
+    await expect(page.getByTestId("panel-mano-de-obra")).toBeVisible();
+    const diasOtraVez = page.getByLabel(/d[ií]as efectivos/i);
+    await diasOtraVez.fill("3");
+    await diasOtraVez.blur();
+    await expect(aviso).toBeHidden({ timeout: 30_000 });
+    await expect(estado).toHaveText(/todos los cambios guardados/i, { timeout: 30_000 });
+
+    await page.reload();
+    await paso(page, 7, "Resumen").click();
+    await expect(page.getByTestId("paso-resumen").getByText("Por 3 días efectivos.")).toBeVisible();
+  });
+
+  test("CASO 7 TECLEADO SIN SALIR DEL CAMPO: recargar tambien pregunta", async ({ page }) => {
+    // Sin blur no hay peticion; la proteccion no puede depender solo de ellas.
+    await cotizacionHastaManoDeObra(page, "V2-SinBlur");
+
+    const dias = page.getByLabel(/d[ií]as efectivos/i);
+    await dias.fill("4");
+    await expect(dias).toBeFocused();
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/cambios sin guardar/i);
+
+    const dialogo = await intentarRecargar(page);
+    expect(dialogo.type()).toBe("beforeunload");
+    await dialogo.dismiss();
+    await expect(dias).toHaveValue("4");
+
+    // Al salir del campo se guarda, y entonces si se puede recargar.
+    await dias.blur();
+    await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
+      timeout: 30_000,
+    });
+    await page.reload();
+    await expect(page.getByLabel(/d[ií]as efectivos/i)).toHaveValue("4", { timeout: 15_000 });
   });
 });
