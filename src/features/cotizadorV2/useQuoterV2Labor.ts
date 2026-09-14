@@ -7,6 +7,7 @@ import {
   deleteV2Labor,
   fetchV2Illustration,
   fetchV2Labor,
+  loadV2WorkerTechniques,
   fetchV2Techniques,
   fetchV2Workers,
   setV2Illustration,
@@ -18,6 +19,7 @@ import {
 import type {
   V2IllustrationInput,
   V2LaborInput,
+  V2LoadWorkerInput,
   V2TechniqueCreateInput,
   V2TechniqueUpdateInput,
   V2WorkerCreateInput,
@@ -109,6 +111,24 @@ export const useAddV2Labor = (quotationId: number) => {
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2LaborInput) => addV2Labor(quotationId, payload),
+    onSuccess: () => {
+      void invalidarCotizacion(client, quotationId);
+    },
+  });
+};
+
+/**
+ * Carga las técnicas de un trabajador. Comparte la clave de «añadir tarea»:
+ * para el estado de guardado es lo mismo, y va en el mismo `scope` que el
+ * resto de escrituras de la cotización.
+ */
+export const useLoadV2WorkerTechniques = (quotationId: number) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: claveDeGuardado(quotationId, "tarea-anadir"),
+    scope: alcanceDeGuardado(quotationId),
+    gcTime: RECORDAR_GUARDADO,
+    mutationFn: (payload: V2LoadWorkerInput) => loadV2WorkerTechniques(quotationId, payload),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },

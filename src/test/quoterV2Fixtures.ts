@@ -190,6 +190,7 @@ export const V2_WORKERS = {
       hourly_rate: "15.000000000000",
       notes: null,
       version: 1,
+      technique_ids: [3],
     },
     {
       id: 2,
@@ -202,6 +203,7 @@ export const V2_WORKERS = {
       hourly_rate: "20.000000000000",
       notes: null,
       version: 1,
+      technique_ids: [],
     },
   ],
 };
@@ -217,6 +219,7 @@ export const V2_TECHNIQUES = {
       default_capacity_per_workday: "50.000000",
       unit: "piezas",
       requires_glaze: true,
+      manual_hours: false,
       units_per_hour: "6.250000000000",
       notes: null,
       version: 1,

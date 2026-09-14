@@ -14,6 +14,8 @@ import type {
   V2Illustration,
   V2IllustrationInput,
   V2LaborInput,
+  V2LoadWorkerInput,
+  V2LoadWorkerResult,
   V2LaborLine,
   V2LaborPage,
   V2Technique,
@@ -53,6 +55,13 @@ export const fetchV2Labor = (quotationId: number): Promise<V2LaborPage> =>
 
 export const addV2Labor = (quotationId: number, payload: V2LaborInput): Promise<V2LaborLine> =>
   apiClient.post(`${QUOTATIONS}/${quotationId}/labor`, payload);
+
+/** Carga las técnicas habilitadas de un trabajador. No duplica las ya cargadas. */
+export const loadV2WorkerTechniques = (
+  quotationId: number,
+  payload: V2LoadWorkerInput,
+): Promise<V2LoadWorkerResult> =>
+  apiClient.post(`/quotations-v2/${quotationId}/labor/load-worker`, payload);
 
 export const updateV2Labor = (
   quotationId: number,

@@ -157,6 +157,13 @@ export function describeError(error: unknown): string {
     case "V2_PRICING_INPUT_INVALID":
       return error.message;
 
+    // ---- Correccion 010H: tecnicas del trabajador ---------------------
+    case "V2_LABOR_TECHNIQUE_NOT_ALLOWED":
+      return (
+        "Ese trabajador no tiene habilitada esa técnica en su ficha. Habilítela en " +
+        "Configuración → Cotizador V2 → Trabajadores, o asigne a quien sí la tenga."
+      );
+
     // ---- Fase 010H: emision, anulacion, duplicacion y produccion V2 --
     case "V2_QUOTATION_CHANGED":
       return (

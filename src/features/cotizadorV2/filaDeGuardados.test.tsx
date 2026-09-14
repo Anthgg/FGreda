@@ -129,6 +129,6 @@ describe("fila de guardados de una cotización", () => {
         expect(lineas[i + 1], `${nombre}:${i + 2}`).toMatch(/scope: alcanceDeGuardado\(/);
       });
     }
-    expect(conClave).toBe(11);
+    expect(conClave).toBe(12);
   });
 });
