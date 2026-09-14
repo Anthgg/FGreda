@@ -30,6 +30,11 @@ export interface V2Worker {
   hourly_rate: string;
   notes: string | null;
   version: number;
+  /**
+   * Técnicas que esta persona sabe hacer, configuradas en su ficha. Al elegirla
+   * en una cotización se cargan estas (las activas). Corrección de 010H.
+   */
+  technique_ids: number[];
 }
 
 export interface V2WorkerCreateInput {
@@ -39,6 +44,7 @@ export interface V2WorkerCreateInput {
   workday_hours?: string | null;
   active?: boolean;
   notes?: string | null;
+  technique_ids?: number[];
 }
 
 export interface V2WorkerUpdateInput {
@@ -50,6 +56,8 @@ export interface V2WorkerUpdateInput {
   workday_hours?: string | null;
   active?: boolean;
   notes?: string | null;
+  /** Si viene, REEMPLAZA el conjunto de técnicas habilitadas. */
+  technique_ids?: number[];
 }
 
 export interface V2Technique {
@@ -62,6 +70,11 @@ export interface V2Technique {
   unit: string;
   /** Si solo tiene sentido sobre una pieza esmaltada. */
   requires_glaze: boolean;
+  /**
+   * Horas decididas a mano (personal adicional). Al cargarla sobre un producto
+   * nace en cero piezas: con rendimiento 1, 50 piezas serían 400 horas.
+   */
+  manual_hours: boolean;
   /** `capacidad / jornada`. Lo calcula el backend. */
   units_per_hour: string;
   notes: string | null;
@@ -74,6 +87,7 @@ export interface V2TechniqueCreateInput {
   default_capacity_per_workday: string;
   unit?: string;
   requires_glaze?: boolean;
+  manual_hours?: boolean;
   active?: boolean;
   notes?: string | null;
 }
@@ -85,6 +99,7 @@ export interface V2TechniqueUpdateInput {
   default_capacity_per_workday?: string;
   unit?: string;
   requires_glaze?: boolean;
+  manual_hours?: boolean;
   active?: boolean;
   notes?: string | null;
 }
@@ -185,4 +200,23 @@ export const LABOR_WARNING_LABEL: Record<string, string> = {
     "Esta técnica se retiró del catálogo. El costo sigue siendo el que se congeló.",
   V2_LABOR_GLAZE_TECHNIQUE_WITHOUT_GLAZE:
     "La técnica es de esmaltado y la pieza no lleva esmalte. Revise si falta encenderlo.",
+  V2_LABOR_TECHNIQUE_NOT_ENABLED:
+    "Esta persona ya no tiene habilitada esta técnica en su ficha. El costo sigue siendo el que se congeló.",
+  V2_LABOR_WORKER_WITHOUT_TECHNIQUES:
+    "Esta persona no tiene técnicas activas habilitadas en su ficha.",
 };
+
+/** Cargar en una cotización las técnicas habilitadas de un trabajador. */
+export interface V2LoadWorkerInput {
+  worker_id: number;
+  /** `null` = todo el pedido. */
+  v2_quotation_product_id?: number | null;
+  /** Las que quedaron marcadas. Ausente = todas las habilitadas y activas. */
+  technique_ids?: number[];
+}
+
+export interface V2LoadWorkerResult {
+  created: V2LaborLine[];
+  already_loaded_technique_ids: number[];
+  warnings: string[];
+}

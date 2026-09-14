@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -97,7 +97,8 @@ describe("Trabajadores y técnicas (Fase 010D)", () => {
     renderApp(["/configuracion"]);
     await abrirPestana();
 
-    expect(await screen.findByText("Vidriado")).toBeInTheDocument();
+    // «Vidriado» sale dos veces: en el catálogo y en las técnicas de Celso.
+    expect((await screen.findAllByText("Vidriado")).length).toBeGreaterThan(0);
     // 50 piezas por jornada de 8 h son 6,25 por hora, y lo calcula el backend.
     expect(screen.getByText("6.250000000000")).toBeInTheDocument();
     expect(screen.getByText(/no cuánto cuesta/i)).toBeInTheDocument();
@@ -161,7 +162,7 @@ describe("Trabajadores y técnicas (Fase 010D)", () => {
     renderApp(["/configuracion"]);
     const user = await abrirPestana();
 
-    await screen.findByText("Vidriado");
+    await screen.findAllByText("Vidriado");
     await user.type(screen.getByLabelText("Código"), "nueva");
     await user.type(screen.getAllByLabelText("Nombre")[1]!, "Nueva");
     await user.type(screen.getByLabelText("Rinde por jornada"), "0");
@@ -195,5 +196,51 @@ describe("Trabajadores y técnicas (Fase 010D)", () => {
       expect(cuerpo.expected_version).toBe(1);
       expect(cuerpo.active).toBe(false);
     });
+  });
+
+  it("la ficha dice qué técnicas sabe hacer cada persona", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+    await abrirPestana();
+
+    expect(await screen.findByTestId("tecnicas-de-1")).toHaveTextContent("Vidriado");
+    expect(screen.getByTestId("tecnicas-de-2")).toHaveTextContent(
+      /no se le puede asignar trabajo/i,
+    );
+  });
+
+  it("editar técnicas reemplaza el conjunto y declara la versión leída", async () => {
+    const fetchSpy = mockSettings();
+    renderApp(["/configuracion"]);
+    const user = await abrirPestana();
+
+    await screen.findByText("Celso");
+    await user.click(screen.getAllByRole("button", { name: "Editar técnicas" })[0]!);
+    const celda = screen.getByTestId("tecnicas-de-1");
+    await user.click(within(celda).getByRole("checkbox", { name: /Vidriado/ }));
+    await user.click(within(celda).getByRole("button", { name: "Guardar técnicas" }));
+
+    await waitFor(() => {
+      const guardado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/quoter-v2/workers/1") &&
+          (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(guardado).toBeDefined();
+      expect(JSON.parse(String((guardado?.[1] as RequestInit).body))).toEqual({
+        expected_version: 1,
+        technique_ids: [],
+      });
+    });
+  });
+
+  it("la técnica declara si sus horas se deciden a mano", async () => {
+    mockSettings();
+    renderApp(["/configuracion"]);
+    await abrirPestana();
+
+    expect(
+      await screen.findByRole("columnheader", { name: "Horas manuales" }),
+    ).toBeInTheDocument();
   });
 });

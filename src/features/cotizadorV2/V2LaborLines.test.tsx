@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -25,6 +25,18 @@ const COTIZACION = {
   code: "CTZ-V2-2026-000001",
   pricing_engine_version: "V2",
   status: "DRAFT",
+  effective_status: "DRAFT" as const,
+  client_notes: null,
+  issued_at: null,
+  valid_until: null,
+  expires_at: null,
+  issued_by_name: null,
+  cancelled_at: null,
+  cancelled_by_name: null,
+  cancel_reason: null,
+  duplicated_from_id: null,
+  open_duplicate_id: null,
+  production_handoff: null,
   production_type: "RETAIL",
   customer_id: null,
   customer_name: null,
@@ -49,13 +61,29 @@ const COTIZACION = {
   updated_at: "2026-09-11T10:00:00Z",
 };
 
-function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
+function mockV2(
+  overrides: {
+    labor?: Response;
+    update?: Response;
+    workers?: Response;
+    techniques?: Response;
+    load?: Response;
+  } = {},
+) {
   return mockFetch((url, init) => {
     const metodo = init.method ?? "GET";
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
-    if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
-    if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
+    if (url.includes("/quoter-v2/workers")) return overrides.workers ?? jsonResponse(200, V2_WORKERS);
+    if (url.includes("/quoter-v2/techniques")) {
+      return overrides.techniques ?? jsonResponse(200, V2_TECHNIQUES);
+    }
+    if (url.includes("/labor/load-worker")) {
+      return (
+        overrides.load ??
+        jsonResponse(201, { created: [], already_loaded_technique_ids: [], warnings: [] })
+      );
+    }
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, { items: [] });
     if (url.includes("/labor")) {
       if (metodo !== "GET") {
@@ -118,6 +146,21 @@ function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
 }
 
 describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
+  it("sin trabajadores lo dice ARRIBA, junto al estado vacío, y dónde darlos de alta", async () => {
+    mockV2({ workers: jsonResponse(200, { items: [], total: 0 }) });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+
+    const aviso = await screen.findByTestId("mano-de-obra-sin-maestros");
+    expect(aviso).toHaveTextContent(/no hay trabajadores activos/i);
+    expect(aviso).toHaveTextContent(/Configuración → Cotizador V2/);
+    // Va antes que la ilustración, no escondido al final del panel.
+    const ilustracion = await screen.findByText(/va aparte de las técnicas productivas/i);
+    expect(
+      aviso.compareDocumentPosition(ilustracion) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /añadir trabajo/i })).not.toBeInTheDocument();
+  });
+
   it("muestra las horas y el costo que calculó el backend", async () => {
     mockV2();
 
@@ -322,5 +365,163 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
         v2_quotation_product_id: 4,
       });
     });
+  });
+});
+
+describe("Cargar a un trabajador con sus técnicas (corrección 010H)", () => {
+  const TORNO = {
+    ...V2_TECHNIQUES.items[0]!,
+    id: 5,
+    code: "torno",
+    name: "Torno fácil",
+    requires_glaze: false,
+  };
+  const ASAS = { ...TORNO, id: 6, code: "asas", name: "Armado de asa" };
+  const CON_TRES = () => jsonResponse(200, { items: [V2_TECHNIQUES.items[0], TORNO, ASAS] });
+  const CELSO_SABE_TRES = () =>
+    jsonResponse(200, {
+      items: [{ ...V2_WORKERS.items[0]!, technique_ids: [3, 5, 6] }, V2_WORKERS.items[1]],
+    });
+
+  async function elegir(
+    user: ReturnType<typeof userEvent.setup>,
+    campo: string,
+    opcion: string,
+  ) {
+    const selectores = await screen.findAllByRole("combobox", { name: campo });
+    await user.click(selectores[selectores.length - 1]!);
+    await user.click(await screen.findByRole("option", { name: new RegExp(opcion) }));
+  }
+
+  it("elegir al trabajador trae sus técnicas marcadas, sin añadirlas una a una", async () => {
+    mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    await elegir(user, "Trabajador", "Celso");
+
+    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
+    expect(within(grupo).getByRole("checkbox", { name: /Torno fácil/ })).toBeChecked();
+    expect(within(grupo).getByRole("checkbox", { name: /Armado de asa/ })).toBeChecked();
+    // Vidriado ya está cargada para Celso en todo el pedido: marcada y bloqueada.
+    const vidriado = within(grupo).getByRole("checkbox", { name: /Vidriado/ });
+    expect(vidriado).toBeChecked();
+    expect(vidriado).toBeDisabled();
+    expect(within(grupo).getByText("(ya cargada)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Añadir 2 técnicas" })).toBeEnabled();
+  });
+
+  it("desmarcar una la deja fuera del envío, con el producto y sus piezas", async () => {
+    const fetchSpy = mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    await elegir(user, "Trabajador", "Celso");
+    await elegir(user, "Producto", "Plato palta");
+    expect(await screen.findByText(/las piezas nacen en 20/i)).toBeInTheDocument();
+
+    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
+    // Para Plato palta no hay nada cargado: las tres salen marcadas.
+    await user.click(within(grupo).getByRole("checkbox", { name: /Armado de asa/ }));
+    await user.click(screen.getByRole("button", { name: "Añadir 2 técnicas" }));
+
+    await waitFor(() => {
+      const carga = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/quotations-v2/7/labor/load-worker") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(carga).toBeDefined();
+      expect(JSON.parse(String((carga?.[1] as RequestInit).body))).toEqual({
+        worker_id: 1,
+        v2_quotation_product_id: 4,
+        technique_ids: [3, 5],
+      });
+    });
+  });
+
+  it("cambiar de producto vuelve a marcar lo que se desmarcó para el anterior", async () => {
+    mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    await elegir(user, "Trabajador", "Celso");
+    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
+    await user.click(within(grupo).getByRole("checkbox", { name: /Armado de asa/ }));
+    expect(within(grupo).getByRole("checkbox", { name: /Armado de asa/ })).not.toBeChecked();
+
+    await elegir(user, "Producto", "Plato palta");
+    expect(
+      within(await screen.findByTestId("tecnicas-del-trabajador")).getByRole("checkbox", {
+        name: /Armado de asa/,
+      }),
+    ).toBeChecked();
+  });
+
+  it("un trabajador sin técnicas lo dice y no ofrece añadir", async () => {
+    mockV2();
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    await elegir(user, "Trabajador", "Refuerzo externo");
+
+    expect(await screen.findByTestId("trabajador-sin-tecnicas")).toHaveTextContent(
+      /no tiene técnicas activas habilitadas/i,
+    );
+    expect(screen.queryByRole("button", { name: /Añadir \d+ técnica/ })).not.toBeInTheDocument();
+  });
+
+  it("en la tarea, trabajador y técnica no se cambian; quitar es solo de aquí", async () => {
+    const fetchSpy = mockV2();
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    // Solo el formulario de carga ofrece elegir trabajador; la tarea no.
+    expect(screen.getAllByRole("combobox", { name: "Trabajador" })).toHaveLength(1);
+    expect(screen.queryByRole("combobox", { name: "Técnica" })).not.toBeInTheDocument();
+
+    const quitar = screen.getByRole("button", { name: "Quitar de esta cotización" });
+    expect(quitar.getAttribute("title")).toMatch(/ficha del trabajador no cambia/i);
+    await user.click(quitar);
+
+    await waitFor(() => {
+      const borrado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/labor/11") &&
+          (init as RequestInit | undefined)?.method === "DELETE",
+      );
+      expect(borrado).toBeDefined();
+    });
+    expect(
+      fetchSpy.mock.calls.some(
+        ([url, init]) =>
+          String(url).includes("/quoter-v2/workers") &&
+          ((init as RequestInit | undefined)?.method ?? "GET") !== "GET",
+      ),
+    ).toBe(false);
+  });
+
+  it("una técnica no habilitada se explica sin mostrar el código", async () => {
+    mockV2({
+      techniques: CON_TRES(),
+      workers: CELSO_SABE_TRES(),
+      load: errorResponse(422, "V2_LABOR_TECHNIQUE_NOT_ALLOWED", "no"),
+    });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    await elegir(user, "Trabajador", "Celso");
+    await user.click(await screen.findByRole("button", { name: "Añadir 2 técnicas" }));
+
+    const carga = within(screen.getByTestId("cargar-trabajador"));
+    const alerta = await carga.findByRole("alert");
+    expect(alerta.textContent).not.toContain("V2_LABOR_TECHNIQUE_NOT_ALLOWED");
+    expect(alerta).toHaveTextContent(/técnica/i);
   });
 });

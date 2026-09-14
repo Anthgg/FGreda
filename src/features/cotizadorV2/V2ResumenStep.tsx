@@ -6,6 +6,7 @@ import {
   type EstadoPaso,
   type PasoId,
 } from "@/features/cotizadorV2/pasos";
+import { V2EmitirCotizacion } from "@/features/cotizadorV2/V2EmitirCotizacion";
 import { V2_PRODUCTION_TYPE_LABEL } from "@/types/quoterV2";
 import { CUSTOMER_KIND_LABEL } from "@/types/quoterV2Firing";
 
@@ -26,7 +27,8 @@ import { CUSTOMER_KIND_LABEL } from "@/types/quoterV2Firing";
  *
  * Costo real, gas, factor y ganancia se ven aquí porque quien cotiza los
  * necesita. El PDF que se envía lleva otra cosa —producto, cantidad, unitario,
- * subtotal, IGV y total— y es de 010H.
+ * subtotal, IGV y total—: desde 010H lo genera el backend al emitir, y el
+ * diálogo de emisión enseña exactamente eso.
  */
 
 /** El título de un paso, para nombrarlo en los enlaces de «falta esto». */
@@ -133,7 +135,7 @@ export function V2ResumenStep({
           data-testid="resumen-listo"
           className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800"
         >
-          Los seis pasos están completos. La cotización puede emitirse.
+          Los seis pasos están completos. La cotización puede emitirse al final de este resumen.
         </p>
       )}
 
@@ -322,6 +324,10 @@ export function V2ResumenStep({
           </p>
         ) : null}
       </section>
+
+      {cotizacion?.status === "DRAFT" && cotizacion.effective_status !== undefined ? (
+        <V2EmitirCotizacion quotationId={cotizacion.id} irAPaso={irAPaso} />
+      ) : null}
 
       {senales.length > 0 ? (
         <section

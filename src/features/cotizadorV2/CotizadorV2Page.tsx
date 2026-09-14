@@ -1,21 +1,25 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
 import { PrimaryButton, SelectField, TextAreaField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
+import { V2CicloDeVida, EstadoV2 } from "@/features/cotizadorV2/V2CicloDeVida";
+import { V2DocumentoEmitido } from "@/features/cotizadorV2/V2DocumentoEmitido";
 import { V2Wizard } from "@/features/cotizadorV2/V2Wizard";
+import { formatDisplayDate } from "@/components/dateFormat";
 import { esPasoValido, type PasoId } from "@/features/cotizadorV2/pasos";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
-import { Badge, EmptyState, MasterHeader, Panel } from "@/features/masters/MasterTable";
+import { EmptyState, MasterHeader, Panel } from "@/features/masters/MasterTable";
 import {
   useCreateV2Quotation,
   useV2Quotation,
   useV2Quotations,
 } from "@/features/cotizadorV2/useQuoterV2";
 import {
+  V2_EFFECTIVE_STATUS_LABEL,
   V2_PRODUCTION_TYPE_LABEL,
-  V2_STATUS_LABEL,
+  type V2DuplicateWarning,
   type V2ProductionType,
 } from "@/types/quoterV2";
 
@@ -95,8 +99,8 @@ const FLOW_STEPS: readonly {
   {
     phase: "010H",
     title: "Vigencia y PDF",
-    detail: "Snapshots y documento del cliente.",
-    listo: false,
+    detail: "Emisión, vencimiento, duplicación, PDF y paso a producción.",
+    listo: true,
   },
 ];
 
@@ -146,8 +150,16 @@ function FlowOutline() {
   );
 }
 
+/** Lo que la duplicación deja en el estado de la navegación al llegar aquí. */
+interface EstadoDeLlegada {
+  avisosDeDuplicacion?: V2DuplicateWarning[];
+  duplicacionCreada?: boolean;
+}
+
 function V2QuotationDetail({ id }: { id: number }) {
   const query = useV2Quotation(id);
+  const location = useLocation();
+  const llegada = (location.state ?? null) as EstadoDeLlegada | null;
 
   if (query.isPending) return <Spinner label="Cargando cotización V2" />;
   if (query.isError) {
@@ -167,10 +179,12 @@ function V2QuotationDetail({ id }: { id: number }) {
         </Link>
         <h2 className="text-base font-semibold text-zinc-900">{quotation.code}</h2>
         <EngineBadge />
-        <Badge tone={quotation.status === "CONFIRMED" ? "positive" : "warning"}>
-          {V2_STATUS_LABEL[quotation.status]}
-        </Badge>
       </div>
+      <V2CicloDeVida
+        cotizacion={quotation}
+        avisosDeDuplicacion={llegada?.avisosDeDuplicacion}
+        duplicacionCreada={llegada?.duplicacionCreada}
+      />
       <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <dt className="text-xs text-zinc-500">Tipo de producción</dt>
@@ -205,10 +219,18 @@ function V2QuotationDetail({ id }: { id: number }) {
 function V2QuotationDetailPage({ id, paso }: { id: number; paso: PasoId | null }) {
   const query = useV2Quotation(id);
 
+  const cotizacion = query.data;
   return (
     <div className="space-y-6">
       <V2QuotationDetail id={id} />
-      {query.data ? <V2Wizard quotationId={id} paso={paso} /> : null}
+      {/* Fase 010H. Emitida, vencida, anulada o en producción: primero el
+          documento que recibió el cliente y su historial. El asistente sigue
+          debajo, en solo lectura, para quien necesite ver de dónde salió el
+          precio. */}
+      {cotizacion && cotizacion.status !== "DRAFT" ? (
+        <V2DocumentoEmitido cotizacion={cotizacion} />
+      ) : null}
+      {cotizacion ? <V2Wizard quotationId={id} paso={paso} /> : null}
     </div>
   );
 }
@@ -333,9 +355,15 @@ export function CotizadorV2Page() {
                     >
                       {item.code}
                     </button>
-                    <span className="text-xs text-zinc-500">
-                      {V2_PRODUCTION_TYPE_LABEL[item.production_type]} ·{" "}
-                      {V2_STATUS_LABEL[item.status]}
+                    <span className="flex items-center gap-2 text-xs text-zinc-500">
+                      {V2_PRODUCTION_TYPE_LABEL[item.production_type]}
+                      <EstadoV2 estado={item.effective_status} />
+                      {item.valid_until ? (
+                        <span>válida hasta {formatDisplayDate(item.valid_until)}</span>
+                      ) : null}
+                      <span className="sr-only">
+                        {V2_EFFECTIVE_STATUS_LABEL[item.effective_status]}
+                      </span>
                     </span>
                   </li>
                 ))}

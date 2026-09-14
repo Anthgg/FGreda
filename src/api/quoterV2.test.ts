@@ -47,6 +47,14 @@ const V2_MODULES = [
   "types/quoterV2Pricing.ts",
   "features/cotizadorV2/useQuoterV2Pricing.ts",
   "features/cotizadorV2/V2PricingPanel.tsx",
+  // Fase 010H
+  "features/cotizadorV2/useQuoterV2Lifecycle.ts",
+  "features/cotizadorV2/V2CicloDeVida.tsx",
+  "features/cotizadorV2/V2EmitirCotizacion.tsx",
+  "features/cotizadorV2/V2DocumentoEmitido.tsx",
+  "features/cotizadorV2/mensajesCicloDeVida.ts",
+  "features/cotizadorV2/fechaLima.ts",
+  "features/cotizadorV2/useDialogoAccesible.ts",
 ];
 
 describe("cliente del Cotizador V2", () => {
