@@ -61,12 +61,14 @@ const COTIZACION = {
   updated_at: "2026-09-11T10:00:00Z",
 };
 
-function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
+function mockV2(
+  overrides: { labor?: Response; update?: Response; workers?: Response } = {},
+) {
   return mockFetch((url, init) => {
     const metodo = init.method ?? "GET";
     if (url.includes("/auth/csrf")) return csrfResponse();
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
-    if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
+    if (url.includes("/quoter-v2/workers")) return overrides.workers ?? jsonResponse(200, V2_WORKERS);
     if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, { items: [] });
     if (url.includes("/labor")) {
@@ -130,6 +132,21 @@ function mockV2(overrides: { labor?: Response; update?: Response } = {}) {
 }
 
 describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
+  it("sin trabajadores lo dice ARRIBA, junto al estado vacío, y dónde darlos de alta", async () => {
+    mockV2({ workers: jsonResponse(200, { items: [], total: 0 }) });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+
+    const aviso = await screen.findByTestId("mano-de-obra-sin-maestros");
+    expect(aviso).toHaveTextContent(/no hay trabajadores activos/i);
+    expect(aviso).toHaveTextContent(/Configuración → Cotizador V2/);
+    // Va antes que la ilustración, no escondido al final del panel.
+    const ilustracion = screen.getByText(/va aparte de las técnicas productivas/i);
+    expect(
+      aviso.compareDocumentPosition(ilustracion) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /añadir trabajo/i })).not.toBeInTheDocument();
+  });
+
   it("muestra las horas y el costo que calculó el backend", async () => {
     mockV2();
 

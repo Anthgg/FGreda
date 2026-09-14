@@ -401,6 +401,29 @@ export function V2LaborLines({
         falta. No hay un precio por técnica.
       </p>
 
+      {/* Fase 010H. Sin trabajadores o sin técnicas no se puede asignar nada, y
+          eso se dice ARRIBA, junto al estado vacío. Antes el aviso vivía al
+          final del panel, debajo de la ilustración, y quien miraba la pantalla
+          solo leía «no hay trabajo asignado» sin saber por qué ni dónde
+          arreglarlo. */}
+      {canEdit && sinMaestros ? (
+        <p
+          data-testid="mano-de-obra-sin-maestros"
+          role="status"
+          className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
+        >
+          {(trabajadores.data?.items ?? []).length === 0
+            ? "No hay trabajadores activos"
+            : "No hay técnicas activas"}
+          {(trabajadores.data?.items ?? []).length === 0 &&
+          (tecnicas.data?.items ?? []).length === 0
+            ? " ni técnicas activas"
+            : ""}
+          . Para asignar trabajo hace falta al menos uno de cada: se dan de alta en Configuración →
+          Cotizador V2.
+        </p>
+      ) : null}
+
       {pagina.items.length === 0 ? (
         <EmptyState message="Todavía no hay trabajo asignado en esta cotización." />
       ) : (
@@ -435,12 +458,7 @@ export function V2LaborLines({
 
       {canEdit ? (
         <div className="mt-6 border-t border-black/[0.04] pt-4">
-          {sinMaestros ? (
-            <p className="text-xs text-zinc-500">
-              Para asignar trabajo hace falta al menos un trabajador y una técnica. Se dan de alta en
-              Configuración → Cotizador V2.
-            </p>
-          ) : (
+          {sinMaestros ? null : (
             <div className="flex flex-wrap items-end gap-3">
               <SelectField
                 label="Trabajador"
