@@ -430,4 +430,82 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(pdf).toContain("taza");
     expect(pdf).toContain("fuente");
   });
+
+  test("TÉCNICAS: elegir al trabajador carga sus técnicas, se desmarca una y quitar no toca su ficha", async ({
+    page,
+  }) => {
+    const id = await borradorCompleto(page, "V2-Tecnicas", ["Taza"]);
+    const api = page.request;
+    const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
+      id: number;
+      name: string;
+      technique_ids: number[];
+    }[];
+    const taller = trabajadores.find((w) => w.name === "E2E-Trabajador taller");
+    expect(taller?.technique_ids).toHaveLength(5);
+    const tecnicas = (await (await api.get("/api/v1/quoter-v2/techniques")).json()).items as {
+      id: number;
+      name: string;
+    }[];
+    const idDe = (nombre: string) => tecnicas.find((t) => t.name === nombre)?.id;
+
+    await paso(page, 4, "Mano de obra").click();
+    const carga = page.getByTestId("cargar-trabajador");
+    await carga.getByRole("combobox", { name: "Trabajador" }).click();
+    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
+    await carga.getByRole("combobox", { name: "Producto" }).click();
+    await page.getByRole("option", { name: /taza/i }).click();
+    await expect(carga).toContainText(/las piezas nacen en 10/i);
+
+    // Sus cinco técnicas aparecen marcadas; el torno no es suyo y no aparece.
+    const grupo = page.getByTestId("tecnicas-del-trabajador");
+    await expect(grupo.getByRole("checkbox")).toHaveCount(5);
+    for (const casilla of await grupo.getByRole("checkbox").all()) {
+      await expect(casilla).toBeChecked();
+    }
+    await expect(grupo).not.toContainText(/torno/i);
+
+    await grupo.getByRole("checkbox", { name: /Colada/ }).uncheck();
+    await carga.getByRole("button", { name: "Añadir 4 técnicas" }).click();
+    await esperarGuardado(page);
+
+    const leerTareas = async () =>
+      (await (await api.get(`/api/v1/quotations-v2/${id}/labor`)).json()).items as {
+        id: number;
+        technique_name: string;
+        quantity: string;
+        worker_id: number;
+      }[];
+    let tareas = await leerTareas();
+    expect(tareas).toHaveLength(4);
+    expect(tareas.map((t) => t.technique_name)).not.toContain("Colada");
+    for (const tarea of tareas) {
+      expect(tarea.worker_id).toBe(taller?.id);
+      expect(Number(tarea.quantity)).toBe(10);
+    }
+    // Ya cargadas: marcadas y bloqueadas; Colada sigue libre.
+    await expect(grupo.getByText("(ya cargada)")).toHaveCount(4);
+    await expect(carga.getByRole("button", { name: "Añadir 1 técnica" })).toBeEnabled();
+
+    // Quitar una la borra de ESTA cotización; la ficha conserva las cinco.
+    await page.getByRole("button", { name: "Quitar de esta cotización" }).first().click();
+    await esperarGuardado(page);
+    await expect.poll(async () => (await leerTareas()).length).toBe(3);
+    const ficha = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items.find(
+      (w: { id: number }) => w.id === taller?.id,
+    );
+    expect(ficha.technique_ids).toHaveLength(5);
+
+    // Una petición a mano con una técnica que no es suya: 422, no se guarda.
+    const token = await csrf(page);
+    const manual = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
+      data: { worker_id: taller?.id, technique_id: idDe("Torno facil"), quantity: "10" },
+      headers: { "X-CSRF-Token": token },
+    });
+    expect(manual.status()).toBe(422);
+    expect(JSON.stringify(await manual.json())).toContain("V2_LABOR_TECHNIQUE_NOT_ALLOWED");
+    tareas = await leerTareas();
+    expect(tareas).toHaveLength(3);
+  });
 });
+
