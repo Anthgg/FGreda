@@ -117,6 +117,8 @@ export interface V2QuotationProduct {
   glaze_cost: string;
   /** Pasta más esmalte. Lo suma el backend: aquí sería coma flotante. */
   materials_cost: string;
+  /** Fase 010H. Texto para el cliente: sale en la columna «Observación» del PDF. */
+  client_observation: string | null;
 
   warnings: string[];
 }
@@ -135,6 +137,7 @@ export interface V2QuotationProductInput {
   requires_glaze?: boolean;
   glaze_material_id?: number | null;
   glaze_cost_per_unit_override?: string | null;
+  client_observation?: string | null;
 }
 
 export interface V2QuotationProductsPage {

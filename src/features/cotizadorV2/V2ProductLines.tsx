@@ -289,6 +289,16 @@ function Linea({
             />
           </div>
 
+          <div className="mt-3">
+            <CampoDeTexto
+              label="Observación para el cliente"
+              value={linea.client_observation ?? ""}
+              onCommit={(valor) => guardarYEsperar({ client_observation: valor })}
+              disabled={!canEdit}
+              hint="Opcional. Sale en el PDF junto a esta pieza: acabado, color, un detalle del encargo."
+            />
+          </div>
+
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {MEDIDAS.map(({ campo, etiqueta }) => (
               <DecimalField

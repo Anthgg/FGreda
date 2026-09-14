@@ -157,6 +157,34 @@ export function describeError(error: unknown): string {
     case "V2_PRICING_INPUT_INVALID":
       return error.message;
 
+    // ---- Fase 010H: emision, anulacion, duplicacion y produccion V2 --
+    case "V2_QUOTATION_CHANGED":
+      return (
+        "La cotización cambió mientras usted revisaba el resumen. Revise los valores " +
+        "actualizados antes de confirmar."
+      );
+    case "V2_QUOTATION_INCOMPLETE":
+      return "A la cotización le faltan datos para emitirse. Revise la lista de pendientes.";
+    case "V2_QUOTATION_ALREADY_ISSUED":
+      return "Otra persona ya emitió esta cotización con otros valores. Recargue la página.";
+    case "V2_QUOTATION_NOT_CONFIRMABLE":
+      return "Una cotización anulada no puede emitirse. Duplíquela para empezar de nuevo.";
+    case "V2_QUOTATION_NOT_CANCELLABLE":
+      return "Esta cotización ya pasó a producción y no puede anularse desde aquí.";
+    case "V2_QUOTATION_NOT_DUPLICABLE":
+      return "Solo se puede duplicar una cotización vencida o anulada.";
+    case "V2_QUOTATION_NOT_SENDABLE":
+      return "Solo una cotización emitida y vigente puede pasar a producción.";
+    case "V2_QUOTATION_EXPIRED":
+      return (
+        "La cotización venció: sus precios ya no pueden aceptarse. Duplíquela para " +
+        "actualizar precios."
+      );
+    case "V2_QUOTATION_PDF_DRAFT_BLOCKED":
+      return "El PDF existe cuando la cotización se emite. Confírmela primero.";
+    case "V2_QUOTATION_PDF_NOT_ISSUED":
+      return "Esta cotización se anuló sin llegar a emitirse, así que no tiene documento.";
+
     // ---- Fase 010B: la configuracion del Cotizador V2 ----------------
     case "V2_SETTINGS_VERSION_CONFLICT":
       return (

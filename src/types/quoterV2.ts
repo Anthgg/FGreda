@@ -20,6 +20,20 @@ export type PricingEngineVersion = "LEGACY" | "V2";
 
 export type V2QuotationStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
 
+/**
+ * Lo que la cotización ES hoy. Fase 010H.
+ *
+ * `EXPIRED` y `READY_FOR_PRODUCTION` no se guardan: los calcula el backend con
+ * su reloj. La pantalla nunca decide si una oferta venció comparando fechas
+ * con el reloj del navegador, que puede ir adelantado o estar en otra zona.
+ */
+export type V2EffectiveStatus =
+  | "DRAFT"
+  | "CONFIRMED"
+  | "EXPIRED"
+  | "READY_FOR_PRODUCTION"
+  | "CANCELLED";
+
 /** Por menor / por mayor. Lo elige la persona; el sistema nunca lo cambia solo. */
 export type V2ProductionType = "RETAIL" | "WHOLESALE";
 
@@ -75,6 +89,31 @@ export interface V2Quotation {
 
   created_at: string;
   updated_at: string;
+
+  // ---- Fase 010H: ciclo de vida ------------------------------------------
+  /** Observaciones que SÍ salen en el PDF. `notes` sigue siendo interno. */
+  client_notes: string | null;
+  effective_status: V2EffectiveStatus;
+  issued_at: string | null;
+  /** Último día (calendario de Lima) en que la oferta vale, `YYYY-MM-DD`. */
+  valid_until: string | null;
+  expires_at: string | null;
+  issued_by_name: string | null;
+  cancelled_at: string | null;
+  cancelled_by_name: string | null;
+  cancel_reason: string | null;
+  duplicated_from_id: number | null;
+  /** El borrador ya abierto a partir de esta: se ofrece ir a él, no duplicar otra vez. */
+  open_duplicate_id: number | null;
+  production_handoff: V2ProductionHandoff | null;
+}
+
+export interface V2ProductionHandoff {
+  id: number;
+  v2_quotation_id: number;
+  status: "READY_FOR_PRODUCTION";
+  created_at: string;
+  created_by_name: string | null;
 }
 
 /**
@@ -92,6 +131,7 @@ export interface V2QuotationUpdateInput {
   currency_code?: string;
   exchange_rate?: string | null;
   notes?: string | null;
+  client_notes?: string | null;
 }
 
 export interface V2QuotationListItem {
@@ -103,6 +143,8 @@ export interface V2QuotationListItem {
   customer_name: string | null;
   name: string | null;
   created_at: string;
+  effective_status: V2EffectiveStatus;
+  valid_until: string | null;
 }
 
 export interface V2QuotationPage {
@@ -115,6 +157,90 @@ export const V2_STATUS_LABEL: Record<V2QuotationStatus, string> = {
   CONFIRMED: "Emitida",
   CANCELLED: "Anulada",
 };
+
+/**
+ * El estado en PALABRAS. Fase 010H. Se enseña siempre escrito: un distintivo
+ * que solo cambia de color no distingue una vencida para quien no ve el ámbar.
+ */
+export const V2_EFFECTIVE_STATUS_LABEL: Record<V2EffectiveStatus, string> = {
+  DRAFT: "Borrador",
+  CONFIRMED: "Emitida",
+  EXPIRED: "Vencida",
+  READY_FOR_PRODUCTION: "Lista para producción",
+  CANCELLED: "Anulada",
+};
+
+// ---- Fase 010H: emisión, anulación, duplicación y producción --------------
+
+export interface V2Blocker {
+  code: string;
+  line_id: number | null;
+}
+
+export interface V2PreviewLine {
+  id: number;
+  product_name: string | null;
+  quantity: number;
+  length_cm: string | null;
+  width_cm: string | null;
+  height_cm: string | null;
+  client_observation: string | null;
+  unit_price: string;
+  line_subtotal: string;
+  line_tax: string;
+  line_total: string;
+}
+
+/** El resumen que se revisa antes de emitir. Sin un solo costo interno. */
+export interface V2ConfirmationPreview {
+  quotation_id: number;
+  code: string;
+  status: V2QuotationStatus;
+  effective_status: V2EffectiveStatus;
+  can_confirm: boolean;
+  blockers: V2Blocker[];
+  warnings: string[];
+  /** Se devuelve al confirmar: si el documento cambió entre medias, el backend responde 409. */
+  fingerprint: string;
+  customer_name: string | null;
+  name: string | null;
+  client_notes: string | null;
+  currency_code: string | null;
+  currency_symbol: string | null;
+  exchange_rate: string | null;
+  tax_percent: string | null;
+  commercial_factor: string | null;
+  validity_days: number | null;
+  valid_until: string | null;
+  subtotal_amount: string;
+  tax_amount: string;
+  total_amount: string;
+  lines: V2PreviewLine[];
+}
+
+export interface V2DuplicateWarning {
+  code: string;
+  name: string | null;
+}
+
+export interface V2DuplicateResult {
+  quotation: V2Quotation;
+  /** Falso cuando ya había un borrador abierto de la misma: el doble clic no crea otro. */
+  created: boolean;
+  warnings: V2DuplicateWarning[];
+}
+
+export interface V2SendToProductionResult {
+  handoff: V2ProductionHandoff;
+  created: boolean;
+}
+
+export interface V2HistoryEvent {
+  event: string;
+  at: string;
+  user_name: string | null;
+  details: Record<string, string | null>;
+}
 
 export const V2_PRODUCTION_TYPE_LABEL: Record<V2ProductionType, string> = {
   RETAIL: "Por menor",
