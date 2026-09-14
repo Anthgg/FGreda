@@ -437,7 +437,9 @@ describe("anular, PDF e historial (Fase 010H)", () => {
 
     const ciclo = await screen.findByTestId("v2-ciclo-de-vida");
     expect(within(ciclo).getByTestId("v2-estado-efectivo")).toHaveTextContent("Emitida");
-    expect(within(ciclo).queryByRole("button", { name: /duplicar/i })).not.toBeInTheDocument();
+    for (const accion of [/duplicar/i, /enviar a producción/i, /anular/i, /descargar pdf/i]) {
+      expect(within(ciclo).queryByRole("button", { name: accion })).not.toBeInTheDocument();
+    }
   });
 });
 

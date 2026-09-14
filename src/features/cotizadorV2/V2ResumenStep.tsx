@@ -325,7 +325,7 @@ export function V2ResumenStep({
         ) : null}
       </section>
 
-      {cotizacion?.status === "DRAFT" ? (
+      {cotizacion?.status === "DRAFT" && cotizacion.effective_status !== undefined ? (
         <V2EmitirCotizacion quotationId={cotizacion.id} irAPaso={irAPaso} />
       ) : null}
 

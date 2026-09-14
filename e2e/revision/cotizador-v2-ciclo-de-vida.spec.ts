@@ -1,3 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
@@ -15,11 +20,11 @@ import { testName } from "../helpers/fixtures";
  * sube el tipo de cambio de la casa de 3,70 a 3,82
  * (`tests/e2e/servidor_revision.py::sembrar_cotizacion_vencida`).
  *
- * El texto del PDF se extrae con `pypdf` en las pruebas PostgreSQL del backend
- * (`tests/db/test_quoter_v2_lifecycle_api.py`), que buscan ahí los términos
- * prohibidos. Aquí se comprueba el recorrido de punta a punta: que el PDF lo
- * sirve el backend a la sesión, que es un PDF, y que nada interno aparece en lo
- * que la pantalla presenta como documento del cliente.
+ * El texto del PDF descargado se extrae DE VERDAD: WeasyPrint comprime los
+ * flujos y codifica los glifos, así que buscar palabras en los bytes daría un
+ * verde vacío (revisión de Codex). Se usa el `pypdf` del entorno del backend de
+ * revisión, que el job ya instaló: `E2E_PDF_PYTHON` apunta a ese intérprete, y
+ * sin él la prueba falla en vez de saltarse.
  */
 
 const NOMBRE_VENCIDA = "E2E-SEMILLA-VENCIDA-USD";
@@ -108,12 +113,61 @@ async function abrirDialogoDeEmision(page: Page) {
   return dialogo;
 }
 
-async function comprobarPdf(api: APIRequestContext, id: number): Promise<void> {
+const EXTRAER_TEXTO = [
+  "import sys",
+  "from pypdf import PdfReader",
+  "sys.stdout.reconfigure(encoding='utf-8')",
+  "print(chr(10).join((p.extract_text() or '') for p in PdfReader(sys.argv[1]).pages))",
+].join("\n");
+
+/** El PDF de la sesión, validado como PDF, y su texto extraído. */
+async function textoDelPdf(api: APIRequestContext, id: number): Promise<string> {
   const respuesta = await api.get(`/api/v1/quotations-v2/${id}/pdf`);
   expect(respuesta.status()).toBe(200);
   expect(respuesta.headers()["content-type"]).toContain("application/pdf");
   const cuerpo = await respuesta.body();
   expect(cuerpo.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+
+  const python = process.env.E2E_PDF_PYTHON;
+  expect(python, "E2E_PDF_PYTHON tiene que apuntar al Python del backend (con pypdf)").toBeTruthy();
+  const carpeta = mkdtempSync(join(tmpdir(), "greda-pdf-"));
+  try {
+    const fichero = join(carpeta, "cotizacion.pdf");
+    writeFileSync(fichero, cuerpo);
+    const texto = execFileSync(python as string, ["-c", EXTRAER_TEXTO, fichero], {
+      encoding: "utf-8",
+    });
+    expect(texto.trim().length, "el PDF no tiene texto extraíble").toBeGreaterThan(0);
+    return texto;
+  } finally {
+    rmSync(carpeta, { recursive: true, force: true });
+  }
+}
+
+/** Sin espacios ni mayúsculas: `pypdf` reparte los blancos como quiere. */
+function compacto(texto: string): string {
+  return texto.replace(/\s+/g, "").toLowerCase();
+}
+
+const PROHIBIDOS_PDF = [
+  "costoreal",
+  "costodeproducción",
+  "costodeproduccion",
+  "gasreal",
+  "ganancia",
+  "margen",
+  "tarifaporhora",
+  "factor",
+  "rendimiento",
+  "stock",
+];
+
+async function comprobarPdf(api: APIRequestContext, id: number): Promise<string> {
+  const texto = compacto(await textoDelPdf(api, id));
+  for (const prohibido of PROHIBIDOS_PDF) {
+    expect(texto, `el PDF contiene «${prohibido}»`).not.toContain(prohibido);
+  }
+  return texto;
 }
 
 async function historial(page: Page): Promise<string[]> {
@@ -171,7 +225,11 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const descarga = page.waitForEvent("download");
     await ciclo.getByRole("button", { name: "Descargar PDF" }).click();
     expect((await descarga).suggestedFilename()).toMatch(/\.pdf$/);
-    await comprobarPdf(page.request, id);
+    const pdf = await comprobarPdf(page.request, id);
+    const cabecera = await (await page.request.get(`/api/v1/quotations-v2/${id}`)).json();
+    for (const permitido of [cabecera.code, "clientee2e", "plato", "igv", "total", "válidahasta"]) {
+      expect(pdf, `el PDF no contiene «${permitido}»`).toContain(compacto(String(permitido)));
+    }
   });
 
   test("CASO 5: doble envío a producción → una sola transición", async ({ page }) => {
@@ -231,7 +289,11 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const documento = page.getByTestId("v2-documento-emitido");
     await expect(documento).toContainText("TC 3.700");
     const totalAntiguo = await documento.getByText(/^Total:/).innerText();
-    await comprobarPdf(page.request, antiguaId);
+    const pdfAntes = await comprobarPdf(page.request, antiguaId);
+    expect(pdfAntes).toContain("3.70");
+    const previaAntigua = await (
+      await page.request.get(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`)
+    ).json();
 
     await ciclo.getByRole("button", { name: "Duplicar y actualizar precios" }).dblclick();
     await expect(page.getByTestId("v2-avisos-duplicacion")).toContainText(
@@ -247,6 +309,14 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(nueva.currency_code).toBe("USD");
     expect(Number(nueva.exchange_rate)).toBeCloseTo(3.82, 6);
     expect(nueva.code).not.toBe(semilla.code);
+    // Precios de hoy: con el mismo costo en soles y un dólar más caro, los
+    // unitarios en USD se recalculan y ya no son los de la vencida.
+    const previaNueva = await (
+      await page.request.get(`/api/v1/quotations-v2/${nuevaId}/confirmation-preview`)
+    ).json();
+    expect(previaNueva.lines).toHaveLength(previaAntigua.lines.length);
+    expect(Number(previaNueva.exchange_rate)).toBeCloseTo(3.82, 6);
+    expect(previaNueva.total_amount).not.toBe(previaAntigua.total_amount);
 
     // Un solo borrador abierto aunque se pulse otra vez.
     const otra = await page.request.post(`/api/v1/quotations-v2/${antiguaId}/duplicate`, {
@@ -268,11 +338,17 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const antigua = await (await page.request.get(`/api/v1/quotations-v2/${antiguaId}`)).json();
     expect(antigua.status).toBe("CONFIRMED");
     expect(Number(antigua.exchange_rate)).toBeCloseTo(3.7, 6);
-    await comprobarPdf(page.request, antiguaId);
+    const pdfDespues = await comprobarPdf(page.request, antiguaId);
+    expect(pdfDespues).toBe(pdfAntes);
+    expect(pdfDespues).not.toContain("3.82");
+    const previaDespues = await (
+      await page.request.get(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`)
+    ).json();
+    expect(previaDespues.total_amount).toBe(previaAntigua.total_amount);
   });
 
   test("CASO 8: multiproducto emitido lleva todas sus líneas al documento", async ({ page }) => {
-    await borradorCompleto(page, "V2-Multi-Emitir", ["Taza", "Fuente"]);
+    const id = await borradorCompleto(page, "V2-Multi-Emitir", ["Taza", "Fuente"]);
     const dialogo = await abrirDialogoDeEmision(page);
     await expect(dialogo.getByTestId("emision-lineas").locator("tbody tr")).toHaveCount(2);
     await dialogo.getByRole("button", { name: "Confirmar y emitir" }).click();
@@ -281,5 +357,17 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const documento = page.getByTestId("v2-documento-emitido");
     await expect(documento.locator("tbody tr")).toHaveCount(2, { timeout: 15_000 });
     await expect(documento).not.toContainText(PROHIBIDOS);
+
+    const previa = await (
+      await page.request.get(`/api/v1/quotations-v2/${id}/confirmation-preview`)
+    ).json();
+    const suma = previa.lines.reduce(
+      (total: number, linea: { line_subtotal: string }) => total + Number(linea.line_subtotal),
+      0,
+    );
+    expect(suma).toBeCloseTo(Number(previa.subtotal_amount), 6);
+    const pdf = await comprobarPdf(page.request, id);
+    expect(pdf).toContain("taza");
+    expect(pdf).toContain("fuente");
   });
 });

@@ -151,6 +151,9 @@ export function V2CicloDeVida({
   // Sin estado efectivo (backend anterior a 010H) se cae al persistido, que
   // nunca dice «vencida»: ofrecer menos acciones es preferible a inventar una.
   const estado: V2EffectiveStatus = cotizacion.effective_status ?? cotizacion.status;
+  // Y sin él NO se ofrece ninguna acción de 010H: un backend que no sabe decir
+  // si la oferta venció tampoco garantiza emitir, duplicar ni pasar a producción.
+  const conCicloDeVida = cotizacion.effective_status !== undefined;
   const pdf = useDescargaPdf(cotizacion.id);
   const anular = useCancelV2Quotation(cotizacion.id);
   const duplicar = useDuplicateV2Quotation(cotizacion.id);
@@ -158,9 +161,10 @@ export function V2CicloDeVida({
   const [dialogo, setDialogo] = useState<"anular" | "produccion" | null>(null);
   const [motivo, setMotivo] = useState("");
 
-  const emitida = cotizacion.issued_at !== null;
-  const puedeDuplicar = estado === "EXPIRED" || estado === "CANCELLED";
-  const puedeAnular = estado === "DRAFT" || estado === "CONFIRMED" || estado === "EXPIRED";
+  const emitida = conCicloDeVida && cotizacion.issued_at != null;
+  const puedeDuplicar = conCicloDeVida && (estado === "EXPIRED" || estado === "CANCELLED");
+  const puedeAnular =
+    conCicloDeVida && (estado === "DRAFT" || estado === "CONFIRMED" || estado === "EXPIRED");
 
   const alDuplicar = () =>
     duplicar.mutate(undefined, {
@@ -265,7 +269,7 @@ export function V2CicloDeVida({
           </SecondaryButton>
         ) : null}
 
-        {estado === "CONFIRMED" ? (
+        {conCicloDeVida && estado === "CONFIRMED" ? (
           <PrimaryButton type="button" onClick={() => setDialogo("produccion")}>
             Enviar a producción
           </PrimaryButton>

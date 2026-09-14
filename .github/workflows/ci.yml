@@ -493,6 +493,9 @@ jobs:
       - name: E2E de la revision
         env:
           E2E_BASE_URL: http://localhost:4173
+          # Fase 010H: el texto del PDF se extrae con el pypdf del backend de la
+          # revision, ya instalado en su entorno.
+          E2E_PDF_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
         run: npx playwright test -c playwright.revision.config.ts
 
       - name: Apagar backend y app
