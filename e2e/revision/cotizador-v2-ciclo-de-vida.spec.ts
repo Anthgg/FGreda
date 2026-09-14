@@ -347,6 +347,66 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(previaDespues.total_amount).toBe(previaAntigua.total_amount);
   });
 
+  test("CATÁLOGO: una pieza del maestro trae sus medidas y gramaje, se emite y llega al PDF", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/cotizador-v2");
+    await page.getByLabel(/referencia/i).fill(testName("V2-Catalogo"));
+    await page.getByRole("button", { name: /crear cotizaci[oó]n v2/i }).click();
+    await expect(page.getByTestId("pasos-cotizacion")).toBeVisible({ timeout: 15_000 });
+    const id = idDeLaUrl(page);
+
+    await paso(page, 1, "Cliente").click();
+    await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
+    await page.getByRole("option").nth(1).click();
+
+    // Una pieza del CATÁLOGO, no de encargo.
+    await paso(page, 2, "Productos").click();
+    await page.getByRole("combobox", { name: /pieza del cat[aá]logo/i }).click();
+    await page.getByRole("option", { name: "E2E-Catalogo Plato hondo 22" }).click();
+    await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
+    await expect(page.getByRole("heading", { name: "E2E-Catalogo Plato hondo 22" })).toBeVisible({
+      timeout: 15_000,
+    });
+    // El nombre lo fija el catálogo y las medidas vienen del maestro.
+    await expect(page.getByLabel(/largo \(cm\)/i).last()).toHaveValue(/^22/);
+    await expect(page.getByLabel(/alto \(cm\)/i).last()).toHaveValue(/^5/);
+    const cantidad = page.getByLabel(/^cantidad/i).last();
+    await cantidad.fill("12");
+    await cantidad.blur();
+    await esperarGuardado(page);
+
+    // La pasta se elige; el peso por pieza ya viene del gramaje del maestro.
+    await paso(page, 3, "Materiales").click();
+    await page.getByRole("combobox", { name: "Pasta", exact: true }).first().click();
+    await page.getByRole("option").nth(1).click();
+    await esperarGuardado(page);
+    await expect(page.getByLabel(/pasta por pieza/i).first()).toHaveValue(/^450/);
+
+    await paso(page, 4, "Mano de obra").click();
+    const dias = page.getByLabel(/d[ií]as efectivos/i);
+    await dias.fill("1");
+    await dias.blur();
+    await esperarGuardado(page);
+    await paso(page, 7, "Resumen").click();
+    await esperarGuardado(page);
+
+    const dialogo = await abrirDialogoDeEmision(page);
+    await expect(dialogo.getByTestId("emision-lineas")).toContainText("E2E-Catalogo Plato hondo 22");
+    await dialogo.getByRole("button", { name: "Confirmar y emitir" }).click();
+    await expect(dialogo).toBeHidden({ timeout: 20_000 });
+
+    const lineas = await (await page.request.get(`/api/v1/quotations-v2/${id}/products`)).json();
+    expect(lineas.items).toHaveLength(1);
+    expect(lineas.items[0].product_id).not.toBeNull();
+    expect(Number(lineas.items[0].body_unit_weight)).toBeCloseTo(450, 6);
+
+    const pdf = await comprobarPdf(page.request, id);
+    expect(pdf).toContain(compacto("E2E-Catalogo Plato hondo 22"));
+    expect(pdf).toContain("largo:22cm");
+  });
+
   test("CASO 8: multiproducto emitido lleva todas sus líneas al documento", async ({ page }) => {
     const id = await borradorCompleto(page, "V2-Multi-Emitir", ["Taza", "Fuente"]);
     const dialogo = await abrirDialogoDeEmision(page);
