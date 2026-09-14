@@ -219,9 +219,29 @@ export function V2EmitirCotizacion({
                   </div>
                 </dl>
 
+                {datos.customer_document || datos.customer_address ? (
+                  <p data-testid="emision-datos-cliente" className="mt-2 text-xs text-zinc-600">
+                    {[datos.customer_document, datos.customer_address, datos.customer_email, datos.customer_phone]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : null}
+
                 <div className="mt-4">
                   <TablaDelDocumento resumen={datos} />
                 </div>
+
+                {datos.client_notes || datos.conditions || datos.payment_notes ? (
+                  <div
+                    data-testid="emision-condiciones"
+                    className="mt-3 space-y-1 whitespace-pre-line rounded-xl border border-black/[0.06] p-3 text-xs text-zinc-600"
+                  >
+                    <p className="font-semibold text-zinc-800">Condiciones que irán en el documento</p>
+                    {datos.client_notes ? <p>{datos.client_notes}</p> : null}
+                    {datos.conditions ? <p>{datos.conditions}</p> : null}
+                    {datos.payment_notes ? <p>{datos.payment_notes}</p> : null}
+                  </div>
+                ) : null}
 
                 {datos.blockers.length > 0 ? (
                   <div

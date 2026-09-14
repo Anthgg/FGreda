@@ -203,6 +203,13 @@ export interface V2ConfirmationPreview {
   /** Se devuelve al confirmar: si el documento cambió entre medias, el backend responde 409. */
   fingerprint: string;
   customer_name: string | null;
+  /** Lo que el PDF dirá del cliente y las condiciones. Entra en la huella. */
+  customer_document?: string | null;
+  customer_address?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  conditions?: string | null;
+  payment_notes?: string | null;
   name: string | null;
   client_notes: string | null;
   currency_code: string | null;

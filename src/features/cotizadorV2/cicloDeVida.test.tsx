@@ -98,6 +98,12 @@ const PREVIEW = {
   warnings: [],
   fingerprint: "a".repeat(64),
   customer_name: "Cerámicas Andinas SAC",
+  customer_document: "RUC: 20600000001",
+  customer_address: "Jr. Barro 456, Lima",
+  customer_email: null,
+  customer_phone: null,
+  conditions: "Adelanto del 50 %.",
+  payment_notes: "Transferencia bancaria.",
   name: "Pedido interno",
   client_notes: null,
   currency_code: "PEN",
@@ -455,6 +461,13 @@ describe("emitir una cotización V2 (Fase 010H)", () => {
     expect(await within(dialogo).findByTestId("emision-total")).toHaveTextContent("S/ 1121.00");
     expect(within(dialogo).getByTestId("emision-vigencia")).toHaveTextContent("03/10/2026");
     expect(within(dialogo).getByText("Plato hondo")).toBeInTheDocument();
+    // Lo que el PDF dirá del cliente y las condiciones también se revisa aquí.
+    expect(within(dialogo).getByTestId("emision-datos-cliente")).toHaveTextContent(
+      "RUC: 20600000001 · Jr. Barro 456, Lima",
+    );
+    expect(within(dialogo).getByTestId("emision-condiciones")).toHaveTextContent(
+      "Transferencia bancaria.",
+    );
     expect(within(dialogo).getByTestId("emision-aviso-congelado")).toHaveTextContent(
       "Al confirmar, los valores comerciales quedarán congelados.",
     );
