@@ -6,6 +6,7 @@ import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describirBloqueo } from "@/features/cotizadorV2/mensajesCicloDeVida";
 import type { PasoId } from "@/features/cotizadorV2/pasos";
+import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
 import { useEstadoDeGuardado } from "@/features/cotizadorV2/useEstadoDeGuardado";
 import {
   useConfirmV2Quotation,
@@ -104,6 +105,7 @@ export function V2EmitirCotizacion({
   const [cambio, setCambio] = useState(false);
   const resumen = useV2ConfirmationPreview(quotationId, abierto);
   const confirmar = useConfirmV2Quotation(quotationId);
+  const contenedor = useDialogoAccesible<HTMLDivElement>(abierto);
 
   const cerrar = () => {
     setAbierto(false);
@@ -155,6 +157,7 @@ export function V2EmitirCotizacion({
 
       {abierto ? (
         <div
+          ref={contenedor}
           role="dialog"
           aria-modal="true"
           aria-label="Confirmar y emitir la cotización"

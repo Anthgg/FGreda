@@ -6,6 +6,7 @@ import { formatDisplayDate } from "@/components/dateFormat";
 import { PrimaryButton, SecondaryButton, TextAreaField } from "@/components/form";
 import { fechaLima } from "@/features/cotizadorV2/fechaLima";
 import { describirAvisoDeDuplicacion } from "@/features/cotizadorV2/mensajesCicloDeVida";
+import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
 import {
   useCancelV2Quotation,
   useDuplicateV2Quotation,
@@ -55,7 +56,19 @@ const SIMBOLO: Record<V2EffectiveStatus, string> = {
   CANCELLED: "✕",
 };
 
-export function EstadoV2({ estado }: { estado: V2EffectiveStatus }) {
+export function EstadoV2({ estado }: { estado: V2EffectiveStatus | undefined }) {
+  // Un backend anterior a 010H no manda el estado efectivo. Se dice que no se
+  // conoce, con palabras, en vez de pintar un distintivo vacío.
+  if (!estado || !(estado in V2_EFFECTIVE_STATUS_LABEL)) {
+    return (
+      <span
+        data-testid="v2-estado-efectivo"
+        className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-300"
+      >
+        Estado no disponible
+      </span>
+    );
+  }
   return (
     <span
       data-testid="v2-estado-efectivo"
@@ -76,8 +89,10 @@ function Dialogo({
   children: React.ReactNode;
   onCerrar: () => void;
 }) {
+  const contenedor = useDialogoAccesible<HTMLDivElement>(true);
   return (
     <div
+      ref={contenedor}
       role="dialog"
       aria-modal="true"
       aria-label={titulo}
@@ -124,13 +139,18 @@ function useDescargaPdf(id: number) {
 export function V2CicloDeVida({
   cotizacion,
   avisosDeDuplicacion,
+  duplicacionCreada = true,
 }: {
   cotizacion: V2Quotation;
   /** Lo que la duplicación no pudo traer, cuando se acaba de llegar desde ella. */
   avisosDeDuplicacion?: readonly V2DuplicateWarning[] | undefined;
+  /** Falso cuando el backend devolvió el borrador que YA estaba abierto. */
+  duplicacionCreada?: boolean | undefined;
 }) {
   const navigate = useNavigate();
-  const estado = cotizacion.effective_status;
+  // Sin estado efectivo (backend anterior a 010H) se cae al persistido, que
+  // nunca dice «vencida»: ofrecer menos acciones es preferible a inventar una.
+  const estado: V2EffectiveStatus = cotizacion.effective_status ?? cotizacion.status;
   const pdf = useDescargaPdf(cotizacion.id);
   const anular = useCancelV2Quotation(cotizacion.id);
   const duplicar = useDuplicateV2Quotation(cotizacion.id);
@@ -146,7 +166,11 @@ export function V2CicloDeVida({
     duplicar.mutate(undefined, {
       onSuccess: (resultado) =>
         navigate(`/cotizador-v2/${resultado.quotation.id}`, {
-          state: { avisosDeDuplicacion: resultado.warnings, duplicadaDe: cotizacion.code },
+          state: {
+            avisosDeDuplicacion: resultado.warnings,
+            duplicacionCreada: resultado.created,
+            duplicadaDe: cotizacion.code,
+          },
         }),
     });
 
@@ -213,10 +237,14 @@ export function V2CicloDeVida({
           role="status"
           className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-xs text-sky-900"
         >
-          <p className="font-semibold">Cotización nueva creada a partir de una anterior.</p>
+          <p className="font-semibold">
+            {duplicacionCreada
+              ? "Cotización nueva creada a partir de una anterior."
+              : "Ya había un borrador duplicado de esa cotización: se abrió ese en lugar de crear otro."}
+          </p>
           <p className="mt-1">
             Precios, tipo de cambio, IGV, tarifas y vigencia se recalcularon con la configuración de
-            hoy. La cotización original no cambió.
+            hoy al duplicar. La cotización original no cambió.
           </p>
           {avisosDeDuplicacion.length > 0 ? (
             <ul className="mt-2 list-disc space-y-1 pl-5">

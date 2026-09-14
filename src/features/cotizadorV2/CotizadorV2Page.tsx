@@ -153,6 +153,7 @@ function FlowOutline() {
 /** Lo que la duplicación deja en el estado de la navegación al llegar aquí. */
 interface EstadoDeLlegada {
   avisosDeDuplicacion?: V2DuplicateWarning[];
+  duplicacionCreada?: boolean;
 }
 
 function V2QuotationDetail({ id }: { id: number }) {
@@ -182,6 +183,7 @@ function V2QuotationDetail({ id }: { id: number }) {
       <V2CicloDeVida
         cotizacion={quotation}
         avisosDeDuplicacion={llegada?.avisosDeDuplicacion}
+        duplicacionCreada={llegada?.duplicacionCreada}
       />
       <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>

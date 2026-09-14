@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
 import {
@@ -282,6 +282,162 @@ describe("estado de la cotización V2 (Fase 010H)", () => {
       String(url).includes("/send-to-production"),
     );
     expect(posts).toHaveLength(1);
+  });
+});
+
+describe("anular, PDF e historial (Fase 010H)", () => {
+  it("anular pide confirmación, manda el motivo y el foco entra en el diálogo", async () => {
+    const user = userEvent.setup();
+    const cuerpos: string[] = [];
+    mockV2(EMITIDA, (url, init) => {
+      if (url.endsWith("/cancel") && init.method === "POST") {
+        cuerpos.push(String(init.body));
+        return jsonResponse(200, {
+          ...EMITIDA,
+          status: "CANCELLED",
+          effective_status: "CANCELLED",
+          cancelled_at: "2026-09-12T15:00:00Z",
+          cancel_reason: "Cliente desistió",
+        });
+      }
+      return undefined;
+    });
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    await user.click(await screen.findByRole("button", { name: "Anular cotización" }));
+    const dialogo = await screen.findByRole("dialog", { name: "Anular cotización" });
+    expect(dialogo).toHaveTextContent(/conserva sus valores y su PDF/i);
+    expect(dialogo.contains(document.activeElement)).toBe(true);
+    await user.type(within(dialogo).getByLabelText(/motivo/i), "Cliente desistió");
+    await user.click(within(dialogo).getByRole("button", { name: "Anular cotización" }));
+
+    await waitFor(() => expect(cuerpos).toHaveLength(1));
+    expect(JSON.parse(cuerpos[0] ?? "{}")).toEqual({ reason: "Cliente desistió" });
+  });
+
+  it("Escape cierra el diálogo y devuelve el foco al botón que lo abrió", async () => {
+    const user = userEvent.setup();
+    mockV2(EMITIDA);
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    const boton = await screen.findByRole("button", { name: "Enviar a producción" });
+    await user.click(boton);
+    await screen.findByRole("dialog", { name: "Enviar a producción" });
+    await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Enviar a producción" })).not.toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(boton);
+  });
+
+  it("descargar PDF pide el binario al backend y lo entrega con su nombre", async () => {
+    const user = userEvent.setup();
+    const crear = vi.fn(() => "blob:greda-pdf");
+    const revocar = vi.fn();
+    // jsdom no implementa object URLs ni la navegación de un enlace de descarga.
+    const originales = { crear: URL.createObjectURL, revocar: URL.revokeObjectURL };
+    URL.createObjectURL = crear;
+    URL.revokeObjectURL = revocar;
+    const clic = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const fetchSpy = mockV2(EMITIDA, (url) => {
+      if (url.endsWith("/quotations-v2/7/pdf")) {
+        return new Response(new Blob(["%PDF-1.7"]), {
+          status: 200,
+          headers: {
+            "content-type": "application/pdf",
+            "content-disposition": 'attachment; filename="CTZ-V2-2026-000007.pdf"',
+          },
+        });
+      }
+      return undefined;
+    });
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    await user.click(await screen.findByRole("button", { name: "Descargar PDF" }));
+
+    try {
+      await waitFor(() => expect(crear).toHaveBeenCalledTimes(1));
+      expect(clic).toHaveBeenCalledTimes(1);
+      expect(
+        fetchSpy.mock.calls.filter(([url]) => String(url).endsWith("/quotations-v2/7/pdf")),
+      ).toHaveLength(1);
+    } finally {
+      clic.mockRestore();
+      URL.createObjectURL = originales.crear;
+      URL.revokeObjectURL = originales.revocar;
+    }
+  });
+
+  it("un PDF que falla se explica sin enseñar el código", async () => {
+    const user = userEvent.setup();
+    mockV2(EMITIDA, (url) => {
+      if (url.endsWith("/pdf")) return errorResponse(409, "V2_QUOTATION_PDF_NOT_ISSUED");
+      return undefined;
+    });
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    await user.click(await screen.findByRole("button", { name: "Descargar PDF" }));
+    const alerta = await within(screen.getByTestId("v2-ciclo-de-vida")).findByRole("alert");
+    expect(alerta).toHaveTextContent(/no tiene documento/i);
+    expect(alerta).not.toHaveTextContent("V2_");
+  });
+
+  it("el historial de una emitida dice quién hizo qué y cuándo", async () => {
+    mockV2(EMITIDA, (url) => {
+      if (url.endsWith("/history")) {
+        return jsonResponse(200, [
+          { event: "CREATED", at: "2026-09-10T15:00:00Z", user_name: "Ana", details: {} },
+          {
+            event: "CONFIRMED",
+            at: "2026-09-11T02:30:00Z",
+            user_name: "Ana Emisora",
+            details: { code: "CTZ-V2-2026-000007" },
+          },
+          {
+            event: "DUPLICATED",
+            at: "2026-10-05T15:00:00Z",
+            user_name: "Luis",
+            details: { new_code: "CTZ-V2-2026-000012" },
+          },
+        ]);
+      }
+      return undefined;
+    });
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    const lista = await screen.findByTestId("v2-historial");
+    await waitFor(() => expect(within(lista).getAllByRole("listitem")).toHaveLength(3));
+    expect(lista).toHaveTextContent("Emitida · 10/09/2026 · Ana Emisora");
+    expect(lista).toHaveTextContent("Duplicada en una cotización nueva · 05/10/2026 · Luis · CTZ-V2-2026-000012");
+    expect(lista).not.toHaveTextContent(/CONFIRMED|DUPLICATED/);
+  });
+
+  it("si el borrador duplicado ya existía, no dice que se creó uno nuevo", async () => {
+    const user = userEvent.setup();
+    const ABIERTA = { ...BASE, id: 12, code: "CTZ-V2-2026-000012", duplicated_from_id: 7 };
+    mockV2({ ...EMITIDA, effective_status: "EXPIRED" }, (url, init) => {
+      if (url.endsWith("/duplicate") && init.method === "POST") {
+        return jsonResponse(200, { quotation: ABIERTA, created: false, warnings: [] });
+      }
+      if (/\/quotations-v2\/12$/.test(url)) return jsonResponse(200, ABIERTA);
+      return undefined;
+    });
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    await user.click(await screen.findByRole("button", { name: "Duplicar y actualizar precios" }));
+    const avisos = await screen.findByTestId("v2-avisos-duplicacion");
+    expect(avisos).toHaveTextContent(/ya había un borrador duplicado/i);
+    expect(avisos).not.toHaveTextContent(/cotización nueva creada/i);
+  });
+
+  it("sin estado efectivo (backend anterior) lo dice con palabras y no ofrece duplicar", async () => {
+    const { effective_status: _omitido, ...sinEstado } = EMITIDA;
+    mockV2(sinEstado);
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    const ciclo = await screen.findByTestId("v2-ciclo-de-vida");
+    expect(within(ciclo).getByTestId("v2-estado-efectivo")).toHaveTextContent("Emitida");
+    expect(within(ciclo).queryByRole("button", { name: /duplicar/i })).not.toBeInTheDocument();
   });
 });
 

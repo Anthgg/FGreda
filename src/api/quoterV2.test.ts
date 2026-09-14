@@ -54,6 +54,7 @@ const V2_MODULES = [
   "features/cotizadorV2/V2DocumentoEmitido.tsx",
   "features/cotizadorV2/mensajesCicloDeVida.ts",
   "features/cotizadorV2/fechaLima.ts",
+  "features/cotizadorV2/useDialogoAccesible.ts",
 ];
 
 describe("cliente del Cotizador V2", () => {
