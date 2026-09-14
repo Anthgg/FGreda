@@ -501,8 +501,14 @@ function CargarTrabajador({
   );
   const linea = (productos.data?.items ?? []).find((fila) => fila.id === productoId);
 
+  // Otro trabajador u otro producto es otro contexto: sus técnicas vuelven a
+  // salir todas marcadas, sin arrastrar lo que se desmarcó para el anterior.
   const elegirTrabajador = (valor: string) => {
     setWorker(valor);
+    setDesmarcadas([]);
+  };
+  const elegirProducto = (valor: string) => {
+    setProducto(valor);
     setDesmarcadas([]);
   };
 
@@ -538,7 +544,7 @@ function CargarTrabajador({
               label: fila.product_name ?? `Línea ${fila.id}`,
             })),
           ]}
-          onChange={setProducto}
+          onChange={elegirProducto}
           hint={
             linea
               ? `Las piezas nacen en ${linea.quantity}, la cantidad de este producto.`

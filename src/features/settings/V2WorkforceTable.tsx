@@ -178,11 +178,15 @@ function WorkersTable({ canEdit }: { canEdit: boolean }) {
   const [editando, setEditando] = useState<{ id: number; ids: number[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (query.isPending) return <Spinner className="size-5" label="Cargando trabajadores..." />;
-  if (query.isError) {
+  // Sin el catálogo de técnicas no se sabe qué sabe hacer nadie: mostrar ids
+  // crudos o editar con un catálogo a medias sería peor que esperar.
+  if (query.isPending || catalogo.isPending) {
+    return <Spinner className="size-5" label="Cargando trabajadores..." />;
+  }
+  if (query.isError || catalogo.isError) {
     return (
       <div role="alert" className="text-sm text-red-700">
-        {describeError(query.error)}
+        {describeError(query.error ?? catalogo.error)}
       </div>
     );
   }

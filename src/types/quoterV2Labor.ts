@@ -99,6 +99,7 @@ export interface V2TechniqueUpdateInput {
   default_capacity_per_workday?: string;
   unit?: string;
   requires_glaze?: boolean;
+  manual_hours?: boolean;
   active?: boolean;
   notes?: string | null;
 }

@@ -442,6 +442,25 @@ describe("Cargar a un trabajador con sus técnicas (corrección 010H)", () => {
     });
   });
 
+  it("cambiar de producto vuelve a marcar lo que se desmarcó para el anterior", async () => {
+    mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByText("Celso · Vidriado");
+
+    await elegir(user, "Trabajador", "Celso");
+    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
+    await user.click(within(grupo).getByRole("checkbox", { name: /Armado de asa/ }));
+    expect(within(grupo).getByRole("checkbox", { name: /Armado de asa/ })).not.toBeChecked();
+
+    await elegir(user, "Producto", "Plato palta");
+    expect(
+      within(await screen.findByTestId("tecnicas-del-trabajador")).getByRole("checkbox", {
+        name: /Armado de asa/,
+      }),
+    ).toBeChecked();
+  });
+
   it("un trabajador sin técnicas lo dice y no ofrece añadir", async () => {
     mockV2();
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
