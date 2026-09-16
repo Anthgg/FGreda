@@ -1,5 +1,6 @@
 import { formatMoney } from "@/utils/formatters";
-
+import { fetchV2QuotationPdf } from "@/api/quoterV2";
+import { useState } from "react";
 import { TableWrapper, Th, Td } from "@/features/cotizadorV2/components/V2Table";
 import {
   esMonedaExtranjera,
@@ -60,8 +61,28 @@ export function V2ResumenStep({
   estados: readonly EstadoPaso[];
   irAPaso: (paso: PasoId) => void;
 }) {
-    const { cotizacion, productos, manoDeObra, quema, precio } = datos;
+  const { cotizacion, productos, manoDeObra, quema, precio } = datos;
   const dinero = (valor: string | null | undefined) => formatMoney(valor, cotizacion?.currency_code ?? "PEN");
+
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!cotizacion) return;
+    try {
+      setDownloading(true);
+      const { blob, filename } = await fetchV2QuotationPdf(cotizacion.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `Cotizacion-${cotizacion.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const pendientes = estados.filter((estado) => estado.id !== "resumen" && !estado.completo);
   const senales = estados.flatMap((estado) =>
@@ -83,15 +104,29 @@ export function V2ResumenStep({
              Documento de revisión interno. 100% Read-Only.
            </p>
         </div>
-        {pendientes.length === 0 ? (
-          <div data-testid="resumen-listo" className="bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-full border border-emerald-200">
-            LISTO PARA EMITIR
-          </div>
-        ) : (
-          <div className="bg-amber-50 text-amber-700 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-200">
-            INCOMPLETO
-          </div>
-        )}
+        
+        <div className="flex items-center gap-3">
+          {cotizacion?.status === "CONFIRMED" && (
+            <button 
+              type="button"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+            >
+              {downloading ? "Descargando..." : "Descargar PDF"}
+            </button>
+          )}
+
+          {pendientes.length === 0 ? (
+            <div data-testid="resumen-listo" className="bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-full border border-emerald-200">
+              LISTO PARA EMITIR
+            </div>
+          ) : (
+            <div className="bg-amber-50 text-amber-700 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-200">
+              INCOMPLETO
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ALERTAS BLOQUEANTES */}
@@ -180,7 +215,7 @@ export function V2ResumenStep({
             <section data-testid="resumen-precio" className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-xs">
               <h3 className="text-xs font-bold text-emerald-900 uppercase tracking-wider mb-5 border-b border-emerald-900/10 pb-2">Estructura de Precio</h3>
               <dl className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-6">
-                  <div className="col-span-full text-xs text-zinc-500 font-medium">Por {precio?.effective_days ?? 0} días efectivos.</div>
+                  {manoDeObra?.effective_work_days != null && (<div className="col-span-full text-xs text-zinc-500 font-medium">Por {manoDeObra.effective_work_days} días efectivos.</div>)}
                 <Cifra label="Costo de Producción" value={dinero(precio?.production_cost)} />
                 <Cifra label="Factor Comercial" value={precio?.commercial_factor ? `×${Number(precio.commercial_factor).toFixed(2)}` : "—"} />
                 <Cifra 

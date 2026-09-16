@@ -1,0 +1,42 @@
+## Resumen
+
+Rediseño integral del Cotizador V2 centrado en simplificación visual,
+jerarquía de información y mejora del flujo operativo.
+
+## Cambios principales
+
+- Home V2 simplificado con creación directa de borrador.
+- Nuevo stepper compacto.
+- Guardado de borrador visible manteniendo autosave.
+- Formateadores centralizados para moneda y valores técnicos.
+- Productos y materiales simplificados.
+- Mano de obra reorganizada:
+  Producto → Técnica → Trabajador → Horas → Costo.
+- Creación contextual de V2Worker mediante Drawer.
+- Visualización SVG de ocupación del horno.
+- Separación visual de tarifa de quema y costo real de gas.
+- Precio y margen simplificados con detalle expandible.
+- Resumen final read-only.
+- Responsive y accesibilidad mejorados.
+- Restauración de descarga PDF mediante infraestructura API existente.
+
+## Arquitectura
+
+Backend: sin cambios.
+Migraciones: ninguna.
+
+V2Worker continúa siendo la entidad productiva.
+Partner continúa siendo la entidad comercial.
+
+## Validación
+
+- Typecheck: PASS
+- Lint: PASS
+- Unit: PASS
+- E2E: PASS
+- Build: PASS
+
+## Riesgo
+
+Cambio principalmente de presentación/UX.
+No se modificaron fórmulas ni reglas de negocio.

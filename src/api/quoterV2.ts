@@ -40,3 +40,7 @@ export const updateV2Quotation = (
   id: number,
   payload: V2QuotationUpdateInput,
 ): Promise<V2Quotation> => apiClient.put(`${QUOTER_V2_BASE}/${id}`, payload);
+
+export const fetchV2QuotationPdf = (id: number): Promise<{ blob: Blob; filename: string | null }> =>
+  apiClient.getBlobWithFilename(`${QUOTER_V2_BASE}/${id}/pdf`);
+
