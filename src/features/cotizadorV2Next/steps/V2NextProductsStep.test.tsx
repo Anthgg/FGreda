@@ -107,7 +107,7 @@ describe("V2NextProductsStep", () => {
     renderStep(2);
 
     expect(await screen.findByText(/Todavía no hay productos/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /\+ Agregar producto/i })[0]).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /\+ Agregar producto/i })).toBeInTheDocument();
   });
 
   it("abre modal de selección y permite agregar producto", async () => {
@@ -118,8 +118,7 @@ describe("V2NextProductsStep", () => {
     renderStep(2);
 
     const user = userEvent.setup();
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    await user.click(screen.getAllByRole("button", { name: /\+ Agregar producto/i })[0]!);
+    await user.click(await screen.findByRole("button", { name: /\+ Agregar producto/i }));
 
     const selectTrigger = await screen.findByText(/Ej: Jarra, Taza/i);
     await user.click(selectTrigger);

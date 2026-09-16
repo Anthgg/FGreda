@@ -44,7 +44,6 @@ const mockUseEstadoDeGuardado = vi.mocked(useEstadoDeGuardado);
 
 // Helper: mock de mutación — el cast a unknown es necesario porque los tipos de
 // TanStack Query son union muy amplios y no aceptan parciales directamente.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const m = (mutate = vi.fn()) => ({ mutate } as unknown as ReturnType<typeof useUpdateV2Quotation>);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const q = (data: unknown) => ({ isPending: false, isError: false, data } as any);
