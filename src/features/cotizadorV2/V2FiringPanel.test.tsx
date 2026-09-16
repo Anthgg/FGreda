@@ -79,6 +79,14 @@ const COTIZACION = {
 function mockV2(overrides: { firing?: Response; update?: Response } = {}) {
   return mockFetch((url, init) => {
     if (url.includes("/auth/csrf")) return csrfResponse();
+    // Correccion 010H: procesos de la pieza y adicionales.
+    if (url.includes("/processes")) return jsonResponse(200, { items: [], warnings: [] });
+    if (url.includes("/quoter-v2/products/")) {
+      return jsonResponse(200, { product_id: 1, items: [] });
+    }
+    if (url.includes("/extras")) {
+      return jsonResponse(200, { items: [], extras_cost_total: "0.000000", warnings: [] });
+    }
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
     if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);

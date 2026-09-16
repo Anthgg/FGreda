@@ -363,6 +363,7 @@ export const V2_PRICING: V2Pricing = {
   labor_cost: "569.066666666666666000",
   illustration_cost: "44.000000000000000000",
   space_cost: "560.000000000000000000",
+  extras_cost: "0.000000000000000000",
   administration_cost: "200.000000",
   gas_cost: "210.000000000000000000",
   firing_commercial_cost: "900.000000000000000000",

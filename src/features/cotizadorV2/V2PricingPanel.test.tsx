@@ -77,9 +77,65 @@ const COTIZACION = {
   updated_at: "2026-09-11T10:00:00Z",
 };
 
-function mockV2(overrides: { pricing?: Response; update?: Response } = {}) {
+const CONCEPTOS = {
+  items: [
+    {
+      id: 2,
+      name: "Empaque especial",
+      unit: "servicio",
+      unit_cost: "25.000000",
+      active: true,
+      notes: null,
+      version: 1,
+    },
+  ],
+};
+
+const ADICIONALES_PUESTOS = {
+  items: [
+    {
+      id: 8,
+      v2_extra_id: 2,
+      v2_quotation_product_id: null,
+      name_snapshot: "Empaque especial",
+      unit_snapshot: "servicio",
+      unit_cost_snapshot: "25.000000",
+      unit_cost_is_override: false,
+      description: null,
+      quantity: "2.000000",
+      total_cost: "50.000000000000000000",
+      sort_order: 0,
+      created_at: "2026-09-16T10:00:00Z",
+    },
+  ],
+  extras_cost_total: "50.000000000000000000",
+  warnings: [],
+};
+
+function mockV2(
+  overrides: {
+    pricing?: Response;
+    update?: Response;
+    conceptos?: Response;
+    adicionales?: Response;
+  } = {},
+) {
   return mockFetch((url, init) => {
     if (url.includes("/auth/csrf")) return csrfResponse();
+    // Correccion 010H: procesos de la pieza y adicionales.
+    if (url.includes("/processes")) return jsonResponse(200, { items: [], warnings: [] });
+    if (url.includes("/quoter-v2/products/")) {
+      return jsonResponse(200, { product_id: 1, items: [] });
+    }
+    if (url.includes("/quoter-v2/extras")) {
+      return overrides.conceptos ?? jsonResponse(200, CONCEPTOS);
+    }
+    if (url.includes("/extras")) {
+      return (
+        overrides.adicionales ??
+        jsonResponse(200, { items: [], extras_cost_total: "0.000000", warnings: [] })
+      );
+    }
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
     if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);
@@ -336,5 +392,52 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     // a cambiar de paso: un error que vive solo en el panel se pierde con el.
     expect(await within(panel).findByRole("alert")).toBeInTheDocument();
     expect(await screen.findByTestId("guardados-fallidos")).toHaveTextContent(/factor comercial/i);
+  });
+});
+
+describe("Adicionales de la cotización (corrección 010H)", () => {
+  it("se ven aparte del material y de la mano de obra, con su importe", async () => {
+    mockV2({ adicionales: jsonResponse(200, ADICIONALES_PUESTOS) });
+    renderApp(["/cotizador-v2/7/precio"]);
+
+    const seccion = await screen.findByTestId("adicionales");
+    expect(seccion).toHaveTextContent("Empaque especial");
+    expect(seccion).toHaveTextContent("50.000000000000000000");
+    // Y no se cuelan en la mano de obra: son un costo que se decide.
+    expect(seccion).toHaveTextContent(/no son material ni técnica/i);
+  });
+
+  it("añadir uno manda el concepto y a qué se aplica", async () => {
+    const fetchSpy = mockV2();
+    renderApp(["/cotizador-v2/7/precio"]);
+    const user = userEvent.setup();
+
+    const seccion = await screen.findByTestId("adicionales");
+    await user.click(within(seccion).getByRole("combobox", { name: "Añadir adicional" }));
+    await user.click(await screen.findByRole("option", { name: /Empaque especial/ }));
+    await user.click(within(seccion).getByRole("button", { name: "Añadir" }));
+
+    await waitFor(() => {
+      const alta = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/quotations-v2/7/extras") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(alta).toBeDefined();
+      expect(JSON.parse(String((alta?.[1] as RequestInit).body))).toEqual({
+        v2_extra_id: 2,
+        v2_quotation_product_id: null,
+        quantity: "1",
+      });
+    });
+  });
+
+  it("sin conceptos en el catálogo dice dónde se dan de alta", async () => {
+    mockV2({ conceptos: jsonResponse(200, { items: [] }) });
+    renderApp(["/cotizador-v2/7/precio"]);
+
+    expect(await screen.findByTestId("sin-conceptos-adicionales")).toHaveTextContent(
+      /Configuración → Cotizador V2/,
+    );
   });
 });

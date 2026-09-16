@@ -43,6 +43,14 @@ function mockSettings(overrides: Overrides = {}) {
     if (custom) return custom;
 
     if (url.includes("/auth/csrf")) return csrfResponse();
+    // Correccion 010H: procesos de la pieza y adicionales.
+    if (url.includes("/processes")) return jsonResponse(200, { items: [], warnings: [] });
+    if (url.includes("/quoter-v2/products/")) {
+      return jsonResponse(200, { product_id: 1, items: [] });
+    }
+    if (url.includes("/extras")) {
+      return jsonResponse(200, { items: [], extras_cost_total: "0.000000", warnings: [] });
+    }
     if (url.includes("/auth/me"))
       return sessionResponse(overrides.user ?? TEST_USER);
     if (url.includes("/settings/reference-data"))

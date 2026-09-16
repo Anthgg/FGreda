@@ -204,6 +204,11 @@ export const LABOR_WARNING_LABEL: Record<string, string> = {
     "Esta persona ya no tiene habilitada esta técnica en su ficha. El costo sigue siendo el que se congeló.",
   V2_LABOR_WORKER_WITHOUT_TECHNIQUES:
     "Esta persona no tiene técnicas activas habilitadas en su ficha.",
+  V2_PROCESS_TECHNIQUE_INACTIVE:
+    "Esta técnica se retiró del catálogo. El proceso sigue en pie; revise si todavía toca.",
+  V2_PROCESS_PRODUCT_WITHOUT_TECHNIQUES:
+    "Esta pieza no tiene procesos configurados en su ficha: elíjalos aquí o configúrelos en el maestro.",
+  V2_EXTRA_INACTIVE: "Este concepto adicional se retiró del maestro. Su costo sigue congelado.",
 };
 
 /** Cargar en una cotización las técnicas habilitadas de un trabajador. */

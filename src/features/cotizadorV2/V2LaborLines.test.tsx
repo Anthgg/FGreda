@@ -61,28 +61,85 @@ const COTIZACION = {
   updated_at: "2026-09-11T10:00:00Z",
 };
 
+/**
+ * Los procesos de la unica linea de la cotizacion de prueba: uno asignado y uno
+ * sin asignar, que son los dos estados que la pantalla tiene que distinguir.
+ */
+const PROCESOS = [
+  {
+    id: 31,
+    v2_quotation_product_id: 4,
+    product_name: "Plato palta",
+    technique_id: 3,
+    technique_name: "Vidriado",
+    technique_unit: "piezas",
+    technique_active: true,
+    standard_capacity: "50.000000",
+    manual_hours: false,
+    origin: "PRODUCT" as const,
+    quantity: "20.000000",
+    quantity_overridden: false,
+    calculated_hours: "3.200000",
+    labor_id: 11,
+    worker_id: 1,
+    worker_name: "Celso",
+    final_hours: "12.000000",
+    labor_cost: "180.000000000000000000",
+    warnings: [],
+  },
+  {
+    id: 32,
+    v2_quotation_product_id: 4,
+    product_name: "Plato palta",
+    technique_id: 5,
+    technique_name: "Armado de asa",
+    technique_unit: "piezas",
+    technique_active: true,
+    standard_capacity: "50.000000",
+    manual_hours: false,
+    origin: "PRODUCT" as const,
+    quantity: "20.000000",
+    quantity_overridden: false,
+    calculated_hours: "3.200000",
+    labor_id: null,
+    worker_id: null,
+    worker_name: null,
+    final_hours: null,
+    labor_cost: null,
+    warnings: [],
+  },
+];
+
 function mockV2(
   overrides: {
     labor?: Response;
     update?: Response;
     workers?: Response;
     techniques?: Response;
-    load?: Response;
+    procesos?: Response;
+    proceso?: Response;
   } = {},
 ) {
   return mockFetch((url, init) => {
     const metodo = init.method ?? "GET";
     if (url.includes("/auth/csrf")) return csrfResponse();
+    // Correccion 010H: procesos de la pieza y adicionales.
+    if (url.includes("/processes")) {
+      if ((init.method ?? "GET") !== "GET") {
+        return overrides.proceso ?? jsonResponse(200, { items: PROCESOS, warnings: [] });
+      }
+      return overrides.procesos ?? jsonResponse(200, { items: PROCESOS, warnings: [] });
+    }
+    if (url.includes("/quoter-v2/products/")) {
+      return jsonResponse(200, { product_id: 1, items: [] });
+    }
+    if (url.includes("/extras")) {
+      return jsonResponse(200, { items: [], extras_cost_total: "0.000000", warnings: [] });
+    }
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/workers")) return overrides.workers ?? jsonResponse(200, V2_WORKERS);
     if (url.includes("/quoter-v2/techniques")) {
       return overrides.techniques ?? jsonResponse(200, V2_TECHNIQUES);
-    }
-    if (url.includes("/labor/load-worker")) {
-      return (
-        overrides.load ??
-        jsonResponse(201, { created: [], already_loaded_technique_ids: [], warnings: [] })
-      );
     }
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, { items: [] });
     if (url.includes("/labor")) {
@@ -145,9 +202,16 @@ function mockV2(
   });
 }
 
+/**
+ * Una cotizacion cuyas piezas no declaran procesos: sus tareas son sueltas y se
+ * editan enteras. Es el caso de los borradores de antes de la correccion, y el
+ * del personal adicional.
+ */
+const SIN_PROCESOS = { procesos: jsonResponse(200, { items: [], warnings: [] }) };
+
 describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("sin trabajadores lo dice ARRIBA, junto al estado vacío, y dónde darlos de alta", async () => {
-    mockV2({ workers: jsonResponse(200, { items: [], total: 0 }) });
+    mockV2({ ...SIN_PROCESOS, workers: jsonResponse(200, { items: [], total: 0 }) });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     const aviso = await screen.findByTestId("mano-de-obra-sin-maestros");
@@ -162,7 +226,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("muestra las horas y el costo que calculó el backend", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -173,7 +237,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("dice de dónde sale la tarifa por hora", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -182,7 +246,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("avisa cuando el trabajo no cabe en la jornada, sin bloquear", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -192,7 +256,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("el aviso no propone una solución: la decide una persona", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -204,7 +268,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("suma las horas por persona en toda la cotización", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -214,7 +278,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("el rendimiento se presenta como estándar del catálogo", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -224,7 +288,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("no guarda mientras se teclea: espera a que el campo se abandone", async () => {
-    const fetchSpy = mockV2();
+    const fetchSpy = mockV2(SIN_PROCESOS);
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -251,7 +315,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("una cantidad vacía se explica en vez de mandarse como cero", async () => {
-    const fetchSpy = mockV2();
+    const fetchSpy = mockV2(SIN_PROCESOS);
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -268,7 +332,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("retirar la tarifa acordada viaja como nulo, no como cadena vacía", async () => {
-    const fetchSpy = mockV2();
+    const fetchSpy = mockV2(SIN_PROCESOS);
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -289,7 +353,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("la ilustración va aparte de las técnicas y se cobra por horas", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -300,7 +364,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("dice que añadir personal no reduce el plazo", async () => {
-    mockV2();
+    mockV2(SIN_PROCESOS);
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -308,7 +372,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("un fallo al guardar se explica en vez de perderse", async () => {
-    mockV2({ update: errorResponse(422, "V2_LABOR_INPUT_INVALID", "Dato invalido") });
+    mockV2({ ...SIN_PROCESOS, update: errorResponse(422, "V2_LABOR_INPUT_INVALID", "Dato invalido") });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -328,7 +392,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
       ...V2_LABOR_PAGE,
       items: [{ ...V2_LABOR_PAGE.items[0]!, hours_overridden: true, final_hours: "20.000000" }],
     };
-    const fetchSpy = mockV2({ labor: jsonResponse(200, acordada) });
+    const fetchSpy = mockV2({ ...SIN_PROCESOS, labor: jsonResponse(200, acordada) });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -347,7 +411,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("el trabajo se puede vincular a un producto de la cotización", async () => {
-    const fetchSpy = mockV2();
+    const fetchSpy = mockV2(SIN_PROCESOS);
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -368,160 +432,144 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 });
 
-describe("Cargar a un trabajador con sus técnicas (corrección 010H)", () => {
-  const TORNO = {
-    ...V2_TECHNIQUES.items[0]!,
-    id: 5,
-    code: "torno",
-    name: "Torno fácil",
-    requires_glaze: false,
-  };
-  const ASAS = { ...TORNO, id: 6, code: "asas", name: "Armado de asa" };
-  const CON_TRES = () => jsonResponse(200, { items: [V2_TECHNIQUES.items[0], TORNO, ASAS] });
-  const CELSO_SABE_TRES = () =>
+describe("Los procesos de la pieza mandan (corrección 010H)", () => {
+  const CON_ASA = () =>
     jsonResponse(200, {
-      items: [{ ...V2_WORKERS.items[0]!, technique_ids: [3, 5, 6] }, V2_WORKERS.items[1]],
+      items: [{ ...V2_TECHNIQUES.items[0] }, { ...V2_TECHNIQUES.items[0], id: 5, name: "Armado de asa" }],
+    });
+  const CELSO_SABE_ASA = () =>
+    jsonResponse(200, {
+      items: [{ ...V2_WORKERS.items[0]!, technique_ids: [3, 5] }, V2_WORKERS.items[1]],
     });
 
-  async function elegir(
-    user: ReturnType<typeof userEvent.setup>,
-    campo: string,
-    opcion: string,
-  ) {
-    const selectores = await screen.findAllByRole("combobox", { name: campo });
-    await user.click(selectores[selectores.length - 1]!);
-    await user.click(await screen.findByRole("option", { name: new RegExp(opcion) }));
-  }
-
-  it("elegir al trabajador trae sus técnicas marcadas, sin añadirlas una a una", async () => {
-    mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
-    renderApp(["/cotizador-v2/7/mano-de-obra"]);
-    const user = userEvent.setup();
-    await screen.findByText("Celso · Vidriado");
-
-    await elegir(user, "Trabajador", "Celso");
-
-    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
-    expect(within(grupo).getByRole("checkbox", { name: /Torno fácil/ })).toBeChecked();
-    expect(within(grupo).getByRole("checkbox", { name: /Armado de asa/ })).toBeChecked();
-    // Vidriado ya está cargada para Celso en todo el pedido: marcada y bloqueada.
-    const vidriado = within(grupo).getByRole("checkbox", { name: /Vidriado/ });
-    expect(vidriado).toBeChecked();
-    expect(vidriado).toBeDisabled();
-    expect(within(grupo).getByText("(ya cargada)")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Añadir 2 técnicas" })).toBeEnabled();
-  });
-
-  it("desmarcar una la deja fuera del envío, con el producto y sus piezas", async () => {
-    const fetchSpy = mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
-    renderApp(["/cotizador-v2/7/mano-de-obra"]);
-    const user = userEvent.setup();
-    await screen.findByText("Celso · Vidriado");
-
-    await elegir(user, "Trabajador", "Celso");
-    await elegir(user, "Producto", "Plato palta");
-    expect(await screen.findByText(/las piezas nacen en 20/i)).toBeInTheDocument();
-
-    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
-    // Para Plato palta no hay nada cargado: las tres salen marcadas.
-    await user.click(within(grupo).getByRole("checkbox", { name: /Armado de asa/ }));
-    await user.click(screen.getByRole("button", { name: "Añadir 2 técnicas" }));
-
-    await waitFor(() => {
-      const carga = fetchSpy.mock.calls.find(
-        ([url, init]) =>
-          String(url).includes("/quotations-v2/7/labor/load-worker") &&
-          (init as RequestInit | undefined)?.method === "POST",
-      );
-      expect(carga).toBeDefined();
-      expect(JSON.parse(String((carga?.[1] as RequestInit).body))).toEqual({
-        worker_id: 1,
-        v2_quotation_product_id: 4,
-        technique_ids: [3, 5],
-      });
-    });
-  });
-
-  it("cambiar de producto vuelve a marcar lo que se desmarcó para el anterior", async () => {
-    mockV2({ techniques: CON_TRES(), workers: CELSO_SABE_TRES() });
-    renderApp(["/cotizador-v2/7/mano-de-obra"]);
-    const user = userEvent.setup();
-    await screen.findByText("Celso · Vidriado");
-
-    await elegir(user, "Trabajador", "Celso");
-    const grupo = await screen.findByTestId("tecnicas-del-trabajador");
-    await user.click(within(grupo).getByRole("checkbox", { name: /Armado de asa/ }));
-    expect(within(grupo).getByRole("checkbox", { name: /Armado de asa/ })).not.toBeChecked();
-
-    await elegir(user, "Producto", "Plato palta");
-    expect(
-      within(await screen.findByTestId("tecnicas-del-trabajador")).getByRole("checkbox", {
-        name: /Armado de asa/,
-      }),
-    ).toBeChecked();
-  });
-
-  it("un trabajador sin técnicas lo dice y no ofrece añadir", async () => {
+  it("los procesos de la pieza aparecen solos, con sus piezas y sus horas", async () => {
     mockV2();
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
-    const user = userEvent.setup();
-    await screen.findByText("Celso · Vidriado");
 
-    await elegir(user, "Trabajador", "Refuerzo externo");
-
-    expect(await screen.findByTestId("trabajador-sin-tecnicas")).toHaveTextContent(
-      /no tiene técnicas activas habilitadas/i,
-    );
-    expect(screen.queryByRole("button", { name: /Añadir \d+ técnica/ })).not.toBeInTheDocument();
+    const procesos = await screen.findByTestId("procesos");
+    // Nadie tuvo que acordarse de que la pieza lleva asa: ya está.
+    expect(procesos).toHaveTextContent("Armado de asa");
+    expect(procesos).toHaveTextContent("Plato palta");
+    // Piezas de la línea y horas del rendimiento, sin trabajador todavía.
+    const piezas = within(procesos).getAllByLabelText(/piezas por trabajar/i);
+    expect(piezas[1]).toHaveValue("20");
+    expect(procesos).toHaveTextContent("3.200000");
+    expect(procesos).toHaveTextContent(/aún no cuesta nada/i);
   });
 
-  it("en la tarea, trabajador y técnica no se cambian; quitar es solo de aquí", async () => {
+  it("solo ofrece como trabajador a quien sabe hacer esa técnica", async () => {
+    mockV2({ techniques: CON_ASA(), workers: CELSO_SABE_ASA() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByTestId("procesos");
+
+    const selectores = screen.getAllByRole("combobox", { name: "Trabajador" });
+    await user.click(selectores[1]!);
+
+    expect(await screen.findByRole("option", { name: /Celso/ })).toBeInTheDocument();
+    // El refuerzo externo no tiene ninguna técnica habilitada.
+    expect(screen.queryByRole("option", { name: /Refuerzo externo/ })).not.toBeInTheDocument();
+  });
+
+  it("asignar a alguien es lo que crea la tarea y el costo", async () => {
+    const fetchSpy = mockV2({ techniques: CON_ASA(), workers: CELSO_SABE_ASA() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    await screen.findByTestId("procesos");
+
+    const selectores = screen.getAllByRole("combobox", { name: "Trabajador" });
+    await user.click(selectores[1]!);
+    await user.click(await screen.findByRole("option", { name: /Celso/ }));
+
+    await waitFor(() => {
+      const asignado = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/processes/32/assign") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(asignado).toBeDefined();
+      expect(JSON.parse(String((asignado?.[1] as RequestInit).body))).toEqual({ worker_id: 1 });
+    });
+  });
+
+  it("quitar un proceso dice que es solo de esta cotización", async () => {
     const fetchSpy = mockV2();
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
-    await screen.findByText("Celso · Vidriado");
+    await screen.findByTestId("procesos");
 
-    // Solo el formulario de carga ofrece elegir trabajador; la tarea no.
-    expect(screen.getAllByRole("combobox", { name: "Trabajador" })).toHaveLength(1);
-    expect(screen.queryByRole("combobox", { name: "Técnica" })).not.toBeInTheDocument();
-
-    const quitar = screen.getByRole("button", { name: "Quitar de esta cotización" });
-    expect(quitar.getAttribute("title")).toMatch(/ficha del trabajador no cambia/i);
+    const quitar = screen.getAllByRole("button", { name: "Quitar de esta cotización" })[0]!;
+    expect(quitar.getAttribute("title")).toMatch(/ficha de la pieza no cambia/i);
     await user.click(quitar);
 
     await waitFor(() => {
       const borrado = fetchSpy.mock.calls.find(
         ([url, init]) =>
-          String(url).includes("/labor/11") &&
+          String(url).includes("/processes/31") &&
           (init as RequestInit | undefined)?.method === "DELETE",
       );
       expect(borrado).toBeDefined();
     });
-    expect(
-      fetchSpy.mock.calls.some(
-        ([url, init]) =>
-          String(url).includes("/quoter-v2/workers") &&
-          ((init as RequestInit | undefined)?.method ?? "GET") !== "GET",
-      ),
-    ).toBe(false);
   });
 
-  it("una técnica no habilitada se explica sin mostrar el código", async () => {
-    mockV2({
-      techniques: CON_TRES(),
-      workers: CELSO_SABE_TRES(),
-      load: errorResponse(422, "V2_LABOR_TECHNIQUE_NOT_ALLOWED", "no"),
-    });
+  it("se puede agregar un proceso extra solo para esta cotización", async () => {
+    const fetchSpy = mockV2({ techniques: CON_ASA() });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
-    await screen.findByText("Celso · Vidriado");
+    await screen.findByTestId("procesos");
 
-    await elegir(user, "Trabajador", "Celso");
-    await user.click(await screen.findByRole("button", { name: "Añadir 2 técnicas" }));
+    // Vidriado y Armado de asa ya están puestas; el catálogo no ofrece más.
+    expect(screen.queryByRole("combobox", { name: "Agregar proceso" })).not.toBeInTheDocument();
 
-    const carga = within(screen.getByTestId("cargar-trabajador"));
-    const alerta = await carga.findByRole("alert");
-    expect(alerta.textContent).not.toContain("V2_LABOR_TECHNIQUE_NOT_ALLOWED");
-    expect(alerta).toHaveTextContent(/técnica/i);
+    mockV2({
+      techniques: jsonResponse(200, {
+        items: [...V2_TECHNIQUES.items, { ...V2_TECHNIQUES.items[0], id: 9, name: "Pulido" }],
+      }),
+    });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    await screen.findAllByTestId("procesos");
+    const combos = await screen.findAllByRole("combobox", { name: "Agregar proceso" });
+    await user.click(combos[0]!);
+    await user.click(await screen.findByRole("option", { name: "Pulido" }));
+    await user.click(screen.getAllByRole("button", { name: "Agregar" })[0]!);
+
+    await waitFor(() => {
+      const anadido = fetchSpy.mock.calls
+        .concat()
+        .find(
+          ([url, init]) =>
+            String(url).endsWith("/processes") &&
+            (init as RequestInit | undefined)?.method === "POST",
+        );
+      expect(anadido === undefined).toBe(true);
+    });
+  });
+
+  it("el personal adicional es una persona, no una técnica", async () => {
+    const fetchSpy = mockV2({ techniques: CON_ASA(), workers: CELSO_SABE_ASA() });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+    const seccion = await screen.findByTestId("personal-adicional");
+    expect(seccion).toHaveTextContent(/suma costo y no reduce el plazo/i);
+
+    await user.click(within(seccion).getByRole("combobox", { name: "Trabajador" }));
+    await user.click(await screen.findByRole("option", { name: /Celso/ }));
+    await user.click(within(seccion).getByRole("combobox", { name: /Técnica que viene a hacer/ }));
+    await user.click(await screen.findByRole("option", { name: "Vidriado" }));
+    await user.click(within(seccion).getByRole("button", { name: "Añadir personal" }));
+
+    await waitFor(() => {
+      const alta = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith("/labor") && (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(alta).toBeDefined();
+      expect(JSON.parse(String((alta?.[1] as RequestInit).body))).toEqual({
+        worker_id: 1,
+        technique_id: 3,
+        v2_quotation_product_id: null,
+        is_additional_personnel: true,
+      });
+    });
   });
 });

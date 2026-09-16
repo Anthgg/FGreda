@@ -36,6 +36,11 @@ export const V2_LABOR_KEY = ["quoter-v2", "labor"] as const;
 export const V2_ILLUSTRATION_KEY = ["quoter-v2", "illustration"] as const;
 export const V2_FIRING_KEY = ["quoter-v2", "firing"] as const;
 export const V2_PRICING_KEY = ["quoter-v2", "pricing"] as const;
+/** Corrección 010H: los procesos de la pieza y los adicionales del pedido. */
+export const V2_PROCESSES_KEY = ["quoter-v2", "processes"] as const;
+export const V2_QUOTATION_EXTRAS_KEY = ["quoter-v2", "quotation-extras"] as const;
+export const V2_EXTRAS_KEY = ["quoter-v2", "extras"] as const;
+export const V2_PRODUCT_TECHNIQUES_KEY = ["quoter-v2", "product-techniques"] as const;
 
 /**
  * Cuánto vale una respuesta antes de volver a pedirla.
@@ -85,6 +90,8 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): P
     V2_ILLUSTRATION_KEY,
     V2_FIRING_KEY,
     V2_PRICING_KEY,
+    V2_PROCESSES_KEY,
+    V2_QUOTATION_EXTRAS_KEY,
   ]) {
     const queryKey = [...clave, quotationId];
     const consulta = cache.find({ queryKey, exact: true });
@@ -124,6 +131,12 @@ export type TipoDeGuardado =
   | "tarea-anadir"
   | "tarea-editar"
   | "tarea-borrar"
+  | "proceso-anadir"
+  | "proceso-editar"
+  | "proceso-borrar"
+  | "adicional-anadir"
+  | "adicional-editar"
+  | "adicional-borrar"
   | "planificacion"
   | "ilustracion"
   | "quema"
@@ -216,6 +229,12 @@ export const DESTINO_DE_GUARDADO: Record<
   "tarea-anadir": { paso: "mano-de-obra", que: "una tarea nueva" },
   "tarea-editar": { paso: "mano-de-obra", que: "una tarea" },
   "tarea-borrar": { paso: "mano-de-obra", que: "quitar una tarea" },
+  "proceso-anadir": { paso: "mano-de-obra", que: "un proceso nuevo" },
+  "proceso-editar": { paso: "mano-de-obra", que: "un proceso" },
+  "proceso-borrar": { paso: "mano-de-obra", que: "quitar un proceso" },
+  "adicional-anadir": { paso: "precio", que: "un adicional nuevo" },
+  "adicional-editar": { paso: "precio", que: "un adicional" },
+  "adicional-borrar": { paso: "precio", que: "quitar un adicional" },
   planificacion: { paso: "mano-de-obra", que: "los días efectivos" },
   ilustracion: { paso: "mano-de-obra", que: "la ilustración" },
   quema: { paso: "quema", que: "la quema" },
@@ -226,7 +245,15 @@ export const DESTINO_DE_GUARDADO: Record<
 function esDeLaCotizacion(queryKey: readonly unknown[], quotationId: number): boolean {
   if (queryKey[0] === QUOTER_V2_KEY[0]) return queryKey[1] === quotationId;
   if (queryKey[0] !== "quoter-v2") return false;
-  const alcances = [V2_LINES_KEY, V2_LABOR_KEY, V2_ILLUSTRATION_KEY, V2_FIRING_KEY, V2_PRICING_KEY];
+  const alcances = [
+    V2_LINES_KEY,
+    V2_LABOR_KEY,
+    V2_ILLUSTRATION_KEY,
+    V2_FIRING_KEY,
+    V2_PRICING_KEY,
+    V2_PROCESSES_KEY,
+    V2_QUOTATION_EXTRAS_KEY,
+  ];
   return alcances.some((clave) => clave[1] === queryKey[1]) && queryKey[2] === quotationId;
 }
 

@@ -164,6 +164,28 @@ export function describeError(error: unknown): string {
         "Configuración → Cotizador V2 → Trabajadores, o asigne a quien sí la tenga."
       );
 
+    // ---- Correccion 010H: procesos de la pieza y adicionales ----------
+    case "V2_PROCESS_NOT_FOUND":
+      return "Ese proceso ya no está en esta cotización. Vuelva a cargar la pantalla.";
+    case "V2_PROCESS_DUPLICATED":
+      return (
+        "Esa técnica ya es un proceso de esta pieza. Para más piezas del mismo proceso, " +
+        "cambie las piezas por trabajar en la fila que ya existe."
+      );
+    case "V2_PROCESS_INPUT_INVALID":
+      return error.message;
+    case "V2_EXTRA_NOT_FOUND":
+      return "Ese adicional ya no existe.";
+    case "V2_EXTRA_INPUT_INVALID":
+      return error.message;
+    case "V2_EXTRA_VERSION_CONFLICT":
+      return (
+        "Alguien cambió este adicional mientras usted lo editaba. Vuelva a cargar la " +
+        "pantalla y repita el cambio."
+      );
+    case "V2_EXTRA_QUOTATION_NOT_EDITABLE":
+      return "La cotización ya no admite cambios: los adicionales quedaron congelados al emitirla.";
+
     // ---- Fase 010H: emision, anulacion, duplicacion y produccion V2 --
     case "V2_QUOTATION_CHANGED":
       return (

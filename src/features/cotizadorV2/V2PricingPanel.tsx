@@ -2,6 +2,7 @@ import { SelectField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
+import { V2ExtrasPanel } from "@/features/cotizadorV2/V2ExtrasPanel";
 import { useSetV2Pricing, useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
 import { PRICING_WARNING_LABEL, type V2Pricing } from "@/types/quoterV2Pricing";
 
@@ -236,6 +237,11 @@ export function V2PricingPanel({
               value={precio.administration_cost}
               hint="Una vez por cotización."
             />
+            <Dato
+              label="Adicionales"
+              value={precio.extras_cost}
+              hint="Empaque, moldes, sellos. Se detallan abajo."
+            />
             <Dato label="Gas real" value={precio.gas_cost} hint="Lo que de verdad se quema." />
             <Dato
               label="Tarifa de quema"
@@ -332,6 +338,8 @@ export function V2PricingPanel({
             />
           </dl>
         </section>
+
+        <V2ExtrasPanel quotationId={quotationId} canEdit={canEdit} />
 
         <Reparto precio={precio} />
 

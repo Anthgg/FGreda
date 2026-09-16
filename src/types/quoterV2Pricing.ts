@@ -54,6 +54,8 @@ export interface V2Pricing {
   illustration_cost: string;
   space_cost: string;
   administration_cost: string;
+  /** Los adicionales: empaque, moldes, sellos. Entran en las dos bases. */
+  extras_cost: string;
   /** Lo que de verdad se quema frente a lo que se cobra por encender. */
   gas_cost: string;
   firing_commercial_cost: string;
