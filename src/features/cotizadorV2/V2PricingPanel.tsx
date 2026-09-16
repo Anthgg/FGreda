@@ -1,46 +1,12 @@
+import { useState } from "react";
 import { SelectField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { Panel } from "@/features/masters/MasterTable";
+import { TableWrapper, Th, Td } from "@/features/cotizadorV2/components/V2Table";
 import { describeError } from "@/features/settings/messages";
 import { useSetV2Pricing, useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
 import { PRICING_WARNING_LABEL, type V2Pricing } from "@/types/quoterV2Pricing";
 
-/**
- * Margen y precio de una cotización V2: las cuatro salidas y el documento.
- *
- * Lo que esta pantalla enseña, y por qué así:
- *
- * - **el costo real y el costo de producción van separados**, uno al lado del
- *   otro. La diferencia entre ellos es exactamente la de la quema, y es lo
- *   primero que el taller mira. Sumarlos en un total la borraría;
- * - **el suelo, el objetivo y el negociado se ven a la vez.** La pregunta que
- *   se hace siempre es «¿esto está por encima del mínimo?», y esconder las
- *   tres cifras dentro de un único total la dejaría sin respuesta;
- * - **el factor se elige de una lista de multiplicadores**, no se teclea como
- *   porcentaje. «×2,5» y «+150 %» son el mismo número dicho de dos formas, y
- *   una de las dos se confunde con «+250 %».
- *
- * La pantalla no calcula: ni multiplica costos por factores, ni redondea, ni
- * suma IGV. Todo llega calculado del backend. Si lo rehiciera aquí habría dos
- * aritméticas —y la de aquí sería de coma flotante— y nadie sabría cuál manda.
- *
- * Los importes internos —costo, gas, factor, ganancia— NO van al PDF del
- * cliente. Ese documento es de 010H y lleva otros números.
- */
-
-/**
- * Los multiplicadores que ofrece el selector, sacados del rango de la cotización.
- *
- * El suelo de ×2 es una regla cerrada del negocio. El techo NO: ×3 es solo el
- * valor por defecto y la casa puede subirlo a ×4 o a ×10 desde Configuración.
- * Por eso la lista se construye desde `factor_min` y `factor_max` en vez de
- * estar escrita aquí: una lista fija dejaría fuera los factores que el propio
- * taller acaba de habilitar, y el usuario no tendría forma de elegirlos.
- *
- * El paso se abre cuando el rango crece para que la lista siga siendo usable:
- * de ×2 a ×3 en pasos de 0,25 son cinco opciones; de ×2 a ×10 en pasos de uno
- * son nueve. Con pasos de 0,25 serían treinta y tres.
- */
 function pasoDeFactor(minimo: number, maximo: number): number {
   const rango = maximo - minimo;
   if (rango <= 2) return 0.25;
@@ -48,7 +14,6 @@ function pasoDeFactor(minimo: number, maximo: number): number {
   return 1;
 }
 
-/** Las opciones del selector, con el factor guardado dentro venga como venga. */
 function opcionesDeFactor(
   actual: string | null,
   minimo: string | null,
@@ -63,8 +28,6 @@ function opcionesDeFactor(
     valores.push(Number(valor.toFixed(2)));
   }
   if (valores.at(-1) !== techo) valores.push(techo);
-  // El factor guardado puede no caer en ningún paso —un ×2,1 pactado a mano—.
-  // Añadirlo es la diferencia entre verlo y que el selector aparezca vacío.
   if (actual !== null && !valores.some((valor) => valor === Number(actual))) {
     valores.push(Number(actual));
   }
@@ -74,13 +37,6 @@ function opcionesDeFactor(
     .map((valor) => ({ value: String(valor), label: `×${valor.toFixed(2)}` }));
 }
 
-/**
- * El valor de la lista que corresponde al factor guardado.
- *
- * El backend devuelve `3.000000` y la lista dice `3`: comparados como texto no
- * son el mismo valor, y el selector se quedaba en «Seleccionar...» enseñando un
- * factor vacío sobre una cotización que sí lo tiene. Se comparan como NÚMEROS.
- */
 function factorSeleccionado(actual: string | null, opciones: { value: string }[]): string {
   if (actual === null) return opciones.at(-1)?.value ?? "3";
   return (
@@ -90,7 +46,7 @@ function factorSeleccionado(actual: string | null, opciones: { value: string }[]
 }
 
 function Aviso({ codigo }: { codigo: string }) {
-  return <li className="text-xs text-amber-700">{PRICING_WARNING_LABEL[codigo] ?? codigo}</li>;
+  return <li className="text-xs font-medium text-amber-700">{PRICING_WARNING_LABEL[codigo] ?? codigo}</li>;
 }
 
 function Dato({
@@ -98,70 +54,78 @@ function Dato({
   value,
   hint,
   tone,
+  large = false,
 }: {
   label: string;
   value: string;
   hint?: string | undefined;
-  tone?: "positive" | "negative" | undefined;
+  tone?: "positive" | "negative" | "neutral" | undefined;
+  large?: boolean;
 }) {
   const color =
     tone === "positive"
-      ? "text-emerald-800"
+      ? "text-emerald-700"
       : tone === "negative"
-        ? "text-red-700"
-        : "text-zinc-800";
+        ? "text-red-600"
+        : tone === "neutral"
+          ? "text-zinc-600"
+          : "text-zinc-900";
+          
+  const size = large ? "text-lg" : "text-sm";
+  
   return (
     <div>
-      <dt className="text-xs text-zinc-500">{label}</dt>
-      <dd className={`text-sm font-medium ${color}`}>{value}</dd>
-      {hint ? <dd className="text-[11px] text-zinc-500">{hint}</dd> : null}
+      <dt className="text-xs font-medium text-zinc-500">{label}</dt>
+      <dd className={`${size} font-bold ${color} mt-0.5`}>{value}</dd>
+      {hint ? <dd className="text-[10px] text-zinc-500 mt-1">{hint}</dd> : null}
     </div>
   );
 }
 
-/** El reparto por producto: de dónde sale cada precio unitario. */
 function Reparto({ precio }: { precio: V2Pricing }) {
   if (precio.lines.length === 0) return null;
   return (
-    <div className="mt-4 overflow-x-auto rounded-2xl border border-black/[0.06]">
-      <table className="w-full min-w-[52rem] text-left text-sm">
-        <caption className="px-4 pt-3 text-left text-xs text-zinc-500">
-          Cada producto carga con lo suyo más la parte que le toca de lo que es de toda la
-          cotización. La suma de los costos asignados es exactamente el costo de producción.
-        </caption>
-        <thead>
-          <tr className="text-xs text-zinc-500">
-            <th className="px-3 py-2 font-medium">Producto</th>
-            <th className="px-3 py-2 font-medium">Piezas</th>
-            <th className="px-3 py-2 font-medium">Costo directo</th>
-            <th className="px-3 py-2 font-medium">Quema</th>
-            <th className="px-3 py-2 font-medium">Espacio</th>
-            <th className="px-3 py-2 font-medium">Generales</th>
-            <th className="px-3 py-2 font-medium">Costo asignado</th>
-            <th className="px-3 py-2 font-medium">Unit. sin redondear</th>
-            <th className="px-3 py-2 font-medium">Unitario</th>
-            <th className="px-3 py-2 font-medium">Total línea</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-black/5">
-          {precio.lines.map((linea) => (
-            <tr key={linea.line_id}>
-              <td className="px-3 py-2 text-zinc-800">
-                {linea.product_name ?? `Línea ${linea.line_id}`}
-              </td>
-              <td className="px-3 py-2 text-zinc-600">{linea.quantity}</td>
-              <td className="px-3 py-2 text-zinc-600">{linea.direct_cost}</td>
-              <td className="px-3 py-2 text-zinc-600">{linea.firing_cost}</td>
-              <td className="px-3 py-2 text-zinc-600">{linea.space_cost}</td>
-              <td className="px-3 py-2 text-zinc-600">{linea.general_cost}</td>
-              <td className="px-3 py-2 text-zinc-800">{linea.production_cost}</td>
-              <td className="px-3 py-2 text-zinc-500">{linea.unit_price_raw}</td>
-              <td className="px-3 py-2 font-medium text-zinc-900">{linea.unit_price}</td>
-              <td className="px-3 py-2 text-zinc-800">{linea.line_total}</td>
+    <div className="mt-8 rounded-2xl border border-black/10 bg-white shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-black/5">
+        <h3 className="text-sm font-semibold text-zinc-900">Reparto por Producto</h3>
+        <p className="mt-1 text-xs text-zinc-500">
+          Desglose del costo de producción y precio unitario asignado a cada línea.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <TableWrapper>
+          <thead className="bg-zinc-50 text-xs text-zinc-500 border-b border-black/5">
+            <tr>
+              <Th>Producto</Th>
+              <Th align="right">Piezas</Th>
+              <Th align="right">C. Directo</Th>
+              <Th align="right">Quema</Th>
+              <Th align="right">Espacio</Th>
+              <Th align="right">Generales</Th>
+              <Th align="right" className="font-semibold text-zinc-700">Costo Base</Th>
+              <Th align="right">Unitario</Th>
+              <Th align="right" className="font-semibold text-zinc-700">Total Línea</Th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-black/5 bg-white">
+            {precio.lines.map((linea) => (
+              <tr key={linea.line_id} className="hover:bg-zinc-50/50">
+                <Td className="font-medium text-zinc-900">
+                  {linea.product_name ?? `Línea ${linea.line_id}`}
+                </Td>
+                <Td align="right">{linea.quantity}</Td>
+                <Td align="right">{linea.direct_cost}</Td>
+                <Td align="right">{linea.firing_cost}</Td>
+                <Td align="right">{linea.space_cost}</Td>
+                <Td align="right">{linea.general_cost}</Td>
+                <Td align="right" className="font-semibold bg-zinc-50/50">{linea.production_cost}</Td>
+                <Td align="right" className="font-medium text-emerald-700">{linea.unit_price}</Td>
+                <Td align="right" className="font-bold text-zinc-900">{linea.line_total}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </TableWrapper>
+      </div>
     </div>
   );
 }
@@ -175,6 +139,8 @@ export function V2PricingPanel({
 }) {
   const query = useV2Pricing(quotationId);
   const guardar = useSetV2Pricing(quotationId);
+  
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   if (query.isPending) return <Spinner className="size-5" label="Calculando el precio..." />;
   if (query.isError) {
@@ -189,149 +155,141 @@ export function V2PricingPanel({
   }
 
   const precio = query.data;
-  // Comparado como NÚMERO y no por el signo del texto: un «-0.000000» no es una
-  // pérdida, y el prefijo lo pintaría de rojo.
   const perdida = Number(precio.estimated_profit ?? 0) < 0;
   const moneda = precio.currency_code ?? "PEN";
   const opciones = opcionesDeFactor(precio.commercial_factor, precio.factor_min, precio.factor_max);
 
   return (
     <Panel>
-      {/* El identificador acota las consultas de las pruebas a ESTE bloque: la
-          ficha monta varios paneles y varios tienen importes con la misma pinta. */}
-      <div data-testid="panel-precio">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-zinc-900">Margen y precio</h2>
-          <span className="text-xs text-zinc-500">
-            Total {moneda}: <strong>{precio.total}</strong>
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-zinc-500">
-          El precio sale del costo de producción multiplicado por un factor único para toda la
-          cotización. El IGV se aplica al final, sobre el subtotal ya redondeado.
-        </p>
-
+      <div data-testid="panel-precio" className="space-y-6">
+        
         {precio.warnings.length > 0 ? (
-          <ul className="mt-3 space-y-1 rounded-2xl bg-amber-50 p-3" data-testid="avisos-precio">
+          <ul className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm" data-testid="avisos-precio">
             {precio.warnings.map((codigo) => (
               <Aviso key={codigo} codigo={codigo} />
             ))}
           </ul>
         ) : null}
 
-        {/* ---- Lo que cuesta ---------------------------------------- */}
-        <section className="mt-4 rounded-2xl border border-black/[0.06] p-4">
-          <h3 className="text-xs font-semibold text-zinc-700">Lo que cuesta</h3>
-          <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Dato label="Materiales" value={precio.materials_cost} />
-            <Dato label="Mano de obra" value={precio.labor_cost} />
-            <Dato label="Ilustración" value={precio.illustration_cost} />
-            <Dato
-              label="Espacio y servicios"
-              value={precio.space_cost}
-              hint="Por días efectivos de taller."
-            />
-            <Dato
-              label="Administración"
-              value={precio.administration_cost}
-              hint="Una vez por cotización."
-            />
-            <Dato label="Gas real" value={precio.gas_cost} hint="Lo que de verdad se quema." />
-            <Dato
-              label="Tarifa de quema"
-              value={precio.firing_commercial_cost}
-              hint="Lo que se cobra por encender."
-            />
-            <Dato
-              label="Diferencia de quema"
-              value={precio.firing_difference}
-              hint="No es el margen de la cotización."
-            />
-          </dl>
-        </section>
-
-        {/* ---- Las dos bases ---------------------------------------- */}
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-            <h3 className="text-xs font-semibold text-zinc-800">Costo real</h3>
-            <p className="mt-1 text-[11px] text-zinc-600">
-              Lo que de verdad sale del bolsillo: lleva el gas que se quema.
-            </p>
-            <p className="mt-2 text-lg font-semibold text-zinc-900">{precio.real_cost}</p>
-          </section>
-          <section className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
-            <h3 className="text-xs font-semibold text-sky-900">Costo de producción</h3>
-            <p className="mt-1 text-[11px] text-sky-800">
-              La base comercial: lleva la tarifa que el taller cobra por encender.
-            </p>
-            <p className="mt-2 text-lg font-semibold text-sky-950">{precio.production_cost}</p>
-          </section>
+        {/* GRAN TARJETA DE PRECIO FINAL */}
+        <div className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 sm:p-8 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-5">
+            <svg className="w-32 h-32 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 relative z-10">
+            <div>
+              <h2 className="text-sm font-bold tracking-widest text-emerald-800/80 uppercase">Precio Total al Cliente</h2>
+              <div className="mt-2 flex items-baseline gap-3">
+                <span className="text-5xl font-black text-emerald-950 tracking-tight">{precio.total}</span>
+                <span className="text-lg font-semibold text-emerald-700/80">{moneda}</span>
+              </div>
+              <p className="mt-3 text-sm font-medium text-emerald-800">
+                Incluye IGV ({precio.tax_percent ?? "0"}%) de {precio.tax}
+              </p>
+            </div>
+            
+            <div className="bg-white/60 backdrop-blur-md rounded-2xl p-5 border border-emerald-100 shadow-xs w-full sm:w-auto">
+              <SelectField
+                label="Multiplicador Comercial"
+                requirement="required"
+                value={factorSeleccionado(precio.commercial_factor, opciones)}
+                options={opciones}
+                onChange={(valor) => guardar.mutate({ commercial_factor: valor })}
+                disabled={!canEdit}
+                hint="Aplica sobre Costo de Producción"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* ---- El factor y las tres salidas ------------------------- */}
-        <section className="mt-4 rounded-2xl border border-black/[0.06] p-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <SelectField
-              label="Factor comercial"
-              requirement="required"
-              value={factorSeleccionado(precio.commercial_factor, opciones)}
-              options={opciones}
-              onChange={(valor) => guardar.mutate({ commercial_factor: valor })}
-              disabled={!canEdit}
-              hint={`Uno solo para toda la cotización. El mínimo de ×${Number(precio.factor_min ?? 2).toFixed(2)} es regla cerrada; el máximo de ×${Number(precio.factor_max ?? 3).toFixed(2)} se configura.`}
-            />
-            <Dato
-              label="Precio negociado"
-              value={precio.negotiated_price}
-              hint="Costo de producción por el factor elegido."
-            />
+        {/* COSTOS DIRECTOS (LO QUE CUESTA PRODUCIR) */}
+        <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-xs">
+          <div className="flex justify-between items-end border-b border-black/5 pb-4 mb-5">
+            <div>
+              <h3 className="text-lg font-bold text-zinc-900">Costos de Producción</h3>
+              <p className="text-xs text-zinc-500 mt-1">Suma de costos directos (materiales, mano de obra, quema comercial).</p>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-black text-zinc-900">{precio.production_cost}</span>
+            </div>
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Dato
-              label="Precio mínimo ×2"
-              value={precio.price_min}
-              hint="Por debajo no se vende."
-            />
-            <Dato label="Precio objetivo ×3" value={precio.price_target} />
-            <Dato
-              label="Ajuste por redondeo"
-              value={precio.rounding_adjustment}
-              hint="Lo que el redondeo añadió sobre el precio negociado."
-            />
-            <Dato
-              label="Margen efectivo"
-              value={`${precio.effective_margin_percent} %`}
-              hint="Sobre el precio, no sobre el costo."
-              tone={perdida ? "negative" : "positive"}
-            />
+          
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+            <Dato label="Materiales" value={precio.materials_cost} />
+            <Dato label="Mano de obra" value={precio.labor_cost} />
+            <Dato label="Tarifa de Quema" value={precio.firing_commercial_cost} hint="Valor comercial asignado." />
+            <Dato label="Ilustración" value={precio.illustration_cost} />
           </dl>
-        </section>
+        </div>
 
-        {/* ---- El documento ---------------------------------------- */}
-        <section className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
-          <h3 className="text-xs font-semibold text-emerald-900">
-            Lo que irá al documento ({moneda})
-          </h3>
-          <p className="mt-1 text-[11px] text-emerald-800">
-            El subtotal se reconstruye sumando las líneas ya redondeadas: quien sume el documento a
-            mano llega al mismo total.
-          </p>
-          <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Dato label="Subtotal sin IGV" value={precio.subtotal} />
-            <Dato
-              label={`IGV ${precio.tax_percent ?? "0"} %`}
-              value={precio.tax}
-              hint="No es ingreso del taller."
-            />
-            <Dato label="Total" value={precio.total} />
-            <Dato
-              label="Ganancia estimada"
-              value={precio.estimated_profit}
-              hint="Precio sin IGV menos costo real."
-              tone={perdida ? "negative" : "positive"}
-            />
-          </dl>
-        </section>
+        {/* EXPANDABLE: COSTOS INDIRECTOS & MARGEN */}
+        <div className="rounded-2xl border border-black/10 bg-white overflow-hidden shadow-xs">
+          <button 
+            type="button" 
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full p-5 flex items-center justify-between bg-zinc-50/50 hover:bg-zinc-50 transition-colors focus:outline-none"
+          >
+            <div className="text-left">
+              <h3 className="text-sm font-bold text-zinc-900">Análisis Financiero Avanzado</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">Costos indirectos, métricas de rentabilidad y precios sugeridos</p>
+            </div>
+            <div className={`transform transition-transform duration-200 text-zinc-400 ${showAdvanced ? 'rotate-180' : ''}`}>
+              <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>
+          </button>
+          
+          {showAdvanced && (
+            <div className="p-6 border-t border-black/5 space-y-8 bg-white animate-in slide-in-from-top-2 fade-in duration-200">
+              
+              {/* Costos Indirectos */}
+              <div>
+                <h4 className="text-xs font-bold text-zinc-400 tracking-wider uppercase mb-4">Costos Indirectos y Reales</h4>
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <Dato label="Costo Real de Taller" value={precio.real_cost} hint="Base térmica: Gasto real en gas + Materiales." tone="negative" large />
+                  <Dato label="Gasto Gas Real" value={precio.gas_cost} tone="neutral" />
+                  <Dato label="Dif. Quema (Tarifa - Gas)" value={precio.firing_difference} tone="neutral" />
+                  <Dato label="Gastos Administrativos" value={precio.administration_cost} hint="Fijo por cotización" tone="neutral" />
+                  <Dato label="Espacio y Servicios" value={precio.space_cost} hint="Días efectivos" tone="neutral" />
+                </dl>
+              </div>
+
+              <hr className="border-black/5" />
+
+              {/* Referencias de Precio y Ganancia */}
+              <div>
+                <h4 className="text-xs font-bold text-zinc-400 tracking-wider uppercase mb-4">Métricas de Rentabilidad</h4>
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div className="sm:col-span-2 bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                    <Dato 
+                      label="Ganancia Neta Estimada" 
+                      value={precio.estimated_profit} 
+                      hint="Total sin IGV - Costo Real" 
+                      tone={perdida ? "negative" : "positive"} 
+                      large 
+                    />
+                    <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-emerald-200">
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wide">Margen Efectivo:</span>
+                      <span className={`text-xs font-black ${perdida ? 'text-red-600' : 'text-emerald-700'}`}>{precio.effective_margin_percent}%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 bg-zinc-50 rounded-xl border border-black/5">
+                    <Dato label="Precio Objetivo (×3)" value={precio.price_target} hint="Referencia estándar." />
+                  </div>
+                  <div className="p-4 bg-red-50/50 rounded-xl border border-red-100">
+                    <Dato label="Precio Mínimo (×2)" value={precio.price_min} hint="Por debajo es pérdida." tone="negative" />
+                  </div>
+                </dl>
+              </div>
+
+              <div className="text-xs text-zinc-400 text-center pt-2">
+                * El Ajuste por Redondeo aplicado al Subtotal es de {precio.rounding_adjustment}.
+              </div>
+
+            </div>
+          )}
+        </div>
 
         <Reparto precio={precio} />
 

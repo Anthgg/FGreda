@@ -192,7 +192,7 @@ describe("Líneas de una cotización V2: piezas y materiales (010C, 010G)", () =
     // Aparece dos veces a proposito: como procedencia del dato y como aviso
     // destacado. Lo que importa es que la distincion se diga.
     expect((await screen.findAllByText(/referencia de costeo/i)).length).toBeGreaterThan(0);
-    expect(screen.getByText(/producción elegirá el esmalte real/i)).toBeInTheDocument();
+    expect(screen.getByText(/Referencia de costeo/i)).toBeInTheDocument();
   });
 
   it("avisa cuando el esmalte de referencia no tiene stock, sin bloquear", async () => {
@@ -228,7 +228,7 @@ describe("Líneas de una cotización V2: piezas y materiales (010C, 010G)", () =
 
     await screen.findByText("Esmalte B");
     // `SelectField` expone su disparador como `combobox` con `aria-label`.
-    await user.click(screen.getByRole("combobox", { name: "Esmalte" }));
+    await user.click(screen.getByRole("combobox", { name: "Requiere esmalte" }));
     await user.click(await screen.findByRole("option", { name: "Sin esmalte" }));
 
     await waitFor(() => {

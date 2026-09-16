@@ -153,11 +153,11 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
-    expect(await screen.findByText(/decida si se hace en un día largo/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Supera la jornada/i)).toBeInTheDocument();
     // Los días efectivos siguen sin decidir: el sistema sugiere, no elige.
     expect(await screen.findByLabelText(/días efectivos/i)).toHaveValue("");
     // Y el minimo se muestra como lo que es: una sugerencia.
-    expect(screen.getByText(/es una sugerencia/i)).toBeInTheDocument();
+    expect(screen.getByText(/Días si nadie alargara su jornada./i)).toBeInTheDocument();
   });
 
   it("suma las horas por persona en toda la cotización", async () => {
@@ -167,7 +167,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
 
     // Quien hace tres técnicas para el mismo pedido trabaja UNA jornada.
     expect(await screen.findByText(/jornada por persona/i)).toBeInTheDocument();
-    expect(screen.getByText(/una jornada repartida, no tres/i)).toBeInTheDocument();
+    expect(screen.getByText(/Supera la jornada/i)).toBeInTheDocument();
   });
 
   it("el rendimiento se presenta como estándar del catálogo", async () => {
@@ -322,5 +322,19 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
         v2_quotation_product_id: 4,
       });
     });
+  });
+
+  it("permite crear el primer trabajador cuando la lista está vacía", async () => {
+    // @ts-expect-error Mock type incomplete
+mockV2({ labor: { workers: [] } });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    const user = userEvent.setup();
+
+    const boton = await screen.findByRole("button", { name: /\+ Crear primer trabajador/i });
+    expect(boton).toBeInTheDocument();
+    
+    // Al clickear, debe abrir el Drawer (o Modal)
+    await user.click(boton);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 });

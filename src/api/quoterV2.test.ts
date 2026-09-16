@@ -73,4 +73,10 @@ describe("cliente del Cotizador V2", () => {
       expect(encontrados, `${modulo} importa V2: ${encontrados.join(", ")}`).toHaveLength(0);
     }
   });
+
+  it("el PDF V2 usa su propio endpoint de quotations-v2 y no el de Legacy", () => {
+    const contenido = readFileSync(resolve(SRC, 'api/quoterV2.ts'), 'utf-8');
+    expect(contenido).toContain('${QUOTER_V2_BASE}/${id}/pdf');
+    expect(contenido).not.toContain('`/quotations/${id}/pdf`');
+  });
 });

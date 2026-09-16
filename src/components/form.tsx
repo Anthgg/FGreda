@@ -249,16 +249,19 @@ export function PrimaryButton({
   type = "submit",
   onClick,
   className = "",
+  form,
 }: {
   children: ReactNode;
   disabled?: boolean | undefined;
   type?: "submit" | "button" | undefined;
   onClick?: (() => void) | undefined;
   className?: string | undefined;
+  form?: string | undefined;
 }) {
   return (
     <button
       type={type}
+      form={form}
       disabled={disabled}
       onClick={onClick}
       className={`inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:bg-zinc-800 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 cursor-pointer ${className}`}

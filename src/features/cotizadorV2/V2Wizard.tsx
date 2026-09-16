@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { PrimaryButton, SecondaryButton } from "@/components/form";
+
 import { Spinner } from "@/components/Spinner";
 import { Panel } from "@/features/masters/MasterTable";
 import { V2ClienteStep } from "@/features/cotizadorV2/V2ClienteStep";
@@ -10,6 +10,7 @@ import { V2LaborLines } from "@/features/cotizadorV2/V2LaborLines";
 import { V2PricingPanel } from "@/features/cotizadorV2/V2PricingPanel";
 import { V2ProductLines } from "@/features/cotizadorV2/V2ProductLines";
 import { V2ResumenStep } from "@/features/cotizadorV2/V2ResumenStep";
+import { V2BottomBar } from "@/features/cotizadorV2/components/V2BottomBar";
 import { useV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
 import { useV2Firing } from "@/features/cotizadorV2/useQuoterV2Firing";
 import { useV2Labor } from "@/features/cotizadorV2/useQuoterV2Labor";
@@ -333,49 +334,15 @@ export function V2Wizard({ quotationId, paso }: { quotationId: number; paso: Pas
         irAPaso={irAPaso}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] pt-4">
-        <div>
-          {anterior ? (
-            <SecondaryButton type="button" onClick={() => irAPaso(anterior.id)}>
-              ← {anterior.titulo}
-            </SecondaryButton>
-          ) : null}
-        </div>
-        {/* No hay botón de «guardar borrador»: cada campo guarda al salir de él.
-            Lo que sí hay es el ESTADO de esos guardados, porque «se guarda solo»
-            sin distinguir pendiente de hecho es lo que invita a recargar a mitad. */}
-        <p
-          data-testid="estado-guardado"
-          role="status"
-          aria-live="polite"
-          className={[
-            "text-[11px]",
-            guardado.fallidos.length > 0
-              ? "font-semibold text-red-700"
-              : guardado.hayRiesgo
-                ? "font-medium text-amber-700"
-                : "text-zinc-500",
-          ].join(" ")}
-        >
-          {/* Por orden de gravedad: un rechazo manda sobre un guardado en
-              curso, y este sobre un borrador que aún no ha salido. «Guardados»
-              solo cuando no queda NADA de lo anterior. */}
-          {guardado.fallidos.length > 0
-            ? "Hay cambios que no se guardaron. Revíselos antes de salir."
-            : guardado.enVuelo > 0
-              ? "Guardando cambios… no cierre ni recargue la página."
-              : guardado.borradores > 0
-                ? "Hay cambios sin guardar: se guardan al salir del campo."
-                : "Todos los cambios guardados."}
-        </p>
-        <div>
-          {siguiente ? (
-            <PrimaryButton type="button" onClick={() => irAPaso(siguiente.id)}>
-              {siguiente.titulo} →
-            </PrimaryButton>
-          ) : null}
-        </div>
-      </div>
+      <V2BottomBar
+        anterior={anterior}
+        siguiente={siguiente}
+        onAnterior={() => anterior && irAPaso(anterior.id)}
+        onSiguiente={() => siguiente && irAPaso(siguiente.id)}
+        guardadoFallidos={guardado.fallidos.length}
+        guardadoEnVuelo={guardado.enVuelo}
+        guardadoBorradores={guardado.borradores}
+      />
     </div>
   );
 }

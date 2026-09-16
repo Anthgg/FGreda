@@ -213,6 +213,8 @@ function CampoDeTexto({
   );
 }
 
+import { formatMoney, formatPercent, formatVolume, formatNumber } from "@/utils/formatters";
+
 function Linea({
   linea,
   quotationId,
@@ -245,17 +247,22 @@ function Linea({
     esperarGuardado(actualizar, "linea-editar", { lineId: linea.id, payload: cambios });
 
   return (
-    <div className="rounded-2xl border border-black/[0.06] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold text-zinc-900">
-          {linea.product_name ?? "Línea sin nombre"}
-        </h3>
+    <div className="rounded-2xl border border-black/10 bg-white shadow-xs p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-900">
+            {linea.product_name ?? "Línea sin nombre"}
+          </h3>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            {linea.product_id !== null ? "Producto de catálogo" : "Pieza de encargo"}
+          </p>
+        </div>
         {canEdit && vista === "piezas" ? (
           <button
             type="button"
             onClick={() => borrar.mutate(linea.id)}
             disabled={borrar.isPending}
-            className="text-xs font-semibold text-red-700 underline underline-offset-2 cursor-pointer disabled:opacity-40"
+            className="text-xs font-semibold text-red-600 hover:text-red-700 underline underline-offset-2 cursor-pointer disabled:opacity-40 transition-colors"
           >
             Quitar
           </button>
@@ -264,65 +271,69 @@ function Linea({
 
       {vista === "piezas" ? (
         <>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <CampoDeTexto
-              label="Nombre de la pieza"
-              value={linea.product_name ?? ""}
-              onCommit={(valor) => guardarYEsperar({ product_name: valor })}
-              disabled={!canEdit || linea.product_id !== null}
-              {...(linea.product_id !== null
-                ? { hint: "Lo fija el catálogo: esta línea cuelga de un producto." }
-                : {})}
-            />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <DecimalField
-              label="Cantidad"
-              requirement="required"
+                label="Cantidad"
+                requirement="required"
               value={String(linea.quantity)}
               onCommit={(valor) => {
-                // Siendo obligatorio, `DecimalField` nunca llama aquí con el
-                // campo vacío: lo explica en pantalla. Mandar un 0 en su lugar
-                // convertiría un borrado a medias en «cero piezas».
                 return valor !== null ? guardarYEsperar({ quantity: Number(valor) }) : undefined;
               }}
               disabled={!canEdit}
               entero
             />
+            
+            <div className="sm:col-span-1">
+              {linea.product_id === null ? (
+                <CampoDeTexto
+                  label="Nombre de la pieza"
+                  value={linea.product_name ?? ""}
+                  onCommit={(valor) => guardarYEsperar({ product_name: valor })}
+                  disabled={!canEdit}
+                />
+              ) : null}
+            </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {MEDIDAS.map(({ campo, etiqueta }) => (
-              <DecimalField
-                key={campo}
-                label={etiqueta}
-                value={linea[campo]}
-                onCommit={(valor) => guardarYEsperar({ [campo]: valor })}
-                disabled={!canEdit}
-              />
-            ))}
+          <div className="mt-5 border-t border-black/5 pt-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-3">Medidas</h4>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {MEDIDAS.map(({ campo, etiqueta }) => (
+                <DecimalField
+                  key={campo}
+                  label={etiqueta}
+                  value={linea[campo]}
+                  onCommit={(valor) => guardarYEsperar({ [campo]: valor })}
+                  disabled={!canEdit}
+                />
+              ))}
+            </div>
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Dato label="Volumen unitario" value={`${linea.unit_volume_cm3} cm³`} />
-            <Dato label="Volumen total" value={`${linea.total_volume_cm3} cm³`} />
+          
+          <div className="mt-5 bg-zinc-50 rounded-xl p-4 flex flex-wrap gap-x-8 gap-y-4">
+            <Dato label="Volumen unitario" value={formatVolume(linea.unit_volume_cm3)} />
+            <Dato label="Volumen total" value={formatVolume(linea.total_volume_cm3)} />
             <Dato
-              label="% del horno"
-              value={`${linea.firing_occupancy_percent} %`}
-              hint="Cuánto ocupa. No es un multiplicador de precio."
+              label="Ocupación estimada"
+              value={formatPercent(linea.firing_occupancy_percent)}
             />
             <Dato
               label="Quema asignada"
-              value={linea.firing_commercial_cost}
-              hint={`Gas real: ${linea.firing_gas_cost}`}
+              value={formatMoney(linea.firing_commercial_cost)}
             />
-          </dl>
+          </div>
         </>
       ) : null}
 
       {vista === "materiales" ? (
         <>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="border-l-2 border-emerald-500 pl-4 py-1 mb-5">
+            <h4 className="text-sm font-semibold text-zinc-900">PASTA</h4>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <SelectField
-              label="Pasta"
-              requirement="required"
+                label="Pasta"
+                requirement="required"
               value={linea.body_material_id ? String(linea.body_material_id) : SIN_MATERIAL}
               options={opcionesPasta}
               onChange={(valor) =>
@@ -339,71 +350,59 @@ function Linea({
             />
           </div>
 
-          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Dato
-              label="Costo por unidad"
-              value={linea.body_cost_per_unit ?? "—"}
-              hint={linea.body_cost_is_override ? "Ajustado en esta cotización" : undefined}
-            />
-            <Dato label="Peso total" value={linea.body_total_weight} />
-            <Dato label="Costo de pasta" value={linea.body_cost} />
-            <Dato label="Costo de materiales" value={linea.materials_cost} />
-          </dl>
-
-          <div className="mt-4 border-t border-black/[0.04] pt-4">
-        <SelectField
-          label="Esmalte"
-          requirement="required"
-          value={linea.requires_glaze ? "SI" : "NO"}
-          options={[
-            { value: "NO", label: "Sin esmalte" },
-            { value: "SI", label: "Con esmalte" },
-          ]}
-          onChange={(valor) => guardar({ requires_glaze: valor === "SI" })}
-          disabled={!canEdit}
-          hint="Apagado por defecto. Al apagarlo, su peso y su costo quedan en cero."
-        />
-
-        {linea.requires_glaze ? (
-          <>
-            <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Dato
-                label="Esmalte usado"
-                value={linea.glaze_material_name ?? "—"}
-                hint={
-                  linea.glaze_is_reference
-                    ? "Referencia de costeo: el activo más caro por gramo"
-                    : "Elegido explícitamente"
-                }
-              />
-              <Dato label="Proporción" value={`${linea.glaze_percent ?? "—"} %`} />
-              <Dato label="Costo por gramo" value={linea.glaze_cost_per_unit ?? "—"} />
-              <Dato label="Peso de esmalte" value={linea.glaze_total_weight} />
-              <Dato
-                label="Volumen"
-                value={`${linea.glaze_volume_ml} ml`}
-                hint={
-                  linea.glaze_conversion_is_fallback
-                    ? "Conversión de reserva 1 g = 1 ml: este material no declara la suya"
-                    : `Conversión ${linea.glaze_ml_per_gram} ml/g`
-                }
-              />
-              <Dato label="Costo de esmalte" value={linea.glaze_cost} />
-            </dl>
-            {linea.glaze_is_reference ? (
-              <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
-                Esto es una <strong>referencia de costeo</strong>, no el esmalte final. Producción
-                elegirá el esmalte real y el precio de esta cotización no cambiará por eso.
-              </p>
-            ) : null}
-          </>
-            ) : null}
+          <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4 bg-zinc-50 rounded-xl p-4">
+            <Dato label="Peso total" value={`${formatNumber(linea.body_total_weight)} ${linea.body_uom ?? ""}`} />
+            <Dato label="Costo de pasta" value={formatMoney(linea.body_cost)} />
           </div>
+
+          <div className="mt-6 border-l-2 border-emerald-500 pl-4 py-1 mb-5">
+            <h4 className="text-sm font-semibold text-zinc-900">ESMALTE</h4>
+          </div>
+          
+          <div className="mb-4">
+            <SelectField
+                label="Requiere esmalte"
+                requirement="required"
+              value={linea.requires_glaze ? "SI" : "NO"}
+              options={[
+                { value: "NO", label: "Sin esmalte" },
+                { value: "SI", label: "Con esmalte" },
+              ]}
+              onChange={(valor) => guardar({ requires_glaze: valor === "SI" })}
+              disabled={!canEdit}
+            />
+          </div>
+
+          {linea.requires_glaze ? (
+            <div className="bg-zinc-50 rounded-xl p-4">
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Dato
+                  label="Esmalte usado"
+                  value={linea.glaze_material_name ?? "—"}
+                  hint={
+                    linea.glaze_is_reference
+                      ? "Referencia de costeo (más caro)"
+                      : "Elegido explícitamente"
+                  }
+                />
+                <Dato label="Proporción" value={formatPercent(linea.glaze_percent)} />
+                <Dato label="Peso total" value={`${formatNumber(linea.glaze_total_weight)} g`} />
+                <Dato label="Costo de esmalte" value={formatMoney(linea.glaze_cost)} />
+              </dl>
+              {linea.glaze_is_reference ? (
+                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 border border-amber-100">
+                  Esto es una <strong>referencia de costeo</strong>, no el esmalte final.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-zinc-500 italic mt-2">Sin esmalte</p>
+          )}
         </>
       ) : null}
 
       {linea.warnings.length > 0 ? (
-        <ul className="mt-3 space-y-1">
+        <ul className="mt-5 space-y-1">
           {linea.warnings.map((codigo) => (
             <Aviso key={codigo} codigo={codigo} />
           ))}
