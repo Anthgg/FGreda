@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { type PasoId } from "@/features/cotizadorV2/pasos";
 import { forzarGuardadoDeBorradores } from "@/components/borradores";
