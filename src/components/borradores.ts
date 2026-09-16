@@ -20,6 +20,7 @@ import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 
 const sucios = new Set<string>();
 const oyentes = new Set<() => void>();
+const guardadores = new Map<string, () => void>();
 
 function avisar(): void {
   for (const oyente of oyentes) oyente();
@@ -30,12 +31,30 @@ function suscribir(oyente: () => void): () => void {
   return () => oyentes.delete(oyente);
 }
 
-function marcar(id: string, sucio: boolean): void {
+function marcar(id: string, sucio: boolean, guardarFn?: () => void): void {
   const estaba = sucios.has(id);
+  
+  if (sucio && guardarFn) {
+    guardadores.set(id, guardarFn);
+  } else if (!sucio) {
+    guardadores.delete(id);
+  }
+
   if (sucio === estaba) return;
   if (sucio) sucios.add(id);
   else sucios.delete(id);
   avisar();
+}
+
+/**
+ * Fuerza la ejecución del guardado de todos los borradores pendientes.
+ * Se utiliza desde el botón "Guardar borrador" para no depender de eventos de blur frágiles.
+ */
+export function forzarGuardadoDeBorradores(): void {
+  const funciones = Array.from(guardadores.values());
+  for (const guardar of funciones) {
+    guardar();
+  }
 }
 
 /**
@@ -139,7 +158,7 @@ export function useBorradorProtegido(sucio: boolean, confirmarAlSalir: () => voi
   useEffect(() => {
     ultimoConfirmar.current = confirmarAlSalir;
     ultimoSucio.current = sucio;
-    marcar(id, sucio);
+    marcar(id, sucio, () => ultimoConfirmar.current());
   });
 
   useEffect(
