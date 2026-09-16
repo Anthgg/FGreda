@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { SelectField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
-import { Panel, TableWrapper, Td, Th } from "@/features/masters/MasterTable";
+import { Panel } from "@/features/masters/MasterTable";
+import { TableWrapper, Th, Td } from "@/features/cotizadorV2/components/V2Table";
 import { describeError } from "@/features/settings/messages";
 import { useSetV2Pricing, useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
 import { PRICING_WARNING_LABEL, type V2Pricing } from "@/types/quoterV2Pricing";

@@ -20,7 +20,7 @@ export function formatMoney(value: string | number | null | undefined, currencyC
 
   // Formato "en-US" usa comas para miles y puntos para decimales.
   const formatted = new Intl.NumberFormat("en-US", {
-    useGrouping: false, minimumFractionDigits: 2,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(num);
 
@@ -44,7 +44,7 @@ export function formatPercent(value: string | number | null | undefined, fractio
   if (Number.isNaN(num)) return String(value);
 
   const formatted = new Intl.NumberFormat("en-US", {
-    useGrouping: false, minimumFractionDigits: 0,
+    minimumFractionDigits: 0,
     maximumFractionDigits: fractionDigits
   }).format(num);
 
@@ -63,7 +63,7 @@ export function formatNumber(value: string | number | null | undefined): string 
   if (Number.isNaN(num)) return String(value);
 
   return new Intl.NumberFormat("en-US", {
-    useGrouping: false, maximumFractionDigits: 6
+    maximumFractionDigits: 6
   }).format(num);
 }
 
@@ -75,7 +75,7 @@ export function formatVolume(value: string | number | null | undefined): string 
   const num = Number(value);
   if (Number.isNaN(num)) return String(value);
 
-  return `${new Intl.NumberFormat("en-US", { useGrouping: false, maximumFractionDigits: 2 }).format(num)} cm³`;
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(num)} cm³`;
 }
 
 /**
@@ -86,7 +86,7 @@ export function formatHours(value: string | number | null | undefined): string {
   const num = Number(value);
   if (Number.isNaN(num)) return String(value);
 
-  return `${new Intl.NumberFormat("en-US", { useGrouping: false, maximumFractionDigits: 2 }).format(num)} h`;
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(num)} h`;
 }
 
 /**
@@ -97,5 +97,5 @@ export function formatDimension(value: string | number | null | undefined): stri
   const num = Number(value);
   if (Number.isNaN(num)) return String(value);
 
-  return `${new Intl.NumberFormat("en-US", { useGrouping: false, maximumFractionDigits: 2 }).format(num)} cm`;
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(num)} cm`;
 }

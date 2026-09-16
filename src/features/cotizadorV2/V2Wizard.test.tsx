@@ -581,9 +581,9 @@ describe("El resumen (paso 7)", () => {
 
     renderApp(["/cotizador-v2/7/resumen"]);
 
-    expect(await screen.findByText("S/ 9077.74")).toBeInTheDocument();
+    expect(await screen.findByText("S/ 9,077.74")).toBeInTheDocument();
     const precio = screen.getByTestId("resumen-precio");
-    expect(within(precio).getByText("S/ 9077.74")).toBeInTheDocument();
+    expect(within(precio).getByText("S/ 9,077.74")).toBeInTheDocument();
     expect(within(precio).queryByText(/9077\.740000000000000000/)).not.toBeInTheDocument();
   });
 
@@ -593,10 +593,10 @@ describe("El resumen (paso 7)", () => {
     renderApp(["/cotizador-v2/7/resumen"]);
 
     // Subtotal 7693 + IGV 1384.74 = 9077.74. La pantalla los pinta, no los suma.
-    expect(await screen.findByText("S/ 7693.00")).toBeInTheDocument();
+    expect(await screen.findByText("S/ 7,693.00")).toBeInTheDocument();
     const precio = screen.getByTestId("resumen-precio");
-    expect(within(precio).getByText("S/ 7693.00")).toBeInTheDocument();
-    expect(within(precio).getByText("S/ 9077.74")).toBeInTheDocument();
+    expect(within(precio).getByText("S/ 7,693.00")).toBeInTheDocument();
+    expect(within(precio).getByText("S/ 9,077.74")).toBeInTheDocument();
   });
 });
 

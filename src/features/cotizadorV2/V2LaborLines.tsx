@@ -3,7 +3,8 @@ import { useState } from "react";
 import { PrimaryButton, SelectField, SecondaryButton } from "@/components/form";
 import { DecimalField } from "@/components/DecimalField";
 import { Spinner } from "@/components/Spinner";
-import { EmptyState, Panel, TableWrapper, Td, Th } from "@/features/masters/MasterTable";
+import { EmptyState, Panel } from "@/features/masters/MasterTable";
+import { TableWrapper, Th, Td } from "@/features/cotizadorV2/components/V2Table";
 import { describeError } from "@/features/settings/messages";
 import {
   useAddV2Labor,
