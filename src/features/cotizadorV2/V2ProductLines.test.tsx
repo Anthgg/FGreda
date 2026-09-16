@@ -228,7 +228,7 @@ describe("Líneas de una cotización V2: piezas y materiales (010C, 010G)", () =
 
     await screen.findByText("Esmalte B");
     // `SelectField` expone su disparador como `combobox` con `aria-label`.
-    await user.click(screen.getByRole("combobox", { name: "Esmalte" }));
+    await user.click(screen.getByRole("combobox", { name: "Requiere esmalte" }));
     await user.click(await screen.findByRole("option", { name: "Sin esmalte" }));
 
     await waitFor(() => {

@@ -273,7 +273,8 @@ function Linea({
         <>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <DecimalField
-              label="Cantidad"
+                label="Cantidad"
+                requirement="required"
               value={String(linea.quantity)}
               onCommit={(valor) => {
                 return valor !== null ? guardarYEsperar({ quantity: Number(valor) }) : undefined;
@@ -331,7 +332,8 @@ function Linea({
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <SelectField
-              label="Pasta"
+                label="Pasta"
+                requirement="required"
               value={linea.body_material_id ? String(linea.body_material_id) : SIN_MATERIAL}
               options={opcionesPasta}
               onChange={(valor) =>
@@ -359,7 +361,8 @@ function Linea({
           
           <div className="mb-4">
             <SelectField
-              label="Requiere esmalte"
+                label="Requiere esmalte"
+                requirement="required"
               value={linea.requires_glaze ? "SI" : "NO"}
               options={[
                 { value: "NO", label: "Sin esmalte" },

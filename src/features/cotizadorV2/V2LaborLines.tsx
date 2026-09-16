@@ -339,10 +339,30 @@ export function V2LaborLines({
             <h2 className="text-base font-semibold text-zinc-900 mb-4">MANO DE OBRA</h2>
             
             {sinMaestros ? (
-              <p className="text-sm text-amber-700 bg-amber-50 p-4 rounded-xl">
-                Para asignar trabajo hace falta al menos un trabajador y una técnica. 
-                Se dan de alta en Configuración → Cotizador V2.
-              </p>
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                <p className="text-sm text-amber-700 mb-3">
+                  Para asignar trabajo hace falta al menos un trabajador y una técnica.
+                </p>
+                {(tecnicas.data?.items ?? []).length === 0 && (
+                  <p className="text-sm text-amber-700 font-medium mb-3">
+                    Falta al menos una técnica configurada (Configuración - Cotizador V2).
+                  </p>
+                )}
+                {(trabajadores.data?.items ?? []).length === 0 && (
+                  <div className="border-t border-amber-200/50 pt-3">
+                    <p className="text-sm text-amber-700 mb-2">
+                      No hay trabajadores registrados.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerOpen(true)}
+                      className="text-xs font-semibold px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                    >
+                      + Crear primer trabajador
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <SelectField

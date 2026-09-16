@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { type PasoId } from "@/features/cotizadorV2/pasos";
 import { forzarGuardadoDeBorradores } from "@/components/borradores";
@@ -22,27 +22,12 @@ export function V2BottomBar({
   guardadoEnVuelo,
   guardadoBorradores,
 }: V2BottomBarProps) {
-  const [justSaved, setJustSaved] = useState(false);
-
-  // Un pequeño hack visual para el boton "Guardar borrador": 
-  // si acaba de limpiar los borradores, mostramos exito por unos segundos.
-  useEffect(() => {
-    if (guardadoEnVuelo > 0) {
-      setJustSaved(false);
-    } else if (guardadoBorradores === 0 && guardadoFallidos === 0) {
-      // asumiendo que acaba de guardar o esta limpio
-      setJustSaved(true);
-      const t = setTimeout(() => setJustSaved(false), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [guardadoEnVuelo, guardadoBorradores, guardadoFallidos]);
-
+  
   const estadoTexto = 
     guardadoFallidos > 0 ? "Hay cambios que no se guardaron." :
-    guardadoEnVuelo > 0 ? "Guardando cambios..." :
-    guardadoBorradores > 0 ? "Cambios sin guardar" :
-    justSaved ? "✓ Borrador guardado" :
-    "✓ Guardado automáticamente";
+    guardadoEnVuelo > 0 ? "Guardando..." :
+    guardadoBorradores > 0 ? "Hay cambios sin guardar" :
+    "Todos los cambios guardados";
   
   const estadoClase = 
     guardadoFallidos > 0 ? "text-red-700 font-semibold" :
@@ -61,7 +46,7 @@ export function V2BottomBar({
       </div>
 
       <div className="flex flex-col items-center flex-1 min-w-[200px]">
-        <p className={`text-xs ${estadoClase}`} aria-live="polite">
+        <p data-testid="estado-guardado" className={`text-xs ${estadoClase}`} aria-live="polite">
           {estadoTexto}
         </p>
       </div>

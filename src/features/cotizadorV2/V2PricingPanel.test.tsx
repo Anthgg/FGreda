@@ -106,7 +106,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    expect(within(panel).getByText("Costo real")).toBeInTheDocument();
+    expect(within(panel).getByText("Costos de Produccin")).toBeInTheDocument();
     expect(within(panel).getByText("Costo de producción")).toBeInTheDocument();
     expect(within(panel).getByText(V2_PRICING.real_cost)).toBeInTheDocument();
     expect(within(panel).getByText(V2_PRICING.production_cost)).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    const selector = within(panel).getByRole("combobox", { name: "Factor comercial" });
+    const selector = within(panel).getByRole("combobox", { name: "Multiplicador Comercial" });
     expect(selector).toHaveTextContent("×3.00");
     // Y no hay ningún campo que pida un porcentaje: «+150 %» y «×2,5» son el
     // mismo número, y uno de los dos se confunde con «+250 %».
@@ -162,7 +162,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
     const panel = await panelDePrecio();
     const user = userEvent.setup();
-    await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
+    await user.click(within(panel).getByRole("combobox", { name: "Multiplicador Comercial" }));
 
     expect(await screen.findByRole("option", { name: "×10.00" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "×4.00" })).toBeInTheDocument();
@@ -176,7 +176,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    expect(within(panel).getByRole("combobox", { name: "Factor comercial" })).toHaveTextContent(
+    expect(within(panel).getByRole("combobox", { name: "Multiplicador Comercial" })).toHaveTextContent(
       "×2.10",
     );
   });
@@ -187,7 +187,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
     const panel = await panelDePrecio();
     const user = userEvent.setup();
-    await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
+    await user.click(within(panel).getByRole("combobox", { name: "Multiplicador Comercial" }));
     await user.click(await screen.findByRole("option", { name: "×2.50" }));
 
     await waitFor(() => {
@@ -207,7 +207,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    expect(within(panel).getByText(/el igv se aplica al final/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/El IGV se aplica al final/i)).toBeInTheDocument();
     expect(within(panel).getByText(/no es ingreso del taller/i)).toBeInTheDocument();
     expect(within(panel).getByText("IGV 18.000000 %")).toBeInTheDocument();
   });
@@ -218,7 +218,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    expect(within(panel).getByText(/sumando las líneas ya redondeadas/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/reconstruye sumando las lneas/i)).toBeInTheDocument();
     expect(within(panel).getByText(V2_PRICING.subtotal)).toBeInTheDocument();
     // El total sale dos veces a proposito: en la cabecera del panel y en el
     // bloque del documento. Se comprueba que estan los dos.
@@ -231,7 +231,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    expect(within(panel).getByText("Ajuste por redondeo")).toBeInTheDocument();
+    expect(within(panel).getByText("Ajuste por Redondeo")).toBeInTheDocument();
     expect(within(panel).getByText(V2_PRICING.rounding_adjustment)).toBeInTheDocument();
   });
 
@@ -302,7 +302,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
 
     const panel = await panelDePrecio();
-    expect(within(panel).getByRole("combobox", { name: "Factor comercial" })).toBeDisabled();
+    expect(within(panel).getByRole("combobox", { name: "Multiplicador Comercial" })).toBeDisabled();
   });
 
   it("un fallo al guardar se explica en vez de perderse", async () => {
@@ -317,7 +317,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
     renderApp(["/cotizador-v2/7/precio"]);
     const panel = await panelDePrecio();
     const user = userEvent.setup();
-    await user.click(within(panel).getByRole("combobox", { name: "Factor comercial" }));
+    await user.click(within(panel).getByRole("combobox", { name: "Multiplicador Comercial" }));
     await user.click(await screen.findByRole("option", { name: "×2.00" }));
 
     // El panel lo explica, y el asistente lo recoge en un aviso que sobrevive
