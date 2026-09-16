@@ -362,8 +362,8 @@ jobs:
     env:
       # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
       # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      # `main`: el servidor de revision ya esta fusionado (Anthgg/BGreda#59), asi
-      # que se prueba la combinacion que queda desplegable.
+      # `main`: el backend de 010H (Anthgg/BGreda#60) ya esta fusionado, y la
+      # E2E del frontend se repite contra el antes de fusionar el suyo.
       BACKEND_REF: main
     services:
       postgres:
@@ -492,6 +492,9 @@ jobs:
       - name: E2E de la revision
         env:
           E2E_BASE_URL: http://localhost:4173
+          # Fase 010H: el texto del PDF se extrae con el pypdf del backend de la
+          # revision, ya instalado en su entorno.
+          E2E_PDF_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
         run: npx playwright test -c playwright.revision.config.ts
 
       - name: Apagar backend y app

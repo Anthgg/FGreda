@@ -194,6 +194,13 @@ export function V2ClienteStep({
     (notes) => esperarGuardado(guardar, "cabecera", { notes }),
     canEdit,
   );
+  // Fase 010H. Lo que SÍ lee el cliente: sale en el PDF. Va aparte de las notas
+  // internas para que nadie publique sin querer lo que escribió para el taller.
+  const notasCliente = useTextoDiferido(
+    cotizacion.client_notes ?? "",
+    (client_notes) => esperarGuardado(guardar, "cabecera", { client_notes }),
+    canEdit,
+  );
 
   const busquedaReposada = useEspera(busqueda);
   const terceros = useQuery({
@@ -337,6 +344,17 @@ export function V2ClienteStep({
           rows={2}
           disabled={!canEdit}
           hint="Para el taller. No salen en el documento del cliente."
+        />
+      </div>
+      <div onFocus={notasCliente.alEntrar} onBlur={notasCliente.confirmar}>
+        <TextAreaField
+          label="Observaciones para el cliente"
+          requirement="optional"
+          value={notasCliente.borrador}
+          onChange={notasCliente.setBorrador}
+          rows={2}
+          disabled={!canEdit}
+          hint="Salen en el PDF que recibe el cliente, junto a las condiciones comerciales."
         />
       </div>
 

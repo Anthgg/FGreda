@@ -7,6 +7,10 @@ import { describeError } from "@/features/settings/messages";
 import { V2MaterialsTable } from "@/features/settings/V2MaterialsTable";
 import { V2WorkforceTable } from "@/features/settings/V2WorkforceTable";
 import {
+  V2ExtrasTable,
+  V2ProductProcessesTable,
+} from "@/features/settings/V2ProcessMasters";
+import {
   useSetV2KilnRate,
   useUpdateV2Settings,
   useV2Settings,
@@ -434,6 +438,8 @@ export function QuoterV2Section({ canEdit }: { canEdit: boolean }) {
       <KilnRatesTable canEdit={canEdit} />
       <V2MaterialsTable canEdit={canEdit} />
       <V2WorkforceTable canEdit={canEdit} />
+      <V2ProductProcessesTable canEdit={canEdit} />
+      <V2ExtrasTable canEdit={canEdit} />
     </div>
   );
 }

@@ -43,6 +43,18 @@ const COTIZACION = {
   code: "CTZ-V2-2026-000001",
   pricing_engine_version: "V2",
   status: "DRAFT",
+  effective_status: "DRAFT" as const,
+  client_notes: null,
+  issued_at: null,
+  valid_until: null,
+  expires_at: null,
+  issued_by_name: null,
+  cancelled_at: null,
+  cancelled_by_name: null,
+  cancel_reason: null,
+  duplicated_from_id: null,
+  open_duplicate_id: null,
+  production_handoff: null,
   production_type: "RETAIL",
   customer_id: 3,
   customer_name: "Cliente demo",
@@ -126,6 +138,14 @@ function mockV2(
   const cotizacion = { ...COTIZACION, ...overrides.cotizacion };
   return mockFetch((url, init) => {
     if (url.includes("/auth/csrf")) return csrfResponse();
+    // Correccion 010H: procesos de la pieza y adicionales.
+    if (url.includes("/processes")) return jsonResponse(200, { items: [], warnings: [] });
+    if (url.includes("/quoter-v2/products/")) {
+      return jsonResponse(200, { product_id: 1, items: [] });
+    }
+    if (url.includes("/extras")) {
+      return jsonResponse(200, { items: [], extras_cost_total: "0.000000", warnings: [] });
+    }
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/workers")) return jsonResponse(200, V2_WORKERS);
     if (url.includes("/quoter-v2/techniques")) return jsonResponse(200, V2_TECHNIQUES);

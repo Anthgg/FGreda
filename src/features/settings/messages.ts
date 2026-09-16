@@ -157,6 +157,63 @@ export function describeError(error: unknown): string {
     case "V2_PRICING_INPUT_INVALID":
       return error.message;
 
+    // ---- Correccion 010H: tecnicas del trabajador ---------------------
+    case "V2_LABOR_TECHNIQUE_NOT_ALLOWED":
+      return (
+        "Ese trabajador no tiene habilitada esa técnica en su ficha. Habilítela en " +
+        "Configuración → Cotizador V2 → Trabajadores, o asigne a quien sí la tenga."
+      );
+
+    // ---- Correccion 010H: procesos de la pieza y adicionales ----------
+    case "V2_PROCESS_NOT_FOUND":
+      return "Ese proceso ya no está en esta cotización. Vuelva a cargar la pantalla.";
+    case "V2_PROCESS_DUPLICATED":
+      return (
+        "Esa técnica ya es un proceso de esta pieza. Para más piezas del mismo proceso, " +
+        "cambie las piezas por trabajar en la fila que ya existe."
+      );
+    case "V2_PROCESS_INPUT_INVALID":
+      return error.message;
+    case "V2_EXTRA_NOT_FOUND":
+      return "Ese adicional ya no existe.";
+    case "V2_EXTRA_INPUT_INVALID":
+      return error.message;
+    case "V2_EXTRA_VERSION_CONFLICT":
+      return (
+        "Alguien cambió este adicional mientras usted lo editaba. Vuelva a cargar la " +
+        "pantalla y repita el cambio."
+      );
+    case "V2_EXTRA_QUOTATION_NOT_EDITABLE":
+      return "La cotización ya no admite cambios: los adicionales quedaron congelados al emitirla.";
+
+    // ---- Fase 010H: emision, anulacion, duplicacion y produccion V2 --
+    case "V2_QUOTATION_CHANGED":
+      return (
+        "La cotización cambió mientras usted revisaba el resumen. Revise los valores " +
+        "actualizados antes de confirmar."
+      );
+    case "V2_QUOTATION_INCOMPLETE":
+      return "A la cotización le faltan datos para emitirse. Revise la lista de pendientes.";
+    case "V2_QUOTATION_ALREADY_ISSUED":
+      return "Otra persona ya emitió esta cotización con otros valores. Recargue la página.";
+    case "V2_QUOTATION_NOT_CONFIRMABLE":
+      return "Una cotización anulada no puede emitirse. Duplíquela para empezar de nuevo.";
+    case "V2_QUOTATION_NOT_CANCELLABLE":
+      return "Esta cotización ya pasó a producción y no puede anularse desde aquí.";
+    case "V2_QUOTATION_NOT_DUPLICABLE":
+      return "Solo se puede duplicar una cotización vencida o anulada.";
+    case "V2_QUOTATION_NOT_SENDABLE":
+      return "Solo una cotización emitida y vigente puede pasar a producción.";
+    case "V2_QUOTATION_EXPIRED":
+      return (
+        "La cotización venció: sus precios ya no pueden aceptarse. Duplíquela para " +
+        "actualizar precios."
+      );
+    case "V2_QUOTATION_PDF_DRAFT_BLOCKED":
+      return "El PDF existe cuando la cotización se emite. Confírmela primero.";
+    case "V2_QUOTATION_PDF_NOT_ISSUED":
+      return "Esta cotización se anuló sin llegar a emitirse, así que no tiene documento.";
+
     // ---- Fase 010B: la configuracion del Cotizador V2 ----------------
     case "V2_SETTINGS_VERSION_CONFLICT":
       return (

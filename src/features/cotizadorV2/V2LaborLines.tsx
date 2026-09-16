@@ -19,6 +19,14 @@ import {
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { useV2QuotationProducts } from "@/features/cotizadorV2/useQuoterV2Materials";
 import {
+  useAddV2Process,
+  useAssignV2Process,
+  useRemoveV2Process,
+  useSetV2ProcessQuantity,
+  useV2Processes,
+} from "@/features/cotizadorV2/useQuoterV2Processes";
+import type { V2Process } from "@/types/quoterV2Processes";
+import {
   LABOR_WARNING_LABEL,
   WORKER_TYPE_LABEL,
   type V2LaborLine,
@@ -45,6 +53,20 @@ const SIN_PRODUCTO = "";
  * - añadir personal **suma costo y no resta plazo**. Que dos personas tarden
  *   la mitad es una decisión, no una división.
  *
+ * ## El orden lo manda la pieza (corrección de 010H)
+ *
+ * Una taza necesita torno, asa y acabado: esos PROCESOS aparecen solos al
+ * añadir la pieza, con sus piezas puestas y sus horas ya calculadas, y el
+ * trabajador se elige después. No hay que reconstruir a mano el proceso
+ * productivo ni acordarse de que la taza lleva asa.
+ *
+ * Quitar un proceso, añadir uno extra o escribir otras piezas son decisiones de
+ * ESTA cotización: el maestro de la pieza no cambia.
+ *
+ * «Personal adicional» ya no es una técnica. Es una PERSONA de más haciendo una
+ * técnica real, y por eso vive en su propia sección: suma costo y no reduce el
+ * plazo.
+ *
  * Los campos guardan al SALIR del campo. Borrar «20» para escribir «50» pasa
  * por la cadena vacía, y `Number("")` es 0: guardando al vuelo, unas horas se
  * pondrían en cero a mitad de una pulsación.
@@ -53,7 +75,12 @@ const SIN_PRODUCTO = "";
 const SIN_SELECCION = "";
 
 function Aviso({ codigo }: { codigo: string }) {
-  return <li className="text-xs text-amber-700">{LABOR_WARNING_LABEL[codigo] ?? codigo}</li>;
+  // Nunca el código crudo: un aviso nuevo del backend sin traducir se dice en palabras.
+  return (
+    <li className="text-xs text-amber-700">
+      {LABOR_WARNING_LABEL[codigo] ?? "Hay un aviso del cálculo de mano de obra. Revise esta tarea."}
+    </li>
+  );
 }
 
 function Dato({ label, value, hint }: { label: string; value: string; hint?: string | undefined }) {
@@ -66,20 +93,29 @@ function Dato({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
+/**
+ * Una tarea que no sale de un proceso: el personal adicional que apoya al
+ * pedido. Las tareas de un proceso se editan en la fila del proceso.
+ */
 function Tarea({
   tarea,
   quotationId,
   canEdit,
+  dentroDeProceso = false,
 }: {
   tarea: V2LaborLine;
   quotationId: number;
   canEdit: boolean;
+  /**
+   * La tarea sale de un proceso: las piezas, el producto y el «quitar» los
+   * manda la fila del proceso, y repetirlos aqui dejaria dos mandos para lo
+   * mismo. Queda lo que es de la tarea: las horas acordadas y la tarifa pactada.
+   */
+  dentroDeProceso?: boolean;
 }) {
   const actualizar = useUpdateV2Labor(quotationId);
   const esperarGuardado = useEsperarGuardado(quotationId);
   const borrar = useDeleteV2Labor(quotationId);
-  const trabajadores = useV2Workers(true);
-  const tecnicas = useV2Techniques(true);
   const productos = useV2QuotationProducts(quotationId);
 
   const guardar = (cambios: Record<string, unknown>) =>
@@ -99,41 +135,31 @@ function Tarea({
             </span>
           ) : null}
         </h3>
-        {canEdit ? (
+        {canEdit && !dentroDeProceso ? (
           <button
             type="button"
             onClick={() => borrar.mutate(tarea.id)}
             disabled={borrar.isPending}
+            title="Quita esta técnica solo de esta cotización. La ficha del trabajador no cambia."
             className="text-xs font-semibold text-red-700 underline underline-offset-2 cursor-pointer disabled:opacity-40"
           >
-            Quitar
+            Quitar de esta cotización
           </button>
         ) : null}
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <SelectField
+      {/* Quién y qué técnica no se cambian aquí: hacerlo dejaría combinar a una
+          persona con una técnica que no sabe hacer. Para otra técnica se quita
+          el proceso y se pone el que toca. Dentro de un proceso, las piezas y
+          el producto los manda la fila del proceso: dos mandos para lo mismo
+          serían dos verdades. */}
+      {dentroDeProceso ? null : (
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Dato
           label="Trabajador"
-          requirement="required"
-          value={String(tarea.worker_id)}
-          options={(trabajadores.data?.items ?? []).map((worker) => ({
-            value: String(worker.id),
-            label: `${worker.name} (${WORKER_TYPE_LABEL[worker.worker_type]})`,
-          }))}
-          onChange={(valor) => guardar({ worker_id: Number(valor) })}
-          disabled={!canEdit}
+          value={`${tarea.worker_name} (${WORKER_TYPE_LABEL[tarea.worker_type]})`}
         />
-        <SelectField
-          label="Técnica"
-          requirement="required"
-          value={String(tarea.technique_id)}
-          options={(tecnicas.data?.items ?? []).map((tecnica) => ({
-            value: String(tecnica.id),
-            label: tecnica.name,
-          }))}
-          onChange={(valor) => guardar({ technique_id: Number(valor) })}
-          disabled={!canEdit}
-        />
+        <Dato label="Técnica" value={tarea.technique_name} />
         <SelectField
           label="Producto"
           requirement="optional"
@@ -165,7 +191,8 @@ function Tarea({
           disabled={!canEdit}
           hint={`Se miden en ${tarea.technique_unit}, como dice la técnica.`}
         />
-      </div>
+        </div>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Dato
@@ -357,16 +384,11 @@ export function V2LaborLines({
   canEdit: boolean;
 }) {
   const query = useV2Labor(quotationId);
-  const anadir = useAddV2Labor(quotationId);
   const planificar = useSetV2Planning(quotationId);
   const esperarGuardado = useEsperarGuardado(quotationId);
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
-  const productos = useV2QuotationProducts(quotationId);
-  const [worker, setWorker] = useState(SIN_SELECCION);
-  const [tecnica, setTecnica] = useState(SIN_SELECCION);
-  const [producto, setProducto] = useState(SIN_PRODUCTO);
-  const [adicional, setAdicional] = useState(false);
+  const procesos = useV2Processes(quotationId);
 
   if (query.isPending) return <Spinner className="size-5" label="Cargando mano de obra..." />;
   if (query.isError) {
@@ -381,6 +403,20 @@ export function V2LaborLines({
   }
 
   const pagina = query.data;
+  // Las tareas que NO salen de un proceso: el personal adicional y lo que se
+  // cargo antes de que existieran los procesos. Las de un proceso se editan en
+  // su fila, y repetirlas aqui seria el mismo trabajo dos veces en pantalla.
+  //
+  // Mientras los procesos no hayan llegado no se sabe cuales son suyas, y dar
+  // por suelta una tarea que si tiene proceso la mostraria con su producto y su
+  // «quitar» —justo lo que esta correccion quita de en medio—. Hasta que
+  // lleguen, aqui solo va lo que se declaro personal adicional.
+  const conProceso = new Set(
+    (procesos.data?.items ?? []).map((proceso) => proceso.labor_id).filter((id) => id !== null),
+  );
+  const sueltas = procesos.isSuccess
+    ? pagina.items.filter((tarea) => !conProceso.has(tarea.id))
+    : pagina.items.filter((tarea) => tarea.is_additional_personnel);
   const sinMaestros =
     (trabajadores.data?.items ?? []).length === 0 || (tecnicas.data?.items ?? []).length === 0;
 
@@ -401,15 +437,36 @@ export function V2LaborLines({
         falta. No hay un precio por técnica.
       </p>
 
-      {pagina.items.length === 0 ? (
-        <EmptyState message="Todavía no hay trabajo asignado en esta cotización." />
-      ) : (
-        <div className="mt-4 space-y-4">
-          {pagina.items.map((tarea) => (
-            <Tarea key={tarea.id} tarea={tarea} quotationId={quotationId} canEdit={canEdit} />
-          ))}
-        </div>
-      )}
+      {/* Fase 010H. Sin trabajadores o sin técnicas no se puede asignar nada, y
+          eso se dice ARRIBA, junto al estado vacío. Antes el aviso vivía al
+          final del panel, debajo de la ilustración, y quien miraba la pantalla
+          solo leía «no hay trabajo asignado» sin saber por qué ni dónde
+          arreglarlo. */}
+      {canEdit && sinMaestros ? (
+        <p
+          data-testid="mano-de-obra-sin-maestros"
+          role="status"
+          className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
+        >
+          {(trabajadores.data?.items ?? []).length === 0
+            ? "No hay trabajadores activos"
+            : "No hay técnicas activas"}
+          {(trabajadores.data?.items ?? []).length === 0 &&
+          (tecnicas.data?.items ?? []).length === 0
+            ? " ni técnicas activas"
+            : ""}
+          . Para asignar trabajo hace falta al menos uno de cada: se dan de alta en Configuración →
+          Cotizador V2.
+        </p>
+      ) : null}
+
+      <Procesos quotationId={quotationId} canEdit={canEdit} tareas={pagina.items} />
+
+      <PersonalAdicional
+        quotationId={quotationId}
+        canEdit={canEdit && !sinMaestros}
+        tareas={sueltas}
+      />
 
       <CargaDeJornada carga={pagina.workday_load} />
 
@@ -433,108 +490,410 @@ export function V2LaborLines({
 
       <Ilustracion quotationId={quotationId} canEdit={canEdit} />
 
-      {canEdit ? (
-        <div className="mt-6 border-t border-black/[0.04] pt-4">
-          {sinMaestros ? (
-            <p className="text-xs text-zinc-500">
-              Para asignar trabajo hace falta al menos un trabajador y una técnica. Se dan de alta en
-              Configuración → Cotizador V2.
-            </p>
-          ) : (
-            <div className="flex flex-wrap items-end gap-3">
-              <SelectField
-                label="Trabajador"
-                requirement="optional"
-                value={worker}
-                options={[
-                  { value: SIN_SELECCION, label: "Seleccionar..." },
-                  ...(trabajadores.data?.items ?? []).map((fila) => ({
-                    value: String(fila.id),
-                    label: fila.name,
-                  })),
-                ]}
-                onChange={setWorker}
-                className="max-w-xs"
-              />
-              <SelectField
-                label="Técnica"
-                requirement="optional"
-                value={tecnica}
-                options={[
-                  { value: SIN_SELECCION, label: "Seleccionar..." },
-                  ...(tecnicas.data?.items ?? []).map((fila) => ({
-                    value: String(fila.id),
-                    label: fila.name,
-                  })),
-                ]}
-                onChange={setTecnica}
-                className="max-w-xs"
-              />
-              <SelectField
-                label="Producto"
-                requirement="optional"
-                value={producto}
-                options={[
-                  { value: SIN_PRODUCTO, label: "Todo el pedido" },
-                  ...(productos.data?.items ?? []).map((linea) => ({
-                    value: String(linea.id),
-                    label: linea.product_name ?? `Línea ${linea.id}`,
-                  })),
-                ]}
-                onChange={setProducto}
-                hint="Sin producto: apoya al pedido entero."
-                className="max-w-xs"
-              />
-              <SelectField
-                label="Personal adicional"
-                requirement="optional"
-                value={adicional ? "SI" : "NO"}
-                options={[
-                  { value: "NO", label: "No" },
-                  { value: "SI", label: "Sí" },
-                ]}
-                onChange={(valor) => setAdicional(valor === "SI")}
-                hint="Suma costo. No reduce el plazo."
-                className="max-w-xs"
-              />
-              <PrimaryButton
-                type="button"
-                disabled={
-                  anadir.isPending || worker === SIN_SELECCION || tecnica === SIN_SELECCION
-                }
-                onClick={() =>
-                  anadir.mutate(
-                    {
-                      worker_id: Number(worker),
-                      technique_id: Number(tecnica),
-                      is_additional_personnel: adicional,
-                      ...(producto === SIN_PRODUCTO
-                        ? {}
-                        : { v2_quotation_product_id: Number(producto) }),
-                    },
-                    {
-                      onSuccess: () => {
-                        setWorker(SIN_SELECCION);
-                        setTecnica(SIN_SELECCION);
-                        setProducto(SIN_PRODUCTO);
-                        setAdicional(false);
-                      },
-                    },
-                  )
-                }
-              >
-                {anadir.isPending ? "Añadiendo..." : "Añadir trabajo"}
-              </PrimaryButton>
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Los procesos de cada pieza, que es de donde sale el trabajo.
+ *
+ * Cada fila dice QUE hay que hacer, a CUANTAS piezas y CUANTAS horas son al
+ * rendimiento estandar. El trabajador se elige al final, y solo entonces
+ * aparece el costo: un proceso sin asignar no cuesta nada todavia.
+ */
+function Procesos({
+  quotationId,
+  canEdit,
+  tareas,
+}: {
+  quotationId: number;
+  canEdit: boolean;
+  tareas: V2LaborLine[];
+}) {
+  const procesos = useV2Processes(quotationId);
+  const productos = useV2QuotationProducts(quotationId);
+
+  if (procesos.isPending) return <Spinner className="size-5" label="Cargando procesos..." />;
+  if (procesos.isError) {
+    return (
+      <p role="alert" className="mt-4 text-xs text-red-600">
+        {describeError(procesos.error)}
+      </p>
+    );
+  }
+
+  const lineas = productos.data?.items ?? [];
+  const todos = procesos.data?.items ?? [];
+
+  if (lineas.length === 0) {
+    return (
+      <EmptyState message="Añada primero las piezas: sus procesos aparecen solos, con sus horas ya calculadas." />
+    );
+  }
+
+  return (
+    <div data-testid="procesos" className="mt-4 space-y-4">
+      {lineas.map((linea) => {
+        const suyos = todos.filter((proceso) => proceso.v2_quotation_product_id === linea.id);
+        return (
+          <div key={linea.id} className="rounded-2xl border border-black/[0.06] p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold text-zinc-900">
+                {linea.product_name ?? `Línea ${linea.id}`}
+              </h3>
+              <span className="text-xs text-zinc-500">{linea.quantity} piezas</span>
             </div>
-          )}
+
+            {suyos.length === 0 ? (
+              <p
+                data-testid={`pieza-sin-procesos-${linea.id}`}
+                className="mt-2 text-xs text-amber-700"
+              >
+                Esta pieza no tiene procesos configurados en su ficha. Añádalos aquí para esta
+                cotización, o configúrelos en Configuración → Cotizador V2.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {suyos.map((proceso) => (
+                  <ProcesoFila
+                    key={proceso.id}
+                    proceso={proceso}
+                    tarea={tareas.find((una) => una.id === proceso.labor_id)}
+                    quotationId={quotationId}
+                    canEdit={canEdit}
+                  />
+                ))}
+              </ul>
+            )}
+
+            {canEdit ? (
+              <AgregarProceso
+                quotationId={quotationId}
+                lineaId={linea.id}
+                yaPuestas={suyos.map((proceso) => proceso.technique_id)}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProcesoFila({
+  proceso,
+  tarea,
+  quotationId,
+  canEdit,
+}: {
+  proceso: V2Process;
+  tarea: V2LaborLine | undefined;
+  quotationId: number;
+  canEdit: boolean;
+}) {
+  const asignar = useAssignV2Process(quotationId);
+  const quitar = useRemoveV2Process(quotationId);
+  const piezas = useSetV2ProcessQuantity(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
+  const trabajadores = useV2Workers(true);
+
+  // Solo quienes tienen la tecnica habilitada en su ficha. El backend rechaza
+  // igualmente a los demas; esto evita ofrecer lo que va a fallar.
+  const capaces = (trabajadores.data?.items ?? []).filter((worker) =>
+    worker.technique_ids.includes(proceso.technique_id),
+  );
+
+  return (
+    <li className="rounded-xl border border-black/[0.04] bg-white p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-zinc-900">
+          {proceso.technique_name}
+          {proceso.origin === "MANUAL" ? (
+            <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600">
+              Añadido en esta cotización
+            </span>
+          ) : null}
+        </p>
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={() => quitar.mutate(proceso.id)}
+            disabled={quitar.isPending}
+            title="Quita el proceso solo de esta cotización. La ficha de la pieza no cambia."
+            className="text-xs font-semibold text-red-700 underline underline-offset-2 cursor-pointer disabled:opacity-40"
+          >
+            Quitar de esta cotización
+          </button>
+        ) : null}
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <DecimalField
+          label="Piezas por trabajar"
+          requirement="required"
+          value={proceso.quantity}
+          onCommit={(valor) =>
+            valor !== null
+              ? esperarGuardado(piezas, "proceso-editar", {
+                  processId: proceso.id,
+                  quantity: valor,
+                })
+              : undefined
+          }
+          disabled={!canEdit}
+          hint={
+            proceso.quantity_overridden
+              ? "Escritas para este encargo: cambiar la cantidad de la pieza ya no las mueve."
+              : `De la cantidad de la pieza. Se miden en ${proceso.technique_unit}.`
+          }
+        />
+        <Dato
+          label="Rendimiento estándar"
+          value={proceso.manual_hours ? "Horas a mano" : `${proceso.standard_capacity} / jornada`}
+          hint="Lo fija el catálogo de técnicas."
+        />
+        <Dato
+          label="Horas calculadas"
+          value={proceso.calculated_hours ?? "—"}
+          hint={proceso.manual_hours ? "Esta técnica no las deduce del rendimiento." : undefined}
+        />
+        <SelectField
+          label="Trabajador"
+          requirement="optional"
+          value={proceso.worker_id === null ? SIN_SELECCION : String(proceso.worker_id)}
+          options={[
+            { value: SIN_SELECCION, label: "Sin asignar" },
+            ...capaces.map((worker) => ({
+              value: String(worker.id),
+              label: `${worker.name} (${WORKER_TYPE_LABEL[worker.worker_type]})`,
+            })),
+          ]}
+          onChange={(valor) =>
+            asignar.mutate({
+              processId: proceso.id,
+              workerId: valor === SIN_SELECCION ? null : Number(valor),
+            })
+          }
+          disabled={!canEdit || asignar.isPending}
+          hint={
+            capaces.length === 0
+              ? "Nadie tiene esta técnica habilitada en su ficha."
+              : "Solo aparece quien sabe hacer esta técnica."
+          }
+        />
+      </div>
+
+      {tarea !== undefined ? (
+        <div className="mt-3 border-t border-black/[0.04] pt-3">
+          <Tarea tarea={tarea} quotationId={quotationId} canEdit={canEdit} dentroDeProceso />
+        </div>
+      ) : proceso.worker_id !== null ? (
+        <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-black/[0.04] pt-3 sm:grid-cols-3">
+          <Dato label="Horas finales" value={proceso.final_hours ?? "—"} />
+          <Dato label="Costo" value={proceso.labor_cost ?? "—"} />
+        </dl>
+      ) : (
+        <p className="mt-3 text-xs text-zinc-500">
+          Sin trabajador todavía: este proceso aún no cuesta nada.
+        </p>
+      )}
+
+      {proceso.warnings.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {proceso.warnings.map((codigo) => (
+            <Aviso key={codigo} codigo={codigo} />
+          ))}
+        </ul>
+      ) : null}
+
+      {asignar.isError || quitar.isError || piezas.isError ? (
+        <p role="alert" className="mt-2 text-xs text-red-600">
+          {describeError(asignar.error ?? quitar.error ?? piezas.error)}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+/** Un proceso mas para esta pieza, solo en esta cotizacion. */
+function AgregarProceso({
+  quotationId,
+  lineaId,
+  yaPuestas,
+}: {
+  quotationId: number;
+  lineaId: number;
+  yaPuestas: number[];
+}) {
+  const tecnicas = useV2Techniques(true);
+  const anadir = useAddV2Process(quotationId);
+  const [elegida, setElegida] = useState(SIN_SELECCION);
+
+  const disponibles = (tecnicas.data?.items ?? []).filter(
+    (tecnica) => !yaPuestas.includes(tecnica.id),
+  );
+  if (disponibles.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-black/[0.04] pt-3">
+      <SelectField
+        label="Agregar proceso"
+        requirement="optional"
+        value={elegida}
+        options={[
+          { value: SIN_SELECCION, label: "Seleccionar..." },
+          ...disponibles.map((tecnica) => ({ value: String(tecnica.id), label: tecnica.name })),
+        ]}
+        onChange={setElegida}
+        className="max-w-xs"
+        hint="Solo para esta cotización: la ficha de la pieza no cambia."
+      />
+      <PrimaryButton
+        type="button"
+        disabled={elegida === SIN_SELECCION || anadir.isPending}
+        onClick={() =>
+          anadir.mutate(
+            { v2_quotation_product_id: lineaId, technique_id: Number(elegida) },
+            { onSuccess: () => setElegida(SIN_SELECCION) },
+          )
+        }
+      >
+        {anadir.isPending ? "Añadiendo..." : "Agregar"}
+      </PrimaryButton>
+      {anadir.isError ? (
+        <p role="alert" className="text-xs text-red-600">
+          {describeError(anadir.error)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Personal adicional: una PERSONA de mas, no una tecnica.
+ *
+ * Antes «Personal adicional» era una tecnica del catalogo, lo que mezclaba dos
+ * cosas distintas: que se hace y quien lo hace. Aqui se elige a la persona, la
+ * tecnica real que viene a hacer y las horas se ajustan a mano.
+ */
+function PersonalAdicional({
+  quotationId,
+  canEdit,
+  tareas,
+}: {
+  quotationId: number;
+  canEdit: boolean;
+  tareas: V2LaborLine[];
+}) {
+  const anadir = useAddV2Labor(quotationId);
+  const trabajadores = useV2Workers(true);
+  const tecnicas = useV2Techniques(true);
+  const productos = useV2QuotationProducts(quotationId);
+  const [worker, setWorker] = useState(SIN_SELECCION);
+  const [tecnica, setTecnica] = useState(SIN_SELECCION);
+  const [producto, setProducto] = useState(SIN_PRODUCTO);
+
+  const ficha = (trabajadores.data?.items ?? []).find((fila) => String(fila.id) === worker);
+  const suyas = ficha
+    ? (tecnicas.data?.items ?? []).filter((una) => ficha.technique_ids.includes(una.id))
+    : [];
+
+  return (
+    <div data-testid="personal-adicional" className="mt-6 border-t border-black/[0.04] pt-4">
+      <h3 className="text-sm font-semibold text-zinc-900">Personal adicional y apoyo</h3>
+      <p className="mt-1 text-xs text-zinc-500">
+        Gente de más para el pedido. Añadir personal suma costo y no reduce el plazo: que dos
+        personas tarden la mitad es una decisión, no una división.
+      </p>
+
+      {tareas.length > 0 ? (
+        <div className="mt-3 space-y-4">
+          {tareas.map((tarea) => (
+            <Tarea key={tarea.id} tarea={tarea} quotationId={quotationId} canEdit={canEdit} />
+          ))}
+        </div>
+      ) : null}
+
+      {canEdit ? (
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <SelectField
+            label="Trabajador"
+            requirement="optional"
+            value={worker}
+            options={[
+              { value: SIN_SELECCION, label: "Seleccionar..." },
+              ...(trabajadores.data?.items ?? []).map((fila) => ({
+                value: String(fila.id),
+                label: `${fila.name} (${WORKER_TYPE_LABEL[fila.worker_type]})`,
+              })),
+            ]}
+            onChange={(valor) => {
+              setWorker(valor);
+              setTecnica(SIN_SELECCION);
+            }}
+            className="max-w-xs"
+          />
+          <SelectField
+            label="Técnica que viene a hacer"
+            requirement="optional"
+            value={tecnica}
+            options={[
+              { value: SIN_SELECCION, label: "Seleccionar..." },
+              ...suyas.map((una) => ({ value: String(una.id), label: una.name })),
+            ]}
+            onChange={setTecnica}
+            disabled={ficha === undefined}
+            className="max-w-xs"
+            hint={
+              ficha !== undefined && suyas.length === 0
+                ? `${ficha.name} no tiene técnicas habilitadas en su ficha.`
+                : "Solo las que sabe hacer."
+            }
+          />
+          <SelectField
+            label="Producto"
+            requirement="optional"
+            value={producto}
+            options={[
+              { value: SIN_PRODUCTO, label: "Todo el pedido" },
+              ...(productos.data?.items ?? []).map((linea) => ({
+                value: String(linea.id),
+                label: linea.product_name ?? `Línea ${linea.id}`,
+              })),
+            ]}
+            onChange={setProducto}
+            className="max-w-xs"
+          />
+          <PrimaryButton
+            type="button"
+            disabled={worker === SIN_SELECCION || tecnica === SIN_SELECCION || anadir.isPending}
+            onClick={() =>
+              anadir.mutate(
+                {
+                  worker_id: Number(worker),
+                  technique_id: Number(tecnica),
+                  v2_quotation_product_id: producto === SIN_PRODUCTO ? null : Number(producto),
+                  is_additional_personnel: true,
+                },
+                {
+                  onSuccess: () => {
+                    setWorker(SIN_SELECCION);
+                    setTecnica(SIN_SELECCION);
+                  },
+                },
+              )
+            }
+          >
+            {anadir.isPending ? "Añadiendo..." : "Añadir personal"}
+          </PrimaryButton>
           {anadir.isError ? (
-            <p role="alert" className="mt-3 text-xs text-red-600">
+            <p role="alert" className="text-xs text-red-600">
               {describeError(anadir.error)}
             </p>
           ) : null}
         </div>
       ) : null}
-      </div>
-    </Panel>
+    </div>
   );
 }

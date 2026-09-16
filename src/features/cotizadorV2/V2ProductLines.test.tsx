@@ -25,6 +25,18 @@ const COTIZACION = {
   code: "CTZ-V2-2026-000001",
   pricing_engine_version: "V2",
   status: "DRAFT",
+  effective_status: "DRAFT" as const,
+  client_notes: null,
+  issued_at: null,
+  valid_until: null,
+  expires_at: null,
+  issued_by_name: null,
+  cancelled_at: null,
+  cancelled_by_name: null,
+  cancel_reason: null,
+  duplicated_from_id: null,
+  open_duplicate_id: null,
+  production_handoff: null,
   production_type: "RETAIL",
   customer_id: null,
   customer_name: null,
@@ -116,6 +128,14 @@ const PASTAS = {
 function mockV2(overrides: { lines?: Response; update?: Response } = {}) {
   return mockFetch((url, init) => {
     if (url.includes("/auth/csrf")) return csrfResponse();
+    // Correccion 010H: procesos de la pieza y adicionales.
+    if (url.includes("/processes")) return jsonResponse(200, { items: [], warnings: [] });
+    if (url.includes("/quoter-v2/products/")) {
+      return jsonResponse(200, { product_id: 1, items: [] });
+    }
+    if (url.includes("/extras")) {
+      return jsonResponse(200, { items: [], extras_cost_total: "0.000000", warnings: [] });
+    }
     if (url.includes("/auth/me")) return jsonResponse(200, { authenticated: true, user: USER });
     if (url.includes("/quoter-v2/materials")) return jsonResponse(200, PASTAS);
     // La pantalla monta tambien la mano de obra (010D): sin estas respuestas

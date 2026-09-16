@@ -190,6 +190,7 @@ export const V2_WORKERS = {
       hourly_rate: "15.000000000000",
       notes: null,
       version: 1,
+      technique_ids: [3],
     },
     {
       id: 2,
@@ -202,6 +203,7 @@ export const V2_WORKERS = {
       hourly_rate: "20.000000000000",
       notes: null,
       version: 1,
+      technique_ids: [],
     },
   ],
 };
@@ -217,6 +219,7 @@ export const V2_TECHNIQUES = {
       default_capacity_per_workday: "50.000000",
       unit: "piezas",
       requires_glaze: true,
+      manual_hours: false,
       units_per_hour: "6.250000000000",
       notes: null,
       version: 1,
@@ -360,6 +363,7 @@ export const V2_PRICING: V2Pricing = {
   labor_cost: "569.066666666666666000",
   illustration_cost: "44.000000000000000000",
   space_cost: "560.000000000000000000",
+  extras_cost: "0.000000000000000000",
   administration_cost: "200.000000",
   gas_cost: "210.000000000000000000",
   firing_commercial_cost: "900.000000000000000000",

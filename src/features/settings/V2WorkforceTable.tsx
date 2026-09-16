@@ -33,6 +33,13 @@ import {
  * El rendimiento es un **estándar**, no una medición: que alguien haga hoy 70
  * piezas donde dice 50 no lo sube, y que haga 40 no lo baja. Cambiarlo es una
  * decisión de taller, y se toma en esta pantalla.
+ *
+ * ## Qué sabe hacer cada persona (corrección de 010H)
+ *
+ * Cada trabajador tiene sus **técnicas habilitadas**. Al elegirlo en una
+ * cotización se cargan esas técnicas, y quien cotiza quita las que no tocan en
+ * ESA cotización; aquí no cambia nada por eso. El rendimiento sigue siendo de
+ * la técnica, no de la persona.
  */
 
 const WORKER_TYPE_OPTIONS = (Object.keys(WORKER_TYPE_LABEL) as V2WorkerType[]).map((value) => ({
@@ -106,23 +113,87 @@ function validarTrabajador(draft: WorkerDraft): string | null {
   return null;
 }
 
+/**
+ * Casillas de técnicas. Ofrece las activas y, además, las retiradas que la
+ * persona ya tenía, marcadas como tales: esconderlas haría que guardar la ficha
+ * las quitara sin que nadie lo pidiera.
+ */
+function CasillasDeTecnicas({
+  tecnicas,
+  marcadas,
+  onChange,
+  disabled,
+  etiqueta,
+}: {
+  tecnicas: readonly V2Technique[];
+  marcadas: readonly number[];
+  onChange: (ids: number[]) => void;
+  disabled: boolean;
+  etiqueta: string;
+}) {
+  const visibles = tecnicas.filter(
+    (tecnica) => tecnica.active || marcadas.includes(tecnica.id),
+  );
+  if (visibles.length === 0) {
+    return (
+      <p className="text-xs text-zinc-500">
+        Todavía no hay técnicas en el catálogo. Añádalas abajo, en «Técnicas».
+      </p>
+    );
+  }
+  return (
+    <fieldset className="text-xs">
+      <legend className="text-zinc-500">{etiqueta}</legend>
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {visibles.map((tecnica) => (
+          <label key={tecnica.id} className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={marcadas.includes(tecnica.id)}
+              disabled={disabled}
+              onChange={(evento) =>
+                onChange(
+                  evento.target.checked
+                    ? [...marcadas, tecnica.id]
+                    : marcadas.filter((id) => id !== tecnica.id),
+                )
+              }
+            />
+            {tecnica.name}
+            {tecnica.active ? null : <span className="text-zinc-400">(retirada)</span>}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function WorkersTable({ canEdit }: { canEdit: boolean }) {
   const query = useV2Workers();
+  const catalogo = useV2Techniques();
   const crear = useCreateV2Worker();
   const actualizar = useUpdateV2Worker();
   const [draft, setDraft] = useState<WorkerDraft>(WORKER_NUEVO);
+  const [tecnicasNuevo, setTecnicasNuevo] = useState<number[]>([]);
+  const [editando, setEditando] = useState<{ id: number; ids: number[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (query.isPending) return <Spinner className="size-5" label="Cargando trabajadores..." />;
-  if (query.isError) {
+  // Sin el catálogo de técnicas no se sabe qué sabe hacer nadie: mostrar ids
+  // crudos o editar con un catálogo a medias sería peor que esperar.
+  if (query.isPending || catalogo.isPending) {
+    return <Spinner className="size-5" label="Cargando trabajadores..." />;
+  }
+  if (query.isError || catalogo.isError) {
     return (
       <div role="alert" className="text-sm text-red-700">
-        {describeError(query.error)}
+        {describeError(query.error ?? catalogo.error)}
       </div>
     );
   }
 
   const trabajadores = query.data?.items ?? [];
+  const tecnicas = catalogo.data?.items ?? [];
+  const nombreDe = (id: number) => tecnicas.find((t) => t.id === id)?.name ?? `#${id}`;
   const set = (campo: keyof WorkerDraft) => (valor: string) =>
     setDraft({ ...draft, [campo]: valor });
 
@@ -136,9 +207,13 @@ function WorkersTable({ canEdit }: { canEdit: boolean }) {
         worker_type: draft.worker_type as V2WorkerType,
         daily_rate: draft.daily_rate.trim(),
         workday_hours: draft.workday_hours.trim() === "" ? null : draft.workday_hours.trim(),
+        technique_ids: tecnicasNuevo,
       },
       {
-        onSuccess: () => setDraft(WORKER_NUEVO),
+        onSuccess: () => {
+          setDraft(WORKER_NUEVO);
+          setTecnicasNuevo([]);
+        },
         onError: (fallo) => setError(describeError(fallo)),
       },
     );
@@ -149,6 +224,12 @@ function WorkersTable({ canEdit }: { canEdit: boolean }) {
       id: worker.id,
       payload: { expected_version: worker.version, active: !worker.active },
     });
+
+  const guardarTecnicas = (worker: V2Worker, ids: number[]) =>
+    actualizar.mutate(
+      { id: worker.id, payload: { expected_version: worker.version, technique_ids: ids } },
+      { onSuccess: () => setEditando(null) },
+    );
 
   return (
     <div className="sm:col-span-2 space-y-4">
@@ -170,6 +251,7 @@ function WorkersTable({ canEdit }: { canEdit: boolean }) {
                 <th className="py-2 pr-3 font-semibold">Jornal</th>
                 <th className="py-2 pr-3 font-semibold">Jornada</th>
                 <th className="py-2 pr-3 font-semibold">Por hora</th>
+                <th className="py-2 pr-3 font-semibold">Técnicas que sabe hacer</th>
                 <th className="py-2 pr-3 font-semibold">Estado</th>
                 {canEdit ? <th className="py-2 font-semibold" /> : null}
               </tr>
@@ -189,11 +271,53 @@ function WorkersTable({ canEdit }: { canEdit: boolean }) {
                     ) : null}
                   </td>
                   <td className="py-2 pr-3 text-zinc-800">{worker.hourly_rate}</td>
+                  <td className="py-2 pr-3 text-zinc-600" data-testid={`tecnicas-de-${worker.id}`}>
+                    {editando?.id === worker.id ? (
+                      <div className="space-y-2">
+                        <CasillasDeTecnicas
+                          tecnicas={tecnicas}
+                          marcadas={editando.ids}
+                          onChange={(ids) => setEditando({ id: worker.id, ids })}
+                          disabled={actualizar.isPending}
+                          etiqueta={`Técnicas de ${worker.name}`}
+                        />
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => guardarTecnicas(worker, editando.ids)}
+                            disabled={actualizar.isPending}
+                            className="text-xs font-semibold text-zinc-900 underline underline-offset-2 cursor-pointer disabled:opacity-40"
+                          >
+                            {actualizar.isPending ? "Guardando..." : "Guardar técnicas"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditando(null)}
+                            className="text-xs text-zinc-600 underline underline-offset-2 cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : worker.technique_ids.length === 0 ? (
+                      <span className="text-amber-700">Ninguna: no se le puede asignar trabajo</span>
+                    ) : (
+                      worker.technique_ids.map(nombreDe).join(", ")
+                    )}
+                  </td>
                   <td className="py-2 pr-3 text-zinc-600">
                     {worker.active ? "Activo" : "De baja"}
                   </td>
                   {canEdit ? (
-                    <td className="py-2">
+                    <td className="py-2 space-x-3 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setEditando({ id: worker.id, ids: [...worker.technique_ids] })}
+                        disabled={actualizar.isPending || editando?.id === worker.id}
+                        className="text-xs font-semibold text-zinc-700 underline underline-offset-2 cursor-pointer disabled:opacity-40"
+                      >
+                        Editar técnicas
+                      </button>
                       <button
                         type="button"
                         onClick={() => cambiarEstado(worker)}
@@ -238,6 +362,15 @@ function WorkersTable({ canEdit }: { canEdit: boolean }) {
               hint="Vacío: usa la jornada del taller."
             />
           </div>
+          <div className="mt-3">
+            <CasillasDeTecnicas
+              tecnicas={tecnicas}
+              marcadas={tecnicasNuevo}
+              onChange={setTecnicasNuevo}
+              disabled={crear.isPending}
+              etiqueta="Técnicas que sabe hacer"
+            />
+          </div>
           {error ? (
             <p role="alert" className="mt-3 text-xs text-red-600">
               {error}
@@ -272,6 +405,7 @@ type TechniqueDraft = {
   default_capacity_per_workday: string;
   unit: string;
   requires_glaze: string;
+  manual_hours: string;
 };
 
 const TECHNIQUE_NUEVA: TechniqueDraft = {
@@ -280,6 +414,7 @@ const TECHNIQUE_NUEVA: TechniqueDraft = {
   default_capacity_per_workday: "",
   unit: "piezas",
   requires_glaze: "NO",
+  manual_hours: "NO",
 };
 
 function validarTecnica(draft: TechniqueDraft): string | null {
@@ -323,6 +458,7 @@ function TechniquesTable({ canEdit }: { canEdit: boolean }) {
         default_capacity_per_workday: draft.default_capacity_per_workday.trim(),
         unit: draft.unit.trim() || "piezas",
         requires_glaze: draft.requires_glaze === "SI",
+        manual_hours: draft.manual_hours === "SI",
       },
       {
         onSuccess: () => setDraft(TECHNIQUE_NUEVA),
@@ -357,6 +493,7 @@ function TechniquesTable({ canEdit }: { canEdit: boolean }) {
                 <th className="py-2 pr-3 font-semibold">Por jornada</th>
                 <th className="py-2 pr-3 font-semibold">Por hora</th>
                 <th className="py-2 pr-3 font-semibold">Necesita esmalte</th>
+                <th className="py-2 pr-3 font-semibold">Horas manuales</th>
                 <th className="py-2 pr-3 font-semibold">Estado</th>
                 {canEdit ? <th className="py-2 font-semibold" /> : null}
               </tr>
@@ -372,6 +509,9 @@ function TechniquesTable({ canEdit }: { canEdit: boolean }) {
                   <td className="py-2 pr-3 text-zinc-800">{tecnica.units_per_hour}</td>
                   <td className="py-2 pr-3 text-zinc-600">
                     {tecnica.requires_glaze ? "Sí" : "No"}
+                  </td>
+                  <td className="py-2 pr-3 text-zinc-600">
+                    {tecnica.manual_hours ? "Sí" : "No"}
                   </td>
                   <td className="py-2 pr-3 text-zinc-600">
                     {tecnica.active ? "Activa" : "Retirada"}
@@ -398,7 +538,7 @@ function TechniquesTable({ canEdit }: { canEdit: boolean }) {
       {canEdit ? (
         <div className="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-4">
           <h4 className="text-sm font-semibold text-zinc-900">Nueva técnica</h4>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-5">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-6">
             <Campo label="Código" value={draft.code} onChange={set("code")} disabled={crear.isPending} />
             <Campo label="Nombre" value={draft.name} onChange={set("name")} disabled={crear.isPending} />
             <Campo
@@ -416,6 +556,15 @@ function TechniquesTable({ canEdit }: { canEdit: boolean }) {
               onChange={set("requires_glaze")}
               disabled={crear.isPending}
               hint="Avisa si se asigna a una pieza sin esmalte."
+            />
+            <SelectField
+              label="Horas manuales"
+              requirement="required"
+              value={draft.manual_hours as "SI" | "NO"}
+              options={SI_NO}
+              onChange={set("manual_hours")}
+              disabled={crear.isPending}
+              hint="Personal adicional: nace en cero piezas y las horas se deciden a mano."
             />
           </div>
           {error ? (
