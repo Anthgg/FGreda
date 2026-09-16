@@ -83,7 +83,7 @@ export function V2ResumenStep({
       document.body.removeChild(a);
       
       setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-    } catch (err) {
+    } catch {
       setDownloadError("No se pudo descargar el PDF. Intente nuevamente.");
     } finally {
       setIsDownloading(false);
