@@ -207,11 +207,13 @@ function mockV2(
  * editan enteras. Es el caso de los borradores de antes de la correccion, y el
  * del personal adicional.
  */
-const SIN_PROCESOS = { procesos: jsonResponse(200, { items: [], warnings: [] }) };
+// Una funcion y no una constante: un `Response` solo se puede leer UNA vez, y
+// compartir el mismo objeto entre pruebas deja a la segunda sin cuerpo.
+const sinProcesos = () => ({ procesos: jsonResponse(200, { items: [], warnings: [] }) });
 
 describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   it("sin trabajadores lo dice ARRIBA, junto al estado vacío, y dónde darlos de alta", async () => {
-    mockV2({ ...SIN_PROCESOS, workers: jsonResponse(200, { items: [], total: 0 }) });
+    mockV2({ ...sinProcesos(), workers: jsonResponse(200, { items: [], total: 0 }) });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
     const aviso = await screen.findByTestId("mano-de-obra-sin-maestros");
@@ -226,7 +228,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("muestra las horas y el costo que calculó el backend", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -237,7 +239,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("dice de dónde sale la tarifa por hora", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -246,7 +248,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("avisa cuando el trabajo no cabe en la jornada, sin bloquear", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -256,7 +258,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("el aviso no propone una solución: la decide una persona", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -268,7 +270,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("suma las horas por persona en toda la cotización", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -278,7 +280,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("el rendimiento se presenta como estándar del catálogo", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -288,7 +290,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("no guarda mientras se teclea: espera a que el campo se abandone", async () => {
-    const fetchSpy = mockV2(SIN_PROCESOS);
+    const fetchSpy = mockV2(sinProcesos());
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -315,7 +317,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("una cantidad vacía se explica en vez de mandarse como cero", async () => {
-    const fetchSpy = mockV2(SIN_PROCESOS);
+    const fetchSpy = mockV2(sinProcesos());
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -332,7 +334,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("retirar la tarifa acordada viaja como nulo, no como cadena vacía", async () => {
-    const fetchSpy = mockV2(SIN_PROCESOS);
+    const fetchSpy = mockV2(sinProcesos());
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -353,7 +355,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("la ilustración va aparte de las técnicas y se cobra por horas", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -364,7 +366,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("dice que añadir personal no reduce el plazo", async () => {
-    mockV2(SIN_PROCESOS);
+    mockV2(sinProcesos());
 
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
 
@@ -372,7 +374,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("un fallo al guardar se explica en vez de perderse", async () => {
-    mockV2({ ...SIN_PROCESOS, update: errorResponse(422, "V2_LABOR_INPUT_INVALID", "Dato invalido") });
+    mockV2({ ...sinProcesos(), update: errorResponse(422, "V2_LABOR_INPUT_INVALID", "Dato invalido") });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -392,7 +394,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
       ...V2_LABOR_PAGE,
       items: [{ ...V2_LABOR_PAGE.items[0]!, hours_overridden: true, final_hours: "20.000000" }],
     };
-    const fetchSpy = mockV2({ ...SIN_PROCESOS, labor: jsonResponse(200, acordada) });
+    const fetchSpy = mockV2({ ...sinProcesos(), labor: jsonResponse(200, acordada) });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -411,7 +413,7 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
   });
 
   it("el trabajo se puede vincular a un producto de la cotización", async () => {
-    const fetchSpy = mockV2(SIN_PROCESOS);
+    const fetchSpy = mockV2(sinProcesos());
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
     const user = userEvent.setup();
 
@@ -512,37 +514,53 @@ describe("Los procesos de la pieza mandan (corrección 010H)", () => {
     });
   });
 
-  it("se puede agregar un proceso extra solo para esta cotización", async () => {
-    const fetchSpy = mockV2({ techniques: CON_ASA() });
-    renderApp(["/cotizador-v2/7/mano-de-obra"]);
-    const user = userEvent.setup();
-    await screen.findByTestId("procesos");
-
-    // Vidriado y Armado de asa ya están puestas; el catálogo no ofrece más.
-    expect(screen.queryByRole("combobox", { name: "Agregar proceso" })).not.toBeInTheDocument();
-
-    mockV2({
+  it("agregar un proceso extra manda la técnica y la línea", async () => {
+    const fetchSpy = mockV2({
       techniques: jsonResponse(200, {
         items: [...V2_TECHNIQUES.items, { ...V2_TECHNIQUES.items[0], id: 9, name: "Pulido" }],
       }),
     });
     renderApp(["/cotizador-v2/7/mano-de-obra"]);
-    await screen.findAllByTestId("procesos");
-    const combos = await screen.findAllByRole("combobox", { name: "Agregar proceso" });
-    await user.click(combos[0]!);
+    const user = userEvent.setup();
+    await screen.findByTestId("procesos");
+
+    await user.click(screen.getByRole("combobox", { name: "Agregar proceso" }));
     await user.click(await screen.findByRole("option", { name: "Pulido" }));
-    await user.click(screen.getAllByRole("button", { name: "Agregar" })[0]!);
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
 
     await waitFor(() => {
-      const anadido = fetchSpy.mock.calls
-        .concat()
-        .find(
-          ([url, init]) =>
-            String(url).endsWith("/processes") &&
-            (init as RequestInit | undefined)?.method === "POST",
-        );
-      expect(anadido === undefined).toBe(true);
+      const anadido = fetchSpy.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith("/quotations-v2/7/processes") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(anadido).toBeDefined();
+      expect(JSON.parse(String((anadido?.[1] as RequestInit).body))).toEqual({
+        v2_quotation_product_id: 4,
+        technique_id: 9,
+      });
     });
+  });
+
+  it("solo ofrece agregar las técnicas que la pieza no tiene ya", async () => {
+    mockV2();
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+    await screen.findByTestId("procesos");
+
+    // Vidriado y Armado de asa ya son procesos de la pieza; el catálogo de
+    // prueba no tiene ninguna más, así que no hay nada que agregar.
+    expect(screen.queryByRole("combobox", { name: "Agregar proceso" })).not.toBeInTheDocument();
+  });
+
+  it("mientras los procesos no llegan, ninguna tarea suya cae en personal adicional", async () => {
+    // Si `/processes` falla, una tarea con proceso no puede mostrarse como
+    // suelta: apareceria con su producto y su «quitar», que es lo que esta
+    // corrección quita de en medio.
+    mockV2({ procesos: errorResponse(500, "V2_INTERNAL", "se cayo") });
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+
+    const seccion = await screen.findByTestId("personal-adicional");
+    expect(seccion).not.toHaveTextContent("Celso · Vidriado");
   });
 
   it("el personal adicional es una persona, no una técnica", async () => {

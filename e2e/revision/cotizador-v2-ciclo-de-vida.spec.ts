@@ -550,21 +550,26 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const asa = filas.find((fila) => fila.technique_name === "Armado de asa");
     expect(Number(asa?.calculated_hours)).toBeCloseTo(3.2, 6);
 
-    // Asignar a alguien es lo que crea el costo.
+    // Asignar a alguien es lo que crea el costo, y se hace DESDE LA PANTALLA.
     const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
       id: number;
       name: string;
     }[];
     const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
     const token = await csrf(page);
-    const asignado = await api.post(
-      `/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`,
-      { data: { worker_id: taller?.id }, headers: { "X-CSRF-Token": token } },
-    );
-    expect(asignado.status()).toBe(200);
+    const filaDelAsa = procesos.locator("li").filter({ hasText: "Armado de asa" });
+    await filaDelAsa.getByRole("combobox", { name: "Trabajador" }).click();
+    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
+    await expect
+      .poll(async () =>
+        (await leerProcesos()).find((fila) => fila.technique_name === "Armado de asa")?.worker_id,
+      )
+      .toBe(taller?.id);
     filas = await leerProcesos();
     const asaAsignada = filas.find((fila) => fila.technique_name === "Armado de asa");
     expect(Number(asaAsignada?.labor_cost)).toBeGreaterThan(0);
+    // Y el costo se ve en la fila, sin recargar.
+    await expect(filaDelAsa).toContainText("Costo");
 
     // Un trabajador que no sabe la técnica sigue rechazado, también por aquí.
     const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
@@ -577,17 +582,20 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     }
 
     // Quitar un proceso es de ESTA cotización: el maestro de la pieza no cambia.
-    const vidriado = filas.find((fila) => fila.technique_name === "Vidriado por inmersion");
-    await page.reload();
-    await paso(page, 4, "Mano de obra").click();
-    await expect(page.getByTestId("procesos")).toContainText("Vidriado por inmersion");
-    const quitar = await api.delete(`/api/v1/quotations-v2/${id}/processes/${vidriado?.id}`, {
-      headers: { "X-CSRF-Token": token },
-    });
-    expect(quitar.status()).toBe(200);
+    // También desde la pantalla, que es donde vive la decisión.
+    await page
+      .getByTestId("procesos")
+      .locator("li")
+      .filter({ hasText: "Vidriado por inmersion" })
+      .getByRole("button", { name: "Quitar de esta cotización" })
+      .click();
+    await expect
+      .poll(async () => (await leerProcesos()).length)
+      .toBe(2);
     expect((await leerProcesos()).map((fila) => fila.technique_name)).not.toContain(
       "Vidriado por inmersion",
     );
+    await expect(page.getByTestId("procesos")).not.toContainText("Vidriado por inmersion");
     const piezas = (await (await api.get("/api/v1/products?product_type=FINISHED_PRODUCT")).json())
       .items as { id: number; name: string }[];
     const taza = piezas.find((pieza) => pieza.name === "E2E-Catalogo Taza 250 ml");
@@ -607,21 +615,32 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       name: string;
     }[];
     const empaque = conceptos.find((uno) => uno.name === "E2E-Empaque especial");
-    const puesto = await api.post(`/api/v1/quotations-v2/${id}/extras`, {
-      data: { v2_extra_id: empaque?.id, quantity: "2" },
-      headers: { "X-CSRF-Token": token },
-    });
-    expect(puesto.status()).toBe(201);
+    // Desde la pantalla de precio, que es donde el Excel los pone.
+    await paso(page, 6, "Margen y precio").click();
+    const adicionales = page.getByTestId("adicionales");
+    await expect(adicionales).toBeVisible({ timeout: 15_000 });
+    await adicionales.getByRole("combobox", { name: "Añadir adicional" }).click();
+    await page.getByRole("option", { name: /E2E-Empaque especial/ }).click();
+    await adicionales.getByRole("button", { name: "Añadir" }).click();
+    await expect(adicionales).toContainText("E2E-Empaque especial");
+
+    const cantidadAdicional = adicionales.getByLabel(/^cantidad/i).first();
+    await cantidadAdicional.fill("2");
+    await cantidadAdicional.blur();
+    await expect
+      .poll(async () =>
+        Number(
+          (await (await api.get(`/api/v1/quotations-v2/${id}/extras`)).json()).extras_cost_total,
+        ),
+      )
+      .toBeCloseTo(50, 6);
+
     const despues = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
     expect(Number(despues.extras_cost)).toBeCloseTo(50, 6);
     expect(Number(despues.production_cost) - Number(antes.production_cost)).toBeCloseTo(50, 6);
     expect(Number(despues.real_cost) - Number(antes.real_cost)).toBeCloseTo(50, 6);
-
-    // Y se ven en la pantalla de precio, aparte del material y de la mano de obra.
-    await paso(page, 6, "Margen y precio").click();
-    await expect(page.getByTestId("adicionales")).toContainText("E2E-Empaque especial", {
-      timeout: 15_000,
-    });
+    expect(empaque).toBeDefined();
+    expect(token.length).toBeGreaterThan(0);
   });
 });
 

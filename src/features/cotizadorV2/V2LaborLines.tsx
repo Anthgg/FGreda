@@ -406,10 +406,17 @@ export function V2LaborLines({
   // Las tareas que NO salen de un proceso: el personal adicional y lo que se
   // cargo antes de que existieran los procesos. Las de un proceso se editan en
   // su fila, y repetirlas aqui seria el mismo trabajo dos veces en pantalla.
+  //
+  // Mientras los procesos no hayan llegado no se sabe cuales son suyas, y dar
+  // por suelta una tarea que si tiene proceso la mostraria con su producto y su
+  // «quitar» —justo lo que esta correccion quita de en medio—. Hasta que
+  // lleguen, aqui solo va lo que se declaro personal adicional.
   const conProceso = new Set(
     (procesos.data?.items ?? []).map((proceso) => proceso.labor_id).filter((id) => id !== null),
   );
-  const sueltas = pagina.items.filter((tarea) => !conProceso.has(tarea.id));
+  const sueltas = procesos.isSuccess
+    ? pagina.items.filter((tarea) => !conProceso.has(tarea.id))
+    : pagina.items.filter((tarea) => tarea.is_additional_personnel);
   const sinMaestros =
     (trabajadores.data?.items ?? []).length === 0 || (tecnicas.data?.items ?? []).length === 0;
 

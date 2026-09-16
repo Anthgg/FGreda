@@ -199,16 +199,28 @@ export function firmaDeGuardado(tipo: string, variables: unknown, intento: numbe
   const v = variables as Record<string, unknown> | number | null | undefined;
   switch (tipo) {
     case "linea-editar":
-    case "tarea-editar": {
+    case "tarea-editar":
+    case "adicional-editar": {
       const objeto = (v ?? {}) as Record<string, unknown>;
-      const fila = objeto.lineId ?? objeto.laborId;
+      const fila = objeto.lineId ?? objeto.laborId ?? objeto.extraId;
       return `${tipo}:${String(fila)}:${claves(objeto.payload)}`;
+    }
+    case "proceso-editar": {
+      // Asignar y cambiar las piezas comparten tipo porque son la misma fila
+      // en la misma pantalla; lo que NO pueden compartir es fila, o guardar
+      // bien un proceso borraria el error de otro.
+      const objeto = (v ?? {}) as Record<string, unknown>;
+      return `${tipo}:${String(objeto.processId)}:${claves(objeto)}`;
     }
     case "linea-borrar":
     case "tarea-borrar":
+    case "proceso-borrar":
+    case "adicional-borrar":
       return `${tipo}:${String(v)}`;
     case "linea-anadir":
     case "tarea-anadir":
+    case "proceso-anadir":
+    case "adicional-anadir":
       return `${tipo}:#${intento}`;
     case "planificacion":
       return tipo;
