@@ -65,18 +65,16 @@ export function TableWrapper({ children }: { children: ReactNode }) {
 export function Th({
   children,
   align = "left",
-  className = "",
 }: {
   children: ReactNode;
   align?: "left" | "right";
-  className?: string;
 }) {
   return (
     <th
       scope="col"
       className={`whitespace-nowrap border-b border-zinc-200 pb-2 pr-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 ${
         align === "right" ? "text-right" : ""
-      } ${className}`}
+      }`}
     >
       {children}
     </th>
@@ -88,22 +86,17 @@ export function Td({
   align = "left",
   muted = false,
   mono = false,
-  className = "",
-  colSpan,
 }: {
   children: ReactNode;
   align?: "left" | "right";
   muted?: boolean;
   mono?: boolean;
-  className?: string;
-  colSpan?: number;
 }) {
   return (
     <td
-      colSpan={colSpan}
       className={`border-b border-zinc-100 py-2 pr-4 ${align === "right" ? "text-right" : ""} ${
         muted ? "text-zinc-500" : "text-zinc-800"
-      } ${mono ? "font-mono text-xs" : ""} ${className}`}
+      } ${mono ? "font-mono text-xs" : ""}`}
     >
       {children}
     </td>
