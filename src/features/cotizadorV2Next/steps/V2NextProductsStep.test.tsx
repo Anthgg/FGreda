@@ -107,7 +107,8 @@ describe("V2NextProductsStep", () => {
     renderStep(2);
 
     expect(await screen.findByText(/Todavía no hay productos/i)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /\+ Agregar producto/i })).toBeInTheDocument();
+    // Multiple buttons may exist (header + empty state) — just check at least one is there
+    expect((await screen.findAllByRole("button", { name: /\+ Agregar producto/i })).length).toBeGreaterThan(0);
   });
 
   it("abre modal de selección y permite agregar producto", async () => {
@@ -118,7 +119,8 @@ describe("V2NextProductsStep", () => {
     renderStep(2);
 
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: /\+ Agregar producto/i }));
+    const btns = await screen.findAllByRole("button", { name: /\+ Agregar producto/i });
+    await user.click(btns[0] as HTMLElement);
 
     const selectTrigger = await screen.findByText(/Ej: Jarra, Taza/i);
     await user.click(selectTrigger);
