@@ -1,5 +1,20 @@
 import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
-import type { V2Quotation } from "@/types/quoterV2";
+import type { V2Quotation, V2ProductionType } from "@/types/quoterV2";
+import { V2_PRODUCTION_TYPE_LABEL } from "@/types/quoterV2";
+import { SelectField } from "@/components/SelectField";
+
+// Opciones canónicas de tipo de producción. El valor que va al backend es el
+// enum (RETAIL / WHOLESALE), la etiqueta es solo visual.
+const TIPOS_PRODUCCION: readonly { value: V2ProductionType; label: string }[] = [
+  { value: "RETAIL", label: V2_PRODUCTION_TYPE_LABEL.RETAIL },
+  { value: "WHOLESALE", label: V2_PRODUCTION_TYPE_LABEL.WHOLESALE },
+];
+
+// Monedas soportadas por V2. Añadir aquí si el backend amplía el catálogo.
+const MONEDAS = [
+  { value: "PEN", label: "Soles (PEN)" },
+  { value: "USD", label: "Dólares (USD)" },
+] as const;
 
 export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
   const update = useUpdateV2Quotation(quotation.id);
@@ -7,6 +22,8 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
   const handleUpdate = (payload: Record<string, unknown>) => {
     update.mutate(payload);
   };
+
+  const canEdit = quotation.effective_status === "DRAFT";
 
   return (
     <div>
@@ -20,31 +37,36 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
               defaultValue={quotation.name || ""}
               onBlur={(e) => handleUpdate({ name: e.target.value })}
               placeholder="Ej. Vajilla Restaurante Aromas"
-              className="h-10 px-3 rounded-xl border border-zinc-200 bg-white/85 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+              disabled={!canEdit}
+              className="h-10 px-3 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-sm text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 placeholder:text-zinc-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-[10px] font-extrabold text-zinc-600">
-            Tipo de producción *
-            <select
+
+          {/* Tipo de producción — SelectField custom, NO <select> nativo */}
+          <div className="relative">
+            <SelectField
+              label="Tipo de producción"
+              requirement="required"
               value={quotation.production_type}
-              onChange={(e) => handleUpdate({ production_type: e.target.value })}
-              className="h-10 px-3 rounded-xl border border-zinc-200 bg-white/85 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-            >
-              <option value="RETAIL">Por menor</option>
-              <option value="WHOLESALE">Por mayor</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-[10px] font-extrabold text-zinc-600">
-            Moneda *
-            <select
-              value={quotation.currency_code || "PEN"}
-              onChange={(e) => handleUpdate({ currency_code: e.target.value })}
-              className="h-10 px-3 rounded-xl border border-zinc-200 bg-white/85 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-            >
-              <option value="PEN">PEN · Soles</option>
-              <option value="USD">USD · Dólares</option>
-            </select>
-          </label>
+              options={TIPOS_PRODUCCION}
+              onChange={(valor) => handleUpdate({ production_type: valor })}
+              disabled={!canEdit}
+              searchable={false}
+            />
+          </div>
+
+          {/* Moneda — SelectField custom, NO <select> nativo */}
+          <div className="relative">
+            <SelectField
+              label="Moneda"
+              requirement="required"
+              value={quotation.currency_code ?? "PEN"}
+              options={MONEDAS}
+              onChange={(valor) => handleUpdate({ currency_code: valor })}
+              disabled={!canEdit}
+              searchable={false}
+            />
+          </div>
         </div>
       </div>
 
@@ -57,13 +79,16 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
               Buscar cliente *
               <input
                 type="text"
-                placeholder="Nombre, RUC o documento…"
-                className="h-10 px-3 rounded-xl border border-zinc-200 bg-white/85 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 w-full"
+                placeholder="Nombre, RUC o documento."
+                disabled={!canEdit}
+                className="h-10 px-3 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-sm text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 w-full placeholder:text-zinc-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </label>
-            <button className="h-[38px] px-3.5 rounded-[10px] border border-zinc-200 bg-white/85 text-zinc-800 text-[11px] font-extrabold cursor-pointer w-full sm:w-auto">
-              + Nuevo cliente
-            </button>
+            {canEdit && (
+              <button className="h-[38px] px-3.5 rounded-[10px] border border-zinc-200 bg-white/85 text-zinc-800 text-[11px] font-extrabold cursor-pointer w-full sm:w-auto">
+                + Nuevo cliente
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-between p-3.5 rounded-[13px] border border-black/5 bg-white/70">
@@ -71,12 +96,14 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
               <strong className="block text-xs font-bold text-zinc-900">{quotation.customer_name}</strong>
               <small className="block text-[10px] text-zinc-500 mt-1">Cliente seleccionado</small>
             </div>
-            <button 
-              onClick={() => handleUpdate({ customer_id: null })}
-              className="border-0 bg-transparent text-zinc-600 underline underline-offset-2 text-[10px] font-extrabold cursor-pointer"
-            >
-              Cambiar
-            </button>
+            {canEdit && (
+              <button 
+                onClick={() => handleUpdate({ customer_id: null })}
+                className="border-0 bg-transparent text-zinc-600 underline underline-offset-2 text-[10px] font-extrabold cursor-pointer"
+              >
+                Cambiar
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -89,8 +116,9 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
           type="text"
           defaultValue={quotation.notes || ""}
           onBlur={(e) => handleUpdate({ notes: e.target.value })}
-          placeholder="Agregar una nota interna…"
-          className="w-full h-10 px-3 rounded-xl border border-zinc-200 bg-white/85 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+          placeholder="Agregar una nota interna."
+          disabled={!canEdit}
+          className="w-full h-10 px-3 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-sm text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 placeholder:text-zinc-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
     </div>
