@@ -431,7 +431,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(pdf).toContain("fuente");
   });
 
-  test("TÉCNICAS: elegir al trabajador carga sus técnicas, se desmarca una y quitar no toca su ficha", async ({
+  test("TÉCNICAS: el personal adicional es una persona con su técnica, y el backend rechaza el resto", async ({
     page,
   }) => {
     const id = await borradorCompleto(page, "V2-Tecnicas", ["Taza"]);
@@ -441,71 +441,187 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       name: string;
       technique_ids: number[];
     }[];
-    const taller = trabajadores.find((w) => w.name === "E2E-Trabajador taller");
+    const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
+    // La ficha del trabajador es la que dice qué sabe hacer.
     expect(taller?.technique_ids).toHaveLength(5);
     const tecnicas = (await (await api.get("/api/v1/quoter-v2/techniques")).json()).items as {
       id: number;
       name: string;
     }[];
-    const idDe = (nombre: string) => tecnicas.find((t) => t.name === nombre)?.id;
+    const torno = tecnicas.find((una) => una.name === "Torno facil");
 
     await paso(page, 4, "Mano de obra").click();
-    const carga = page.getByTestId("cargar-trabajador");
-    await carga.getByRole("combobox", { name: "Trabajador" }).click();
+    const seccion = page.getByTestId("personal-adicional");
+    await expect(seccion).toContainText(/suma costo y no reduce el plazo/i, { timeout: 15_000 });
+
+    await seccion.getByRole("combobox", { name: "Trabajador" }).click();
     await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
-    await carga.getByRole("combobox", { name: "Producto" }).click();
-    await page.getByRole("option", { name: /taza/i }).click();
-    await expect(carga).toContainText(/las piezas nacen en 10/i);
-
-    // Sus cinco técnicas aparecen marcadas; el torno no es suyo y no aparece.
-    const grupo = page.getByTestId("tecnicas-del-trabajador");
-    await expect(grupo.getByRole("checkbox")).toHaveCount(5);
-    for (const casilla of await grupo.getByRole("checkbox").all()) {
-      await expect(casilla).toBeChecked();
-    }
-    await expect(grupo).not.toContainText(/torno/i);
-
-    await grupo.getByRole("checkbox", { name: /Colada/ }).uncheck();
-    await carga.getByRole("button", { name: "Añadir 4 técnicas" }).click();
-    await esperarGuardado(page);
-
+    await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
+    // El torno no es suyo: no se ofrece.
+    await expect(page.getByRole("option", { name: "Torno facil" })).toHaveCount(0);
+    await page.getByRole("option", { name: "A mano", exact: true }).click();
+    await seccion.getByRole("button", { name: "Añadir personal" }).click();
+    // Se espera al DATO, no al indicador: el alta empieza con el clic y el pie
+    // todavia dice «guardado» durante el instante anterior a que arranque.
     const leerTareas = async () =>
       (await (await api.get(`/api/v1/quotations-v2/${id}/labor`)).json()).items as {
+        worker_id: number;
+        technique_name: string;
+        is_additional_personnel: boolean;
+      }[];
+    await expect
+      .poll(async () => (await leerTareas()).filter((tarea) => tarea.is_additional_personnel).length)
+      .toBe(1);
+
+    const tareas = await leerTareas();
+    const apoyo = tareas.find((tarea) => tarea.is_additional_personnel);
+    expect(apoyo?.worker_id).toBe(taller?.id);
+    // «Personal adicional» ya no es una técnica: la tarea lleva la técnica real.
+    expect(apoyo?.technique_name).toBe("A mano");
+
+    // Y la barrera del backend sigue en pie para una petición a mano.
+    const token = await csrf(page);
+    const prohibido = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
+      data: { worker_id: taller?.id, technique_id: torno?.id, quantity: "10" },
+      headers: { "X-CSRF-Token": token },
+    });
+    expect(prohibido.status()).toBe(422);
+    expect(JSON.stringify(await prohibido.json())).toContain("V2_LABOR_TECHNIQUE_NOT_ALLOWED");
+  });
+
+  test("PROCESOS: la taza trae torno, asa y vidriado; se quita uno, se asigna y el adicional suma", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/cotizador-v2");
+    await page.getByLabel(/referencia/i).fill(testName("V2-Procesos"));
+    await page.getByRole("button", { name: /crear cotizaci[oó]n v2/i }).click();
+    await expect(page.getByTestId("pasos-cotizacion")).toBeVisible({ timeout: 15_000 });
+    const id = idDeLaUrl(page);
+
+    await paso(page, 1, "Cliente").click();
+    await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
+    await page.getByRole("option").nth(1).click();
+
+    // La taza del catálogo declara tres procesos en su ficha.
+    await paso(page, 2, "Productos").click();
+    await page.getByRole("combobox", { name: /pieza del cat[aá]logo/i }).click();
+    await page.getByRole("option", { name: "E2E-Catalogo Taza 250 ml" }).click();
+    await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
+    await expect(page.getByRole("heading", { name: "E2E-Catalogo Taza 250 ml" })).toBeVisible({
+      timeout: 15_000,
+    });
+    const cantidad = page.getByLabel(/^cantidad/i).last();
+    await cantidad.fill("20");
+    await cantidad.blur();
+    await esperarGuardado(page);
+
+    await paso(page, 3, "Materiales").click();
+    await page.getByRole("combobox", { name: "Pasta", exact: true }).first().click();
+    await page.getByRole("option").nth(1).click();
+    await esperarGuardado(page);
+
+    // Aquí está el punto de la corrección: nadie tuvo que acordarse del asa.
+    await paso(page, 4, "Mano de obra").click();
+    const procesos = page.getByTestId("procesos");
+    await expect(procesos).toContainText("Torno facil", { timeout: 15_000 });
+    await expect(procesos).toContainText("Armado de asa");
+    await expect(procesos).toContainText("Vidriado por inmersion");
+
+    const api = page.request;
+    const leerProcesos = async () =>
+      (await (await api.get(`/api/v1/quotations-v2/${id}/processes`)).json()).items as {
         id: number;
         technique_name: string;
         quantity: string;
-        worker_id: number;
+        calculated_hours: string | null;
+        worker_id: number | null;
+        labor_cost: string | null;
       }[];
-    let tareas = await leerTareas();
-    expect(tareas).toHaveLength(4);
-    expect(tareas.map((t) => t.technique_name)).not.toContain("Colada");
-    for (const tarea of tareas) {
-      expect(tarea.worker_id).toBe(taller?.id);
-      expect(Number(tarea.quantity)).toBe(10);
+    let filas = await leerProcesos();
+    expect(filas).toHaveLength(3);
+    // Piezas precargadas con la cantidad del producto y horas ya calculadas.
+    for (const fila of filas) {
+      expect(Number(fila.quantity)).toBe(20);
+      expect(fila.worker_id).toBeNull();
+      expect(fila.labor_cost).toBeNull();
     }
-    // Ya cargadas: marcadas y bloqueadas; Colada sigue libre.
-    await expect(grupo.getByText("(ya cargada)")).toHaveCount(4);
-    await expect(carga.getByRole("button", { name: "Añadir 1 técnica" })).toBeEnabled();
+    // 20 piezas a 50 por jornada de 8 h son 3,2 h.
+    const asa = filas.find((fila) => fila.technique_name === "Armado de asa");
+    expect(Number(asa?.calculated_hours)).toBeCloseTo(3.2, 6);
 
-    // Quitar una la borra de ESTA cotización; la ficha conserva las cinco.
-    await page.getByRole("button", { name: "Quitar de esta cotización" }).first().click();
-    await esperarGuardado(page);
-    await expect.poll(async () => (await leerTareas()).length).toBe(3);
-    const ficha = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items.find(
-      (w: { id: number }) => w.id === taller?.id,
-    );
-    expect(ficha.technique_ids).toHaveLength(5);
-
-    // Una petición a mano con una técnica que no es suya: 422, no se guarda.
+    // Asignar a alguien es lo que crea el costo.
+    const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
+      id: number;
+      name: string;
+    }[];
+    const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
     const token = await csrf(page);
-    const manual = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
-      data: { worker_id: taller?.id, technique_id: idDe("Torno facil"), quantity: "10" },
+    const asignado = await api.post(
+      `/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`,
+      { data: { worker_id: taller?.id }, headers: { "X-CSRF-Token": token } },
+    );
+    expect(asignado.status()).toBe(200);
+    filas = await leerProcesos();
+    const asaAsignada = filas.find((fila) => fila.technique_name === "Armado de asa");
+    expect(Number(asaAsignada?.labor_cost)).toBeGreaterThan(0);
+
+    // Un trabajador que no sabe la técnica sigue rechazado, también por aquí.
+    const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
+    if (tornero !== undefined) {
+      const prohibido = await api.post(
+        `/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`,
+        { data: { worker_id: tornero.id }, headers: { "X-CSRF-Token": token } },
+      );
+      expect(prohibido.status()).toBe(422);
+    }
+
+    // Quitar un proceso es de ESTA cotización: el maestro de la pieza no cambia.
+    const vidriado = filas.find((fila) => fila.technique_name === "Vidriado por inmersion");
+    await page.reload();
+    await paso(page, 4, "Mano de obra").click();
+    await expect(page.getByTestId("procesos")).toContainText("Vidriado por inmersion");
+    const quitar = await api.delete(`/api/v1/quotations-v2/${id}/processes/${vidriado?.id}`, {
       headers: { "X-CSRF-Token": token },
     });
-    expect(manual.status()).toBe(422);
-    expect(JSON.stringify(await manual.json())).toContain("V2_LABOR_TECHNIQUE_NOT_ALLOWED");
-    tareas = await leerTareas();
-    expect(tareas).toHaveLength(3);
+    expect(quitar.status()).toBe(200);
+    expect((await leerProcesos()).map((fila) => fila.technique_name)).not.toContain(
+      "Vidriado por inmersion",
+    );
+    const piezas = (await (await api.get("/api/v1/products?product_type=FINISHED_PRODUCT")).json())
+      .items as { id: number; name: string }[];
+    const taza = piezas.find((pieza) => pieza.name === "E2E-Catalogo Taza 250 ml");
+    const maestro = await (
+      await api.get(`/api/v1/quoter-v2/products/${taza?.id}/techniques`)
+    ).json();
+    expect(
+      (maestro.items as { technique_name: string; active: boolean }[])
+        .filter((fila) => fila.active)
+        .map((fila) => fila.technique_name),
+    ).toContain("Vidriado por inmersion");
+
+    // El adicional suma al costo de producción y al costo real, como el Excel.
+    const antes = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
+    const conceptos = (await (await api.get("/api/v1/quoter-v2/extras")).json()).items as {
+      id: number;
+      name: string;
+    }[];
+    const empaque = conceptos.find((uno) => uno.name === "E2E-Empaque especial");
+    const puesto = await api.post(`/api/v1/quotations-v2/${id}/extras`, {
+      data: { v2_extra_id: empaque?.id, quantity: "2" },
+      headers: { "X-CSRF-Token": token },
+    });
+    expect(puesto.status()).toBe(201);
+    const despues = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
+    expect(Number(despues.extras_cost)).toBeCloseTo(50, 6);
+    expect(Number(despues.production_cost) - Number(antes.production_cost)).toBeCloseTo(50, 6);
+    expect(Number(despues.real_cost) - Number(antes.real_cost)).toBeCloseTo(50, 6);
+
+    // Y se ven en la pantalla de precio, aparte del material y de la mano de obra.
+    await paso(page, 6, "Margen y precio").click();
+    await expect(page.getByTestId("adicionales")).toContainText("E2E-Empaque especial", {
+      timeout: 15_000,
+    });
   });
 });
 
