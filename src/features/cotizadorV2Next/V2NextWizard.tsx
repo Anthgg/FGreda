@@ -1,8 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
+import { useEstadoDeGuardado } from "@/features/cotizadorV2/useEstadoDeGuardado";
 import { Spinner } from "@/components/Spinner";
 import { ApiError } from "@/api/client";
 import { V2NextClientStep } from "./steps/V2NextClientStep";
+import { V2NextProductsStep } from "./steps/V2NextProductsStep";
 import { V2_EFFECTIVE_STATUS_LABEL } from "@/types/quoterV2";
 
 const STEPS = ["Cliente", "Productos", "Materiales", "Procesos", "Quema", "Precio", "Resumen"];
@@ -13,6 +16,15 @@ export function V2NextWizard({ quotationId }: { quotationId: number }) {
   const currentStep = step ? parseInt(step, 10) - 1 : 0;
   
   const query = useV2Quotation(quotationId);
+  const guardado = useEstadoDeGuardado(quotationId);
+  const [pendingStep, setPendingStep] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (pendingStep !== null && !guardado.hayRiesgo) {
+      navigate(`/cotizador-v2-next/${quotationId}/${pendingStep + 1}`);
+      setPendingStep(null);
+    }
+  }, [guardado.hayRiesgo, pendingStep, quotationId, navigate]);
 
   if (query.isPending) {
     return <div className="p-12"><Spinner className="mx-auto size-6" /></div>;
@@ -24,7 +36,11 @@ export function V2NextWizard({ quotationId }: { quotationId: number }) {
   const q = query.data;
 
   const handleStep = (idx: number) => {
-    navigate(`/cotizador-v2-next/${quotationId}/${idx + 1}`);
+    if (guardado.hayRiesgo) {
+      setPendingStep(idx);
+    } else {
+      navigate(`/cotizador-v2-next/${quotationId}/${idx + 1}`);
+    }
   };
 
   const handleBack = () => {
@@ -99,9 +115,9 @@ export function V2NextWizard({ quotationId }: { quotationId: number }) {
               </div>
             </div>
 
-            {currentStep === 0 ? (
-              <V2NextClientStep quotation={q} />
-            ) : (
+            {currentStep === 0 && <V2NextClientStep quotation={q} />}
+            {currentStep === 1 && <V2NextProductsStep quotation={q} />}
+            {currentStep > 1 && (
               <div className="border border-dashed border-zinc-300 rounded-[15px] p-10 text-center text-[11px] text-zinc-400 bg-white/35">
                 Esta fase solo muestra la estructura general del paso a paso.
               </div>
@@ -133,19 +149,39 @@ export function V2NextWizard({ quotationId }: { quotationId: number }) {
 
       <div className="fixed z-20 bottom-0 left-0 lg:left-[244px] right-0 p-3 pointer-events-none">
         <div className="max-w-[1600px] mx-auto border border-black/10 rounded-[15px] bg-white/85 backdrop-blur-xl shadow-lg flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 py-2.5 pointer-events-auto">
-          <div className="flex items-center justify-center sm:justify-start gap-2 text-[10px] font-bold text-zinc-600">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.1)]"></span>
-            Todos los cambios guardados
+          <div className={`flex items-center justify-center sm:justify-start gap-2 text-[10px] font-bold ${
+            guardado.fallidos.length > 0 ? "text-red-700" :
+            guardado.enVuelo > 0 ? "text-amber-600" :
+            guardado.borradores > 0 ? "text-amber-600" :
+            "text-zinc-600"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${
+              guardado.fallidos.length > 0 ? "bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.1)]" :
+              guardado.enVuelo > 0 ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.1)] animate-pulse" :
+              guardado.borradores > 0 ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.1)]" :
+              "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.1)]"
+            }`}></span>
+            {guardado.fallidos.length > 0
+              ? "Hay cambios que no se guardaron"
+              : guardado.enVuelo > 0
+                ? "Guardando cambios..."
+                : guardado.borradores > 0
+                  ? "Hay cambios sin guardar"
+                  : "Todos los cambios guardados"}
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            <button className="h-9 px-3 rounded-xl border border-zinc-200 bg-white/80 text-zinc-800 text-[10px] font-extrabold hover:bg-zinc-50 transition-colors cursor-pointer w-full sm:w-auto">
+            <button 
+              disabled={guardado.enVuelo > 0}
+              className="h-9 px-3 rounded-xl border border-zinc-200 bg-white/80 text-zinc-800 text-[10px] font-extrabold hover:bg-zinc-50 transition-colors cursor-pointer w-full sm:w-auto disabled:opacity-50"
+            >
               Guardar borrador
             </button>
             <button
               onClick={() => { if(currentStep < 6) handleStep(currentStep + 1); }} 
-              className="h-9 px-3 rounded-xl bg-zinc-900 text-white text-[10px] font-extrabold hover:bg-zinc-800 transition-colors cursor-pointer w-full sm:w-auto"
+              disabled={guardado.fallidos.length > 0 || pendingStep !== null}
+              className="h-9 px-3 rounded-xl bg-zinc-900 text-white text-[10px] font-extrabold hover:bg-zinc-800 transition-colors cursor-pointer w-full sm:w-auto disabled:opacity-50"
             >
-              {currentStep === 6 ? "Finalizar revisión ✓" : "Continuar →"}
+              {pendingStep !== null ? "Guardando..." : currentStep === 6 ? "Finalizar revisión V" : "Continuar  "}
             </button>
           </div>
         </div>
