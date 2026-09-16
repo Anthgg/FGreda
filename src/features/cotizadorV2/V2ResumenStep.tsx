@@ -180,6 +180,7 @@ export function V2ResumenStep({
             <section data-testid="resumen-precio" className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-xs">
               <h3 className="text-xs font-bold text-emerald-900 uppercase tracking-wider mb-5 border-b border-emerald-900/10 pb-2">Estructura de Precio</h3>
               <dl className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-6">
+                  <div className="col-span-full text-xs text-zinc-500 font-medium">Por {precio?.effective_days ?? 0} días efectivos.</div>
                 <Cifra label="Costo de Producción" value={dinero(precio?.production_cost)} />
                 <Cifra label="Factor Comercial" value={precio?.commercial_factor ? `×${Number(precio.commercial_factor).toFixed(2)}` : "—"} />
                 <Cifra 
