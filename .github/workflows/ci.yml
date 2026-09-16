@@ -362,10 +362,9 @@ jobs:
     env:
       # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
       # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      # Fase 010H: la rama del backend con el ciclo de vida (Anthgg/BGreda#60)
-      # mientras su PR no se fusiona. Tras fusionarlo vuelve a `main`, y la E2E
-      # se repite contra `main` antes de fusionar el frontend.
-      BACKEND_REF: feat/phase-010h-lifecycle
+      # `main`: el backend de 010H (Anthgg/BGreda#60) ya esta fusionado, y la
+      # E2E del frontend se repite contra el antes de fusionar el suyo.
+      BACKEND_REF: main
     services:
       postgres:
         image: postgres:16-alpine
