@@ -40,6 +40,14 @@ export const BLOQUEOS_DE_EMISION: Record<string, Pendiente> = {
     mensaje: "Un producto no tiene peso de pasta por pieza.",
     paso: "materiales",
   },
+  V2_CONFIRM_LINE_PROCESS_REQUIRED: {
+    mensaje: "Una pieza de catálogo no tiene todos sus procesos requeridos.",
+    paso: "mano-de-obra",
+  },
+  V2_CONFIRM_PROCESS_WORKER_REQUIRED: {
+    mensaje: "Un proceso no tiene trabajador asignado.",
+    paso: "mano-de-obra",
+  },
   V2_CONFIRM_LINE_PRICE_REQUIRED: {
     mensaje: "Un producto quedó sin precio unitario.",
     paso: "precio",
