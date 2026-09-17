@@ -40,6 +40,21 @@ async function esperarGuardado(page: Page): Promise<void> {
   });
 }
 
+async function asignarProceso(
+  page: Page,
+  tecnica: string | RegExp,
+  trabajador: string | RegExp,
+): Promise<void> {
+  const fila = page.locator("li").filter({ hasText: tecnica }).first();
+  await expect(fila).toBeVisible({ timeout: 15_000 });
+  await fila.getByRole("combobox", { name: "Trabajador" }).click();
+  const search = page.getByPlaceholder(/buscar opci[oó]n/i);
+  if (await search.isVisible().catch(() => false)) {
+    await search.fill("");
+  }
+  await page.getByRole("option", { name: trabajador }).click();
+}
+
 async function csrf(page: Page): Promise<string> {
   const galleta = (await page.context().cookies()).find((c) => c.name === "greda_csrf");
   expect(galleta, "la sesión tiene que llevar su cookie CSRF").toBeDefined();
@@ -385,6 +400,8 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect(page.getByLabel(/pasta por pieza/i).first()).toHaveValue(/^450/);
 
     await paso(page, 4, "Mano de obra").click();
+    await asignarProceso(page, /Torno facil/i, /E2E-Tornero/);
+    await asignarProceso(page, /Vidriado por inmersion/i, /E2E-Trabajador taller/);
     const dias = page.getByLabel(/d[ií]as efectivos/i);
     await dias.fill("1");
     await dias.blur();
@@ -643,4 +660,3 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(token.length).toBeGreaterThan(0);
   });
 });
-

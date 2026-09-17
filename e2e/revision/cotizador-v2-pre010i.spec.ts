@@ -206,7 +206,13 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
       /pasta|material|trabajador|proceso/i,
       { timeout: 30_000 },
     );
-    await expect(page.getByRole("button", { name: /emitir|confirmar/i })).toBeDisabled();
+    await page.getByTestId("emitir-cotizacion").getByRole("button", { name: /confirmar y emitir/i }).click();
+    const dialogo = page.getByRole("dialog", { name: /confirmar y emitir/i });
+    await expect(dialogo.getByTestId("emision-bloqueos")).toContainText(
+      /pasta|material|trabajador|proceso/i,
+      { timeout: 15_000 },
+    );
+    await expect(dialogo.getByRole("button", { name: /^confirmar y emitir$/i })).toBeDisabled();
   });
 
   test("A2H-002: operador local ve UI restringida y la API responde 403", async ({ page }) => {
