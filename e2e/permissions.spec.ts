@@ -3,21 +3,26 @@ import { test } from "@playwright/test";
 /**
  * Roles y permisos.
  *
- * Este entorno solo tiene una cuenta de prueba real disponible (ADMIN).
- * La regla del proyecto es explicita: "no inventar credenciales, no crear
- * usuarios". Sin un segundo usuario real con un rol restringido (OPERATOR
- * u otro no-admin), UI_PERMISSION_BYPASS y BACKEND_PERMISSION_BYPASS no se
- * pueden ejercitar de verdad — un test que solo llame a la API como ADMIN
- * no probaria nada sobre restriccion de permisos.
+ * Esta suite es el SMOKE DE PRODUCCION: corre contra la URL desplegada y con
+ * la unica cuenta real que este entorno tiene (ADMIN). Aprovisionar ahi un
+ * segundo usuario no-admin seria crear una cuenta en produccion, y eso no se
+ * hace para pasar una prueba.
  *
- * Se documenta como NOT_VERIFIED en vez de fabricar un resultado. Si en
- * algun momento se aprovisiona un usuario de prueba no-admin real, este
- * archivo es el lugar para los casos:
- *   - ruta permitida vs prohibida en el sidebar/router;
- *   - botones ocultos en la UI para ese rol;
- *   - la MISMA mutacion intentada por API directa debe devolver 403,
- *     incluso si la UI ya oculta el boton (el backend es la autoridad).
+ * UI_PERMISSION_BYPASS y BACKEND_PERMISSION_BYPASS ya NO estan sin verificar:
+ * se ejercitan en el gate de revision, que levanta backend y frontend de la
+ * rama con un operador sembrado en local —
+ * `e2e/revision/cotizador-v2-pre010i.spec.ts`, casos «A2H-002» —, donde se
+ * comprueban las dos mitades que importan:
+ *   - la UI no ofrece a ese rol lo que no puede hacer;
+ *   - la MISMA mutacion por API directa responde 403, aunque el boton ya no
+ *     este (el backend es la autoridad final).
+ *
+ * Aqui no se duplica: contra produccion no hay con quien probarlo.
  */
 test.describe("Roles y permisos", () => {
-  test.skip(true, "UI_PERMISSION_BYPASS / BACKEND_PERMISSION_BYPASS: NOT_VERIFIED — falta un usuario de prueba no-admin real");
+  test.skip(
+    true,
+    "Verificado en el gate de revision (e2e/revision/cotizador-v2-pre010i.spec.ts, A2H-002): " +
+      "el smoke de produccion no aprovisiona cuentas no-admin",
+  );
 });

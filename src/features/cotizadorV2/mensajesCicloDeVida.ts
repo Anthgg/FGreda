@@ -48,6 +48,10 @@ export const BLOQUEOS_DE_EMISION: Record<string, Pendiente> = {
     mensaje: "Un proceso no tiene trabajador asignado.",
     paso: "mano-de-obra",
   },
+  V2_CONFIRM_LINE_LABOR_REQUIRED: {
+    mensaje: "Una pieza no tiene mano de obra: nadie la fabrica.",
+    paso: "mano-de-obra",
+  },
   V2_CONFIRM_LINE_PRICE_REQUIRED: {
     mensaje: "Un producto quedó sin precio unitario.",
     paso: "precio",
