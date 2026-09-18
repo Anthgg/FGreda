@@ -111,7 +111,7 @@ function AdjustmentForm({
 export function InventoryPage() {
   const { data: user } = useSession();
   // Fase 009J. Ajustar existencia es del taller; abrir un almacen, no.
-  const isAdmin = capabilitiesFor(user?.role).ajustarInventario;
+  const puedeAjustar = capabilitiesFor(user?.role).ajustarInventario;
 
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -206,7 +206,7 @@ export function InventoryPage() {
                       >
                         Historial
                       </SecondaryButton>
-                      {isAdmin ? (
+                      {puedeAjustar ? (
                         <SecondaryButton onClick={() => setAdjusting(balance)}>
                           Ajustar
                         </SecondaryButton>
@@ -219,7 +219,7 @@ export function InventoryPage() {
           </TableWrapper>
         )}
 
-        {adjusting !== null && isAdmin ? (
+        {adjusting !== null && puedeAjustar ? (
           <AdjustmentForm
             balance={adjusting}
             saving={adjustment.isPending}
