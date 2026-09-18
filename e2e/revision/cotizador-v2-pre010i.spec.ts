@@ -312,35 +312,9 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
     expect(response.status()).toBe(403);
   });
 
-  test("A2H-002 inventario: el operador ajusta existencia pero no abre almacen", async ({
-    page,
-  }) => {
-    // Cierra INVENTORY_PERMISSION_BYPASS, que estaba NOT_VERIFIED por no haber
-    // una cuenta no-admin. No se inventa la politica: se lee la que hay. Ajustar
-    // existencia es del TALLER —`ajustarInventario: esTaller` en la UI y
-    // `WorkshopUserDep` (ADMIN u OPERATOR) en el backend—, asi que el operador
-    // puede y comprobar un 403 ahi seria comprobar una regla falsa. Lo que si
-    // es administrativo es abrir un almacen: `crearAlmacen: esAdmin` y
-    // `AdminUserDep` en POST /inventory/locations.
-    await login(page, E2E_OPERATOR_EMAIL, E2E_OPERATOR_PASSWORD);
-    await page.goto("/inventario");
-    await expect(page.getByRole("heading", { name: /inventario/i }).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    const csrf = await page.request.get("/api/v1/auth/csrf");
-    expect(csrf.ok()).toBeTruthy();
-    const csrfToken = (await csrf.json()).csrf_token as string;
-
-    // Leer el inventario si le corresponde.
-    const lectura = await page.request.get("/api/v1/inventory/locations");
-    expect(lectura.status()).toBe(200);
-
-    // Abrir un almacen NO: el backend es la autoridad final.
-    const almacen = await page.request.post("/api/v1/inventory/locations", {
-      headers: { "X-CSRF-Token": csrfToken },
-      data: { name: testName("Almacen-operador"), code: "E2E-OP" },
-    });
-    expect(almacen.status()).toBe(403);
-  });
+  // La frontera del inventario —el operador AJUSTA existencia pero no ABRE
+  // almacenes— tiene su propia prueba en `inventario-operador.spec.ts`, que
+  // hace el ajuste de verdad por la pantalla y comprueba el saldo y el
+  // movimiento. Aqui habia una version que se llamaba «ajusta existencia» sin
+  // ajustar nada, y cuyo 403 salia de un cuerpo que el esquema ya rechaza.
 });
