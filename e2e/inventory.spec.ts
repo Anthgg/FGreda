@@ -23,10 +23,18 @@ test.describe("Inventario", () => {
   });
 });
 
-test.describe("Inventario: permisos (limitacion conocida)", () => {
-  // No existe una segunda cuenta de prueba con rol no-admin en este entorno:
-  // no se inventa una. INVENTORY_PERMISSION_BYPASS queda NOT_VERIFIED hasta
-  // que se disponga de un usuario OPERATOR/no-admin real para probar contra
-  // el, tal como pide la regla de "backend es la autoridad final".
-  test.skip(true, "INVENTORY_PERMISSION_BYPASS: NOT_VERIFIED — falta una cuenta de prueba con rol no-admin real");
+test.describe("Inventario: permisos", () => {
+  // INVENTORY_PERMISSION_BYPASS ya no esta sin verificar: se comprueba en el
+  // gate de revision con un operador sembrado en local
+  // (e2e/revision/cotizador-v2-pre010i.spec.ts, «A2H-002 inventario»), leyendo
+  // la politica que existe y no una inventada: ajustar existencia es del
+  // TALLER —el operador puede—, y abrir un almacen es administrativo —POST
+  // /inventory/locations responde 403—.
+  //
+  // Contra produccion no se repite: haria falta crear ahi una cuenta no-admin.
+  test.skip(
+    true,
+    "Verificado en el gate de revision (e2e/revision/cotizador-v2-pre010i.spec.ts, " +
+      "«A2H-002 inventario»): el smoke de produccion no aprovisiona cuentas no-admin",
+  );
 });

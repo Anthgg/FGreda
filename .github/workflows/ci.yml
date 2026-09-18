@@ -362,8 +362,10 @@ jobs:
     env:
       # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
       # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      # `main`: el backend de 010H (Anthgg/BGreda#60) ya esta fusionado, y la
-      # E2E del frontend se repite contra el antes de fusionar el suyo.
+      # `main`: la correccion backend de PRE-010I (Anthgg/BGreda#61) ya esta
+      # fusionada, y trae el seed del Excel, el operador local y los blockers
+      # que esta rama valida. La E2E vuelve a probarse contra main antes de
+      # fusionar el frontend.
       BACKEND_REF: main
     services:
       postgres:
@@ -423,9 +425,14 @@ jobs:
         run: |
           EMAIL="e2e-$(openssl rand -hex 4)@example.com"
           CLAVE="$(openssl rand -hex 24)"
+          OP_EMAIL="e2e-operator-$(openssl rand -hex 4)@example.com"
+          OP_CLAVE="$(openssl rand -hex 24)"
           echo "::add-mask::$CLAVE"
+          echo "::add-mask::$OP_CLAVE"
           echo "E2E_EMAIL=$EMAIL" >> "$GITHUB_ENV"
           echo "E2E_PASSWORD=$CLAVE" >> "$GITHUB_ENV"
+          echo "E2E_OPERATOR_EMAIL=$OP_EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_OPERATOR_PASSWORD=$OP_CLAVE" >> "$GITHUB_ENV"
 
       - name: Levantar el backend de la revision
         working-directory: backend

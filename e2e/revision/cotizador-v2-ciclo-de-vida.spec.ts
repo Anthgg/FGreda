@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
-import { testName } from "../helpers/fixtures";
+import { TEST_DATA_PREFIX, testName } from "../helpers/fixtures";
 
 /**
  * Fase 010H — emitir, vencer, duplicar, PDF y paso a producción, contra LA REVISIÓN.
@@ -38,6 +38,21 @@ async function esperarGuardado(page: Page): Promise<void> {
   await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
     timeout: 30_000,
   });
+}
+
+async function asignarProceso(
+  page: Page,
+  tecnica: string | RegExp,
+  trabajador: string | RegExp,
+): Promise<void> {
+  const fila = page.locator("li").filter({ hasText: tecnica }).first();
+  await expect(fila).toBeVisible({ timeout: 15_000 });
+  await fila.getByRole("combobox", { name: "Trabajador" }).click();
+  const search = page.getByPlaceholder(/buscar opci[oó]n/i);
+  if (await search.isVisible().catch(() => false)) {
+    await search.fill("");
+  }
+  await page.getByRole("option", { name: trabajador }).click();
 }
 
 async function csrf(page: Page): Promise<string> {
@@ -95,6 +110,35 @@ async function borradorCompleto(page: Page, etiqueta: string, piezas: string[]):
   }
 
   await paso(page, 4, "Mano de obra").click();
+  // Una pieza de encargo no trae procesos de ninguna ficha: se le definen aqui,
+  // para ESTA cotizacion, y se le pone quien la hace. Sin eso la cotizacion
+  // queda con mano de obra 0 y ya no se puede emitir, que es justo la barrera
+  // que cierra A2H-001.
+  for (const pieza of piezas) {
+    const tarjeta = page
+      .getByTestId("procesos")
+      .locator("div")
+      .filter({ has: page.getByRole("heading", { name: new RegExp(`^${TEST_DATA_PREFIX}${pieza}-`) }) })
+      .first();
+    // Tecnica y persona POR NOMBRE, no por posicion: «A mano» la sabe hacer
+    // «E2E-Trabajador taller» en la semilla, y elegir por indice ataria la
+    // prueba al orden en que el catalogo devuelva sus filas.
+    await tarjeta.getByRole("combobox", { name: "Agregar proceso" }).click();
+    const buscador = page.getByPlaceholder(/buscar opci[oó]n/i);
+    if (await buscador.isVisible().catch(() => false)) await buscador.fill("A mano");
+    await page.getByRole("option", { name: "A mano", exact: true }).click();
+    await tarjeta.getByRole("button", { name: "Agregar" }).click();
+    // Acotado A ESTA tarjeta: con dos piezas hay dos filas «A mano», y buscar
+    // en toda la pagina reasignaria la de la primera.
+    const fila = tarjeta.locator("li").filter({ hasText: "A mano" }).first();
+    await expect(fila).toBeVisible({ timeout: 15_000 });
+    await fila.getByRole("combobox", { name: "Trabajador" }).click();
+    const personas = page.getByPlaceholder(/buscar opci[oó]n/i);
+    if (await personas.isVisible().catch(() => false)) await personas.fill("Trabajador taller");
+    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
+    await esperarGuardado(page);
+  }
+
   const dias = page.getByLabel(/d[ií]as efectivos/i);
   await dias.fill("2");
   await dias.blur();
@@ -385,6 +429,8 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect(page.getByLabel(/pasta por pieza/i).first()).toHaveValue(/^450/);
 
     await paso(page, 4, "Mano de obra").click();
+    await asignarProceso(page, /Torno facil/i, /E2E-Tornero/);
+    await asignarProceso(page, /Vidriado por inmersion/i, /E2E-Trabajador taller/);
     const dias = page.getByLabel(/d[ií]as efectivos/i);
     await dias.fill("1");
     await dias.blur();
@@ -643,4 +689,3 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(token.length).toBeGreaterThan(0);
   });
 });
-
