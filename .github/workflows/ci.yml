@@ -362,9 +362,11 @@ jobs:
     env:
       # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
       # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      # PRE-010I depende de la correccion backend emparejada: contiene el seed
-      # Excel, el operador local y los blockers nuevos que esta rama valida.
-      BACKEND_REF: fix/pre-010i-post-audit-backend
+      # `main`: la correccion backend de PRE-010I (Anthgg/BGreda#61) ya esta
+      # fusionada, y trae el seed del Excel, el operador local y los blockers
+      # que esta rama valida. La E2E vuelve a probarse contra main antes de
+      # fusionar el frontend.
+      BACKEND_REF: main
     services:
       postgres:
         image: postgres:16-alpine
