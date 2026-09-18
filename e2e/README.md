@@ -18,29 +18,51 @@
 >
 > Correrla en local:
 >
-> ```bash
-> # Las MISMAS credenciales en el backend y en Playwright: el backend de la
-> # revision registra estas dos cuentas en su autenticacion simulada (una ADMIN
-> # y una OPERATOR) y Playwright entra con ellas. Se generan aleatorias igual
-> # que en CI; no hay ninguna credencial real que poner aqui.
-> export E2E_EMAIL=e2e@example.com
-> export E2E_PASSWORD="$(openssl rand -hex 24)"
-> export E2E_OPERATOR_EMAIL=e2e-operator@example.com
-> export E2E_OPERATOR_PASSWORD="$(openssl rand -hex 24)"
+> Son tres procesos que se quedan corriendo, asi que van en **tres
+> terminales**, y las tres tienen que ver las MISMAS credenciales: el backend
+> de la revision registra dos cuentas en su autenticacion simulada (una ADMIN
+> y una OPERATOR) y Playwright entra con ellas. Como `openssl rand` da un valor
+> distinto cada vez, se generan **una sola vez** en un fichero fuera del repo y
+> cada terminal lo carga. Son aleatorias, igual que en CI: no hay ninguna
+> credencial real que poner aqui.
 >
-> # backend (en BGreda), contra un PostgreSQL local
-> DATABASE_URL=postgresql://.../greda_e2e uv run alembic upgrade head
+> ```bash
+> # UNA sola vez. Ajusta BGREDA_DIR si tu clon del backend esta en otro sitio;
+> # la URL de la base es la misma que usa CI (usuario y clave `greda`).
+> cat > "$HOME/.greda-e2e-revision.env" <<EOF
+> export BGREDA_DIR="$HOME/BGreda"
+> export DATABASE_URL=postgresql://greda:greda@localhost:5432/greda_e2e
+> export E2E_EMAIL=e2e@example.com
+> export E2E_PASSWORD=$(openssl rand -hex 24)
+> export E2E_OPERATOR_EMAIL=e2e-operator@example.com
+> export E2E_OPERATOR_PASSWORD=$(openssl rand -hex 24)
+> EOF
+> ```
+>
+> ```bash
+> # terminal 1 — backend de la revision (queda sirviendo en :8000)
+> source "$HOME/.greda-e2e-revision.env"
+> cd "$BGREDA_DIR"
+> uv sync
+> uv run alembic upgrade head
 > GREDA_E2E_REVISION=1 \
->   DATABASE_URL=postgresql://.../greda_e2e \
 >   FRONTEND_ORIGINS=http://localhost:4173 \
 >   COOKIE_SECURE=false \
 >   uv run python -m tests.e2e.servidor_revision --port 8000
+> ```
 >
-> # frontend (en FGreda), en otra terminal con los MISMOS export de arriba
+> ```bash
+> # terminal 2 — la app construida desde esta rama (queda sirviendo en :4173)
+> source "$HOME/.greda-e2e-revision.env"
 > VITE_API_BASE_URL=http://localhost:4173 npm run build
 > npx vite preview --port 4173 --strictPort
+> ```
+>
+> ```bash
+> # terminal 3 — las pruebas
+> source "$HOME/.greda-e2e-revision.env"
 > E2E_BASE_URL=http://localhost:4173 \
->   E2E_PDF_PYTHON=<BGreda>/.venv/bin/python \
+>   E2E_PDF_PYTHON="$BGREDA_DIR/.venv/bin/python" \
 >   npx playwright test -c playwright.revision.config.ts
 > ```
 >
@@ -49,9 +71,9 @@
 > `E2E_EMAIL`, `E2E_PASSWORD`, `E2E_OPERATOR_EMAIL` o `E2E_OPERATOR_PASSWORD`:
 > sin valores por defecto, para que no pueda caer contra un sitio real.
 > `E2E_PDF_PYTHON` lo exige `cotizador-v2-ciclo-de-vida.spec.ts` para extraer
-> el texto del PDF con el `pypdf` del backend; en Windows es
-> `<BGreda>\.venv\Scripts\python.exe`. `VITE_API_BASE_URL` apunta al propio
-> `vite preview`, que reenvia `/api` al backend.
+> el texto del PDF con el `pypdf` del backend; en Windows (Git Bash) es
+> `"$BGREDA_DIR/.venv/Scripts/python.exe"`. `VITE_API_BASE_URL` apunta al
+> propio `vite preview`, que reenvia `/api` al backend.
 >
 > Lo que sigue describe el **smoke de produccion**.
 
