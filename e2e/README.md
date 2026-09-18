@@ -81,21 +81,39 @@ corridas. La suite:
 | Concurrencia | `concurrency.spec.ts` | doble-clic en Confirmar (CASO B), doble-clic en Guardar (CASO D); CASO A y CASO C documentados abajo |
 | Terceros | `terceros.spec.ts` | lookup DNI/RUC, autocompletado y persistencia de ubigeo |
 | Recetas | `recipes.spec.ts` | listado, detalle, rendimiento, búsqueda, historial de versiones, no-persistencia del simulador |
-| Inventario | `inventory.spec.ts` | listado real, saldo no editable inline; bypass de permisos por rol: **NOT_VERIFIED** (ver abajo) |
+| Inventario | `inventory.spec.ts` | listado real, saldo no editable inline; permisos por rol: skip en el smoke, verificado en el gate de revisión (ver abajo) |
 | Importaciones | `imports.spec.ts` | archivo corrupto → error controlado, nunca 500, nunca llega a confirmar |
-| Permisos | `permissions.spec.ts` | **NOT_VERIFIED** en su totalidad (ver abajo) |
+| Permisos | `permissions.spec.ts` | skip en el smoke; verificado en el gate de revisión (ver abajo) |
 
-## Casos documentados como NOT_VERIFIED / skip permanente
+## Casos docume### Permisos por rol: verificados en el gate de revisión, no en el smoke
 
-### Permisos por rol (`permissions.spec.ts`, sección "no-admin" de `inventory.spec.ts`)
+`permissions.spec.ts` y la sección "Inventario: permisos" de
+`inventory.spec.ts` siguen en `test.skip`, pero **ya no son NOT_VERIFIED**.
+El skip es porque el smoke corre contra producción con la única cuenta real
+(ADMIN), y aprovisionar ahí una cuenta no-admin sería crear un usuario en
+producción para pasar una prueba. Contra producción no se duplica.
 
-Requieren una segunda cuenta real con un rol distinto a Administrador. No
-existe ninguna en este ambiente y la política del proyecto prohíbe crear
-usuarios o contraseñas nuevas para llenar este hueco. Quedan como
-`test.skip` con el motivo explícito en el propio test. Para cerrarlos: crear
-(por un canal fuera de esta suite, con autorización explícita) una cuenta de
-prueba con un rol restringido y exportar sus credenciales como
-`E2E_NONADMIN_EMAIL` / `E2E_NONADMIN_PASSWORD`.
+Los casos se ejercitan en el gate de revisión
+(`e2e/revision/cotizador-v2-pre010i.spec.ts`), que levanta backend y
+frontend de la rama con un operador sembrado en local (en CI, credenciales
+aleatorias por corrida en `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD`):
+
+- **UI_PERMISSION_BYPASS** y **BACKEND_PERMISSION_BYPASS** — test
+  «A2H-002: operador local ve UI restringida y la API responde 403». El
+  operador ve la configuración del Cotizador V2 en solo lectura (sin
+  Guardar/Editar/Configurar) y la misma mutación por API directa
+  (`PUT /settings/commercial`) responde 403: el backend es la autoridad final.
+- **INVENTORY_PERMISSION_BYPASS** — test «A2H-002 inventario: el operador
+  ajusta existencia pero no abre almacen». Documenta la política real, no una
+  inventada: ajustar existencia es del **taller** (`ajustarInventario:
+  esTaller` en `src/features/auth/capabilities.ts`; `WorkshopUserDep` = ADMIN
+  u OPERATOR en el backend), así que el operador **sí** puede ajustar. Lo
+  administrativo es abrir un almacén (`crearAlmacen: esAdmin`;
+  `POST /inventory/locations` con `AdminUserDep`): el test comprueba que el
+  operador lee `GET /inventory/locations` (200) y que crear un almacén
+  responde 403.
+
+NONADMIN_EMAIL` / `E2E_NONADMIN_PASSWORD`.
 
 ### CASO A: edición concurrente del mismo borrador (`concurrency.spec.ts`)
 
