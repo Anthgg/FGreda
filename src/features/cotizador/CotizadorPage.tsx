@@ -84,17 +84,16 @@ function ProductionPanel({ preview }: {
         <h2 className="text-sm font-semibold text-zinc-950">Resumen de quema del lote</h2>
         <p className="mt-1 text-xs text-zinc-500">
           Cálculo consolidado de todos los productos incluidos en esta producción. La ocupación
-          y el factor salen del lote completo, no de cada pieza por separado.
+          física se conserva como referencia; no multiplica el costo de quema.
         </p>
       </div>
-      {/* Siete columnas solo caben de verdad en pantalla ancha. A 1024 px
+      {/* Seis columnas solo caben de verdad en pantalla ancha. A 1024 px
           partian cada importe en dos lineas ("S/" arriba, la cifra abajo);
           cuatro columnas ahi lo mantienen legible sin agrandar las tarjetas. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Volumen</p><p className="font-bold tabular-nums">{decimalFrom(summary.total_volume_cm3)} cm³</p></div>
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Ocupación</p><p className="font-bold tabular-nums">{decimalFrom(summary.occupancy_percentage)}%</p></div>
-        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Factor</p><p className="font-bold tabular-nums">×{decimalFrom(summary.occupancy_factor)}</p></div>
-        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Costo base</p><p className="font-bold tabular-nums">{money(numberFrom(summary.subtotal, "0"), "PEN")}</p></div>
+        <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">Costo real</p><p className="font-bold tabular-nums">{money(numberFrom(summary.subtotal, "0"), "PEN")}</p></div>
         <div className="rounded-xl border border-orange-200 bg-orange-50 p-3"><p className="text-[10px] uppercase text-orange-700">Quema sin IGV</p><p className="font-bold tabular-nums text-orange-950">{money(numberFrom(summary.total_cost, "0"), "PEN")}</p></div>
         <div className="rounded-xl bg-zinc-50 p-3"><p className="text-[10px] uppercase text-zinc-400">IGV ({taxPercentage}%)</p><p className="font-bold tabular-nums">{money(numberFrom(summary.tax_amount, "0"), "PEN")}</p></div>
         <div className="rounded-xl bg-zinc-950 p-3 text-white"><p className="text-[10px] uppercase text-zinc-400">Quema con IGV</p><p className="font-bold tabular-nums">{money(numberFrom(summary.total_with_tax, "0"), "PEN")}</p></div>
@@ -138,8 +137,8 @@ export function CotizadorPage() {
   }));
   // Fase 009K.3. El factor que se aplicaria si se encendiera. Sale del preview
   // —que es quien lo resuelve— y solo cuando esta encendido; apagado el
-  // preview trae el neutro 1, que no es el numero de Configuracion. Por eso
-  // el valor de referencia se pide a Configuracion, la unica autoridad.
+  // preview trae el neutro 1 cuando el factor esta apagado. Configuracion
+  // sigue siendo la referencia inicial, pero el valor final es del borrador.
   const configuredProductionFactor = commercialSettings.data
     ? String(commercialSettings.data.production_factor_default)
     : null;
@@ -379,10 +378,19 @@ export function CotizadorPage() {
             <ProductionFactorField
               enabled={draft.productionFactorEnabled}
               configuredFactor={configuredProductionFactor}
+              value={draft.productionFactor}
               disabled={readOnly}
               onChange={(productionFactorEnabled) =>
-                changeDraft({ ...draft, productionFactorEnabled })
+                changeDraft({
+                  ...draft,
+                  productionFactorEnabled,
+                  productionFactor:
+                    productionFactorEnabled && !draft.productionFactor.trim()
+                      ? configuredProductionFactor ?? ""
+                      : draft.productionFactor,
+                })
               }
+              onValueChange={(productionFactor) => changeDraft({ ...draft, productionFactor })}
             />
           ) : null}
           {draft.items.map((item, index) => (

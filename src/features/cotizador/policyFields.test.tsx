@@ -22,8 +22,8 @@ import type { QuotationBuilderOut } from "@/types/quotationBuilder";
  * cubierto contra PostgreSQL real— sino tres cosas que solo se ven en la UI:
  *
  * 1. con que ARRANCA una cotizacion nueva: factor apagado, horno todo junto;
- * 2. que lo que viaja al backend sea la INTENCION y nunca un valor de factor,
- *    para que el navegador no pueda elegir el factor de la casa;
+ * 2. que lo que viaja al backend sea la INTENCION y, desde 009K.4.2, el valor
+ *    del factor elegido para esta cotizacion;
  * 3. que la pantalla no prometa lo que el sistema no hace. En concreto, que
  *    no diga «automatico 1/2/3»: esa regla no existe, y escribirla haria que
  *    alguien esperara tramos que nadie calcula.
@@ -283,7 +283,7 @@ describe("Factor de producción opcional", () => {
     expect(screen.getByRole("radio", { name: "Activado" })).not.toBeChecked();
   });
 
-  it("FF02 + FF03: activarlo manda la intencion y enseña el factor configurado", async () => {
+  it("FF02 + FF03: activarlo manda la intencion y enseña el factor editable", async () => {
     const user = userEvent.setup();
     const spy = mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
@@ -291,13 +291,15 @@ describe("Factor de producción opcional", () => {
 
     await user.click(screen.getByRole("radio", { name: "Activado" }));
 
-    // El numero sale de Configuracion, que es su unica autoridad.
-    expect(await screen.findByText(/Factor configurado:/i)).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: /Valor del factor/ })).toHaveValue("3");
     // 009K.4.1: el multiplicador se dice «×3», no «×3.00». No es dinero,
     // y los dos decimales lo hacian parecer un importe.
-    expect(screen.getByText("×3")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sugerido por Configuración: ×3. Valor efectivo: ×3."),
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(previewBodies(spy).at(-1)?.production_factor_enabled).toBe(true);
+      expect(previewBodies(spy).at(-1)?.production_factor).toBe("3");
     });
   });
 
@@ -318,7 +320,7 @@ describe("Factor de producción opcional", () => {
     });
   });
 
-  it("FF07: el navegador nunca manda un valor de factor", async () => {
+  it("FF07: el navegador manda el valor editable del factor", async () => {
     const user = userEvent.setup();
     const spy = mockFetch(handler);
     renderApp(["/cotizador/nuevo"]);
@@ -328,12 +330,15 @@ describe("Factor de producción opcional", () => {
     await waitFor(() => {
       expect(previewBodies(spy).at(-1)?.production_factor_enabled).toBe(true);
     });
-    // Ni encendido ni apagado: cuanto vale el factor de la casa se decide en
-    // Configuracion, y un numero saliendo de aqui seria una segunda respuesta
-    // a la misma pregunta.
-    for (const body of previewBodies(spy)) {
-      expect(body).not.toHaveProperty("production_factor");
-    }
+    const input = await screen.findByRole("textbox", { name: /Valor del factor/ });
+    await user.clear(input);
+    await user.type(input, "2");
+    await waitFor(() => {
+      expect(previewBodies(spy).at(-1)).toMatchObject({
+        production_factor_enabled: true,
+        production_factor: "2",
+      });
+    });
   });
 
   it("FF07 bis: no hay selector manual de 1, 2 o 3", async () => {

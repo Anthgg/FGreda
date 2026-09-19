@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { SelectField } from "@/components/form";
+import { SelectField, TextField } from "@/components/form";
 import type { SelectOption } from "@/components/form";
 import {
   NEUTRAL_FACTOR,
@@ -74,33 +74,25 @@ function Segmented<T extends string>({
 }
 
 /**
- * El factor de produccion, que desde 009K.3 es opcional y nace apagado.
- *
- * Encendido NO se elige cuanto vale: el valor es el de Configuracion y lo
- * aplica el backend. Por eso aqui se ENSENA el numero configurado en vez de
- * ofrecer un campo — dos sitios donde escribir el factor de la casa serian
- * dos respuestas distintas a la misma pregunta.
- *
- * Y no dice «automatico 1/2/3»: esa regla no existe en el sistema. Escribirlo
- * en la pantalla haria que alguien esperara tramos que nadie calcula.
- *
- * Fase 009K.4.1: se llama por su nombre —«factor de produccion», el mismo de
- * Configuracion y del backend— y dice de quien es cada mitad de la decision.
- * Antes ponia «Factor comercial» y, debajo, «Configuración → Comercial» a
- * secas: la primera es OTRA cosa en la base (`quotations.commercial_factor`) y
- * la segunda se leia como que apagarlo o encenderlo se hacia en Ajustes.
+ * Fase 009K.4.2: el factor es opcional y, cuando se aplica, su valor es
+ * editable por cotizacion. Configuracion solo da la sugerencia inicial.
  */
 export function ProductionFactorField({
   enabled,
   configuredFactor,
+  value,
   disabled,
   onChange,
+  onValueChange,
 }: {
   enabled: boolean;
   configuredFactor: string | null | undefined;
+  value: string;
   disabled: boolean;
   onChange: (enabled: boolean) => void;
+  onValueChange: (value: string) => void;
 }) {
+  const effectiveValue = value.trim() || factorMultiplier(configuredFactor);
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-5">
       <Segmented
@@ -116,24 +108,26 @@ export function ProductionFactorField({
       >
         <p className="mt-3 text-xs text-zinc-600">
           {enabled
-            ? "Se aplica el factor configurado para producción."
+            ? "Se aplica el factor elegido para esta cotización."
             : "No se aplica multiplicador de producción."}
         </p>
-        {/* El numero es de LECTURA: sale de Configuracion y lo aplica el
-            backend. Apagado se ensena el neutro y no el numero configurado —
-            poner «×3» en una cotizacion que multiplica por uno seria anunciar
-            algo que no se aplica. Y va sin simbolo de moneda: el factor no son
-            tres soles, son tres veces el costo tecnico. */}
-        <p className="mt-2 text-xs text-zinc-600">
-          {enabled ? "Factor configurado:" : "Factor efectivo:"}{" "}
-          <span className="font-semibold tabular-nums text-zinc-900">
-            ×{enabled ? factorMultiplier(configuredFactor) : NEUTRAL_FACTOR}
-          </span>
-        </p>
-        <p className="mt-2 text-[11px] text-zinc-500">
-          El valor del factor se define en Configuración; aquí decides si esta cotización lo
-          aplica.
-        </p>
+        {enabled ? (
+          <TextField
+            label="Valor del factor"
+            requirement="required"
+            value={value}
+            onChange={onValueChange}
+            disabled={disabled}
+            inputMode="decimal"
+            placeholder={factorMultiplier(configuredFactor)}
+            hint={`Sugerido por Configuración: ×${factorMultiplier(configuredFactor)}. Valor efectivo: ×${effectiveValue}.`}
+          />
+        ) : (
+          <p className="mt-2 text-xs text-zinc-600">
+            Factor efectivo:{" "}
+            <span className="font-semibold tabular-nums text-zinc-900">×{NEUTRAL_FACTOR}</span>
+          </p>
+        )}
       </Segmented>
     </div>
   );
