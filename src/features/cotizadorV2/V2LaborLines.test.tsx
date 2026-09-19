@@ -365,6 +365,33 @@ describe("Mano de obra de una cotización V2 (Fase 010D)", () => {
     expect(screen.getByText("13.750000000000")).toBeInTheDocument();
   });
 
+  it("la ilustración se indica por producto y manda la lista entera (010J)", async () => {
+    const espia = mockV2(sinProcesos());
+    renderApp(["/cotizador-v2/7/mano-de-obra"]);
+
+    const campo = await screen.findByRole("textbox", {
+      name: /Piezas a ilustrar · Plato palta/,
+    });
+    // La cantidad sin producto de cotizaciones anteriores se ofrece para reasignarla.
+    expect(screen.getByRole("textbox", { name: /Piezas sin producto asignado/ })).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.clear(campo);
+    await user.type(campo, "20");
+    await user.tab();
+
+    await waitFor(() => {
+      const put = espia.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes("/illustration") &&
+          (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(put).toBeDefined();
+      expect(JSON.parse(String((put?.[1] as RequestInit).body))).toEqual({
+        lines: [{ line_id: 11, quantity: "20" }],
+      });
+    });
+  });
+
   it("dice que añadir personal no reduce el plazo", async () => {
     mockV2(sinProcesos());
 

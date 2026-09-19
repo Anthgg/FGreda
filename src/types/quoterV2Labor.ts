@@ -166,6 +166,15 @@ export interface V2LaborPage {
   effective_work_days: number | null;
 }
 
+/** Fase 010J. La ilustración de UN producto: entra en su costo directo. */
+export interface V2IllustrationLine {
+  line_id: number;
+  product_name: string | null;
+  quantity: string;
+  hours: string;
+  cost: string;
+}
+
 export interface V2Illustration {
   enabled: boolean;
   quantity: string;
@@ -174,8 +183,14 @@ export interface V2Illustration {
   workday_hours: string | null;
   capacity_per_workday: string | null;
   hourly_rate: string | null;
+  /** La ilustración NO asignada a ningún producto (se reparte como general). */
   hours: string;
   cost: string;
+  /** Fase 010J. La de cada producto. */
+  lines: V2IllustrationLine[];
+  /** General + productos. */
+  total_hours: string;
+  total_cost: string;
 }
 
 export interface V2IllustrationInput {
@@ -183,6 +198,8 @@ export interface V2IllustrationInput {
   illustration_quantity?: string;
   illustration_notes?: string | null;
   illustration_hourly_rate_override?: string | null;
+  /** Fase 010J. Cantidad por producto; las líneas que no vienen quedan en cero. */
+  lines?: { line_id: number; quantity: string }[];
 }
 
 export const WORKER_TYPE_LABEL: Record<V2WorkerType, string> = {

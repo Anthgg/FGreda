@@ -35,6 +35,7 @@ const CONFIG = {
   high_fire_enabled_default: true,
   illustration_daily_rate: "110.000000",
   illustration_pieces_per_workday: "50.000000",
+  piece_separation_cm: "3.000000",
   illustration_hourly_rate: "13.750000",
   illustration_pieces_per_hour: "6.250000",
   tax_percent: "18.000000",

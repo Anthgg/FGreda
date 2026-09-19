@@ -19,6 +19,17 @@
 
 import type { V2CustomerKind } from "@/types/quoterV2";
 
+/**
+ * Fase 010J (Excel final). COMPARTIDA cobra la fracción de horno que ocupa el
+ * pedido; EXCLUSIVA/URGENTE, cada hornada entera. Lo elige quien cotiza.
+ */
+export type V2FiringMode = "SHARED" | "EXCLUSIVE";
+
+export const FIRING_MODE_LABEL: Record<V2FiringMode, string> = {
+  SHARED: "Compartida",
+  EXCLUSIVE: "Exclusiva / urgente",
+};
+
 export interface V2KilnOption {
   kiln_id: number;
   code: string;
@@ -29,8 +40,21 @@ export interface V2KilnOption {
   occupancy_percent: string;
   /** Y cuántas hornadas pediría. Es la información con la que se decide. */
   firing_count: number;
+  /** Fase 010J. Lo que costaría la quema en ESTE horno, mismo modo y cliente. */
+  billed_load: string;
+  /** `null` si al horno le falta alguna tarifa que la cotización necesita. */
+  commercial_total: string | null;
+  gas_total: string | null;
   /** Sin tarifas V2 configuradas no se puede costear, y hay que decirlo antes. */
   has_rates: boolean;
+}
+
+/** Otro horno que cobraría menos por la misma quema. Sugerencia, no cambio. */
+export interface V2CheaperKiln {
+  kiln_id: number;
+  name: string;
+  commercial_total: string;
+  savings: string;
 }
 
 export interface V2FiringLine {
@@ -57,12 +81,19 @@ export interface V2Firing {
 
   total_volume_cm3: string;
   occupancy_percent: string;
+  /** Hornadas FÍSICAS: cuántas veces se enciende el horno. */
   firing_count: number;
+  /** Fase 010J. */
+  firing_mode: V2FiringMode;
+  /** Separación entre piezas, en cm, sumada a largo, ancho y alto. */
+  piece_separation_cm: string;
+  /** Hornadas que se COBRAN: ocupación/100 en compartida, enteras en exclusiva. */
+  billed_load: string;
   low_fire_enabled: boolean;
   high_fire_enabled: boolean;
   low_fire_count: number;
   high_fire_count: number;
-  /** Con cuánta carga va cada hornada. La última, al 60 %, cuesta igual. */
+  /** Con cuánta carga va cada hornada: la primera al 100 %, la última con el resto. */
   batch_loads: string[];
 
   gas_cost_low: string | null;
@@ -81,6 +112,8 @@ export interface V2Firing {
 
   /** El horno que el sistema recomendaría. RECOMIENDA: no se aplica solo. */
   recommended_kiln_id: number | null;
+  /** Fase 010J. El horno más barato para esta quema, si no es el elegido. */
+  cheaper_kiln: V2CheaperKiln | null;
   kilns: V2KilnOption[];
   lines: V2FiringLine[];
   warnings: string[];
@@ -91,6 +124,8 @@ export interface V2FiringInput {
   customer_kind?: V2CustomerKind;
   low_fire_enabled?: boolean;
   high_fire_enabled?: boolean;
+  firing_mode?: V2FiringMode;
+  piece_separation_cm?: string;
   /** Presente y en nulo retira el acuerdo; ausente lo conserva. */
   gas_cost_low_override?: string | null;
   gas_cost_high_override?: string | null;

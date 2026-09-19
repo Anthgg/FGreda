@@ -69,6 +69,8 @@ export interface V2Pricing {
   commercial_factor: string | null;
   factor_min: string | null;
   factor_max: string | null;
+  /** Fase 010J. El factor del precio objetivo (×3 por defecto). */
+  factor_target: string | null;
   price_min: string;
   price_target: string;
   negotiated_price: string;
@@ -90,6 +92,32 @@ export interface V2Pricing {
   effective_margin_percent: string;
 
   lines: V2PricingLine[];
+  warnings: string[];
+}
+
+/** Fase 010J. Una palanca para bajar el precio. Estimación; nunca se aplica sola. */
+export type V2ReductionCode =
+  | "OTHER_KILN"
+  | "MIN_FACTOR"
+  | "REMOVE_ILLUSTRATION"
+  | "REMOVE_EXTRAS"
+  | "INTERNAL_STAFF"
+  | "SHARED_FIRING";
+
+export interface V2Reduction {
+  code: V2ReductionCode;
+  applicable: boolean;
+  cost_reduction: string;
+  savings: string;
+  estimated_subtotal: string;
+  suggestion: string | null;
+}
+
+export interface V2Reductions {
+  current_subtotal: string;
+  commercial_factor: string | null;
+  currency_code: string;
+  items: V2Reduction[];
   warnings: string[];
 }
 

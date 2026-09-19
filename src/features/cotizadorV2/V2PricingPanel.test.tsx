@@ -8,6 +8,7 @@ import {
   V2_LABOR_PAGE,
   V2_MATERIAL_PRODUCTS,
   V2_PRICING,
+  V2_REDUCTIONS,
   V2_TECHNIQUES,
   V2_WORKERS,
 } from "@/test/quoterV2Fixtures";
@@ -144,6 +145,7 @@ function mockV2(
     if (url.includes("/illustration")) return jsonResponse(200, V2_ILLUSTRATION);
     if (url.includes("/planning")) return jsonResponse(200, V2_LABOR_PAGE);
     if (url.includes("/firing")) return jsonResponse(200, V2_FIRING);
+    if (url.includes("/reductions")) return jsonResponse(200, V2_REDUCTIONS);
     if (url.includes("/pricing")) {
       if (init?.method === "PUT") return overrides.update ?? jsonResponse(200, V2_PRICING);
       return overrides.pricing ?? jsonResponse(200, V2_PRICING);
@@ -166,6 +168,26 @@ function mockV2(
 async function panelDePrecio(): Promise<HTMLElement> {
   return await screen.findByTestId("panel-precio");
 }
+
+describe("Reducciones sugeridas (Fase 010J)", () => {
+  it("enseña cada palanca con su ahorro y no aplica ninguna", async () => {
+    const espia = mockV2();
+    renderApp(["/cotizador-v2/7/precio"]);
+
+    const bloque = await screen.findByTestId("panel-reducciones");
+    expect(within(bloque).getByText("Usar otro horno")).toBeInTheDocument();
+    expect(within(bloque).getByText("5711.21")).toBeInTheDocument();
+    expect(within(bloque).getByText("6707.17")).toBeInTheDocument();
+    expect(within(bloque).getByText("9923.00")).toBeInTheDocument();
+    expect(within(bloque).getByText(/Nunca por debajo de ×2/)).toBeInTheDocument();
+    expect(within(bloque).getByText("Horno sugerido: Horno grande.")).toBeInTheDocument();
+    // Sugerir no es aplicar: ninguna escritura sale de este bloque.
+    const escrituras = espia.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(escrituras).toHaveLength(0);
+  });
+});
 
 describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
   it("enseña las dos bases de costo por separado", async () => {
@@ -197,7 +219,7 @@ describe("Margen y precio de una cotización V2 (Fase 010F)", () => {
 
     const panel = await panelDePrecio();
     expect(within(panel).getByText("Precio mínimo ×2")).toBeInTheDocument();
-    expect(within(panel).getByText("Precio objetivo ×3")).toBeInTheDocument();
+    expect(within(panel).getByText("Precio objetivo ×3.00")).toBeInTheDocument();
     expect(within(panel).getByText("Precio negociado")).toBeInTheDocument();
     expect(within(panel).getByText(V2_PRICING.price_min)).toBeInTheDocument();
   });
