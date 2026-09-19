@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
+import { CREACION_LEGACY_HABILITADA } from "@/features/cotizador/legacyCutover";
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
@@ -564,7 +565,8 @@ export function CotizadorPage() {
           {canEdit && status === "DRAFT" ? <PrimaryButton type="button" disabled={busy} onClick={() => save(false)}>{busy ? "Guardando…" : id ? "Guardar borrador" : "Crear borrador"}</PrimaryButton> : null}
           {canEdit && id && status !== "CANCELLED" ? <SecondaryButton disabled={busy} onClick={() => setConfirmCancel(true)}>Anular</SecondaryButton> : null}
           {canEdit && id && persisted && canMarkPaid(status, persisted.payment_status) ? <SecondaryButton disabled={busy} onClick={() => setConfirmPaid(true)}>Marcar como pagada</SecondaryButton> : null}
-          {canEdit && id && status !== "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => duplicate.mutate(id, { onSuccess: (copy) => navigate(`/cotizador/${copy.id}`) })}>Duplicar</SecondaryButton> : null}
+          {/* Fase 010J: duplicar crea una Legacy nueva, y eso se retiró. */}
+          {CREACION_LEGACY_HABILITADA && canEdit && id && status !== "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => duplicate.mutate(id, { onSuccess: (copy) => navigate(`/cotizador/${copy.id}`) })}>Duplicar</SecondaryButton> : null}
           {/* Fase 009I. No se consulta el estado de cobro: producir y cobrar
               son ejes distintos, y exigir el pago aqui pararia el taller por
               una gestion administrativa. */}
