@@ -12,6 +12,7 @@ import {
   useDuplicateV2Quotation,
   useSendV2ToProduction,
 } from "@/features/cotizadorV2/useQuoterV2Lifecycle";
+import { AccionProduccionV2 } from "@/features/production/AccionProduccionV2";
 import { describeError } from "@/features/settings/messages";
 import {
   V2_EFFECTIVE_STATUS_LABEL,
@@ -231,7 +232,7 @@ export function V2CicloDeVida({
           {cotizacion.production_handoff.created_by_name
             ? ` (por ${cotizacion.production_handoff.created_by_name})`
             : ""}
-          . El seguimiento de la producción llega en la siguiente fase; no se descontó inventario.
+          . No se descontó inventario: el consumo real se registra en la orden de producción.
         </p>
       ) : null}
 
@@ -267,6 +268,11 @@ export function V2CicloDeVida({
           <SecondaryButton disabled={pdf.descargando} onClick={() => void pdf.descargar()}>
             {pdf.descargando ? "Generando PDF…" : "Descargar PDF"}
           </SecondaryButton>
+        ) : null}
+
+        {/* Fase 010I. Ya enviada: crear la orden o abrir la que hay. */}
+        {conCicloDeVida && estado === "READY_FOR_PRODUCTION" ? (
+          <AccionProduccionV2 quotationId={cotizacion.id} />
         ) : null}
 
         {conCicloDeVida && estado === "CONFIRMED" ? (

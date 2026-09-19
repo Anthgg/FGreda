@@ -166,9 +166,9 @@ describe("qué acciones se ofrecen", () => {
 
 describe("estados", () => {
   it("dice cada estado en castellano y con su tono", () => {
-    expect(describeStatus("CREATED")).toBe("Creada");
+    expect(describeStatus("CREATED")).toBe("Inicio");
     expect(describeStatus("STARTED")).toBe("En proceso");
-    expect(describeStatus("COMPLETED")).toBe("Completada");
+    expect(describeStatus("COMPLETED")).toBe("Finalizado");
     expect(describeStatus("CANCELLED")).toBe("Anulada");
 
     expect(statusTone("COMPLETED")).toBe("positive");

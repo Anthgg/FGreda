@@ -26,6 +26,7 @@ import {
   useProductionOrder,
   useStartProductionOrder,
 } from "@/features/production/useProductionOrders";
+import { OrdenV2 } from "@/features/production/OrdenV2";
 import { PrototypeOrderContext } from "@/features/production/PrototypeOrderContext";
 import { describeError } from "@/features/settings/messages";
 import type { ProductionOrder, ReadinessIssue } from "@/types/production";
@@ -203,11 +204,15 @@ export function ProductionOrderDetailPage() {
   // botón de la cabecera reintenta, porque reintentar solo en bucle contra un
   // backend caído no arregla nada y llena el log.
   const pedida = useRef<number | null>(null);
+  // Fase 010I: se espera a saber el origen. Una orden V2 tiene su propia ficha
+  // de ejecución y no esta hoja, así que no se pide.
+  const origen = order.data?.origin_type;
   useEffect(() => {
     if (orderId === null || pedida.current === orderId) return;
+    if (origen === undefined || origen === "V2_QUOTATION") return;
     pedida.current = orderId;
     void verDocumento();
-  }, [orderId, verDocumento]);
+  }, [orderId, origen, verDocumento]);
 
   useEffect(() => {
     return () => {
@@ -236,6 +241,9 @@ export function ProductionOrderDetailPage() {
   }
 
   const data = order.data;
+  // Fase 010I. Una orden V2 tiene su propia ficha: no pasa por el cobro, no
+  // descuenta al iniciar y sus piezas son las de la cotización V2.
+  if (data.origin_type === "V2_QUOTATION") return <OrdenV2 order={data} />;
   const { readiness } = data;
   const esMuestra = data.origin_type === "PROTOTYPE";
   const generales = stockIssues(readiness.issues);

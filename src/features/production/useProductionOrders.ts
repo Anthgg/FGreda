@@ -1,21 +1,41 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 
 import {
+  addProductionNote,
   cancelProductionOrder,
   completeProductionOrder,
   createProductionOrder,
+  fetchProductionConsumptions,
   fetchProductionOrder,
   fetchProductionOrderByToken,
   fetchProductionOrders,
+  fetchProductionTimeline,
+  registerProductionCommunication,
+  registerProductionConsumption,
   startProductionOrder,
 } from "@/api/production";
 import { MOVEMENTS_KEY, STOCK_KEY } from "@/features/masters/useMasters";
 import { PROTOTYPES_KEY } from "@/features/prototypes/usePrototypes";
 import { QUOTATIONS_KEY } from "@/features/quotations/useQuotations";
-import type { ProductionOrderCreateIn, ProductionOrderFilters } from "@/types/production";
+import type {
+  ProductionCommunicationCreateIn,
+  ProductionConsumptionCreateIn,
+  ProductionNoteCreateIn,
+  ProductionOrderCreateIn,
+  ProductionOrderFilters,
+} from "@/types/production";
 
 export const PRODUCTION_KEY = ["production-orders"] as const;
 export const productionOrderKey = (id: number) => [...PRODUCTION_KEY, id] as const;
+/**
+ * Fase 010I. Cuelgan de la clave de la orden a propósito: invalidar la orden
+ * refresca también su seguimiento y sus consumos, y nada más.
+ */
+export const productionTimelineKey = (id: number) =>
+  [...productionOrderKey(id), "timeline"] as const;
+export const productionConsumptionsKey = (id: number) =>
+  [...productionOrderKey(id), "consumptions"] as const;
 
 export const useProductionOrders = (filters: ProductionOrderFilters) =>
   useQuery({
@@ -114,5 +134,97 @@ export const useCancelProductionOrder = () => {
   return useMutation({
     mutationFn: (id: number) => cancelProductionOrder(id),
     onSuccess: invalidate,
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Fase 010I — ejecución real de una orden V2
+// ---------------------------------------------------------------------------
+
+/**
+ * La orden de una cotización V2, si existe. Mismo criterio que la Legacy: el
+ * listado filtrado devuelve cero o una fila, porque la base impone una orden
+ * por cotización. El filtro es PROPIO: el id de una V2 no es el de una Legacy.
+ */
+export const useProductionOrderForV2Quotation = (v2QuotationId: number | null) =>
+  useQuery({
+    queryKey: [...PRODUCTION_KEY, "for-v2-quotation", v2QuotationId],
+    queryFn: () => fetchProductionOrders({ v2_quotation_id: v2QuotationId!, limit: 1 }),
+    enabled: v2QuotationId !== null,
+    select: (page) => page.items[0] ?? null,
+  });
+
+export const useProductionTimeline = (id: number | null) =>
+  useQuery({
+    queryKey: productionTimelineKey(id!),
+    queryFn: () => fetchProductionTimeline(id!),
+    enabled: id !== null,
+  });
+
+export const useProductionConsumptions = (id: number | null) =>
+  useQuery({
+    queryKey: productionConsumptionsKey(id!),
+    queryFn: () => fetchProductionConsumptions(id!),
+    enabled: id !== null,
+  });
+
+/**
+ * Una clave de idempotencia por INTENCIÓN, no por petición.
+ *
+ * Se crea al abrir un formulario y se reutiliza en cada reintento de ESA
+ * operación —un corte de red, un doble clic—, que es lo que impide al backend
+ * registrarla dos veces. Sólo `renovar` crea otra: al terminar con éxito o al
+ * volver a editar, cuando lo que se envíe ya será otra operación.
+ */
+export function useIdempotencyKey(): { key: string; renovar: () => void } {
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  const renovar = useCallback(() => setKey(crypto.randomUUID()), []);
+  return { key, renovar };
+}
+
+/**
+ * Registrar un consumo real. **Mueve inventario.**
+ *
+ * Sin actualización optimista: el saldo se lee del backend después. Se
+ * invalida la orden (con su seguimiento y sus consumos) y el inventario; no la
+ * lista de órdenes, que no cambia por un consumo.
+ */
+export const useRegisterConsumption = (orderId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ProductionConsumptionCreateIn) =>
+      registerProductionConsumption(orderId, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: productionOrderKey(orderId) });
+      void qc.invalidateQueries({ queryKey: MOVEMENTS_KEY });
+    },
+    // También si falla: con «no hay existencia» el saldo que se enseñaba ya no
+    // es el que acaba de mirar el backend, y hay que volver a leerlo.
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: STOCK_KEY });
+    },
+  });
+};
+
+/** Nota o quema. Sólo cambia el seguimiento. */
+export const useAddProductionNote = (orderId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ProductionNoteCreateIn) => addProductionNote(orderId, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: productionTimelineKey(orderId) });
+    },
+  });
+};
+
+/** Registrar un aviso. Sólo cambia el seguimiento: ni estado ni inventario. */
+export const useRegisterCommunication = (orderId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ProductionCommunicationCreateIn) =>
+      registerProductionCommunication(orderId, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: productionTimelineKey(orderId) });
+    },
   });
 };
