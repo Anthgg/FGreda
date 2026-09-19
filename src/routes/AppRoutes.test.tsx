@@ -91,10 +91,12 @@ describe("rutas protegidas y Dashboard", () => {
       "href",
       "/cotizador-v2",
     );
-    expect(screen.getByRole("link", { name: "Cotizador Legacy" })).toHaveAttribute(
+    // Fase 010J: el menú ya no ofrece crear Legacy; lo histórico se consulta.
+    expect(screen.getByRole("link", { name: "Cotizaciones Legacy" })).toHaveAttribute(
       "href",
-      "/cotizador/nuevo",
+      "/cotizaciones",
     );
+    expect(screen.queryByRole("link", { name: "Cotizador Legacy" })).not.toBeInTheDocument();
   });
 
   it("Fase 010A: /cotizador-v2 abre el Cotizador V2 y no el historico", async () => {

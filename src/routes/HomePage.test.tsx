@@ -179,7 +179,7 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
 
     const newQuoteBtn = screen.getByRole("link", { name: /nueva cotización/i });
     expect(newQuoteBtn).toBeInTheDocument();
-    expect(newQuoteBtn).toHaveAttribute("href", "/cotizador/nuevo");
+    expect(newQuoteBtn).toHaveAttribute("href", "/cotizador-v2");
   });
 
   it("calcula y muestra los 4 KPIs operacionales con datos reales", async () => {
@@ -339,7 +339,8 @@ describe("Dashboard Operativo de Inicio (HomePage)", () => {
     expect(quickSection).toBeInTheDocument();
     const links = quickSection.querySelectorAll("a");
     const hrefs = Array.from(links).map((l) => l.getAttribute("href"));
-    expect(hrefs).toContain("/cotizador/nuevo");
+    expect(hrefs).toContain("/cotizador-v2");
+    expect(hrefs).not.toContain("/cotizador/nuevo");
     expect(hrefs).toContain("/productos");
     expect(hrefs).toContain("/terceros");
     expect(hrefs).toContain("/cotizaciones");

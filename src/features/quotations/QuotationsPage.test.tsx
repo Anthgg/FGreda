@@ -6,6 +6,14 @@ import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp, sessio
 import type { Product } from "@/types/masters";
 import type { QuotationOut } from "@/types/quotations";
 
+// Fase 010J. Esta suite prueba también el formulario de la cotización heredada
+// (`/cotizaciones/nueva`), retirado en la app; se enciende solo aquí.
+vi.mock("@/features/cotizador/legacyCutover", () => ({
+  CREACION_LEGACY_HABILITADA: true,
+  CreacionLegacyRetirada: () => null,
+}));
+
+
 const finished: Product = {
   id: 42,
   internal_reference: "LAB50042",
@@ -114,8 +122,10 @@ describe("pantallas de cotizaciones", () => {
 
     expect(await screen.findByRole("heading", { name: "Cotizaciones." })).toBeInTheDocument();
     expect(await screen.findByText(/no hay cotizaciones/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /cotización heredada/i })).toHaveAttribute("href", "/cotizaciones/nueva");
-    expect(screen.getByRole("link", { name: /abrir cotizador/i })).toHaveAttribute("href", "/cotizador/nuevo");
+    // Fase 010J: la nueva es V2; ni «heredada» ni el formulario Legacy.
+    expect(screen.getByRole("link", { name: /nueva cotización v2/i })).toHaveAttribute("href", "/cotizador-v2");
+    expect(screen.queryByRole("link", { name: /cotización heredada/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /abrir cotizador/i })).not.toBeInTheDocument();
     expect(container.querySelectorAll("select")).toHaveLength(0);
     expect(container.querySelectorAll('input[type="date"]')).toHaveLength(0);
     expect(container.firstElementChild?.querySelector(".w-full")).toBeInTheDocument();
