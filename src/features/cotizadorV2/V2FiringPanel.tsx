@@ -163,7 +163,10 @@ function ComparacionDeHornos({ quema }: { quema: V2Firing }) {
 function Reparto({ quema }: { quema: V2Firing }) {
   if (quema.lines.length === 0) return null;
   return (
-    <div className="mt-4 overflow-x-auto rounded-2xl border border-black/[0.06]">
+    <div
+      className="mt-4 overflow-x-auto rounded-2xl border border-black/[0.06]"
+      data-testid="reparto-quema"
+    >
       <table className="w-full min-w-[36rem] text-left text-sm">
         <caption className="px-4 pt-3 text-left text-xs text-zinc-500">
           La quema es una sola para todo el pedido y se reparte entre los

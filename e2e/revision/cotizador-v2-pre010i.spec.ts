@@ -87,38 +87,28 @@ async function esperarGuardado(page: Page): Promise<void> {
 }
 
 /**
- * El caso canonico del Excel, con la divergencia aprobada de 010D.
+ * Fase 010J. El caso canonico del Excel FINAL, armado entero desde la UI.
  *
- * Los costos y el precio objetivo son EXACTAMENTE los del Excel: materiales,
- * mano de obra, ilustracion, espacio, administracion, quema, costo real y
- * costo de produccion coinciden cifra a cifra.
- *
- * El subtotal del documento no: el Excel carga los S/44 de ilustracion enteros
- * sobre «Plato palta» y el sistema los reparte entre las tres lineas, porque
- * «la ilustracion es una sola por cotizacion y no una tecnica mas» —regla de
- * 010D, que manda sobre la hoja—. Como la administracion se reparte por costo
- * directo y cada unitario se redondea hacia arriba al escalon de S/0,50, mover
- * esos S/44 de sitio mueve el subtotal S/2: 7691 en vez de 7693.
- *
- * Es una diferencia de redondeo acotada y conocida, no otro precio.
+ * Externo, por menor, horno chico, baja + alta, quema COMPARTIDA, separacion
+ * 3 cm, factor x3, 4 dias. Todo el trabajo lo hace el trabajador del taller
+ * (interno: costo cero) y los 20 «Plato palta» llevan ilustracion. Ya no hay
+ * divergencia con la hoja: la ilustracion se carga al producto que la lleva,
+ * como en el Excel, y el documento coincide al centimo.
  */
 const esperado = {
   materials: 285.36,
-  labor: 569.066667,
+  labor: 0,
   illustration: 44,
   space: 560,
   admin: 200,
-  gas: 210,
-  commercial_firing: 900,
-  real_cost: 1868.426667,
-  production_cost: 2558.426667,
-  subtotal: 7691,
-  tax: 1384.38,
-  total: 9075.38,
+  gas: 526.976471,
+  commercial_firing: 2258.470588,
+  real_cost: 1616.336471,
+  production_cost: 3347.830588,
+  subtotal: 10055,
+  tax: 1809.9,
+  total: 11864.9,
 };
-
-/** Lo que el Excel muestra en H15, para dejar la diferencia por escrito. */
-const TOTAL_EXCEL = 9077.74;
 
 function asNumber(value: unknown): number {
   return Number(String(value));
@@ -129,7 +119,7 @@ function close(actual: number, expected: number, tolerance = 0.01): void {
 }
 
 test.describe("PRE-010I: Excel UI y RBAC local", () => {
-  test("A2H-001: el caso canonico del Excel se arma desde la UI y no queda incompleto", async ({
+  test("A2H-001: el caso canonico del Excel FINAL se arma desde la UI y no queda incompleto", async ({
     page,
   }) => {
     await login(page);
@@ -150,12 +140,12 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
     await expect(page.getByTestId("panel-mano-de-obra")).toBeVisible();
     await asignarProceso(page, "A mano", /E2E-Trabajador taller/);
     await asignarProceso(page, /Vidriado por inmersion/i, /E2E-Trabajador taller/);
-    await asignarProceso(page, /Torno facil/i, /E2E-Tornero/);
-    await asignarProceso(page, /Torno dificil/i, /E2E-Tornero/);
+    await asignarProceso(page, /Torno facil/i, /E2E-Trabajador taller/);
+    await asignarProceso(page, /Torno dificil/i, /E2E-Trabajador taller/);
     await asignarProceso(page, /Vidriado a mano alzada/i, /E2E-Trabajador taller/);
     await seleccionar(page, page, "Ilustración", "Con ilustración");
-    const ilustradas = page.getByLabel(/piezas a ilustrar/i);
-    await ilustradas.fill("4");
+    const ilustradas = page.getByLabel(/piezas a ilustrar · Plato palta/i);
+    await ilustradas.fill("20");
     await ilustradas.blur();
     const dias = page.getByLabel(/d[ií]as efectivos/i);
     await dias.fill("4");
@@ -166,7 +156,28 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
     await expect(page.getByTestId("paso-resumen")).toBeVisible();
     await expect(page.getByTestId("resumen-pendientes")).toBeHidden();
     const resumen = page.getByTestId("resumen-precio");
-    await expect(resumen).toContainText("S/ 9075.38", { timeout: 30_000 });
+    await expect(resumen).toContainText("S/ 11864.90", { timeout: 30_000 });
+
+    // La quema en pantalla: compartida, la sugerencia del grande y nada aplicado.
+    await paso(page, 5, "Quema").click();
+    const quemaUi = page.getByTestId("panel-quema");
+    await expect(quemaUi.getByRole("combobox", { name: "Modo de quema" })).toContainText(
+      "Compartida",
+    );
+    await expect(quemaUi.getByTestId("sugerencia-horno")).toContainText(
+      "reduce la quema estimada en S/ 1447.93",
+    );
+    await expect(
+      quemaUi.getByRole("combobox", { name: "Horno de esta cotización" }),
+    ).toContainText("Horno chico E2E");
+
+    // Las reducciones del Excel, en la pantalla de precio.
+    await paso(page, 6, "Margen y precio").click();
+    const reducciones = page.getByTestId("panel-reducciones");
+    await expect(reducciones).toContainText("5711.21", { timeout: 30_000 });
+    await expect(reducciones).toContainText("6707.17");
+    await expect(reducciones).toContainText("9923.00");
+    await paso(page, 7, "Resumen").click();
 
     const [productos, manoDeObra, quema, precio] = await Promise.all([
       page.request.get(`/api/v1/quotations-v2/${quotationId}/products`),
@@ -186,20 +197,17 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
 
     close(asNumber(productosJson.materials_cost), esperado.materials);
     close(asNumber(manoJson.labor_cost), esperado.labor, 0.0001);
+    close(asNumber(quemaJson.billed_load), 5.018823529412, 1e-9);
     close(asNumber(precioJson.illustration_cost), esperado.illustration);
     close(asNumber(precioJson.space_cost), esperado.space);
     close(asNumber(precioJson.administration_cost), esperado.admin);
-    close(asNumber(quemaJson.gas_total), esperado.gas);
-    close(asNumber(quemaJson.commercial_total), esperado.commercial_firing);
-    close(asNumber(precioJson.real_cost), esperado.real_cost, 0.0001);
-    close(asNumber(precioJson.production_cost), esperado.production_cost, 0.0001);
+    close(asNumber(quemaJson.gas_total), esperado.gas, 0.000001);
+    close(asNumber(quemaJson.commercial_total), esperado.commercial_firing, 0.000001);
+    close(asNumber(precioJson.real_cost), esperado.real_cost, 0.000001);
+    close(asNumber(precioJson.production_cost), esperado.production_cost, 0.000001);
     close(asNumber(precioJson.subtotal), esperado.subtotal);
     close(asNumber(precioJson.tax), esperado.tax);
     close(asNumber(precioJson.total), esperado.total);
-    // La distancia con la hoja es la de los redondeos, y se fija aqui para que
-    // cualquier deriva mayor salte como un fallo y no pase por diferencia
-    // conocida.
-    expect(Math.abs(asNumber(precioJson.total) - TOTAL_EXCEL)).toBeLessThanOrEqual(3);
 
     // INVENTORY_GATE: cotizar, emitir y pasar a produccion NO consumen
     // existencia. Se mide aqui, alrededor de las tres acciones, en vez de
@@ -211,7 +219,7 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
     await page.getByRole("button", { name: /^confirmar y emitir$/i }).click();
     const dialogoEmision = page.getByRole("dialog", { name: /confirmar y emitir/i });
     await expect(dialogoEmision).toBeVisible();
-    await expect(dialogoEmision).toContainText("S/ 9075.38");
+    await expect(dialogoEmision).toContainText("S/ 11864.90");
     await dialogoEmision.getByRole("button", { name: /^confirmar y emitir$/i }).click();
     await expect(page.getByTestId("v2-documento-emitido")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("v2-estado-efectivo")).toContainText(/emitida/i);

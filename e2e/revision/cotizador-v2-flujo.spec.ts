@@ -85,14 +85,16 @@ async function anadirPieza(
 }
 
 /**
- * Prepara una cotizacion con una pieza que ocupa UNA hornada del horno chico y
- * deja la pantalla en el paso de mano de obra.
+ * Prepara una cotizacion con una pieza en el horno chico y deja la pantalla en
+ * el paso de mano de obra.
  *
- * Los importes esperados salen de la siembra del backend de revision: horno
- * chico con tarifa externa 200 + 250 = S/450 por una hornada, espacio a S/140
- * por dia, administracion S/200 y factor x3. Sin pasta ni tareas, el resto es
- * cero. Con 2 dias efectivos: espacio S/280, produccion 450 + 280 + 200 = S/930,
- * subtotal 930 x 3 = S/2790 (unitario 139,50, ya en el escalon de S/0,50).
+ * Los importes esperados salen de la siembra del backend de revision y de las
+ * reglas del Excel final (010J): 20 piezas de 18 x 12 x 3 con 3 cm de
+ * separacion ocupan 20 x 21 x 15 x 6 = 37.800 cm3, el 222,35 % del horno chico.
+ * En quema COMPARTIDA se cobran 2,2235 hornadas a 200 + 250: S/1000,59.
+ * Espacio a S/140 por dia, administracion S/200, factor x3. Con 2 dias:
+ * produccion 1000,59 + 280 + 200 = S/1480,59; x3 = 4441,76; unitario 222,09
+ * que sube al escalon de S/0,50: 222,50 x 20 = S/4450.
  */
 async function cotizacionHastaManoDeObra(page: Page, etiqueta: string): Promise<void> {
   await login(page);
@@ -209,7 +211,7 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
 
     // La tabla de reparto tiene una fila por producto, y el reparto es por
     // VOLUMEN: la pieza grande carga con mas quema que la chica.
-    const filas = quema.locator("tbody tr");
+    const filas = quema.getByTestId("reparto-quema").locator("tbody tr");
     await expect(filas).toHaveCount(2);
 
     // La ocupacion NO multiplica el precio: es informacion. Que aparezca el
@@ -368,8 +370,8 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G)", () => {
     await expect(resumen.getByText("Por 2 días efectivos.")).toBeVisible();
     await expect(resumen).toContainText("S/ 280.00");
     const precio = page.getByTestId("resumen-precio");
-    await expect(precio).toContainText("S/ 930.00");
-    await expect(precio).toContainText("S/ 2790.00");
+    await expect(precio).toContainText("S/ 1480.59");
+    await expect(precio).toContainText("S/ 4450.00");
   });
 
   test("CASO 6 GUARDADO RECHAZADO: no aparenta guardado, sobrevive al cambio de paso y protege la salida", async ({

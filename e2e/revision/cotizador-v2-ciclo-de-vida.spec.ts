@@ -488,23 +488,32 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       technique_ids: number[];
     }[];
     const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
-    // La ficha del trabajador es la que dice qué sabe hacer.
-    expect(taller?.technique_ids).toHaveLength(5);
+    const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
+    // La ficha del trabajador es la que dice qué sabe hacer. Fase 010J: el del
+    // taller hace el caso canónico del Excel final entero, torno incluido; el
+    // tornero solo tornea.
+    expect(taller?.technique_ids).toHaveLength(7);
+    expect(tornero?.technique_ids).toHaveLength(2);
     const tecnicas = (await (await api.get("/api/v1/quoter-v2/techniques")).json()).items as {
       id: number;
       name: string;
     }[];
-    const torno = tecnicas.find((una) => una.name === "Torno facil");
+    const aMano = tecnicas.find((una) => una.name === "A mano");
 
     await paso(page, 4, "Mano de obra").click();
     const seccion = page.getByTestId("personal-adicional");
     await expect(seccion).toContainText(/suma costo y no reduce el plazo/i, { timeout: 15_000 });
 
+    // El tornero no sabe hacer piezas a mano: no se le ofrece.
+    await seccion.getByRole("combobox", { name: "Trabajador" }).click();
+    await page.getByRole("option", { name: /E2E-Tornero/ }).click();
+    await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
+    await expect(page.getByRole("option", { name: "A mano", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
     await seccion.getByRole("combobox", { name: "Trabajador" }).click();
     await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
     await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
-    // El torno no es suyo: no se ofrece.
-    await expect(page.getByRole("option", { name: "Torno facil" })).toHaveCount(0);
     await page.getByRole("option", { name: "A mano", exact: true }).click();
     await seccion.getByRole("button", { name: "Añadir personal" }).click();
     // Se espera al DATO, no al indicador: el alta empieza con el clic y el pie
@@ -528,7 +537,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     // Y la barrera del backend sigue en pie para una petición a mano.
     const token = await csrf(page);
     const prohibido = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
-      data: { worker_id: taller?.id, technique_id: torno?.id, quantity: "10" },
+      data: { worker_id: tornero?.id, technique_id: aMano?.id, quantity: "10" },
       headers: { "X-CSRF-Token": token },
     });
     expect(prohibido.status()).toBe(422);
@@ -583,6 +592,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
         calculated_hours: string | null;
         worker_id: number | null;
         labor_cost: string | null;
+        final_hours: string | null;
       }[];
     let filas = await leerProcesos();
     expect(filas).toHaveLength(3);
@@ -613,7 +623,9 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       .toBe(taller?.id);
     filas = await leerProcesos();
     const asaAsignada = filas.find((fila) => fila.technique_name === "Armado de asa");
-    expect(Number(asaAsignada?.labor_cost)).toBeGreaterThan(0);
+    // Fase 010J: el personal del taller no suma costo; sus horas sí cuentan.
+    expect(Number(asaAsignada?.final_hours)).toBeGreaterThan(0);
+    expect(Number(asaAsignada?.labor_cost)).toBe(0);
     // Y el costo se ve en la fila, sin recargar.
     await expect(filaDelAsa).toContainText("Costo");
 
