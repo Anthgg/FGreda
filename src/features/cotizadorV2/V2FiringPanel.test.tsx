@@ -133,8 +133,9 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
     renderApp(["/cotizador-v2/7/quema"]);
 
     const panel = await panelDeQuema();
-    // 160 % de ocupación son dos hornadas: 2 x 200 + 2 x 250 = 900.
-    expect(within(panel).getByText("160.000000 %")).toBeInTheDocument();
+    // 160 % en exclusiva son dos hornadas enteras: 2 x 200 + 2 x 250 = 900. El
+    // porcentaje sale dos veces: en el resumen y en la comparación de hornos.
+    expect(within(panel).getAllByText("160.000000 %").length).toBeGreaterThan(0);
     expect(within(panel).getAllByText("900.000000000000000000").length).toBeGreaterThan(0);
     expect(within(panel).getAllByText("210.000000000000000000").length).toBeGreaterThan(0);
   });
@@ -193,11 +194,75 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
     expect(within(avisos).getByText(/decida usted/i)).toBeInTheDocument();
     // Recomienda el grande y el elegido sigue siendo el chico: una
     // recomendacion es una frase, no un cambio de horno.
-    expect(within(panel).getByText("Horno grande")).toBeInTheDocument();
+    expect(within(panel).getAllByText("Horno grande").length).toBeGreaterThan(0);
     const selector = within(panel).getByRole("combobox", {
       name: "Horno de esta cotización",
     });
     expect(selector).toHaveTextContent("Horno chico");
+  });
+
+  it("enseña el modo, la carga facturada y la comparación de hornos (010J)", async () => {
+    mockV2();
+
+    renderApp(["/cotizador-v2/7/quema"]);
+
+    const panel = await panelDeQuema();
+    expect(within(panel).getByRole("combobox", { name: "Modo de quema" })).toHaveTextContent(
+      "Exclusiva / urgente",
+    );
+    expect(within(panel).getByText("2 hornadas")).toBeInTheDocument();
+    expect(within(panel).getByText(/cada hornada necesaria se cobra entera/i)).toBeInTheDocument();
+    const comparacion = within(panel).getByTestId("comparacion-hornos");
+    expect(within(comparacion).getByText("1900.000000")).toBeInTheDocument();
+    // Ningún horno es más barato en este caso: no hay sugerencia.
+    expect(within(panel).queryByTestId("sugerencia-horno")).toBeNull();
+  });
+
+  it("sugiere el horno más barato sin cambiarlo (010J)", async () => {
+    mockV2({
+      firing: jsonResponse(200, {
+        ...V2_FIRING,
+        firing_mode: "SHARED",
+        billed_load: "5.018823529412",
+        cheaper_kiln: {
+          kiln_id: 2,
+          name: "Horno grande",
+          commercial_total: "810.540000",
+          savings: "1447.930588",
+        },
+      }),
+    });
+
+    renderApp(["/cotizador-v2/7/quema"]);
+
+    const panel = await panelDeQuema();
+    const sugerencia = within(panel).getByTestId("sugerencia-horno");
+    expect(sugerencia).toHaveTextContent("«Horno grande» reduce la quema estimada en S/ 1447.93");
+    expect(sugerencia).toHaveTextContent("el horno no se cambia solo");
+    expect(within(panel).getByText(/se cobra la parte del horno que ocupa/i)).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("combobox", { name: "Horno de esta cotización" }),
+    ).toHaveTextContent("Horno chico");
+  });
+
+  it("cambiar el modo manda solo el modo (010J)", async () => {
+    const fetchMock = mockV2();
+
+    renderApp(["/cotizador-v2/7/quema"]);
+    const panel = await panelDeQuema();
+    const user = userEvent.setup();
+    await user.click(within(panel).getByRole("combobox", { name: "Modo de quema" }));
+    await user.click(await screen.findByRole("option", { name: "Compartida" }));
+
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(
+        ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(put).toBeDefined();
+      expect(JSON.parse(String((put?.[1] as RequestInit).body))).toEqual({
+        firing_mode: "SHARED",
+      });
+    });
   });
 
   it("manda solo el campo que cambió al elegir otro horno", async () => {

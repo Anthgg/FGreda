@@ -210,7 +210,11 @@ function Tarea({
               : `${tarea.daily_rate} por jornada de ${tarea.workday_hours} h`
           }
         />
-        <Dato label="Costo" value={tarea.labor_cost} />
+        <Dato
+          label="Costo"
+          value={tarea.labor_cost}
+          hint={tarea.worker_type === "INTERNAL" ? "Personal del taller: no suma costo." : undefined}
+        />
       </dl>
 
       <div className="mt-4 grid grid-cols-1 gap-4 border-t border-black/[0.04] pt-4 sm:grid-cols-2">
@@ -322,7 +326,8 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
       <h3 className="text-sm font-semibold text-zinc-900">Ilustración</h3>
       <p className="mt-1 text-xs text-zinc-500">
         Va aparte de las técnicas productivas: ilustrar no es tornear. Se cobra por horas, no por
-        tandas: 75 piezas son 12 horas, no dos jornadas completas.
+        tandas: 75 piezas son 12 horas, no dos jornadas completas. Se indica por producto y su costo
+        entra en el costo de ese producto.
       </p>
 
       <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -338,10 +343,33 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
           disabled={!canEdit}
           hint="Apagada por defecto. Al apagarla, sus horas y su costo quedan en cero."
         />
-        {ilustracion.enabled ? (
+        {ilustracion.enabled
+          ? ilustracion.lines.map((linea) => (
+              <DecimalField
+                key={linea.line_id}
+                label={`Piezas a ilustrar · ${linea.product_name ?? `Línea ${linea.line_id}`}`}
+                requirement="optional"
+                value={linea.quantity}
+                onCommit={(valor) =>
+                  valor !== null
+                    ? esperarGuardado(guardar, "ilustracion", {
+                        // Se manda la lista entera: las líneas que no vienen quedan en cero.
+                        lines: ilustracion.lines.map((otra) => ({
+                          line_id: otra.line_id,
+                          quantity: otra.line_id === linea.line_id ? valor : otra.quantity,
+                        })),
+                      })
+                    : undefined
+                }
+                disabled={!canEdit}
+                hint={`${linea.hours} h · ${linea.cost}`}
+              />
+            ))
+          : null}
+        {ilustracion.enabled && Number(ilustracion.quantity) > 0 ? (
           <DecimalField
-            label="Piezas a ilustrar"
-            requirement="required"
+            label="Piezas sin producto asignado"
+            requirement="optional"
             value={ilustracion.quantity}
             onCommit={(valor) =>
               valor !== null
@@ -349,6 +377,7 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
                 : undefined
             }
             disabled={!canEdit}
+            hint="De cotizaciones anteriores: se reparte como gasto general. Póngalo en 0 y asígnelo a un producto."
           />
         ) : null}
       </div>
@@ -362,8 +391,8 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
           />
           <Dato label="Rendimiento" value={`${ilustracion.capacity_per_workday ?? "—"} / jornada`} />
           <Dato label="Tarifa por hora" value={ilustracion.hourly_rate ?? "—"} />
-          <Dato label="Horas" value={ilustracion.hours} />
-          <Dato label="Costo" value={ilustracion.cost} />
+          <Dato label="Horas" value={ilustracion.total_hours} />
+          <Dato label="Costo" value={ilustracion.total_cost} />
         </dl>
       ) : null}
 
@@ -434,7 +463,9 @@ export function V2LaborLines({
       </div>
       <p className="mt-1 text-xs text-zinc-500">
         El costo sale del jornal de cada persona dividido entre su jornada, por las horas que hace
-        falta. No hay un precio por técnica.
+        falta. No hay un precio por técnica. El personal del taller no suma costo (su sueldo ya lo
+        paga el taller); el externo se paga por sus horas reales. Las horas de todos cuentan para
+        la jornada y el espacio.
       </p>
 
       {/* Fase 010H. Sin trabajadores o sin técnicas no se puede asignar nada, y

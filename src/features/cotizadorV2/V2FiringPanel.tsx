@@ -10,8 +10,10 @@ import {
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import {
   CUSTOMER_KIND_LABEL,
+  FIRING_MODE_LABEL,
   FIRING_WARNING_LABEL,
   type V2Firing,
+  type V2FiringMode,
 } from "@/types/quoterV2Firing";
 import type { V2CustomerKind } from "@/types/quoterV2";
 
@@ -24,10 +26,13 @@ import type { V2CustomerKind } from "@/types/quoterV2";
  *   dos colores distintos. Son COSTO y PRECIO. Juntarlos en una columna —o
  *   sumarlos en un total— haría desaparecer la diferencia, que es justo lo que
  *   el taller quiere mirar;
- * - **una hornada al 60 % cuesta lo mismo que una llena.** La barra de carga
- *   está para verlo, no para calcular con ella: el horno se enciende entero;
- * - **las recomendaciones no actúan.** «Esto cabe en un horno más chico» es una
- *   frase, no un cambio de horno. Quien cotiza decide.
+ * - **el modo decide lo que se cobra** (fase 010J, Excel final). En quema
+ *   COMPARTIDA se cobra la fracción de horno que ocupa el pedido —un 30 % es
+ *   0,30 de la tarifa—; en EXCLUSIVA/URGENTE, cada hornada entera. El gas se
+ *   mueve con la misma carga. La pantalla no calcula: enseña la carga que el
+ *   backend facturó;
+ * - **las recomendaciones no actúan.** «Grande reduce la quema estimada en
+ *   S/ 1447,93» es una frase, no un cambio de horno. Quien cotiza decide.
  *
  * No hay ningún multiplicador por ocupación. En el motor histórico una pieza
  * que ocupaba poco horno pagaba hasta ×3; en V2 eso no existe y no vuelve bajo
@@ -68,7 +73,13 @@ function Dato({
 }
 
 /** Cuánta carga lleva cada hornada. Información, no reparto de costo. */
-function CargaPorHornada({ cargas }: { cargas: string[] }) {
+function CargaPorHornada({
+  cargas,
+  modo,
+}: {
+  cargas: string[];
+  modo: V2FiringMode;
+}) {
   if (cargas.length === 0) return null;
   return (
     <div className="mt-4 rounded-2xl border border-black/[0.06] p-4">
@@ -76,8 +87,9 @@ function CargaPorHornada({ cargas }: { cargas: string[] }) {
         Carga de cada hornada
       </h3>
       <p className="mt-1 text-[11px] text-zinc-500">
-        La última puede ir a medias y cuesta exactamente lo mismo: el horno se
-        enciende entero.
+        {modo === "SHARED"
+          ? "Quema compartida: la última hornada viaja con otras piezas del taller y se cobra por lo que ocupa."
+          : "Quema exclusiva: cada hornada se cobra entera, aunque la última vaya a medias."}
       </p>
       <ul className="mt-3 space-y-2">
         {cargas.map((carga, indice) => (
@@ -97,6 +109,53 @@ function CargaPorHornada({ cargas }: { cargas: string[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Fase 010J. Lo que costaría la misma quema en cada horno. No cambia nada. */
+function ComparacionDeHornos({ quema }: { quema: V2Firing }) {
+  if (quema.kilns.length < 2) return null;
+  return (
+    <div
+      className="mt-4 overflow-x-auto rounded-2xl border border-black/[0.06]"
+      data-testid="comparacion-hornos"
+    >
+      <table className="w-full min-w-[36rem] text-left text-sm">
+        <caption className="px-4 pt-3 text-left text-xs text-zinc-500">
+          La misma quema en cada horno, con el mismo modo, cliente y ciclos.
+          Comparar no cambia el horno elegido.
+        </caption>
+        <thead>
+          <tr className="text-xs text-zinc-500">
+            <th className="px-4 py-2 font-medium">Horno</th>
+            <th className="px-4 py-2 font-medium">Ocupación</th>
+            <th className="px-4 py-2 font-medium">Hornadas</th>
+            <th className="px-4 py-2 font-medium">Carga facturada</th>
+            <th className="px-4 py-2 font-medium">Tarifa de quema</th>
+            <th className="px-4 py-2 font-medium">Gas real</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black/5">
+          {quema.kilns.map((horno) => (
+            <tr key={horno.kiln_id}>
+              <td className="px-4 py-2 text-zinc-800">
+                {horno.name}
+                {horno.kiln_id === quema.kiln_id ? (
+                  <span className="ml-2 text-[11px] text-zinc-500">(elegido)</span>
+                ) : null}
+              </td>
+              <td className="px-4 py-2 text-zinc-600">{horno.occupancy_percent} %</td>
+              <td className="px-4 py-2 text-zinc-600">{horno.firing_count}</td>
+              <td className="px-4 py-2 text-zinc-600">{horno.billed_load}</td>
+              <td className="px-4 py-2 text-zinc-800">
+                {horno.commercial_total ?? "Sin tarifas"}
+              </td>
+              <td className="px-4 py-2 text-zinc-600">{horno.gas_total ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -190,9 +249,24 @@ export function V2FiringPanel({
           </span>
         </div>
         <p className="mt-1 text-xs text-zinc-500">
-          Cada hornada necesaria se cobra entera. No hay multiplicador por
-          ocupación: ocupar poco horno no encarece la pieza.
+          {quema.firing_mode === "SHARED"
+            ? "Quema compartida: se cobra la parte del horno que ocupa el pedido, en tarifa y en gas."
+            : "Quema exclusiva o urgente: cada hornada necesaria se cobra entera."}{" "}
+          No hay multiplicador por ocupación.
         </p>
+
+        {quema.cheaper_kiln ? (
+          <p
+            className="mt-3 rounded-2xl bg-sky-50 px-4 py-3 text-sm text-sky-900"
+            data-testid="sugerencia-horno"
+          >
+            «{quema.cheaper_kiln.name}» reduce la quema estimada en{" "}
+            <strong>S/ {Number(quema.cheaper_kiln.savings).toFixed(2)}</strong>.
+            <span className="ml-1 text-xs text-sky-800">
+              Es una sugerencia: el horno no se cambia solo.
+            </span>
+          </p>
+        ) : null}
 
         {quema.warnings.length > 0 ? (
           <ul
@@ -242,6 +316,29 @@ export function V2FiringPanel({
             hint="Cambia lo que se cobra. El gas que se consume es el mismo."
           />
           <SelectField
+            label="Modo de quema"
+            requirement="optional"
+            value={quema.firing_mode}
+            options={(["SHARED", "EXCLUSIVE"] as V2FiringMode[]).map((valor) => ({
+              value: valor,
+              label: FIRING_MODE_LABEL[valor],
+            }))}
+            onChange={(valor) => guardar.mutate({ firing_mode: valor as V2FiringMode })}
+            disabled={!canEdit}
+            hint="Compartida cobra lo que ocupa; exclusiva o urgente, hornadas enteras."
+          />
+          <DecimalField
+            label="Separación entre piezas (cm)"
+            value={quema.piece_separation_cm}
+            onCommit={(valor) =>
+              valor !== null
+                ? esperarGuardado(guardar, "quema", { piece_separation_cm: valor })
+                : undefined
+            }
+            disabled={!canEdit}
+            hint="Se suma a largo, ancho y alto de cada pieza. 0 = sin separación."
+          />
+          <SelectField
             label="Quema baja"
             requirement="optional"
             value={quema.low_fire_enabled ? "SI" : "NO"}
@@ -284,7 +381,20 @@ export function V2FiringPanel({
           />
           <Dato label="Volumen total" value={`${quema.total_volume_cm3} cm³`} />
           <Dato label="Ocupación" value={`${quema.occupancy_percent} %`} />
-          <Dato label="Hornadas" value={String(quema.firing_count)} />
+          <Dato
+            label="Hornadas físicas"
+            value={String(quema.firing_count)}
+            hint="Cuántas veces se enciende."
+          />
+          <Dato
+            label="Carga facturada"
+            value={`${quema.billed_load} hornadas`}
+            hint={
+              quema.firing_mode === "SHARED"
+                ? "Ocupación / 100: se cobra lo que ocupa."
+                : "Hornadas enteras."
+            }
+          />
           <Dato label="Hornadas en baja" value={String(quema.low_fire_count)} />
           <Dato
             label="Hornadas en alta"
@@ -297,7 +407,8 @@ export function V2FiringPanel({
           />
         </dl>
 
-        <CargaPorHornada cargas={quema.batch_loads} />
+        <CargaPorHornada cargas={quema.batch_loads} modo={quema.firing_mode} />
+        <ComparacionDeHornos quema={quema} />
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
@@ -305,7 +416,8 @@ export function V2FiringPanel({
               Tarifa de quema (lo que se cobra)
             </h3>
             <p className="mt-1 text-[11px] text-emerald-800">
-              Por hornada completa, según el tipo de cliente.
+              Tarifa de una hornada completa, según el tipo de cliente. Se
+              multiplica por la carga facturada.
             </p>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DecimalField
