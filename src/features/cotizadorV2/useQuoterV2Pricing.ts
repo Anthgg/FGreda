@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { fetchV2Pricing, setV2Pricing } from "@/api/quoterV2Pricing";
+import { fetchV2Pricing, fetchV2Reductions, setV2Pricing } from "@/api/quoterV2Pricing";
 import type { V2PricingInput } from "@/types/quoterV2Pricing";
 import {
   alcanceDeGuardado,
@@ -13,6 +13,17 @@ import {
 
 export { V2_PRICING_KEY } from "@/features/cotizadorV2/claves";
 
+
+/**
+ * Fase 010J. Cuelga de la clave del PRECIO: cualquier cambio de la cotización
+ * invalida el precio, y con él estas estimaciones, que salen de él.
+ */
+export const useV2Reductions = (quotationId: number) =>
+  useQuery({
+    queryKey: [...V2_PRICING_KEY, quotationId, "reductions"],
+    queryFn: () => fetchV2Reductions(quotationId),
+    staleTime: V2_STALE_TIME,
+  });
 
 export const useV2Pricing = (quotationId: number) =>
   useQuery({

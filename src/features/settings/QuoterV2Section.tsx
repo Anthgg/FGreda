@@ -69,6 +69,7 @@ function toDraft(values: V2SettingsValues): Draft {
     high_fire_enabled_default: values.high_fire_enabled_default ? "SI" : "NO",
     illustration_daily_rate: values.illustration_daily_rate,
     illustration_pieces_per_workday: values.illustration_pieces_per_workday,
+    piece_separation_cm: values.piece_separation_cm,
   };
 }
 
@@ -92,6 +93,7 @@ function validate(draft: Draft): Partial<Record<string, string>> {
     "commercial_factor_max",
     "illustration_daily_rate",
     "illustration_pieces_per_workday",
+    "piece_separation_cm",
   ]) {
     if (crudo(campo) === "" || Number.isNaN(numero(campo))) {
       errors[campo] = "Indique un valor.";
@@ -132,6 +134,10 @@ function validate(draft: Draft): Partial<Record<string, string>> {
   if (!(numero("illustration_pieces_per_workday") > 0)) {
     errors.illustration_pieces_per_workday = "Indique cuántas piezas se ilustran por jornada.";
   }
+  const separacion = numero("piece_separation_cm");
+  if (!(separacion >= 0 && separacion <= 20)) {
+    errors.piece_separation_cm = "Entre 0 y 20 cm. 0 es sin separación.";
+  }
   return errors;
 }
 
@@ -147,6 +153,7 @@ const TEXT_FIELDS = [
   "default_exchange_rate",
   "illustration_daily_rate",
   "illustration_pieces_per_workday",
+  "piece_separation_cm",
 ] as const;
 
 function toPayload(draft: Draft, version: number): V2SettingsUpdateInput {
@@ -364,6 +371,16 @@ function QuoterV2Form({ canEdit }: { canEdit: boolean }) {
           onChange={set("high_fire_enabled_default")}
           disabled={!canEdit}
           hint="Cada cotización puede apagar cualquiera de las dos."
+        />
+        <TextField
+          label="Separación entre piezas en el horno (cm)"
+          requirement="required"
+          value={draft.piece_separation_cm ?? ""}
+          onChange={set("piece_separation_cm")}
+          disabled={!canEdit}
+          inputMode="decimal"
+          error={errors.piece_separation_cm}
+          hint="Se suma a largo, ancho y alto de cada pieza al medir el horno. 0 = sin separación. Cada cotización la congela y puede cambiarla."
         />
       </FormSection>
 

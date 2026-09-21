@@ -29,6 +29,7 @@ import { NuevaCotizacionPage } from "@/features/quotations/NuevaCotizacionPage";
 import { QuotationsPage } from "@/features/quotations/QuotationsPage";
 import { RecipesPage } from "@/features/recipes/RecipesPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
+import { SoloQuemaPage } from "@/features/soloQuema/SoloQuemaPage";
 import { PublicTrackingPage } from "@/features/tracking/PublicTrackingPage";
 import { TrackingScanPage } from "@/features/tracking/TrackingScanPage";
 import { AppShell } from "@/layouts/AppShell";
@@ -131,11 +132,16 @@ export function AppRoutes() {
           <Route path="cotizador-v2" element={<CotizadorV2Page />} />
           <Route path="cotizador-v2/:id" element={<CotizadorV2Page />} />
           <Route path="cotizador-v2/:id/:step" element={<CotizadorV2Page />} />
-
           {/* V2 NEXT: Fase 001 Rediseño */}
           <Route path="cotizador-v2-next" element={<CotizadorV2NextPage />} />
           <Route path="cotizador-v2-next/:id" element={<CotizadorV2NextPage />} />
           <Route path="cotizador-v2-next/:id/:step" element={<CotizadorV2NextPage />} />
+          {/* Fase 010K. Solo Quema: quemar piezas que trae el cliente. Rama
+              propia, no un modo del Cotizador V2: distinto talonario, distinto
+              factor y distinto documento. Tampoco cuelga de `quemas`, que
+              registra hornadas ya ocurridas. */}
+          <Route path="solo-quema" element={<SoloQuemaPage />} />
+          <Route path="solo-quema/:id" element={<SoloQuemaPage />} />
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

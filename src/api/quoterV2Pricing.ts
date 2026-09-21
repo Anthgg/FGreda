@@ -9,7 +9,7 @@
  */
 
 import { apiClient } from "@/api/client";
-import type { V2Pricing, V2PricingInput } from "@/types/quoterV2Pricing";
+import type { V2Pricing, V2PricingInput, V2Reductions } from "@/types/quoterV2Pricing";
 
 const QUOTATIONS = "/quotations-v2";
 
@@ -18,3 +18,7 @@ export const fetchV2Pricing = (quotationId: number): Promise<V2Pricing> =>
 
 export const setV2Pricing = (quotationId: number, payload: V2PricingInput): Promise<V2Pricing> =>
   apiClient.put(`${QUOTATIONS}/${quotationId}/pricing`, payload);
+
+/** Fase 010J. Reducciones sugeridas: solo lectura, nunca cambia la cotización. */
+export const fetchV2Reductions = (quotationId: number): Promise<V2Reductions> =>
+  apiClient.get(`${QUOTATIONS}/${quotationId}/reductions`);

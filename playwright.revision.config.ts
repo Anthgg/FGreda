@@ -45,6 +45,8 @@ if (!["localhost", "127.0.0.1"].includes(host)) {
 }
 obligatoria("E2E_EMAIL");
 obligatoria("E2E_PASSWORD");
+obligatoria("E2E_OPERATOR_EMAIL");
+obligatoria("E2E_OPERATOR_PASSWORD");
 
 export default defineConfig({
   testDir: "./e2e/revision",

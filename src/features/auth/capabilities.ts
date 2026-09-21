@@ -50,6 +50,21 @@ export interface Capabilities {
   gestionarConceptosComerciales: boolean;
   /** Crear la orden desde una cotización confirmada. */
   crearOrdenProduccion: boolean;
+  /**
+   * Fase 010I. Crear la orden desde una cotización V2 enviada a producción. De
+   * ADMIN: el puente de la cotización V2 es administrativo, como el envío a
+   * producción del que nace. El backend acepta al taller en la creación, pero
+   * esta pantalla vive en el Cotizador V2, que sólo abre ADMIN.
+   */
+  crearOrdenDesdeCotizacionV2: boolean;
+  /** Fase 010I. Abrir la cotización V2 de origen: lleva precios, es de ADMIN. */
+  verCotizacionV2: boolean;
+  /** Fase 010I. Registrar material real gastado. Mueve inventario. */
+  registrarConsumo: boolean;
+  /** Fase 010I. Notas y quemas del seguimiento. */
+  registrarNotaProduccion: boolean;
+  /** Fase 010I, decisión D2. Registrar un aviso al cliente ya hecho. */
+  registrarComunicacion: boolean;
   /** Arrancar: el único punto que descuenta material. */
   arrancarProduccion: boolean;
   completarProduccion: boolean;
@@ -81,6 +96,11 @@ export function capabilitiesFor(role: Role | undefined): Capabilities {
     cotizarDesdePrototipo: esAdmin(role),
     gestionarConceptosComerciales: esAdmin(role),
     crearOrdenProduccion: esTaller(role),
+    crearOrdenDesdeCotizacionV2: esAdmin(role),
+    verCotizacionV2: esAdmin(role),
+    registrarConsumo: esTaller(role),
+    registrarNotaProduccion: esTaller(role),
+    registrarComunicacion: esTaller(role),
     arrancarProduccion: esTaller(role),
     completarProduccion: esTaller(role),
     anularProduccion: esAdmin(role),

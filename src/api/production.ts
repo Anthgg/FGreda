@@ -1,10 +1,18 @@
 import { apiClient } from "@/api/client";
 import { toQuery } from "@/api/masters";
 import type {
+  ProductionCommunication,
+  ProductionCommunicationCreateIn,
+  ProductionConsumption,
+  ProductionConsumptionCreateIn,
+  ProductionConsumptionPage,
+  ProductionNote,
+  ProductionNoteCreateIn,
   ProductionOrder,
   ProductionOrderCreateIn,
   ProductionOrderFilters,
   ProductionOrderPage,
+  ProductionTimeline,
 } from "@/types/production";
 
 const ORDERS = "/production-orders";
@@ -52,3 +60,42 @@ export const fetchProductionOrderDocument = (
   id: number,
 ): Promise<{ blob: Blob; filename: string | null }> =>
   apiClient.getBlobWithFilename(`${ORDERS}/${id}/document`);
+
+// ---------------------------------------------------------------------------
+// Fase 010I — ejecución real de una orden V2
+// ---------------------------------------------------------------------------
+
+export const fetchProductionConsumptions = (id: number): Promise<ProductionConsumptionPage> =>
+  apiClient.get<ProductionConsumptionPage>(`${ORDERS}/${id}/consumptions`);
+
+/**
+ * Registra material REAL gastado. **Mueve inventario**, y sólo por esta llamada.
+ *
+ * Reintentar con la misma `idempotency_key` no descuenta dos veces: el backend
+ * devuelve el consumo que ya existe.
+ */
+export const registerProductionConsumption = (
+  id: number,
+  payload: ProductionConsumptionCreateIn,
+): Promise<ProductionConsumption> =>
+  apiClient.post<ProductionConsumption>(`${ORDERS}/${id}/consumptions`, payload);
+
+/** Nota o quema real en el seguimiento. No mueve inventario. */
+export const addProductionNote = (
+  id: number,
+  payload: ProductionNoteCreateIn,
+): Promise<ProductionNote> => apiClient.post<ProductionNote>(`${ORDERS}/${id}/notes`, payload);
+
+/**
+ * REGISTRA un aviso al cliente que ya se hizo. **No envía nada**: el sistema
+ * no tiene integración con WhatsApp ni con ningún proveedor.
+ */
+export const registerProductionCommunication = (
+  id: number,
+  payload: ProductionCommunicationCreateIn,
+): Promise<ProductionCommunication> =>
+  apiClient.post<ProductionCommunication>(`${ORDERS}/${id}/communications`, payload);
+
+/** Todo lo que le pasó a la orden, en el orden que manda el backend. */
+export const fetchProductionTimeline = (id: number): Promise<ProductionTimeline> =>
+  apiClient.get<ProductionTimeline>(`${ORDERS}/${id}/timeline`);

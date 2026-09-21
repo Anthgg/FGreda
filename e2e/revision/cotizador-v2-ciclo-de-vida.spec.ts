@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
-import { testName } from "../helpers/fixtures";
+import { TEST_DATA_PREFIX, testName } from "../helpers/fixtures";
 
 /**
  * Fase 010H — emitir, vencer, duplicar, PDF y paso a producción, contra LA REVISIÓN.
@@ -38,6 +38,21 @@ async function esperarGuardado(page: Page): Promise<void> {
   await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
     timeout: 30_000,
   });
+}
+
+async function asignarProceso(
+  page: Page,
+  tecnica: string | RegExp,
+  trabajador: string | RegExp,
+): Promise<void> {
+  const fila = page.locator("li").filter({ hasText: tecnica }).first();
+  await expect(fila).toBeVisible({ timeout: 15_000 });
+  await fila.getByRole("combobox", { name: "Trabajador" }).click();
+  const search = page.getByPlaceholder(/buscar opci[oó]n/i);
+  if (await search.isVisible().catch(() => false)) {
+    await search.fill("");
+  }
+  await page.getByRole("option", { name: trabajador }).click();
 }
 
 async function csrf(page: Page): Promise<string> {
@@ -95,6 +110,35 @@ async function borradorCompleto(page: Page, etiqueta: string, piezas: string[]):
   }
 
   await paso(page, 4, "Mano de obra").click();
+  // Una pieza de encargo no trae procesos de ninguna ficha: se le definen aqui,
+  // para ESTA cotizacion, y se le pone quien la hace. Sin eso la cotizacion
+  // queda con mano de obra 0 y ya no se puede emitir, que es justo la barrera
+  // que cierra A2H-001.
+  for (const pieza of piezas) {
+    const tarjeta = page
+      .getByTestId("procesos")
+      .locator("div")
+      .filter({ has: page.getByRole("heading", { name: new RegExp(`^${TEST_DATA_PREFIX}${pieza}-`) }) })
+      .first();
+    // Tecnica y persona POR NOMBRE, no por posicion: «A mano» la sabe hacer
+    // «E2E-Trabajador taller» en la semilla, y elegir por indice ataria la
+    // prueba al orden en que el catalogo devuelva sus filas.
+    await tarjeta.getByRole("combobox", { name: "Agregar proceso" }).click();
+    const buscador = page.getByPlaceholder(/buscar opci[oó]n/i);
+    if (await buscador.isVisible().catch(() => false)) await buscador.fill("A mano");
+    await page.getByRole("option", { name: "A mano", exact: true }).click();
+    await tarjeta.getByRole("button", { name: "Agregar" }).click();
+    // Acotado A ESTA tarjeta: con dos piezas hay dos filas «A mano», y buscar
+    // en toda la pagina reasignaria la de la primera.
+    const fila = tarjeta.locator("li").filter({ hasText: "A mano" }).first();
+    await expect(fila).toBeVisible({ timeout: 15_000 });
+    await fila.getByRole("combobox", { name: "Trabajador" }).click();
+    const personas = page.getByPlaceholder(/buscar opci[oó]n/i);
+    if (await personas.isVisible().catch(() => false)) await personas.fill("Trabajador taller");
+    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
+    await esperarGuardado(page);
+  }
+
   const dias = page.getByLabel(/d[ií]as efectivos/i);
   await dias.fill("2");
   await dias.blur();
@@ -385,6 +429,8 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect(page.getByLabel(/pasta por pieza/i).first()).toHaveValue(/^450/);
 
     await paso(page, 4, "Mano de obra").click();
+    await asignarProceso(page, /Torno facil/i, /E2E-Tornero/);
+    await asignarProceso(page, /Vidriado por inmersion/i, /E2E-Trabajador taller/);
     const dias = page.getByLabel(/d[ií]as efectivos/i);
     await dias.fill("1");
     await dias.blur();
@@ -442,23 +488,32 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       technique_ids: number[];
     }[];
     const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
-    // La ficha del trabajador es la que dice qué sabe hacer.
-    expect(taller?.technique_ids).toHaveLength(5);
+    const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
+    // La ficha del trabajador es la que dice qué sabe hacer. Fase 010J: el del
+    // taller hace el caso canónico del Excel final entero, torno incluido; el
+    // tornero solo tornea.
+    expect(taller?.technique_ids).toHaveLength(7);
+    expect(tornero?.technique_ids).toHaveLength(2);
     const tecnicas = (await (await api.get("/api/v1/quoter-v2/techniques")).json()).items as {
       id: number;
       name: string;
     }[];
-    const torno = tecnicas.find((una) => una.name === "Torno facil");
+    const aMano = tecnicas.find((una) => una.name === "A mano");
 
     await paso(page, 4, "Mano de obra").click();
     const seccion = page.getByTestId("personal-adicional");
     await expect(seccion).toContainText(/suma costo y no reduce el plazo/i, { timeout: 15_000 });
 
+    // El tornero no sabe hacer piezas a mano: no se le ofrece.
+    await seccion.getByRole("combobox", { name: "Trabajador" }).click();
+    await page.getByRole("option", { name: /E2E-Tornero/ }).click();
+    await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
+    await expect(page.getByRole("option", { name: "A mano", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
     await seccion.getByRole("combobox", { name: "Trabajador" }).click();
     await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
     await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
-    // El torno no es suyo: no se ofrece.
-    await expect(page.getByRole("option", { name: "Torno facil" })).toHaveCount(0);
     await page.getByRole("option", { name: "A mano", exact: true }).click();
     await seccion.getByRole("button", { name: "Añadir personal" }).click();
     // Se espera al DATO, no al indicador: el alta empieza con el clic y el pie
@@ -482,7 +537,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     // Y la barrera del backend sigue en pie para una petición a mano.
     const token = await csrf(page);
     const prohibido = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
-      data: { worker_id: taller?.id, technique_id: torno?.id, quantity: "10" },
+      data: { worker_id: tornero?.id, technique_id: aMano?.id, quantity: "10" },
       headers: { "X-CSRF-Token": token },
     });
     expect(prohibido.status()).toBe(422);
@@ -537,6 +592,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
         calculated_hours: string | null;
         worker_id: number | null;
         labor_cost: string | null;
+        final_hours: string | null;
       }[];
     let filas = await leerProcesos();
     expect(filas).toHaveLength(3);
@@ -567,7 +623,9 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       .toBe(taller?.id);
     filas = await leerProcesos();
     const asaAsignada = filas.find((fila) => fila.technique_name === "Armado de asa");
-    expect(Number(asaAsignada?.labor_cost)).toBeGreaterThan(0);
+    // Fase 010J: el personal del taller no suma costo; sus horas sí cuentan.
+    expect(Number(asaAsignada?.final_hours)).toBeGreaterThan(0);
+    expect(Number(asaAsignada?.labor_cost)).toBe(0);
     // Y el costo se ve en la fila, sin recargar.
     await expect(filaDelAsa).toContainText("Costo");
 
@@ -643,4 +701,3 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(token.length).toBeGreaterThan(0);
   });
 });
-

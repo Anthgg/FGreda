@@ -570,6 +570,9 @@ describe("mensajes del ciclo de vida (Fase 010H)", () => {
     "V2_CONFIRM_LINE_QUANTITY_REQUIRED",
     "V2_CONFIRM_LINE_BODY_MATERIAL_REQUIRED",
     "V2_CONFIRM_LINE_BODY_WEIGHT_REQUIRED",
+    "V2_CONFIRM_LINE_PROCESS_REQUIRED",
+    "V2_CONFIRM_PROCESS_WORKER_REQUIRED",
+    "V2_CONFIRM_LINE_LABOR_REQUIRED",
     "V2_CONFIRM_LINE_PRICE_REQUIRED",
     "V2_CONFIRM_FACTOR_REQUIRED",
     "V2_CONFIRM_FACTOR_OUT_OF_RANGE",
@@ -630,5 +633,131 @@ describe("mensajes del ciclo de vida (Fase 010H)", () => {
     expect(describirBloqueo("V2_CONFIRM_ALGO_NUEVO").mensaje).not.toMatch(/V2_/);
     expect(describirAvisoDeDuplicacion("V2_DUPLICATE_ALGO", null)).not.toMatch(/V2_/);
     expect(describirEvento("ALGO_NUEVO")).not.toMatch(/ALGO_NUEVO/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fase 010I, bloque E — el puente a la orden de producción
+// ---------------------------------------------------------------------------
+describe("010I: de la cotización V2 a la orden de producción", () => {
+  const ENVIADA = {
+    ...EMITIDA,
+    effective_status: "READY_FOR_PRODUCTION",
+    production_handoff: {
+      id: 1,
+      v2_quotation_id: 7,
+      status: "READY_FOR_PRODUCTION",
+      created_at: "2026-09-12T15:00:00Z",
+      created_by_name: "Ana Emisora",
+    },
+  };
+  const ORDEN = {
+    id: 5,
+    code: "OP-2026-000005",
+    status: "CREATED",
+    origin_type: "V2_QUOTATION",
+    v2_quotation_id: 7,
+    v2_quotation_code: "CTZV2-2026-000007",
+  };
+
+  it("confirmada pero sin enviar: no se ofrece crear la orden todavía", async () => {
+    mockV2(EMITIDA, (url) =>
+      url.includes("/production-orders")
+        ? jsonResponse(200, { items: [], total: 0, limit: 1, offset: 0 })
+        : undefined,
+    );
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    const ciclo = await screen.findByTestId("v2-ciclo-de-vida");
+    expect(
+      await within(ciclo).findByRole("button", { name: "Enviar a producción" }),
+    ).toBeInTheDocument();
+    expect(
+      within(ciclo).queryByRole("button", { name: "Crear orden de producción" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("enviada y sin orden: ADMIN crea la orden con su almacén y UNA clave", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockV2(ENVIADA, (url, init) => {
+      if (url.includes("/inventory/locations")) {
+        return jsonResponse(200, [{ id: 1, name: "Taller principal", active: true }]);
+      }
+      if (url.includes("/production-orders") && init.method === "POST") {
+        return jsonResponse(201, ORDEN);
+      }
+      if (url.includes("/production-orders")) {
+        return jsonResponse(200, { items: [], total: 0, limit: 1, offset: 0 });
+      }
+      return undefined;
+    });
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    await user.click(await screen.findByRole("button", { name: "Crear orden de producción" }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveTextContent(/No se descuenta ningún material/);
+    await user.click(within(dialogo).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: /Taller principal/ }));
+    await user.click(within(dialogo).getByRole("button", { name: "Crear orden" }));
+
+    await waitFor(() => {
+      const creadas = fetchSpy.mock.calls.filter(
+        ([url, init]) =>
+          String(url).includes("/production-orders") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(creadas).toHaveLength(1);
+      const enviado = JSON.parse(String((creadas[0]![1] as RequestInit).body)) as Record<
+        string,
+        unknown
+      >;
+      expect(enviado).toMatchObject({ v2_quotation_id: 7, stock_location_id: 1 });
+      expect(String(enviado.idempotency_key)).toMatch(/^[0-9a-f-]{36}$/);
+      expect(enviado).not.toHaveProperty("quotation_id");
+    });
+  });
+
+  it("con orden ya creada: «Ver orden de producción», nunca una segunda", async () => {
+    mockV2(ENVIADA, (url) =>
+      url.includes("/production-orders")
+        ? jsonResponse(200, { items: [ORDEN], total: 1, limit: 1, offset: 0 })
+        : undefined,
+    );
+    renderApp(["/cotizador-v2/7/resumen"]);
+
+    const ver = await screen.findByTestId("v2-ver-orden");
+    expect(ver).toHaveTextContent("Ver orden de producción · OP-2026-000005");
+    expect(ver).toHaveAttribute("href", "/produccion/5");
+    expect(
+      screen.queryByRole("button", { name: "Crear orden de producción" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("para el OPERADOR el puente no se ofrece (es de ADMIN)", async () => {
+    const { AccionProduccionV2 } = await import("@/features/production/AccionProduccionV2");
+    const { renderWithProviders, sessionResponse } = await import("@/test/utils");
+    const spy = mockFetch((url) => {
+      if (url.includes("/auth/me")) {
+        return sessionResponse({ ...USER, role: "OPERATOR", display_name: "Operario" });
+      }
+      if (url.includes("/production-orders")) {
+        return jsonResponse(200, { items: [], total: 0, limit: 1, offset: 0 });
+      }
+      return jsonResponse(200, {});
+    });
+
+    renderWithProviders(<AccionProduccionV2 quotationId={7} />);
+
+    // Se afirma la ausencia DESPUÉS de que la sesión y la búsqueda de la orden
+    // respondieron: antes, el botón tampoco estaría y la prueba no probaría nada.
+    await waitFor(() => {
+      const rutas = spy.mock.calls.map(([url]) => String(url));
+      expect(rutas.some((url) => url.includes("/auth/me"))).toBe(true);
+      expect(rutas.some((url) => url.includes("/production-orders"))).toBe(true);
+    });
+    await waitFor(() => expect(document.body.textContent).toBe(""));
+    expect(
+      screen.queryByRole("button", { name: "Crear orden de producción" }),
+    ).not.toBeInTheDocument();
   });
 });

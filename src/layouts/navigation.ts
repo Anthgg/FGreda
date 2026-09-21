@@ -113,6 +113,16 @@ export const NAVIGATION: readonly NavigationItem[] = [
     description: "Cotizaciones de prototipo y desarrollo previo a producción.",
   },
   {
+    // Fase 010K. Va junto a «Quemas» porque ambas hablan de horno, pero no es
+    // lo mismo: aquella registra hornadas hechas, esta cotiza el servicio de
+    // quemar piezas que el cliente todavia no ha traido.
+    label: "Solo quema",
+    to: "/solo-quema",
+    enabled: true,
+    icon: "flame",
+    description: "Cotizar la quema de piezas que trae el cliente.",
+  },
+  {
     label: "Quemas",
     to: "/quemas",
     enabled: true,

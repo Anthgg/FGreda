@@ -1,6 +1,6 @@
 import type { V2Firing } from "@/types/quoterV2Firing";
 import type { V2Illustration, V2LaborPage } from "@/types/quoterV2Labor";
-import type { V2Pricing } from "@/types/quoterV2Pricing";
+import type { V2Pricing, V2Reductions } from "@/types/quoterV2Pricing";
 
 /**
  * Fixtures del Cotizador V2, compartidas entre pruebas.
@@ -34,6 +34,7 @@ export const V2_CONFIG = {
   high_fire_enabled_default: true,
   illustration_daily_rate: "110.000000",
   illustration_pieces_per_workday: "50.000000",
+  piece_separation_cm: "3.000000",
   illustration_hourly_rate: "13.750000",
   illustration_pieces_per_hour: "6.250000",
   tax_percent: "18.000000",
@@ -280,14 +281,24 @@ export const V2_ILLUSTRATION: V2Illustration = {
   hourly_rate: "13.750000000000",
   hours: "12.000000",
   cost: "165.000000000000000000",
+  lines: [
+    {
+      line_id: 11,
+      product_name: "Plato palta",
+      quantity: "0.000000",
+      hours: "0.000000",
+      cost: "0.000000",
+    },
+  ],
+  total_hours: "12.000000",
+  total_cost: "165.000000000000000000",
 };
 
 /**
- * El caso canónico de 010E: externo, horno chico, 160 %, baja y alta.
- *
- * Dos hornadas a 200 + dos a 250 son S/900 de tarifa; dos a 35 + dos a 70 son
- * S/210 de gas, y la diferencia es S/690. La segunda hornada va al 60 % de
- * carga y cuesta exactamente igual que la primera: el horno se enciende entero.
+ * El caso de 010E en quema EXCLUSIVA (010J): externo, horno chico, 160 %, baja
+ * y alta. En exclusiva se cobran las dos hornadas enteras: 2 x 200 + 2 x 250 =
+ * S/900 de tarifa y 2 x 35 + 2 x 70 = S/210 de gas. En compartida serían 1,6
+ * hornadas: S/720 y S/168.
  */
 export const V2_FIRING: V2Firing = {
   production_type: "RETAIL",
@@ -298,6 +309,9 @@ export const V2_FIRING: V2Firing = {
   total_volume_cm3: "27200.000000",
   occupancy_percent: "160.000000",
   firing_count: 2,
+  firing_mode: "EXCLUSIVE",
+  piece_separation_cm: "3.000000",
+  billed_load: "2",
   low_fire_enabled: true,
   high_fire_enabled: true,
   low_fire_count: 2,
@@ -315,6 +329,7 @@ export const V2_FIRING: V2Firing = {
   commercial_total: "900.000000000000000000",
   difference: "690.000000000000000000",
   recommended_kiln_id: 2,
+  cheaper_kiln: null,
   kilns: [
     {
       kiln_id: 1,
@@ -324,6 +339,9 @@ export const V2_FIRING: V2Firing = {
       active: true,
       occupancy_percent: "160.000000",
       firing_count: 2,
+      billed_load: "2",
+      commercial_total: "900.000000",
+      gas_total: "210.000000",
       has_rates: true,
     },
     {
@@ -334,6 +352,9 @@ export const V2_FIRING: V2Firing = {
       active: true,
       occupancy_percent: "13.600000",
       firing_count: 1,
+      billed_load: "1",
+      commercial_total: "1900.000000",
+      gas_total: "165.000000",
       has_rates: true,
     },
   ],
@@ -374,6 +395,7 @@ export const V2_PRICING: V2Pricing = {
   commercial_factor: "3.000000",
   factor_min: "2.000000",
   factor_max: "3.000000",
+  factor_target: "3.000000",
   price_min: "5116.853333333333332000",
   price_target: "7675.279999999999998000",
   negotiated_price: "7675.279999999999998000",
@@ -406,6 +428,64 @@ export const V2_PRICING: V2Pricing = {
       line_tax: "637.200000000000000000",
       line_total: "4177.200000000000000000",
       profit: "2704.126639040848115000",
+    },
+  ],
+  warnings: [],
+};
+
+/** Fase 010J. Las reducciones del caso canónico del Excel final. */
+export const V2_REDUCTIONS: V2Reductions = {
+  current_subtotal: "10055.000000",
+  commercial_factor: "3.000000",
+  currency_code: "PEN",
+  items: [
+    {
+      code: "OTHER_KILN",
+      applicable: true,
+      cost_reduction: "1447.930588",
+      savings: "4343.791764",
+      estimated_subtotal: "5711.208236",
+      suggestion: "Horno grande",
+    },
+    {
+      code: "MIN_FACTOR",
+      applicable: true,
+      cost_reduction: "0.000000",
+      savings: "3347.830588",
+      estimated_subtotal: "6707.169412",
+      suggestion: "2.000000",
+    },
+    {
+      code: "REMOVE_ILLUSTRATION",
+      applicable: true,
+      cost_reduction: "44.000000",
+      savings: "132.000000",
+      estimated_subtotal: "9923.000000",
+      suggestion: null,
+    },
+    {
+      code: "REMOVE_EXTRAS",
+      applicable: false,
+      cost_reduction: "0.000000",
+      savings: "0.000000",
+      estimated_subtotal: "10055.000000",
+      suggestion: null,
+    },
+    {
+      code: "INTERNAL_STAFF",
+      applicable: false,
+      cost_reduction: "0.000000",
+      savings: "0.000000",
+      estimated_subtotal: "10055.000000",
+      suggestion: null,
+    },
+    {
+      code: "SHARED_FIRING",
+      applicable: false,
+      cost_reduction: "0.000000",
+      savings: "0.000000",
+      estimated_subtotal: "10055.000000",
+      suggestion: null,
     },
   ],
   warnings: [],

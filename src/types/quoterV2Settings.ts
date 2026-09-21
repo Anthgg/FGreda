@@ -39,6 +39,8 @@ export interface V2SettingsValues {
   high_fire_enabled_default: boolean;
   illustration_daily_rate: string;
   illustration_pieces_per_workday: string;
+  /** Fase 010J. Separación entre piezas en el horno, en cm (0 = sin separación). */
+  piece_separation_cm: string;
 
   /** Derivados por el backend. No se envían de vuelta: se calculan. */
   illustration_hourly_rate: string;
@@ -101,6 +103,7 @@ export interface V2SettingsUpdateInput {
   high_fire_enabled_default?: boolean;
   illustration_daily_rate?: string;
   illustration_pieces_per_workday?: string;
+  piece_separation_cm?: string;
 }
 
 export interface V2KilnRateInput {

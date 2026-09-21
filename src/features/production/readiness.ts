@@ -16,10 +16,17 @@ import type {
 } from "@/types/production";
 import type { QuotationPaymentStatus } from "@/types/quotations";
 
+/**
+ * Fase 010I. Los nombres con los que el taller dice el estado: INICIO, EN
+ * PROCESO, FINALIZADO, ANULADA. Son los mismos cuatro estados de siempre —no
+ * se inventa ninguno— y valen para toda orden, venga de donde venga: dos
+ * vocabularios para el mismo estado en la misma lista confunden más que
+ * cualquiera de los dos.
+ */
 const STATUS_LABEL: Record<ProductionOrderStatus, string> = {
-  CREATED: "Creada",
+  CREATED: "Inicio",
   STARTED: "En proceso",
-  COMPLETED: "Completada",
+  COMPLETED: "Finalizado",
   CANCELLED: "Anulada",
 };
 
@@ -163,7 +170,9 @@ export function canStart(
   origin: ProductionOrderOrigin = "QUOTATION",
 ): boolean {
   if (status !== "CREATED" || !ready) return false;
-  return origin === "PROTOTYPE" || estaCobrada(payment);
+  // Fase 010I. Una orden V2 tampoco pasa por el cobro Legacy: nace del envío
+  // a producción de una cotización V2 confirmada, y el backend no le pide pago.
+  return origin === "PROTOTYPE" || origin === "V2_QUOTATION" || estaCobrada(payment);
 }
 
 export function canComplete(status: ProductionOrderStatus): boolean {

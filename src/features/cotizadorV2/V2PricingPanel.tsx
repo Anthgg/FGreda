@@ -3,6 +3,7 @@ import { Spinner } from "@/components/Spinner";
 import { Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
 import { V2ExtrasPanel } from "@/features/cotizadorV2/V2ExtrasPanel";
+import { V2ReductionsPanel } from "@/features/cotizadorV2/V2ReductionsPanel";
 import { useSetV2Pricing, useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
 import { PRICING_WARNING_LABEL, type V2Pricing } from "@/types/quoterV2Pricing";
 
@@ -298,7 +299,11 @@ export function V2PricingPanel({
               value={precio.price_min}
               hint="Por debajo no se vende."
             />
-            <Dato label="Precio objetivo ×3" value={precio.price_target} />
+            <Dato
+              label={`Precio objetivo ×${Number(precio.factor_target ?? 3).toFixed(2)}`}
+              value={precio.price_target}
+              hint="Costo de producción por el factor objetivo de la casa."
+            />
             <Dato
               label="Ajuste por redondeo"
               value={precio.rounding_adjustment}
@@ -338,6 +343,8 @@ export function V2PricingPanel({
             />
           </dl>
         </section>
+
+        <V2ReductionsPanel quotationId={quotationId} />
 
         <V2ExtrasPanel quotationId={quotationId} canEdit={canEdit} />
 

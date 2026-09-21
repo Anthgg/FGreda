@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { SelectField } from "@/components/form";
+import { capabilitiesFor } from "@/features/auth/capabilities";
+import { useSession } from "@/features/auth/useSession";
 import { Spinner } from "@/components/Spinner";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
+import { fechaLima } from "@/features/cotizadorV2/fechaLima";
 import { Badge, EmptyState, Pagination } from "@/features/masters/MasterTable";
 import { describeStatus, statusTone } from "@/features/production/readiness";
 import { useProductionOrders } from "@/features/production/useProductionOrders";
@@ -19,21 +22,19 @@ const PAGE_SIZE = 25;
 
 const STATUS_OPTIONS = [
   { value: ALL, label: "Todos los estados" },
-  { value: "CREATED", label: "Creada" },
+  { value: "CREATED", label: "Inicio" },
   { value: "STARTED", label: "En proceso" },
-  { value: "COMPLETED", label: "Completada" },
+  { value: "COMPLETED", label: "Finalizado" },
   { value: "CANCELLED", label: "Anulada" },
 ] as const;
 
 const ORIGIN_OPTIONS = [
   { value: ALL, label: "Todos los orígenes" },
   { value: "QUOTATION", label: "Cotización" },
+  { value: "V2_QUOTATION", label: "Cotización V2" },
   { value: "PROTOTYPE", label: "Prototipo" },
 ] as const;
 
-function fecha(valor: string | null): string {
-  return valor ? valor.slice(0, 10) : "—";
-}
 
 /**
  * De dónde viene una orden, escrito con códigos y no con identificadores.
@@ -42,7 +43,33 @@ function fecha(valor: string | null): string {
  * CTZ-…, CPR-… y PRT-… son lo que aparece impreso en los papeles que tiene
  * delante.
  */
-function Origen({ order }: { order: ProductionOrderSummary }) {
+function Origen({
+  order,
+  verCotizacionV2,
+}: {
+  order: ProductionOrderSummary;
+  verCotizacionV2: boolean;
+}) {
+  // Fase 010I. La cotización V2 sólo la abre ADMIN —lleva precios—, así que al
+  // taller se le enseña el código, que es lo que lleva el papel, sin enlace.
+  if (order.origin_type === "V2_QUOTATION") {
+    const codigo = order.v2_quotation_code ?? "Cotización V2";
+    return (
+      <div className="flex flex-col gap-0.5">
+        {verCotizacionV2 && order.v2_quotation_id ? (
+          <Link
+            to={`/cotizador-v2/${order.v2_quotation_id}`}
+            className="font-mono text-zinc-700 hover:text-black hover:underline"
+          >
+            {codigo}
+          </Link>
+        ) : (
+          <span className="font-mono text-zinc-700">{codigo}</span>
+        )}
+        <span className="text-[10px] text-zinc-500">Cotización V2</span>
+      </div>
+    );
+  }
   if (order.origin_type === "PROTOTYPE") {
     return (
       <div className="flex flex-col gap-0.5">
@@ -80,6 +107,8 @@ function Origen({ order }: { order: ProductionOrderSummary }) {
  * a ver por su propia ruta, en sólo lectura.
  */
 export function ProductionOrdersPage() {
+  const { data: user } = useSession();
+  const puede = capabilitiesFor(user?.role);
   const [status, setStatus] = useState<string>(ALL);
   const [origin, setOrigin] = useState<string>(ALL);
   const [offset, setOffset] = useState(0);
@@ -110,7 +139,7 @@ export function ProductionOrdersPage() {
             className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl"
           />
           <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
-            Órdenes de fabricación y consumo físico de material preparado.
+            Órdenes de fabricación: qué se fabrica, para quién y en qué estado va.
           </p>
         </div>
         <Link
@@ -148,7 +177,7 @@ export function ProductionOrdersPage() {
             <EmptyState
               message={
                 status === ALL && origin === ALL
-                  ? "Todavía no hay órdenes de producción. Nacen de una cotización confirmada o del cobro de una cotización de prototipo."
+                  ? "Todavía no hay órdenes de producción. Nacen de una cotización confirmada o enviada a producción, o del cobro de una cotización de prototipo."
                   : "No hay órdenes con esos filtros."
               }
             />
@@ -159,13 +188,12 @@ export function ProductionOrdersPage() {
                   <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Orden</th>
+                      <th className="px-4 py-3 font-semibold">Cliente</th>
                       <th className="px-4 py-3 font-semibold">Origen</th>
+                      <th className="px-4 py-3 font-semibold">Piezas</th>
                       <th className="px-4 py-3 font-semibold">Estado</th>
                       <th className="px-4 py-3 font-semibold">Almacén</th>
-                      <th className="px-4 py-3 text-right font-semibold">Líneas</th>
-                      <th className="px-4 py-3 font-semibold">Creada</th>
-                      <th className="px-4 py-3 font-semibold">Arrancada</th>
-                      <th className="px-4 py-3 font-semibold">Completada</th>
+                      <th className="px-4 py-3 font-semibold">Fecha</th>
                       <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                     </tr>
                   </thead>
@@ -175,8 +203,15 @@ export function ProductionOrdersPage() {
                         <td className="px-4 py-3">
                           <span className="font-mono font-bold text-zinc-900">{order.code}</span>
                         </td>
+                        <td className="px-4 py-3 text-zinc-800">
+                          {order.customer_name ?? <span className="text-zinc-400">—</span>}
+                        </td>
                         <td className="px-4 py-3">
-                          <Origen order={order} />
+                          <Origen order={order} verCotizacionV2={puede.verCotizacionV2} />
+                        </td>
+                        {/* Lo arma el backend: aquí no se reconstruye nada. */}
+                        <td className="max-w-64 px-4 py-3 text-zinc-700">
+                          {order.pieces_summary ?? <span className="text-zinc-400">—</span>}
                         </td>
                         <td className="px-4 py-3">
                           <Badge tone={statusTone(order.status)}>
@@ -184,10 +219,7 @@ export function ProductionOrdersPage() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-zinc-600">{order.stock_location_name}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{order.line_count}</td>
-                        <td className="px-4 py-3 text-zinc-500">{fecha(order.created_at)}</td>
-                        <td className="px-4 py-3 text-zinc-500">{fecha(order.started_at)}</td>
-                        <td className="px-4 py-3 text-zinc-500">{fecha(order.completed_at)}</td>
+                        <td className="px-4 py-3 text-zinc-500">{fechaLima(order.created_at)}</td>
                         <td className="px-4 py-3 text-right">
                           <Link
                             to={`/produccion/${order.id}`}
