@@ -173,7 +173,7 @@ test.describe("Solo Quema (Fase 010K)", () => {
     await expect(precio.getByText("6236.300000").first()).toBeVisible({ timeout: 20_000 });
   });
 
-  test("el documento emitido no enseña nada interno", async ({ page, request }) => {
+  test("el documento emitido no enseña nada interno", async ({ page }) => {
     const id = await servicioDelExcel(page, "quema-pdf");
 
     const emision = page.getByTestId("panel-emision-quema");
@@ -183,7 +183,9 @@ test.describe("Solo Quema (Fase 010K)", () => {
       timeout: 30_000,
     });
 
-    const crudo = await textoDelPdf(request, id);
+    // `page.request` y no el `request` suelto de Playwright: aquel no lleva las
+    // cookies de la sesion y el PDF, que va detras del login, respondia 401.
+    const crudo = await textoDelPdf(page.request, id);
     const texto = compacto(crudo);
     expect(texto).toContain(compacto("COTIZACIÓN DE QUEMA"));
     for (const prohibido of PROHIBIDOS_PDF) {
