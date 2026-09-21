@@ -142,6 +142,12 @@ export function ProductionOrdersPage() {
             Órdenes de fabricación: qué se fabrica, para quién y en qué estado va.
           </p>
         </div>
+        <Link
+          to="/produccion/hornadas"
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+        >
+          Hornadas
+        </Link>
       </header>
 
       <div className="glass-panel rounded-2xl border border-white/60 p-4 shadow-sm sm:rounded-3xl sm:p-6">

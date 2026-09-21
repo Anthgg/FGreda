@@ -4,12 +4,14 @@ import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
 import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
 import { CotizadorV2Page } from "@/features/cotizadorV2/CotizadorV2Page";
+import { CotizadorV2NextPage } from "@/features/cotizadorV2Next/CotizadorV2NextPage";
 import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
 import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
 import { NuevaQuemaPage } from "@/features/firings/NuevaQuemaPage";
 import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
+import { KilnBatchesPage } from "@/features/kilnBatches/KilnBatchesPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
 import { ProductionOrderDetailPage } from "@/features/production/ProductionOrderDetailPage";
 import { ProductionOrderScanPage } from "@/features/production/ProductionOrderScanPage";
@@ -95,6 +97,7 @@ export function AppRoutes() {
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
           <Route path="produccion" element={<ProductionOrdersPage />} />
           {/* Antes que "produccion/:id": las rutas con segmentos fijos se declaran antes. */}
+          <Route path="produccion/hornadas" element={<KilnBatchesPage />} />
           <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
           {/* Fase 009K.4. La ficha de una muestra: redirige a su orden si la
               tiene, y si no la tiene se lee en sólo lectura. «Edición» y
@@ -125,17 +128,14 @@ export function AppRoutes() {
           <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
           <Route path="cotizador/nuevo" element={<CotizadorPage />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
-          {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior.
-              `cotizador-v2` no comparte prefijo con `cotizador`, asi que
-              ninguna direccion de un motor puede resolver en la pantalla del
-              otro. El Cotizador de arriba sigue siendo el historico y sus
-              cotizaciones no se recalculan. */}
+          {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior. */}
           <Route path="cotizador-v2" element={<CotizadorV2Page />} />
           <Route path="cotizador-v2/:id" element={<CotizadorV2Page />} />
-          {/* El paso vive en la URL y no en la base: asi el boton «atras» del
-              navegador funciona, recargar no pierde el sitio y no hace falta
-              una migracion para guardar un numero que se puede inferir. */}
           <Route path="cotizador-v2/:id/:step" element={<CotizadorV2Page />} />
+          {/* V2 NEXT: Fase 001 Rediseño */}
+          <Route path="cotizador-v2-next" element={<CotizadorV2NextPage />} />
+          <Route path="cotizador-v2-next/:id" element={<CotizadorV2NextPage />} />
+          <Route path="cotizador-v2-next/:id/:step" element={<CotizadorV2NextPage />} />
           {/* Fase 010K. Solo Quema: quemar piezas que trae el cliente. Rama
               propia, no un modo del Cotizador V2: distinto talonario, distinto
               factor y distinto documento. Tampoco cuelga de `quemas`, que
