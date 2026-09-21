@@ -97,7 +97,11 @@ async function textoDelPdf(api: APIRequestContext, id: number): Promise<string> 
 async function servicioDelExcel(page: Page, etiqueta: string): Promise<number> {
   await login(page);
   await page.goto("/solo-quema");
-  await page.getByLabel(/^nombre$/i).fill(testName(etiqueta));
+  // Sin anclar el final: `Field` compone el nombre accesible con la etiqueta MAS
+  // su exigencia —«Nombre Opcional»—, asi que un `/^nombre$/` no encuentra nada
+  // y el fallo llega noventa segundos despues, como un tiempo agotado que no
+  // explica por que. El resto del fichero ya lo hacia asi.
+  await page.getByLabel(/nombre/i).fill(testName(etiqueta));
   await page.getByRole("button", { name: /crear servicio de quema/i }).click();
   await expect(page.getByTestId("ficha-solo-quema")).toBeVisible({ timeout: 15_000 });
   const id = idDeLaUrl(page);
