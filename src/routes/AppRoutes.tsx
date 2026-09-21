@@ -11,6 +11,7 @@ import { FiringsPage } from "@/features/firings/FiringsPage";
 import { NuevaQuemaPage } from "@/features/firings/NuevaQuemaPage";
 import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
+import { KilnBatchesPage } from "@/features/kilnBatches/KilnBatchesPage";
 import { PartnersPage } from "@/features/masters/PartnersPage";
 import { ProductionOrderDetailPage } from "@/features/production/ProductionOrderDetailPage";
 import { ProductionOrderScanPage } from "@/features/production/ProductionOrderScanPage";
@@ -95,6 +96,7 @@ export function AppRoutes() {
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
           <Route path="produccion" element={<ProductionOrdersPage />} />
           {/* Antes que "produccion/:id": las rutas con segmentos fijos se declaran antes. */}
+          <Route path="produccion/hornadas" element={<KilnBatchesPage />} />
           <Route path="produccion/scan/:token" element={<ProductionOrderScanPage />} />
           {/* Fase 009K.4. La ficha de una muestra: redirige a su orden si la
               tiene, y si no la tiene se lee en sólo lectura. «Edición» y
