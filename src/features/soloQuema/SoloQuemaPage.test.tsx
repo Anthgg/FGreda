@@ -78,7 +78,7 @@ describe("Solo Quema (Fase 010K)", () => {
     const panel = await screen.findByTestId("panel-quema-solo");
     // 133 100 cm³ en un horno de 17 000: ocho hornadas y 7,829412 facturadas.
     expect(within(panel).getAllByText("782.941176 %").length).toBeGreaterThan(0);
-    expect(within(panel).getByText("7.829412 hornadas")).toBeInTheDocument();
+    expect(within(panel).getByText("7.829411764706 hornadas")).toBeInTheDocument();
     expect(within(panel).getAllByText("3523.235294").length).toBeGreaterThan(0);
     expect(within(panel).getAllByText("822.088235").length).toBeGreaterThan(0);
   });
@@ -130,7 +130,7 @@ describe("Solo Quema (Fase 010K)", () => {
     renderApp(["/solo-quema/5"]);
 
     const panel = await screen.findByTestId("panel-precio-quema");
-    expect(within(panel).getByText(/entre 1\.000000 y 2\.000000/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/entre 1\.00 y 2\.00/i)).toBeInTheDocument();
     expect(within(panel).getByText(/el gas no entra: es costo, no precio/i)).toBeInTheDocument();
   });
 

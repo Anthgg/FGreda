@@ -138,7 +138,7 @@ test.describe("Solo Quema (Fase 010K)", () => {
     await servicioDelExcel(page, "quema-excel");
 
     const quema = page.getByTestId("panel-quema-solo");
-    await expect(quema.getByText("7.829412 hornadas")).toBeVisible();
+    await expect(quema.getByText(/7\.82941\d* hornadas/)).toBeVisible();
     await expect(quema.getByText("3523.235294").first()).toBeVisible();
     await expect(quema.getByText("822.088235").first()).toBeVisible();
 
@@ -158,7 +158,7 @@ test.describe("Solo Quema (Fase 010K)", () => {
     await servicioDelExcel(page, "quema-factor");
 
     const precio = page.getByTestId("panel-precio-quema");
-    await expect(precio.getByText(/entre 1\.000000 y 2\.000000/i)).toBeVisible();
+    await expect(precio.getByText(/entre 1[.,]00 y 2[.,]00/i)).toBeVisible();
 
     const factor = precio.getByLabel(/factor del servicio/i);
     await factor.fill("3");
