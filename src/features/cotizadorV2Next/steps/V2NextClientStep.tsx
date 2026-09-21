@@ -42,7 +42,7 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
             />
           </label>
 
-          {/* Tipo de producción — SelectField custom, NO <select> nativo */}
+          {/* Tipo de producción — selector custom, sin elemento nativo */}
           <div className="relative">
             <SelectField
               label="Tipo de producción"
@@ -55,7 +55,7 @@ export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
             />
           </div>
 
-          {/* Moneda — SelectField custom, NO <select> nativo */}
+          {/* Moneda — selector custom, sin elemento nativo */}
           <div className="relative">
             <SelectField
               label="Moneda"

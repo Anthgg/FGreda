@@ -5,6 +5,14 @@ import { V2_EFFECTIVE_STATUS_LABEL } from "@/types/quoterV2";
 import { formatDisplayDate } from "@/components/dateFormat";
 import { Spinner } from "@/components/Spinner";
 import { ApiError } from "@/api/client";
+import { SelectField } from "@/components/SelectField";
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "Todos los estados" },
+  { value: "DRAFT", label: "Borrador" },
+  { value: "CONFIRMED", label: "Emitida" },
+  { value: "CANCELLED", label: "Anulada" },
+] as const;
 
 export function V2NextQuotationList() {
   const [q, setQ] = useState("");
@@ -52,16 +60,14 @@ export function V2NextQuotationList() {
             className="w-full h-10 px-3 rounded-xl border border-zinc-200 bg-white/80 backdrop-blur-sm text-xs focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none"
           />
         </div>
-        <select
+        <SelectField
+          label="Estado"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="h-10 px-3 rounded-xl border border-zinc-200 bg-white/80 backdrop-blur-sm text-xs text-zinc-700 outline-none focus:border-zinc-400"
-        >
-          <option value="all">Todos los estados</option>
-          <option value="DRAFT">Borrador</option>
-          <option value="CONFIRMED">Emitida</option>
-          <option value="CANCELLED">Anulada</option>
-        </select>
+          options={STATUS_OPTIONS}
+          onChange={setStatus}
+          searchable={false}
+          className="min-w-52"
+        />
       </div>
 
       <div className="flex-1 min-h-0 bg-white/55 backdrop-blur-xl border border-black/5 rounded-[18px] shadow-sm overflow-auto">
