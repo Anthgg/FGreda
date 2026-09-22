@@ -309,6 +309,42 @@ export function describeError(error: unknown): string {
     // `NEGATIVE_STOCK_NOT_ALLOWED` ya esta traducido mas arriba, con el
     // inventario: es el mismo error mire quien lo mire.
 
+    // ---- Fase 010M: mapa físico del horno (layout) -------------------
+    case "KILN_LAYOUT_NOT_FOUND":
+      return "No se encontró distribución guardada para esta hornada.";
+    case "KILN_LAYOUT_DIMENSIONS_MISSING":
+      return "El horno necesita ancho, fondo y altura útil antes de crear el mapa.";
+    case "KILN_LAYOUT_NOT_EDITABLE":
+      return "Esta hornada ya no está en estado planificado y no admite cambios en su distribución física.";
+    case "KILN_LAYOUT_VERSION_CONFLICT":
+      return "La distribución cambió en otra sesión. Recargue para ver los cambios y vuelva a aplicar los suyos.";
+    case "KILN_LAYOUT_ALREADY_EXISTS":
+      return "Ya existe una distribución para esta hornada. Recargue la página.";
+    case "KILN_LAYOUT_ASSIGNMENT_MISMATCH":
+      return "Una de las piezas no pertenece a esta hornada o ya fue retirada.";
+    case "KILN_LAYOUT_QUANTITY_EXCEEDED":
+      return "La cantidad de piezas colocadas supera la cantidad asignada a la hornada.";
+    case "KILN_LAYOUT_IDEMPOTENCY_KEY_REUSED":
+      return "Esta clave de operación ya fue utilizada con otro contenido.";
+    case "KILN_LAYOUT_OUT_OF_BOUNDS":
+      return "Una o más piezas exceden los límites físicos del horno.";
+    case "KILN_LAYOUT_HEIGHT_EXCEEDED":
+      return "La altura de la pieza excede la altura útil del nivel asignado.";
+    case "KILN_LAYOUT_COLLISION":
+      return "Dos o más piezas colisionan o superponen sus áreas de seguridad en el mismo nivel.";
+    case "KILN_LAYOUT_LEVEL_OUT_OF_BOUNDS":
+      return "Uno o más niveles exceden la altura del horno.";
+    case "KILN_LAYOUT_LEVEL_OVERLAP":
+      return "Dos o más niveles se solapan verticalmente en el horno.";
+    case "KILN_LAYOUT_LEVEL_NOT_FOUND":
+      return "El nivel asignado a la pieza no existe en la distribución.";
+    case "KILN_LAYOUT_PHYSICAL_QUANTITY_INVALID":
+      return "Cada ubicación física debe corresponder exactamente a 1 pieza.";
+    case "KILN_LAYOUT_UNIT_IDENTITY_MISSING":
+      return "Existen piezas colocadas sin identificador de unidad explícito.";
+    case "KILN_LAYOUT_UNIT_IDENTITY_INCONSISTENT":
+      return "Los identificadores de unidad son inconsistentes.";
+
     default:
       return safeFallback(error.message);
   }
