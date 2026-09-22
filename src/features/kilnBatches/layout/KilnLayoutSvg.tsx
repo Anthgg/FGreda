@@ -69,14 +69,7 @@ export function KilnLayoutSvg({
     const origX = Number(placement.x_cm);
     const origY = Number(placement.y_cm);
 
-    try {
-      if (typeof svgRef.current.setPointerCapture === "function") {
-        svgRef.current.setPointerCapture(e.pointerId);
-      }
-    } catch {
-      // Si el navegador no soporta capture en ese elemento, continuar
-    }
-
+    // Solo iniciar estado de arrastre provisional; la captura de puntero se activa al mover
     setDragState({
       placement,
       pointerId: e.pointerId,
@@ -98,6 +91,19 @@ export function KilnLayoutSvg({
 
     const dx = coords.x - dragState.startSvgX;
     const dy = coords.y - dragState.startSvgY;
+
+    // Activar captura de puntero únicamente si hay desplazamiento real
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+      if (svgRef.current && typeof svgRef.current.setPointerCapture === "function") {
+        try {
+          if (!svgRef.current.hasPointerCapture(dragState.pointerId)) {
+            svgRef.current.setPointerCapture(dragState.pointerId);
+          }
+        } catch {
+          // Ignorar
+        }
+      }
+    }
 
     // En SVG el eje Y está invertido (dy positivo es hacia abajo en pantalla -> decrementa y_cm)
     const rawNewX = dragState.origX_cm + dx;
@@ -194,7 +200,8 @@ export function KilnLayoutSvg({
         toDecimal6(dragState.currentY_cm),
       );
     }
-    // Si fue inválido, automáticamente se descarta la posición provisional (revertir al orig)
+    // Mantener la pieza seleccionada
+    onSelectPlacement(dragState.placement);
     setDragState(null);
   };
 
@@ -246,10 +253,18 @@ export function KilnLayoutSvg({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        onClick={() => onSelectPlacement(null)}
+        onClick={(e) => {
+          if (
+            e.target === e.currentTarget ||
+            (e.target as Element)?.getAttribute("data-role") === "background"
+          ) {
+            onSelectPlacement(null);
+          }
+        }}
       >
         {/* Fondo del horno */}
         <rect
+          data-role="background"
           x={0}
           y={0}
           width={kilnWidth}
