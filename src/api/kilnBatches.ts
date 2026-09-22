@@ -53,8 +53,23 @@ export const fetchProductionBatchSuggestions = (
     })}`,
   );
 
-export const fetchKilnBatchLayout = (batchId: number): Promise<KilnBatchLayout> =>
-  apiClient.get<KilnBatchLayout>(`${KILN_BATCHES}/${batchId}/layout`);
+export const fetchKilnBatchLayout = async (
+  batchId: number,
+): Promise<KilnBatchLayout | null> => {
+  try {
+    return await apiClient.get<KilnBatchLayout>(`${KILN_BATCHES}/${batchId}/layout`);
+  } catch (err: unknown) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "status" in err &&
+      (err as { status: number }).status === 404
+    ) {
+      return null;
+    }
+    throw err;
+  }
+};
 
 export const updateKilnBatchLayout = (
   batchId: number,

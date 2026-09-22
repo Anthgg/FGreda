@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { ArrowLeftIcon, ExclamationTriangleIcon } from "./layoutIcons";
@@ -19,7 +19,14 @@ import type {
   SuggestedPlacement,
 } from "@/types/kilnBatches";
 
-import { checkCollision, checkPlacementBounds, getReservedFootprint, toDecimal6 } from "./kilnLayoutMath";
+import {
+  canonicalLayoutFingerprint,
+  checkCollision,
+  checkPlacementBounds,
+  getReservedFootprint,
+  toDecimal6,
+  validateLevelMove,
+} from "./kilnLayoutMath";
 import { KilnConflictModal } from "./KilnConflictModal";
 import { KilnLayoutHeader } from "./KilnLayoutHeader";
 import { KilnLayoutSvg } from "./KilnLayoutSvg";
@@ -55,6 +62,10 @@ export function KilnBatchLayoutPage() {
   const [isLevelModalOpen, setIsLevelModalOpen] = useState<boolean>(false);
   const [editingLevel, setEditingLevel] = useState<KilnBatchLayoutLevelIn | null>(null);
   const [isConflictModalOpen, setIsConflictModalOpen] = useState<boolean>(false);
+
+  // Referencias para reintentos de guardado idempotentes
+  const pendingSaveFingerprintRef = useRef<string | null>(null);
+  const pendingIdempotencyKeyRef = useRef<string | null>(null);
 
   // Mensajes de error o éxito
   const [localError, setLocalError] = useState<string | null>(null);
@@ -135,6 +146,13 @@ export function KilnBatchLayoutPage() {
             : initialLevels[0]?.level_index ?? 0,
         );
       }
+    } else if (layout === null) {
+      // Layout aún no existe (404) - Inicializar borrador vacío
+      setDraftLevels([]);
+      setDraftPlacements([]);
+      setIsDirty(false);
+      setSuggestion(null);
+      setSelectedPlacementId(null);
     }
   }, [layout, assignmentMap]);
 
@@ -143,7 +161,9 @@ export function KilnBatchLayoutPage() {
   const kilnDepth = Number(layout?.kiln_depth_cm_snapshot || 0);
   const kilnHeight = Number(layout?.kiln_height_cm_snapshot || 0);
 
-  const hasMissingDimensions = kilnWidth <= 0 || kilnDepth <= 0 || kilnHeight <= 0;
+  const hasMissingDimensions = Boolean(
+    layout && (kilnWidth <= 0 || kilnDepth <= 0 || kilnHeight <= 0),
+  );
   const isReadOnly = batch?.status !== "PLANNED";
 
   // Placements del nivel actualmente activo
@@ -235,14 +255,43 @@ export function KilnBatchLayoutPage() {
     setLocalError(null);
   };
 
-  // Mover pieza a otro nivel
+  // Mover pieza a otro nivel con validación geométrica completa M2
   const handleMoveLevel = (id: string | number, targetLevelIndex: number) => {
     if (isReadOnly) return;
+    const target = draftPlacements.find((p) => p.id === id);
+    if (!target) return;
+
+    const destLevel = draftLevels.find((l) => l.level_index === targetLevelIndex);
+    if (!destLevel) {
+      setLocalError("El nivel destino seleccionado no existe.");
+      return;
+    }
+
+    const otherPlacementsInDest = draftPlacements.filter(
+      (p) => p.id !== id && p.level_index === targetLevelIndex,
+    );
+
+    const validation = validateLevelMove(
+      target,
+      destLevel,
+      otherPlacementsInDest,
+      kilnWidth,
+      kilnDepth,
+    );
+
+    if (!validation.valid) {
+      setLocalError(validation.error ?? "La pieza no cabe en ese nivel.");
+      return;
+    }
+
     setDraftPlacements((prev) =>
       prev.map((p) => (p.id === id ? { ...p, level_index: targetLevelIndex } : p)),
     );
+    setSelectedLevelIndex(targetLevelIndex);
     setIsDirty(true);
     setLocalError(null);
+    setSuccessMessage(`Pieza movida al nivel ${destLevel.name || targetLevelIndex}.`);
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   // Quitar pieza del layout (volver a pendientes)
@@ -296,11 +345,12 @@ export function KilnBatchLayoutPage() {
 
   // Solicitar sugerencia de auto-packing M3
   const handleSuggest = async () => {
-    if (isReadOnly || !layout) return;
+    if (isReadOnly) return;
     setLocalError(null);
     try {
+      const expectedVersion = layout ? layout.version : 0;
       const res = await suggestMutation.mutateAsync({
-        expected_version: layout.version,
+        expected_version: expectedVersion,
         levels: draftLevels,
       });
       setSuggestion(res);
@@ -365,7 +415,7 @@ export function KilnBatchLayoutPage() {
 
   // Guardar layout persistido (PUT)
   const handleSave = async () => {
-    if (isReadOnly || !layout) return;
+    if (isReadOnly) return;
     setLocalError(null);
     setSuccessMessage(null);
 
@@ -384,18 +434,37 @@ export function KilnBatchLayoutPage() {
       rotation_degrees: p.rotation_degrees,
     }));
 
-    const idempotencyKey =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `save-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const expectedVersion = layout ? layout.version : 0;
+    const currentFingerprint = canonicalLayoutFingerprint(
+      expectedVersion,
+      draftLevels,
+      placementsPayload,
+    );
+
+    let idempotencyKey: string;
+    if (
+      pendingSaveFingerprintRef.current === currentFingerprint &&
+      pendingIdempotencyKeyRef.current
+    ) {
+      idempotencyKey = pendingIdempotencyKeyRef.current;
+    } else {
+      idempotencyKey =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `save-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      pendingSaveFingerprintRef.current = currentFingerprint;
+      pendingIdempotencyKeyRef.current = idempotencyKey;
+    }
 
     try {
       await updateMutation.mutateAsync({
-        expected_version: layout.version,
+        expected_version: expectedVersion,
         idempotency_key: idempotencyKey,
         levels: draftLevels,
         placements: placementsPayload,
       });
+      pendingSaveFingerprintRef.current = null;
+      pendingIdempotencyKeyRef.current = null;
       setIsDirty(false);
       setSuccessMessage("Distribución física del horno guardada exitosamente.");
       setTimeout(() => setSuccessMessage(null), 4000);
@@ -403,7 +472,15 @@ export function KilnBatchLayoutPage() {
       if (typeof err === "object" && err !== null && "status" in err) {
         const status = (err as { status: number }).status;
         if (status === 409) {
+          pendingSaveFingerprintRef.current = null;
+          pendingIdempotencyKeyRef.current = null;
           setIsConflictModalOpen(true);
+          return;
+        }
+        if (status === 422) {
+          pendingSaveFingerprintRef.current = null;
+          pendingIdempotencyKeyRef.current = null;
+          setLocalError(describeError(err));
           return;
         }
       }
@@ -500,7 +577,7 @@ export function KilnBatchLayoutPage() {
       {batch && (
         <KilnLayoutHeader
           batch={batch}
-          version={layout?.version || 1}
+          version={layout ? layout.version : 0}
           kilnWidth={Number(layout?.kiln_width_cm_snapshot || 0)}
           kilnDepth={Number(layout?.kiln_depth_cm_snapshot || 0)}
           kilnHeight={Number(layout?.kiln_height_cm_snapshot || 0)}

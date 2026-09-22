@@ -74,9 +74,13 @@ export function KilnLayoutHeader({
           ) : (
             <Badge tone={statusTone(batch.status)}>{statusLabel(batch.status)}</Badge>
           )}
-          <span className="rounded-lg border border-zinc-200 bg-white/80 px-2.5 py-1 text-xs font-semibold text-zinc-700">
-            Versión: {version}
-          </span>
+          {version === 0 ? (
+            <Badge tone="neutral">Sin distribución guardada</Badge>
+          ) : (
+            <span className="rounded-lg border border-zinc-200 bg-white/80 px-2.5 py-1 text-xs font-semibold text-zinc-700">
+              Versión: {version}
+            </span>
+          )}
         </div>
       </div>
     </header>

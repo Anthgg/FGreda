@@ -12,6 +12,11 @@
  * - Al convertir de vuelta: y_cm = kiln_depth_cm - (svg_y + reserved_y_size).
  */
 
+import type {
+  KilnBatchLayoutLevelIn,
+  KilnBatchLayoutPlacementIn,
+} from "@/types/kilnBatches";
+
 export interface ReservedFootprint {
   x_size: number;
   y_size: number;
@@ -247,3 +252,133 @@ export function getOrderStyle(key: number | string): OrderStyle {
   const index = Math.abs(hash) % ORDER_STYLES.length;
   return ORDER_STYLES[index]!;
 }
+
+/**
+ * Genera una huella canónica determinista del borrador para idempotencia en reintentos de guardado.
+ */
+export function canonicalLayoutFingerprint(
+  expectedVersion: number,
+  levels: KilnBatchLayoutLevelIn[],
+  placements: KilnBatchLayoutPlacementIn[],
+): string {
+  const sortedLevels = [...levels].sort((a, b) => a.level_index - b.level_index);
+  const sortedPlacements = [...placements].sort((a, b) => {
+    if (a.batch_assignment_id !== b.batch_assignment_id) {
+      return a.batch_assignment_id - b.batch_assignment_id;
+    }
+    if (a.group_index !== b.group_index) {
+      return a.group_index - b.group_index;
+    }
+    if (a.level_index !== b.level_index) {
+      return a.level_index - b.level_index;
+    }
+    if (a.x_cm !== b.x_cm) {
+      return a.x_cm.localeCompare(b.x_cm);
+    }
+    return a.y_cm.localeCompare(b.y_cm);
+  });
+  return JSON.stringify({
+    expected_version: expectedVersion,
+    levels: sortedLevels,
+    placements: sortedPlacements,
+  });
+}
+
+export interface LevelMoveValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Valida si una pieza cabe físicamente en un nivel destino:
+ * 1. Altura reservada <= altura útil del nivel destino.
+ * 2. Límites del horno (si las dimensiones del horno están configuradas).
+ * 3. Colisión con otras piezas en el nivel destino en la misma posición (x, y).
+ */
+export function validateLevelMove(
+  placement: {
+    id?: string | number | undefined;
+    x_cm: string | number;
+    y_cm: string | number;
+    piece_length_cm_snapshot: string | number;
+    piece_width_cm_snapshot: string | number;
+    piece_height_cm_snapshot: string | number;
+    separation_cm_snapshot: string | number;
+    rotation_degrees: number;
+  },
+  targetLevel: KilnBatchLayoutLevelIn,
+  otherPlacementsInTargetLevel: Array<{
+    id?: string | number | undefined;
+    x_cm: string | number;
+    y_cm: string | number;
+    piece_length_cm_snapshot: string | number;
+    piece_width_cm_snapshot: string | number;
+    piece_height_cm_snapshot: string | number;
+    separation_cm_snapshot: string | number;
+    rotation_degrees: number;
+  }>,
+  kilnWidth: number,
+  kilnDepth: number,
+): LevelMoveValidationResult {
+  const fp = getReservedFootprint(
+    placement.piece_length_cm_snapshot,
+    placement.piece_width_cm_snapshot,
+    placement.piece_height_cm_snapshot,
+    placement.separation_cm_snapshot,
+    placement.rotation_degrees,
+  );
+
+  const destUsableHeight = Number(targetLevel.usable_height_cm);
+  if (fp.z_size > destUsableHeight) {
+    return {
+      valid: false,
+      error: `La pieza no cabe en ese nivel: la altura de la pieza (${fp.z_size} cm) supera la altura útil del nivel (${destUsableHeight} cm).`,
+    };
+  }
+
+  const xNum = Number(placement.x_cm);
+  const yNum = Number(placement.y_cm);
+
+  if (kilnWidth > 0 && kilnDepth > 0) {
+    const inBounds = checkPlacementBounds(xNum, yNum, fp.x_size, fp.y_size, kilnWidth, kilnDepth);
+    if (!inBounds) {
+      return {
+        valid: false,
+        error: `La pieza no cabe en ese nivel: excede los límites físicos del horno en la posición (${xNum}, ${yNum}) cm.`,
+      };
+    }
+  }
+
+  const targetBox = {
+    left: xNum,
+    right: xNum + fp.x_size,
+    bottom: yNum,
+    top: yNum + fp.y_size,
+  };
+
+  for (const other of otherPlacementsInTargetLevel) {
+    if (other.id === placement.id) continue;
+    const otherFp = getReservedFootprint(
+      other.piece_length_cm_snapshot,
+      other.piece_width_cm_snapshot,
+      other.piece_height_cm_snapshot,
+      other.separation_cm_snapshot,
+      other.rotation_degrees,
+    );
+    const otherBox = {
+      left: Number(other.x_cm),
+      right: Number(other.x_cm) + otherFp.x_size,
+      bottom: Number(other.y_cm),
+      top: Number(other.y_cm) + otherFp.y_size,
+    };
+    if (checkCollision(targetBox, otherBox)) {
+      return {
+        valid: false,
+        error: `La pieza no cabe en ese nivel: colisiona con otra pieza existente en la posición (${xNum}, ${yNum}) cm.`,
+      };
+    }
+  }
+
+  return { valid: true };
+}
+

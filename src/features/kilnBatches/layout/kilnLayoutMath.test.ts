@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalLayoutFingerprint,
   checkCollision,
   checkHeightExceeded,
   checkPlacementBounds,
@@ -9,6 +10,7 @@ import {
   getReservedFootprint,
   svgToCmY,
   toDecimal6,
+  validateLevelMove,
 } from "./kilnLayoutMath";
 
 describe("kilnLayoutMath", () => {
@@ -145,6 +147,139 @@ describe("kilnLayoutMath", () => {
     });
   });
 
+  describe("canonicalLayoutFingerprint", () => {
+    it("genera la misma huella independientemente del orden de niveles o placements", () => {
+      const levelsA = [
+        { level_index: 1, z_cm: "25", usable_height_cm: "20" },
+        { level_index: 0, z_cm: "0", usable_height_cm: "25" },
+      ];
+      const levelsB = [
+        { level_index: 0, z_cm: "0", usable_height_cm: "25" },
+        { level_index: 1, z_cm: "25", usable_height_cm: "20" },
+      ];
+      const placementsA = [
+        {
+          batch_assignment_id: 2,
+          group_index: 0,
+          quantity: 1,
+          level_index: 0,
+          x_cm: "15",
+          y_cm: "10",
+          rotation_degrees: 0,
+        },
+        {
+          batch_assignment_id: 1,
+          group_index: 0,
+          quantity: 1,
+          level_index: 0,
+          x_cm: "5",
+          y_cm: "5",
+          rotation_degrees: 0,
+        },
+      ];
+      const placementsB = [
+        {
+          batch_assignment_id: 1,
+          group_index: 0,
+          quantity: 1,
+          level_index: 0,
+          x_cm: "5",
+          y_cm: "5",
+          rotation_degrees: 0,
+        },
+        {
+          batch_assignment_id: 2,
+          group_index: 0,
+          quantity: 1,
+          level_index: 0,
+          x_cm: "15",
+          y_cm: "10",
+          rotation_degrees: 0,
+        },
+      ];
+
+      const fp1 = canonicalLayoutFingerprint(1, levelsA, placementsA);
+      const fp2 = canonicalLayoutFingerprint(1, levelsB, placementsB);
+      expect(fp1).toBe(fp2);
+    });
+
+    it("genera huellas distintas cuando cambian coordenadas o versión", () => {
+      const levels = [{ level_index: 0, z_cm: "0", usable_height_cm: "25" }];
+      const placements = [
+        {
+          batch_assignment_id: 1,
+          group_index: 0,
+          quantity: 1,
+          level_index: 0,
+          x_cm: "5",
+          y_cm: "5",
+          rotation_degrees: 0,
+        },
+      ];
+      const fp1 = canonicalLayoutFingerprint(1, levels, placements);
+      const fp2 = canonicalLayoutFingerprint(2, levels, placements);
+      expect(fp1).not.toBe(fp2);
+
+      const modifiedPlacements = [{ ...placements[0]!, x_cm: "6" }];
+      const fp3 = canonicalLayoutFingerprint(1, levels, modifiedPlacements);
+      expect(fp1).not.toBe(fp3);
+    });
+  });
+
+  describe("validateLevelMove", () => {
+    const targetLevel = {
+      level_index: 1,
+      z_cm: "30",
+      usable_height_cm: "25",
+    };
+    const piece = {
+      id: "p-1",
+      x_cm: "5",
+      y_cm: "5",
+      piece_length_cm_snapshot: "10",
+      piece_width_cm_snapshot: "10",
+      piece_height_cm_snapshot: "15",
+      separation_cm_snapshot: "2",
+      rotation_degrees: 0,
+    };
+
+    it("permite mover si la pieza cabe físicamente en el nivel destino", () => {
+      const res = validateLevelMove(piece, targetLevel, [], 60, 50);
+      expect(res.valid).toBe(true);
+      expect(res.error).toBeUndefined();
+    });
+
+    it("rechaza si la altura reservada supera la altura útil del nivel", () => {
+      const shortLevel = { ...targetLevel, usable_height_cm: "16" }; // 15 + 2 = 17 > 16
+      const res = validateLevelMove(piece, shortLevel, [], 60, 50);
+      expect(res.valid).toBe(false);
+      expect(res.error).toMatch(/supera la altura útil/i);
+    });
+
+    it("rechaza si la pieza en (x, y) excede los límites del horno", () => {
+      const outPiece = { ...piece, x_cm: "55" }; // 55 + (10+2) = 67 > 60
+      const res = validateLevelMove(outPiece, targetLevel, [], 60, 50);
+      expect(res.valid).toBe(false);
+      expect(res.error).toMatch(/excede los límites físicos/i);
+    });
+
+    it("rechaza si la pieza colisiona con otra pieza en el nivel destino", () => {
+      const otherPiece = {
+        id: "p-2",
+        x_cm: "8",
+        y_cm: "8",
+        piece_length_cm_snapshot: "10",
+        piece_width_cm_snapshot: "10",
+        piece_height_cm_snapshot: "10",
+        separation_cm_snapshot: "2",
+        rotation_degrees: 0,
+      };
+      const res = validateLevelMove(piece, targetLevel, [otherPiece], 60, 50);
+      expect(res.valid).toBe(false);
+      expect(res.error).toMatch(/colisiona con otra pieza/i);
+    });
+  });
+
   describe("getOrderStyle", () => {
     it("es determinista y estable para la misma clave", () => {
       const style1 = getOrderStyle("OP #101");
@@ -161,3 +296,4 @@ describe("kilnLayoutMath", () => {
     });
   });
 });
+

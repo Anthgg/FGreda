@@ -119,26 +119,19 @@ export function KilnSelectedPiecePanel({
           {otherLevels.length > 0 && (
             <div className="inline-flex items-center gap-1.5">
               <span className="text-xs text-zinc-500">Mover a:</span>
-              <select
-                aria-label="Seleccionar nivel destino"
-                value=""
-                onChange={(e) => {
-                  const target = Number(e.target.value);
-                  if (!isNaN(target)) {
-                    onMoveLevel(placement.id!, target);
-                  }
-                }}
-                className="rounded-lg border-zinc-300 bg-white py-1 pl-2 pr-6 text-xs text-zinc-800 shadow-sm focus:border-amber-500 focus:ring-amber-500"
-              >
-                <option value="" disabled>
-                  Seleccionar nivel...
-                </option>
+              <div className="flex flex-wrap gap-1">
                 {otherLevels.map((lvl) => (
-                  <option key={lvl.level_index} value={lvl.level_index}>
-                    {lvl.name || `Nivel ${lvl.level_index}`} (z={lvl.z_cm} cm)
-                  </option>
+                  <button
+                    key={lvl.level_index}
+                    type="button"
+                    aria-label={`Mover pieza al ${lvl.name || `Nivel ${lvl.level_index}`}`}
+                    onClick={() => onMoveLevel(placement.id!, lvl.level_index)}
+                    className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700 shadow-xs hover:bg-zinc-50"
+                  >
+                    {lvl.name || `Nivel ${lvl.level_index}`}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 
