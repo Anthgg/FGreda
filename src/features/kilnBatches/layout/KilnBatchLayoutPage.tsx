@@ -708,7 +708,12 @@ export function KilnBatchLayoutPage() {
       {/* Grid principal: Lienzo SVG + Panel lateral de piezas pendientes */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Columna Izquierda: Mapa SVG + Panel de inspección de pieza */}
-        <div className="space-y-4">
+        <div
+          id="kiln-level-panel"
+          role="tabpanel"
+          aria-labelledby={`kiln-level-tab-${selectedLevelIndex}`}
+          className="space-y-4"
+        >
           {dimensions.isValid ? (
             <KilnLayoutSvg
               kilnWidth={kilnWidth}
