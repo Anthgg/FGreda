@@ -64,9 +64,19 @@ export function KilnPlacementItem({
   const orderText = placement.orderLabel || `#${placement.batch_assignment_id}`;
   const style = getOrderStyle(orderKey);
 
-  const ariaLabel = `${orderText}: ${placement.productName || "Pieza"} ${fp.piece_x}×${fp.piece_y} cm${
+  const placementKey =
+    placement.id !== undefined && placement.id !== null
+      ? String(placement.id)
+      : `suggested-${placement.batch_assignment_id}-${placement.group_index}-${placement.unit_index ?? 0}-${placement.level_index}`;
+
+  const visibleLabelId = `kiln-piece-label-${placementKey}`;
+  const productLabelId = `kiln-piece-product-${placementKey}`;
+  const descriptionId = `kiln-piece-desc-${placementKey}`;
+
+  const accessibleName = `${orderText}: ${placement.productName || "Pieza"}`;
+  const descriptionText = `${placement.productName || "Pieza"}${
     placement.unit_index ? `, unidad ${placement.unit_index}` : ""
-  }, x=${placement.x_cm}, y=${placement.y_cm}, rot=${placement.rotation_degrees}°`;
+  }, nivel ${placement.level_index + 1}, medidas ${fp.piece_x}×${fp.piece_y}×${placement.piece_height_cm_snapshot} cm, x=${placement.x_cm}, y=${placement.y_cm}, rot=${placement.rotation_degrees}°`;
 
   // Colores y bordes según estado
   let outerStroke = "stroke-zinc-400/60";
@@ -83,62 +93,70 @@ export function KilnPlacementItem({
   }
 
   return (
-    <g
-      role="button"
-      tabIndex={0}
-      aria-label={ariaLabel}
-      aria-pressed={isSelected}
-      className={`cursor-pointer transition-opacity ${
-        placement.isDragging ? "opacity-80" : "opacity-100"
-      } outline-none focus:ring-2 focus:ring-amber-400`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(placement);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
+    <g>
+      <g
+        role="button"
+        tabIndex={0}
+        aria-labelledby={`${visibleLabelId} ${productLabelId}`}
+        aria-describedby={descriptionId}
+        aria-label={accessibleName}
+        aria-pressed={isSelected}
+        className={`cursor-pointer transition-opacity ${
+          placement.isDragging ? "opacity-80" : "opacity-100"
+        } outline-none focus:ring-2 focus:ring-amber-400`}
+        onClick={(e) => {
+          e.stopPropagation();
           onSelect(placement);
-        }
-      }}
-      onPointerDown={(e) => {
-        if (!isReadOnly && onPointerDown) {
-          onPointerDown(e, placement);
-        }
-      }}
-    >
-      {/* 1. Rectángulo exterior: Área reservada de seguridad (Separación) */}
-      <rect
-        x={svg_x}
-        y={svg_y}
-        width={fp.x_size}
-        height={fp.y_size}
-        rx={0.5}
-        ry={0.5}
-        className={`${outerFill} ${outerStroke}`}
-        strokeWidth={isSelected ? 0.35 : 0.2}
-        strokeDasharray={placement.isSuggested ? "1 0.5" : "0.6 0.4"}
-      />
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect(placement);
+          }
+        }}
+        onPointerDown={(e) => {
+          if (!isReadOnly && onPointerDown) {
+            onPointerDown(e, placement);
+          }
+        }}
+      >
+        <desc id={descriptionId}>{descriptionText}</desc>
+        <text id={productLabelId} display="none">
+          {placement.productName ? `: ${placement.productName}` : ""}
+        </text>
 
-      {/* 2. Rectángulo interior: Pieza física real */}
-      <rect
-        x={inner_x}
-        y={inner_y}
-        width={fp.piece_x}
-        height={fp.piece_y}
-        rx={0.4}
-        ry={0.4}
-        fill={style.fillColor}
-        fillOpacity={placement.isSuggested ? 0.65 : 0.85}
-        stroke={isSelected ? "#b45309" : style.strokeColor}
-        strokeWidth={isSelected ? 0.4 : 0.25}
-        strokeDasharray={style.borderStyle === "dashed" ? "1 0.5" : undefined}
-      />
+        {/* 1. Rectángulo exterior: Área reservada de seguridad (Separación) */}
+        <rect
+          x={svg_x}
+          y={svg_y}
+          width={fp.x_size}
+          height={fp.y_size}
+          rx={0.5}
+          ry={0.5}
+          className={`${outerFill} ${outerStroke}`}
+          strokeWidth={isSelected ? 0.35 : 0.2}
+          strokeDasharray={placement.isSuggested ? "1 0.5" : "0.6 0.4"}
+        />
 
-      {/* 3. Etiquetas visuales accesibles (Etiqueta de orden y unidad) */}
-      {fp.piece_x >= 3 && fp.piece_y >= 2 && (
-        <g pointerEvents="none">
+        {/* 2. Rectángulo interior: Pieza física real */}
+        <rect
+          x={inner_x}
+          y={inner_y}
+          width={fp.piece_x}
+          height={fp.piece_y}
+          rx={0.4}
+          ry={0.4}
+          fill={style.fillColor}
+          fillOpacity={placement.isSuggested ? 0.65 : 0.85}
+          stroke={isSelected ? "#b45309" : style.strokeColor}
+          strokeWidth={isSelected ? 0.4 : 0.25}
+          strokeDasharray={style.borderStyle === "dashed" ? "1 0.5" : undefined}
+        />
+
+        {/* 3. Etiqueta visual primaria: Nombre visible del botón */}
+        {fp.piece_x >= 3 && fp.piece_y >= 2 ? (
           <text
+            id={visibleLabelId}
             x={inner_x + fp.piece_x / 2}
             y={inner_y + fp.piece_y / 2 - (fp.piece_y >= 4 ? 0.6 : 0)}
             textAnchor="middle"
@@ -147,51 +165,58 @@ export function KilnPlacementItem({
             fontSize={Math.min(1.6, Math.max(0.9, fp.piece_x / 5))}
             fontWeight="bold"
             fontFamily="monospace"
+            pointerEvents="none"
           >
-            {placement.orderLabel || `#${placement.batch_assignment_id}`}
+            {orderText}
           </text>
-          {fp.piece_y >= 4 && (
-            <text
-              x={inner_x + fp.piece_x / 2}
-              y={inner_y + fp.piece_y / 2 + 1.1}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#ffffff"
-              fillOpacity={0.9}
-              fontSize={Math.min(1.2, Math.max(0.7, fp.piece_x / 6))}
-              fontFamily="sans-serif"
-            >
-              {placement.unit_index ? `u:${placement.unit_index}` : `${fp.piece_x}×${fp.piece_y}`}
-            </text>
-          )}
-        </g>
+        ) : (
+          <text id={visibleLabelId} display="none">
+            {orderText}
+          </text>
+        )}
+      </g>
+
+      {/* 4. Etiqueta visual secundaria (Unidad/Medida): decorador complementario no interactivo */}
+      {fp.piece_x >= 3 && fp.piece_y >= 4 && (
+        <text
+          aria-hidden="true"
+          pointerEvents="none"
+          x={inner_x + fp.piece_x / 2}
+          y={inner_y + fp.piece_y / 2 + 1.1}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="#ffffff"
+          fillOpacity={0.9}
+          fontSize={Math.min(1.2, Math.max(0.7, fp.piece_x / 6))}
+          fontFamily="sans-serif"
+        >
+          {placement.unit_index ? `u:${placement.unit_index}` : `${fp.piece_x}×${fp.piece_y}`}
+        </text>
       )}
 
-      {/* 4. Badge "Sugerido" si es un preview */}
+      {/* 5. Badge "Sugerido" si es un preview (decorador no interactivo) */}
       {placement.isSuggested && fp.x_size >= 4 && (
-        <rect
-          x={svg_x + 0.2}
-          y={svg_y + 0.2}
-          width={Math.min(fp.x_size - 0.4, 3.5)}
-          height={1.0}
-          rx={0.3}
-          fill="#9333ea"
-          fillOpacity={0.9}
-          pointerEvents="none"
-        />
-      )}
-      {placement.isSuggested && fp.x_size >= 4 && (
-        <text
-          x={svg_x + 0.5}
-          y={svg_y + 0.8}
-          fill="#ffffff"
-          fontSize={0.65}
-          fontWeight="bold"
-          fontFamily="sans-serif"
-          pointerEvents="none"
-        >
-          PREVIEW
-        </text>
+        <g pointerEvents="none" aria-hidden="true">
+          <rect
+            x={svg_x + 0.2}
+            y={svg_y + 0.2}
+            width={Math.min(fp.x_size - 0.4, 3.5)}
+            height={1.0}
+            rx={0.3}
+            fill="#9333ea"
+            fillOpacity={0.9}
+          />
+          <text
+            x={svg_x + 0.5}
+            y={svg_y + 0.8}
+            fill="#ffffff"
+            fontSize={0.65}
+            fontWeight="bold"
+            fontFamily="sans-serif"
+          >
+            PREVIEW
+          </text>
+        </g>
       )}
     </g>
   );

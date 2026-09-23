@@ -35,14 +35,14 @@ try {
   const tablist = await page.$('[role="tablist"]');
   const suggestBtn = await page.$('button:has-text("Sugerir acomodo")');
   const saveBtn = await page.$('button:has-text("Guardar distribución")');
-  const placements = await page.$$('[role="button"][aria-label*="Taza de café"], [role="button"][aria-label*="OP #"]');
+  const placementCount = await page.getByRole("button", { name: /OP #5/ }).count();
   const hasBatchCode = bodyText.includes("KB-2026-000001");
 
   console.log(`[AUDIT PRECHECK] SVG presente: ${!!svg}`);
   console.log(`[AUDIT PRECHECK] Tablist de niveles presente: ${!!tablist}`);
   console.log(`[AUDIT PRECHECK] Botón 'Sugerir acomodo': ${!!suggestBtn}`);
   console.log(`[AUDIT PRECHECK] Botón 'Guardar distribución': ${!!saveBtn}`);
-  console.log(`[AUDIT PRECHECK] Placements en lienzo: ${placements.length}`);
+  console.log(`[AUDIT PRECHECK] Placement localizable por role='button' y name=/OP #5/: ${placementCount >= 1} (count: ${placementCount})`);
   console.log(`[AUDIT PRECHECK] Código de hornada (KB-2026-000001): ${hasBatchCode}`);
 
   if (
@@ -51,7 +51,7 @@ try {
     !!tablist &&
     !!suggestBtn &&
     !!saveBtn &&
-    placements.length >= 1 &&
+    placementCount >= 1 &&
     hasBatchCode
   ) {
     console.log("[AUDIT PRECHECK PASS] Mapa interactivo real verificado con éxito.");

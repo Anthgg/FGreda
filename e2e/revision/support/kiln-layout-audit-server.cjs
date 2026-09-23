@@ -103,6 +103,8 @@ const MOCK_LAYOUT = {
 };
 
 const server = http.createServer((req, res) => {
+  req.on("error", (err) => console.warn("AUDIT_MOCK_REQ_ERR", err.message));
+  res.on("error", (err) => console.warn("AUDIT_MOCK_RES_ERR", err.message));
   const origin = req.headers.origin || "http://localhost:4173";
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -216,6 +218,13 @@ const server = http.createServer((req, res) => {
   res.end(JSON.stringify({ detail: "Endpoint no mockeado en audit server" }));
 });
 
+server.on("clientError", (err, socket) => {
+  if (err.code === "ECONNRESET" || !socket.writable) {
+    return;
+  }
+  socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`KILN_LAYOUT_AUDIT_MOCK_READY http://${HOST}:${PORT}`);
 });
@@ -230,3 +239,6 @@ function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+process.on("uncaughtException", (err) => {
+  console.warn("AUDIT_MOCK_UNCAUGHT", err.message);
+});
