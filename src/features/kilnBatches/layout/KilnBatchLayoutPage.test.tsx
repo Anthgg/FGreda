@@ -39,6 +39,9 @@ const MOCK_BATCH: KilnBatch = {
   completed_at: null,
   cancelled_at: null,
   cancel_reason: null,
+  kiln_width_cm_snapshot: "60.000000",
+  kiln_depth_cm_snapshot: "50.000000",
+  kiln_height_cm_snapshot: "80.000000",
   assignments: [
     {
       id: 101,
@@ -161,6 +164,9 @@ interface ScenarioOptions {
   suggestResponse?: KilnBatchLayoutSuggestion;
   putStatus?: number | ((callIndex: number) => number);
   putError?: string;
+  layoutStatus?: number;
+  layoutError?: string;
+  layoutNetworkError?: boolean;
 }
 
 function layoutMock(options: ScenarioOptions = {}) {
@@ -170,6 +176,9 @@ function layoutMock(options: ScenarioOptions = {}) {
     suggestResponse = MOCK_SUGGESTION,
     putStatus = 200,
     putError = "CONFLICT",
+    layoutStatus = 200,
+    layoutError = "NOT_FOUND",
+    layoutNetworkError = false,
   } = options;
 
   let currentLayout = layout ? { ...layout } : null;
@@ -219,6 +228,12 @@ function layoutMock(options: ScenarioOptions = {}) {
 
     // Obtener layout GET
     if (url.includes("/layout")) {
+      if (layoutNetworkError) {
+        throw new TypeError("Failed to fetch");
+      }
+      if (layoutStatus !== 200) {
+        return errorResponse(layoutStatus, layoutError);
+      }
       if (!currentLayout) {
         return errorResponse(404, "NOT_FOUND");
       }
@@ -282,7 +297,12 @@ describe("KilnBatchLayoutPage: Mapa interactivo del horno (M4)", () => {
   });
 
   it("alerta si el horno no tiene dimensiones útiles configuradas", async () => {
-    const batchSinDim = { ...MOCK_BATCH };
+    const batchSinDim = {
+      ...MOCK_BATCH,
+      kiln_width_cm_snapshot: "0.000000",
+      kiln_depth_cm_snapshot: "0.000000",
+      kiln_height_cm_snapshot: "0.000000",
+    };
     const layoutSinDim: KilnBatchLayout = {
       ...MOCK_LAYOUT,
       kiln_width_cm_snapshot: "0.000000",
@@ -628,5 +648,87 @@ describe("KilnBatchLayoutPage: Mapa interactivo del horno (M4)", () => {
 
     // Debe mostrar error y rechazar el movimiento
     expect(await screen.findByRole("alert")).toHaveTextContent(/supera la altura útil/i);
+  });
+
+  it("ERROR 422: layout con KILN_LAYOUT_DIMENSIONS_MISSING muestra mensaje explicativo y botón reintentar sin montar SVG", async () => {
+    layoutMock({
+      layoutStatus: 422,
+      layoutError: "KILN_LAYOUT_DIMENSIONS_MISSING",
+    });
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    // Debe mostrar el mensaje mapeado en messages.ts
+    expect(
+      await screen.findByText("El horno necesita ancho, fondo y altura útil antes de crear el mapa."),
+    ).toBeInTheDocument();
+
+    // Botón de reintento presente
+    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+
+    // SVG interactivo NO montado
+    expect(screen.queryByRole("region", { name: /plano interactivo/i })).not.toBeInTheDocument();
+  });
+
+  it("ERROR 500: fallo inesperado al cargar layout muestra mensaje de error y no monta borrador vacío", async () => {
+    layoutMock({
+      layoutStatus: 500,
+      layoutError: "INTERNAL_SERVER_ERROR",
+    });
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Sin distribución guardada/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /plano interactivo/i })).not.toBeInTheDocument();
+  });
+
+  it("ERROR RED: fallo de red al consultar layout muestra mensaje de conexión y permite reintentar", async () => {
+    layoutMock({
+      layoutNetworkError: true,
+    });
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    expect(
+      await screen.findByText(/No se pudo conectar con el servidor/i),
+    ).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /plano interactivo/i })).not.toBeInTheDocument();
+  });
+
+  it("MISSING_DIMENSIONS: hornada sin layout y sin medidas en el horno muestra alerta de bloqueo y deshabilita acciones", async () => {
+    const batchSinMedidas: KilnBatch = {
+      ...MOCK_BATCH,
+      kiln_width_cm_snapshot: "0.000000",
+      kiln_depth_cm_snapshot: "0.000000",
+      kiln_height_cm_snapshot: "0.000000",
+    };
+    layoutMock({
+      batch: batchSinMedidas,
+      layout: null,
+    });
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    // Debe mostrar la alerta específica de dimensiones faltantes
+    expect(
+      await screen.findByText(
+        /No se puede crear la distribución porque este horno no tiene ancho, fondo y altura útil configurados/i,
+      ),
+    ).toBeInTheDocument();
+
+    // Debe mostrar el lienzo bloqueado
+    expect(
+      screen.getByText(/Lienzo físico bloqueado hasta configurar las dimensiones del horno/i),
+    ).toBeInTheDocument();
+
+    // SVG interactivo NO montado
+    expect(screen.queryByRole("region", { name: /plano interactivo/i })).not.toBeInTheDocument();
+
+    // Acciones deshabilitadas
+    expect(screen.getByRole("button", { name: /sugerir acomodo/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /añadir nivel/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /guardar distribución/i })).toBeDisabled();
   });
 });

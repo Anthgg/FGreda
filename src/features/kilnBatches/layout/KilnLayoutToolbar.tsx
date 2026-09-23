@@ -6,6 +6,7 @@ interface KilnLayoutToolbarProps {
   isSaving: boolean;
   isSuggesting: boolean;
   hasLevels: boolean;
+  hasValidDimensions: boolean;
   onSuggest: () => void;
   onSave: () => void;
   onReload: () => void;
@@ -18,6 +19,7 @@ export function KilnLayoutToolbar({
   isSaving,
   isSuggesting,
   hasLevels,
+  hasValidDimensions,
   onSuggest,
   onSave,
   onReload,
@@ -31,7 +33,7 @@ export function KilnLayoutToolbar({
             <button
               type="button"
               onClick={onSuggest}
-              disabled={isSuggesting || isSaving || !hasLevels}
+              disabled={isSuggesting || isSaving || !hasLevels || !hasValidDimensions}
               className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-2xs hover:bg-purple-100 disabled:opacity-40"
             >
               {isSuggesting ? (
@@ -58,7 +60,7 @@ export function KilnLayoutToolbar({
             <button
               type="button"
               onClick={onAddLevel}
-              disabled={isSaving}
+              disabled={isSaving || !hasValidDimensions}
               className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 disabled:opacity-40"
             >
               <svg
@@ -112,7 +114,7 @@ export function KilnLayoutToolbar({
           <button
             type="button"
             onClick={onSave}
-            disabled={!isDirty || isSaving || isSuggesting}
+            disabled={!isDirty || isSaving || isSuggesting || !hasValidDimensions}
             className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 disabled:opacity-40"
           >
             {isSaving ? <Spinner className="size-3.5 text-white" label="Guardando…" /> : null}

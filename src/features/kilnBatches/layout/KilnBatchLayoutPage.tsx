@@ -23,6 +23,7 @@ import {
   canonicalLayoutFingerprint,
   checkCollision,
   checkPlacementBounds,
+  extractKilnDimensions,
   getReservedFootprint,
   toDecimal6,
   validateLevelMove,
@@ -156,14 +157,15 @@ export function KilnBatchLayoutPage() {
     }
   }, [layout, assignmentMap]);
 
-  // Dimensiones útiles del horno
-  const kilnWidth = Number(layout?.kiln_width_cm_snapshot || 0);
-  const kilnDepth = Number(layout?.kiln_depth_cm_snapshot || 0);
-  const kilnHeight = Number(layout?.kiln_height_cm_snapshot || 0);
+  // Dimensiones útiles reales del horno (sin dimensiones inventadas)
+  const dimensions = useMemo(() => {
+    return extractKilnDimensions(layout, batch);
+  }, [layout, batch]);
 
-  const hasMissingDimensions = Boolean(
-    layout && (kilnWidth <= 0 || kilnDepth <= 0 || kilnHeight <= 0),
-  );
+  const kilnWidth = dimensions.width;
+  const kilnDepth = dimensions.depth;
+  const kilnHeight = dimensions.height;
+  const hasMissingDimensions = !dimensions.isValid;
   const isReadOnly = batch?.status !== "PLANNED";
 
   // Placements del nivel actualmente activo
@@ -182,7 +184,7 @@ export function KilnBatchLayoutPage() {
     new_x_cm: string,
     new_y_cm: string,
   ) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !dimensions.isValid) return;
     setDraftPlacements((prev) =>
       prev.map((p) => (p.id === id ? { ...p, x_cm: new_x_cm, y_cm: new_y_cm } : p)),
     );
@@ -192,7 +194,7 @@ export function KilnBatchLayoutPage() {
 
   // Manejador para rotar una pieza (0° <-> 90°)
   const handleRotatePlacement = (id: string | number) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !dimensions.isValid) return;
     const target = draftPlacements.find((p) => p.id === id);
     if (!target) return;
 
@@ -257,7 +259,7 @@ export function KilnBatchLayoutPage() {
 
   // Mover pieza a otro nivel con validación geométrica completa M2
   const handleMoveLevel = (id: string | number, targetLevelIndex: number) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !dimensions.isValid) return;
     const target = draftPlacements.find((p) => p.id === id);
     if (!target) return;
 
@@ -307,7 +309,7 @@ export function KilnBatchLayoutPage() {
 
   // Añadir / Editar Nivel
   const handleSaveLevel = (level: KilnBatchLayoutLevelIn) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !dimensions.isValid) return;
     setDraftLevels((prev) => {
       const exists = prev.some((l) => l.level_index === level.level_index);
       if (exists) {
@@ -345,7 +347,7 @@ export function KilnBatchLayoutPage() {
 
   // Solicitar sugerencia de auto-packing M3
   const handleSuggest = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly || !dimensions.isValid) return;
     setLocalError(null);
     try {
       const expectedVersion = layout ? layout.version : 0;
@@ -395,7 +397,7 @@ export function KilnBatchLayoutPage() {
 
   // Aplicar sugerencia al borrador
   const handleApplySuggestion = () => {
-    if (!suggestion) return;
+    if (!suggestion || !dimensions.isValid) return;
     // Marcar como piezas normales del borrador
     setDraftPlacements((prev) =>
       prev.map((p) => (p.isSuggested ? { ...p, isSuggested: false } : p)),
@@ -415,7 +417,7 @@ export function KilnBatchLayoutPage() {
 
   // Guardar layout persistido (PUT)
   const handleSave = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly || !dimensions.isValid) return;
     setLocalError(null);
     setSuccessMessage(null);
 
@@ -522,6 +524,32 @@ export function KilnBatchLayoutPage() {
     );
   }
 
+  if (layoutQuery.isError) {
+    return (
+      <div className="space-y-4">
+        <Link
+          to="/produccion/hornadas"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-zinc-900"
+        >
+          <ArrowLeftIcon className="h-4 w-4" /> Volver a Hornadas
+        </Link>
+        <div
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p>{describeError(layoutQuery.error)}</p>
+          <button
+            type="button"
+            onClick={() => void layoutQuery.refetch()}
+            className="self-start rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 shadow-2xs hover:bg-red-50 sm:self-auto"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-4">
       {/* Navegación y enlace de retorno */}
@@ -545,9 +573,9 @@ export function KilnBatchLayoutPage() {
             <div>
               <p className="font-semibold">Horno sin dimensiones físicas útiles configuradas</p>
               <p className="mt-1 text-amber-800">
-                El horno de esta hornada no tiene configuradas sus dimensiones lineales útiles
-                (ancho, profundidad o altura). Debe configurar estas medidas en la ficha del horno
-                para habilitar la distribución física interactiva.
+                No se puede crear la distribución porque este horno no tiene ancho, fondo y
+                altura útil configurados. Configure estas medidas en la ficha del horno para
+                habilitar la distribución física interactiva.
               </p>
             </div>
           </div>
@@ -578,9 +606,9 @@ export function KilnBatchLayoutPage() {
         <KilnLayoutHeader
           batch={batch}
           version={layout ? layout.version : 0}
-          kilnWidth={Number(layout?.kiln_width_cm_snapshot || 0)}
-          kilnDepth={Number(layout?.kiln_depth_cm_snapshot || 0)}
-          kilnHeight={Number(layout?.kiln_height_cm_snapshot || 0)}
+          kilnWidth={kilnWidth}
+          kilnDepth={kilnDepth}
+          kilnHeight={kilnHeight}
           isReadOnly={isReadOnly}
         />
       )}
@@ -592,10 +620,12 @@ export function KilnBatchLayoutPage() {
         isSaving={updateMutation.isPending}
         isSuggesting={suggestMutation.isPending}
         hasLevels={draftLevels.length > 0}
+        hasValidDimensions={dimensions.isValid}
         onSuggest={handleSuggest}
         onSave={handleSave}
         onReload={handleReload}
         onAddLevel={() => {
+          if (!dimensions.isValid) return;
           setEditingLevel(null);
           setIsLevelModalOpen(true);
         }}
@@ -625,10 +655,12 @@ export function KilnBatchLayoutPage() {
         isReadOnly={isReadOnly}
         onSelectLevel={setSelectedLevelIndex}
         onAddLevel={() => {
+          if (!dimensions.isValid) return;
           setEditingLevel(null);
           setIsLevelModalOpen(true);
         }}
         onEditLevel={(lvl) => {
+          if (!dimensions.isValid) return;
           setEditingLevel(lvl);
           setIsLevelModalOpen(true);
         }}
@@ -639,18 +671,28 @@ export function KilnBatchLayoutPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Columna Izquierda: Mapa SVG + Panel de inspección de pieza */}
         <div className="space-y-4">
-          <KilnLayoutSvg
-            kilnWidth={kilnWidth > 0 ? kilnWidth : 50}
-            kilnDepth={kilnDepth > 0 ? kilnDepth : 50}
-            placements={currentLevelPlacements}
-            selectedPlacementId={selectedPlacementId}
-            isReadOnly={isReadOnly}
-            onSelectPlacement={(p) => setSelectedPlacementId(p ? p.id! : null)}
-            onUpdatePlacementPosition={handleUpdatePlacementPosition}
-          />
+          {dimensions.isValid ? (
+            <KilnLayoutSvg
+              kilnWidth={kilnWidth}
+              kilnDepth={kilnDepth}
+              placements={currentLevelPlacements}
+              selectedPlacementId={selectedPlacementId}
+              isReadOnly={isReadOnly}
+              onSelectPlacement={(p) => setSelectedPlacementId(p ? p.id! : null)}
+              onUpdatePlacementPosition={handleUpdatePlacementPosition}
+            />
+          ) : (
+            <div
+              role="region"
+              aria-label="Lienzo bloqueado"
+              className="flex h-64 w-full items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center text-xs text-zinc-500"
+            >
+              Lienzo físico bloqueado hasta configurar las dimensiones del horno.
+            </div>
+          )}
 
           {/* Panel de inspección de pieza seleccionada */}
-          {selectedPlacement && (
+          {selectedPlacement && dimensions.isValid && (
             <KilnSelectedPiecePanel
               placement={selectedPlacement}
               levels={draftLevels.map((l) => ({
@@ -686,17 +728,19 @@ export function KilnBatchLayoutPage() {
       </div>
 
       {/* Modal para Crear / Editar Nivel */}
-      <KilnLevelModal
-        isOpen={isLevelModalOpen}
-        kilnHeight={kilnHeight > 0 ? kilnHeight : 100}
-        initialLevel={editingLevel}
-        existingLevels={draftLevels}
-        onSave={handleSaveLevel}
-        onClose={() => {
-          setIsLevelModalOpen(false);
-          setEditingLevel(null);
-        }}
-      />
+      {dimensions.isValid && (
+        <KilnLevelModal
+          isOpen={isLevelModalOpen}
+          kilnHeight={kilnHeight}
+          initialLevel={editingLevel}
+          existingLevels={draftLevels}
+          onSave={handleSaveLevel}
+          onClose={() => {
+            setIsLevelModalOpen(false);
+            setEditingLevel(null);
+          }}
+        />
+      )}
 
       {/* Modal para Conflicto de Versión Concurrente (409) */}
       <KilnConflictModal

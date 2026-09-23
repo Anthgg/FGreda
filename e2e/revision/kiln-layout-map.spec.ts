@@ -22,6 +22,9 @@ const MOCK_BATCH = {
   completed_at: null,
   cancelled_at: null,
   cancel_reason: null,
+  kiln_width_cm_snapshot: "60.000000",
+  kiln_depth_cm_snapshot: "50.000000",
+  kiln_height_cm_snapshot: "80.000000",
   assignments: [
     {
       id: 101,
@@ -161,14 +164,46 @@ async function setupAuthRoutes(page: Page) {
   });
 }
 
+interface MockPlacement {
+  id?: number | string;
+  batch_assignment_id: number;
+  group_index: number;
+  unit_index: number;
+  quantity: number;
+  level_index: number;
+  x_cm: string;
+  y_cm: string;
+  rotation_degrees: number;
+  piece_length_cm_snapshot?: string;
+  piece_width_cm_snapshot?: string;
+  piece_height_cm_snapshot?: string;
+  separation_cm_snapshot?: string;
+}
+
+interface MockLevel {
+  level_index: number;
+  name?: string;
+  z_cm: string;
+  usable_height_cm: string;
+  plate_label?: string | null;
+  plate_thickness_cm?: string | null;
+}
+
+interface MockPutPayload {
+  expected_version: number;
+  idempotency_key?: string;
+  levels?: MockLevel[];
+  placements?: MockPlacement[];
+}
+
 test.describe("Mapa interactivo de distribución física del horno (Fase 010M - M4)", () => {
-  test("CORE FLOW: abrir hornadas -> mapa -> sugerir -> preview -> aplicar -> seleccionar -> rotar -> mover -> guardar -> comprobar PUT", async ({
+  test("CORE FLOW: abrir hornadas -> mapa -> sugerir -> preview -> aplicar -> seleccionar -> rotar -> mover -> guardar -> comprobar PUT -> recargar persistencia", async ({
     page,
   }) => {
     await setupAuthRoutes(page);
 
     let currentLayout = { ...MOCK_LAYOUT };
-    const putCalls: Array<{ expected_version: number; idempotency_key?: string }> = [];
+    const putCalls: MockPutPayload[] = [];
 
     await page.route(/\/api\/v1\/kiln-batches(\?.*)?$/, async (route) => {
       await route.fulfill({
@@ -207,7 +242,14 @@ test.describe("Mapa interactivo de distribución física del horno (Fase 010M - 
           ...currentLayout,
           version: body.expected_version + 1,
           levels: body.levels,
-          placements: body.placements,
+          placements: body.placements.map((p: MockPlacement, idx: number) => ({
+            ...p,
+            id: p.id ?? idx + 1,
+            piece_length_cm_snapshot: "9.000000",
+            piece_width_cm_snapshot: "9.000000",
+            piece_height_cm_snapshot: "10.000000",
+            separation_cm_snapshot: "2.000000",
+          })),
         };
         await route.fulfill({
           status: 200,
@@ -274,23 +316,55 @@ test.describe("Mapa interactivo de distribución física del horno (Fase 010M - 
     const rotateBtn = page.getByRole("button", { name: /rotar 90°/i });
     await rotateBtn.click();
 
-    // 11. Mover pieza al Nivel 2
+    // 11. Mover pieza al Nivel 2 (obligatorio)
     const moveBtn = page.getByRole("button", { name: /mover pieza al piso 2 - superior/i });
-    if (await moveBtn.isVisible()) {
-      await moveBtn.click();
-    }
+    await expect(moveBtn).toBeVisible();
+    await moveBtn.click();
+
+    // Validar en el panel que la pieza se movió a Piso 2 y rotó a 90°
+    await expect(page.locator("div").filter({ hasText: "Nivel actual:" }).first()).toContainText(
+      "Piso 2 - Superior",
+    );
+    await expect(page.getByRole("button", { name: /rotar 90° \(90°\)/i })).toBeVisible();
 
     // 12. Guardar distribución (PUT)
     const saveBtn = page.getByRole("button", { name: /guardar distribución/i });
     await saveBtn.click();
 
-    // 13. Comprobar que PUT ocurrió con expected_version
+    // 13. Comprobar que PUT ocurrió con expected_version y cambios aplicados
     await expect.poll(() => putCalls.length).toBeGreaterThan(0);
-    expect(putCalls[0]?.expected_version).toBe(1);
-    expect(putCalls[0]?.idempotency_key).toBeDefined();
+    const lastPut = putCalls[putCalls.length - 1];
+    expect(lastPut?.expected_version).toBe(1);
+    expect(lastPut?.idempotency_key).toBeDefined();
+    const placed = lastPut?.placements?.find(
+      (p: MockPlacement) => p.batch_assignment_id === 101,
+    );
+    expect(placed).toBeDefined();
+    expect(placed?.level_index).toBe(1);
+    expect(placed?.rotation_degrees).toBe(90);
 
     // 14. Mensaje de éxito
     await expect(page.getByText(/guardada exitosamente/i)).toBeVisible();
+
+    // 15. Recargar la página y validar persistencia desde el servidor (versión 2, pieza en Piso 2 a 90°)
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: /mapa de distribución física del horno/i }),
+    ).toBeVisible();
+    await expect(page.getByText(/versión: 2/i)).toBeVisible();
+
+    // Cambiar a Piso 2 para inspeccionar la pieza
+    const level2SelectorTab = page.getByRole("tab", { name: /piso 2 - superior/i });
+    await expect(level2SelectorTab).toBeVisible();
+    await level2SelectorTab.click();
+
+    const pieceAfterReload = page.getByRole("button", { name: /taza de café/i }).first();
+    await expect(pieceAfterReload).toBeVisible();
+    await pieceAfterReload.click();
+    await expect(page.locator("div").filter({ hasText: "Nivel actual:" }).first()).toContainText(
+      "Piso 2 - Superior",
+    );
+    await expect(page.getByRole("button", { name: /rotar 90° \(90°\)/i })).toBeVisible();
   });
 
   test("EMPTY_LAYOUT: GET layout 404 -> renderiza estado inicial -> añadir nivel -> guardar con expected_version = 0", async ({
@@ -368,6 +442,13 @@ test.describe("Mapa interactivo de distribución física del horno (Fase 010M - 
     expect(putCalls[0]?.idempotency_key).toBeDefined();
 
     // 5. Tras guardar, debe actualizarse a versión 1
+    await expect(page.getByText(/versión: 1/i)).toBeVisible();
+
+    // 6. Recargar la página y comprobar persistencia desde el servidor
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: /mapa de distribución física del horno/i }),
+    ).toBeVisible();
     await expect(page.getByText(/versión: 1/i)).toBeVisible();
   });
 
@@ -550,5 +631,56 @@ test.describe("Mapa interactivo de distribución física del horno (Fase 010M - 
     await expect(page.getByText(/subtotal/i)).not.toBeVisible();
     await expect(page.getByText(/igv/i)).not.toBeVisible();
     await expect(page.getByText(/margen/i)).not.toBeVisible();
+  });
+
+  test("MISSING_DIMENSIONS: horno sin medidas válidas -> alerta de bloqueo, sin SVG y controles deshabilitados", async ({
+    page,
+  }) => {
+    await setupAuthRoutes(page);
+
+    const batchWithoutDims = {
+      ...MOCK_BATCH,
+      kiln_width_cm_snapshot: "0.000000",
+      kiln_depth_cm_snapshot: "0.000000",
+      kiln_height_cm_snapshot: "0.000000",
+    };
+
+    await page.route("**/api/v1/kiln-batches/1", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(batchWithoutDims),
+      });
+    });
+
+    await page.route("**/api/v1/kiln-batches/1/layout", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "NOT_FOUND" }),
+      });
+    });
+
+    await login(page);
+    await page.goto("/produccion/hornadas/1/mapa");
+
+    // 1. Debe mostrar alerta accesible de dimensiones faltantes
+    const alert = page.getByRole("alert");
+    await expect(alert).toBeVisible();
+    await expect(alert).toContainText(
+      "No se puede crear la distribución porque este horno no tiene ancho, fondo y altura útil configurados",
+    );
+
+    // 2. NO debe renderizarse el SVG interactivo
+    await expect(page.getByRole("region", { name: /plano interactivo/i })).not.toBeVisible();
+    await expect(page.getByRole("region", { name: /lienzo bloqueado/i })).toBeVisible();
+    await expect(
+      page.getByText(/Lienzo físico bloqueado hasta configurar las dimensiones del horno/i),
+    ).toBeVisible();
+
+    // 3. Controles de acción deshabilitados
+    await expect(page.getByRole("button", { name: /sugerir acomodo/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /añadir nivel/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /guardar distribución/i })).toBeDisabled();
   });
 });

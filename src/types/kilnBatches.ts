@@ -38,6 +38,17 @@ export interface KilnBatch {
   cancelled_at: string | null;
   cancel_reason: string | null;
   assignments: KilnBatchAssignment[];
+  kiln_width_cm_snapshot?: string | null;
+  kiln_depth_cm_snapshot?: string | null;
+  kiln_height_cm_snapshot?: string | null;
+  usable_width_cm?: string | null;
+  usable_depth_cm?: string | null;
+  usable_height_cm?: string | null;
+  kiln?: {
+    usable_width_cm?: string | null;
+    usable_depth_cm?: string | null;
+    usable_height_cm?: string | null;
+  } | null;
 }
 
 export interface KilnBatchPage {

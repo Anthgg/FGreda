@@ -382,3 +382,82 @@ export function validateLevelMove(
   return { valid: true };
 }
 
+export interface KilnDimensionsResult {
+  width: number;
+  depth: number;
+  height: number;
+  isValid: boolean;
+}
+
+/**
+ * Extrae y valida las dimensiones físicas reales del horno a partir del layout
+ * o del contrato del batch/kiln para la creación inicial.
+ * Rechaza 0, negativos, NaN, undefined y null.
+ */
+export function extractKilnDimensions(
+  layout?: {
+    kiln_width_cm_snapshot?: string | null;
+    kiln_depth_cm_snapshot?: string | null;
+    kiln_height_cm_snapshot?: string | null;
+  } | null,
+  batch?: {
+    kiln_width_cm_snapshot?: string | null;
+    kiln_depth_cm_snapshot?: string | null;
+    kiln_height_cm_snapshot?: string | null;
+    usable_width_cm?: string | null;
+    usable_depth_cm?: string | null;
+    usable_height_cm?: string | null;
+    kiln?: {
+      usable_width_cm?: string | null;
+      usable_depth_cm?: string | null;
+      usable_height_cm?: string | null;
+    } | null;
+  } | null,
+): KilnDimensionsResult {
+  let wStr = layout?.kiln_width_cm_snapshot;
+  let dStr = layout?.kiln_depth_cm_snapshot;
+  let hStr = layout?.kiln_height_cm_snapshot;
+
+  if (!wStr || Number(wStr) <= 0) {
+    wStr =
+      batch?.kiln_width_cm_snapshot ??
+      batch?.usable_width_cm ??
+      batch?.kiln?.usable_width_cm ??
+      undefined;
+  }
+  if (!dStr || Number(dStr) <= 0) {
+    dStr =
+      batch?.kiln_depth_cm_snapshot ??
+      batch?.usable_depth_cm ??
+      batch?.kiln?.usable_depth_cm ??
+      undefined;
+  }
+  if (!hStr || Number(hStr) <= 0) {
+    hStr =
+      batch?.kiln_height_cm_snapshot ??
+      batch?.usable_height_cm ??
+      batch?.kiln?.usable_height_cm ??
+      undefined;
+  }
+
+  const width = Number(wStr);
+  const depth = Number(dStr);
+  const height = Number(hStr);
+
+  const isValid =
+    !isNaN(width) &&
+    width > 0 &&
+    !isNaN(depth) &&
+    depth > 0 &&
+    !isNaN(height) &&
+    height > 0;
+
+  return {
+    width: isValid ? width : 0,
+    depth: isValid ? depth : 0,
+    height: isValid ? height : 0,
+    isValid,
+  };
+}
+
+

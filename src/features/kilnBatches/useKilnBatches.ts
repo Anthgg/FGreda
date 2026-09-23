@@ -110,6 +110,7 @@ export const useKilnBatchLayout = (batchId: number | null) =>
     queryFn: () => fetchKilnBatchLayout(batchId!),
     enabled: batchId !== null && !Number.isNaN(batchId),
     retry: (failureCount, error: unknown) => {
+      if (import.meta.env?.MODE === "test") return false;
       // No reintentar si es 404 (el layout aún no existe) o 422 (falta dimensiones)
       if (typeof error === "object" && error !== null && "status" in error) {
         const status = (error as { status: number }).status;
