@@ -14,6 +14,7 @@ import {
 import type {
   KilnBatch,
   KilnBatchLayout,
+  KilnBatchLayoutLevelIn,
   KilnBatchLayoutPlacementIn,
   KilnBatchLayoutSuggestion,
   KilnBatchLayoutUpdateIn,
@@ -73,7 +74,7 @@ const MOCK_BATCH: KilnBatch = {
 };
 
 const MOCK_LAYOUT: KilnBatchLayout = {
-  id: 10,
+  layout_id: 10,
   batch_id: 1,
   version: 1,
   kiln_width_cm_snapshot: "60.000000",
@@ -81,8 +82,11 @@ const MOCK_LAYOUT: KilnBatchLayout = {
   kiln_height_cm_snapshot: "80.000000",
   placed_quantity: 1,
   pending_quantity: 2,
+  invalid_quantity: 0,
+  updated_at: "2026-09-23T00:00:00Z",
   levels: [
     {
+      id: 101,
       level_index: 0,
       name: "Piso 1 - Base",
       z_cm: "0.000000",
@@ -91,6 +95,7 @@ const MOCK_LAYOUT: KilnBatchLayout = {
       plate_thickness_cm: "1.500000",
     },
     {
+      id: 102,
       level_index: 1,
       name: "Piso 2 - Superior",
       z_cm: "26.500000",
@@ -205,7 +210,7 @@ function layoutMock(options: ScenarioOptions = {}) {
       putCalls.push(body);
       const nextVersion = (currentLayout?.version ?? 0) + 1;
       currentLayout = {
-        id: currentLayout?.id ?? 10,
+        layout_id: currentLayout?.layout_id ?? 10,
         batch_id: batch.id,
         version: nextVersion,
         kiln_width_cm_snapshot: currentLayout?.kiln_width_cm_snapshot ?? "60.000000",
@@ -213,7 +218,12 @@ function layoutMock(options: ScenarioOptions = {}) {
         kiln_height_cm_snapshot: currentLayout?.kiln_height_cm_snapshot ?? "80.000000",
         placed_quantity: body.placements.length,
         pending_quantity: 0,
-        levels: body.levels,
+        invalid_quantity: 0,
+        updated_at: "2026-09-23T00:00:00Z",
+        levels: (body.levels ?? []).map((lvl: KilnBatchLayoutLevelIn, idx: number) => ({
+          ...lvl,
+          id: idx + 101,
+        })),
         placements: body.placements.map((p: KilnBatchLayoutPlacementIn, idx: number) => ({
           ...p,
           id: idx + 1,
@@ -599,6 +609,7 @@ describe("KilnBatchLayoutPage: Mapa interactivo del horno (M4)", () => {
       ...MOCK_LAYOUT,
       levels: [
         {
+          id: 101,
           level_index: 0,
           name: "Piso 1 - Base",
           z_cm: "0.000000",
@@ -607,6 +618,7 @@ describe("KilnBatchLayoutPage: Mapa interactivo del horno (M4)", () => {
           plate_thickness_cm: null,
         },
         {
+          id: 102,
           level_index: 1,
           name: "Piso 2 - Bajo",
           z_cm: "26.000000",

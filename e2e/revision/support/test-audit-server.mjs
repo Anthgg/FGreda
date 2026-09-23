@@ -125,8 +125,12 @@ testServer.listen(TEST_PORT, TEST_HOST, async () => {
     // 11. Kiln layout GET
     const layoutGet = await makeRequest("/api/v1/kiln-batches/1/layout");
     assert.strictEqual(layoutGet.status, 200);
+    assert.strictEqual(layoutGet.body.layout_id, 10);
     assert.strictEqual(layoutGet.body.version, 1);
+    assert.strictEqual(layoutGet.body.invalid_quantity, 0);
+    assert.ok(layoutGet.body.updated_at);
     assert.ok(layoutGet.body.levels.length >= 1);
+    assert.strictEqual(layoutGet.body.levels[0].id, 101);
     console.log("  ✓ GET /api/v1/kiln-batches/1/layout");
 
     // 12. Kiln layout suggest
@@ -145,7 +149,10 @@ testServer.listen(TEST_PORT, TEST_HOST, async () => {
       },
     });
     assert.strictEqual(layoutPut.status, 200);
+    assert.strictEqual(layoutPut.body.layout_id, 10);
     assert.strictEqual(layoutPut.body.version, 2);
+    assert.strictEqual(layoutPut.body.invalid_quantity, 0);
+    assert.strictEqual(layoutPut.body.levels[0].id, 101);
     console.log("  ✓ PUT /api/v1/kiln-batches/1/layout");
 
     console.log("\n[TEST AUDIT SERVER PASS] Todos los 13 endpoints verificados correctamente.");

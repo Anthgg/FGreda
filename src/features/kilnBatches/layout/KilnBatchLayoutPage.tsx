@@ -680,14 +680,7 @@ export function KilnBatchLayoutPage() {
 
       {/* Selector de Niveles */}
       <KilnLevelSelector
-        levels={draftLevels.map((l) => ({
-          level_index: l.level_index,
-          name: l.name ?? null,
-          z_cm: l.z_cm,
-          usable_height_cm: l.usable_height_cm,
-          plate_label: l.plate_label ?? null,
-          plate_thickness_cm: l.plate_thickness_cm ?? null,
-        }))}
+        levels={draftLevels}
         selectedLevelIndex={selectedLevelIndex}
         placements={draftPlacements}
         isReadOnly={isReadOnly}
@@ -738,14 +731,7 @@ export function KilnBatchLayoutPage() {
           {selectedPlacement && dimensions.isValid && (
             <KilnSelectedPiecePanel
               placement={selectedPlacement}
-              levels={draftLevels.map((l) => ({
-                level_index: l.level_index,
-                name: l.name ?? null,
-                z_cm: l.z_cm,
-                usable_height_cm: l.usable_height_cm,
-                plate_label: l.plate_label ?? null,
-                plate_thickness_cm: l.plate_thickness_cm ?? null,
-              }))}
+              levels={draftLevels}
               currentLevelIndex={selectedLevelIndex}
               isReadOnly={isReadOnly}
               onRotate={handleRotatePlacement}
