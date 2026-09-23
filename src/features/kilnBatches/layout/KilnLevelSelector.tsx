@@ -32,35 +32,36 @@ export function KilnLevelSelector({
   const sortedLevels = [...levels].sort((a, b) => a.level_index - b.level_index);
 
   return (
-    <div
-      role="tablist"
-      aria-label="Niveles del horno"
-      className="flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-2"
-    >
+    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-2">
       <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mr-2">
         Niveles:
       </span>
-      {sortedLevels.map((level) => {
-        const isActive = level.level_index === currentActive;
-        const pieceCount = placements.filter((p) => p.level_index === level.level_index).length;
+      <div
+        role="tablist"
+        aria-label="Niveles del horno"
+        className="inline-flex flex-wrap items-center gap-2"
+      >
+        {sortedLevels.map((level) => {
+          const isActive = level.level_index === currentActive;
+          const pieceCount = placements.filter((p) => p.level_index === level.level_index).length;
 
-        return (
-          <div
-            key={level.level_index}
-            className={`group inline-flex items-center rounded-xl border transition-all text-xs ${
-              isActive
-                ? "border-zinc-900 bg-zinc-900 text-white shadow-xs"
-                : "border-zinc-200 bg-white/80 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50"
-            }`}
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              aria-label={`${level.name || `Nivel ${level.level_index + 1}`}, ${pieceCount} piezas`}
-              onClick={() => onSelectLevel(level.level_index)}
-              className="flex items-center gap-2 px-3 py-1.5 font-medium"
+          return (
+            <div
+              key={level.level_index}
+              role="presentation"
+              className={`group inline-flex items-center rounded-xl border transition-all text-xs ${
+                isActive
+                  ? "border-zinc-900 bg-zinc-900 text-white shadow-xs"
+                  : "border-zinc-200 bg-white/80 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50"
+              }`}
             >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => onSelectLevel(level.level_index)}
+                className="flex items-center gap-2 px-3 py-1.5 font-medium"
+              >
               <span>{level.name || `Nivel ${level.level_index + 1}`}</span>
               <span
                 className={`rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-bold ${
@@ -143,6 +144,7 @@ export function KilnLevelSelector({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

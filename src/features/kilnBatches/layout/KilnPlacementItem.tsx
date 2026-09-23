@@ -61,13 +61,12 @@ export function KilnPlacementItem({
   const inner_y = svg_y + fp.separation / 2;
 
   const orderKey = placement.orderLabel || placement.batch_assignment_id;
+  const orderText = placement.orderLabel || `#${placement.batch_assignment_id}`;
   const style = getOrderStyle(orderKey);
 
-  const ariaLabel = `${placement.productName || "Pieza"} ${fp.piece_x}×${fp.piece_y} cm, ${
-    placement.orderLabel || `Asignación #${placement.batch_assignment_id}`
-  }${placement.unit_index ? `, unidad ${placement.unit_index}` : ""}, x=${placement.x_cm}, y=${
-    placement.y_cm
-  }, rot=${placement.rotation_degrees}°`;
+  const ariaLabel = `${orderText}: ${placement.productName || "Pieza"} ${fp.piece_x}×${fp.piece_y} cm${
+    placement.unit_index ? `, unidad ${placement.unit_index}` : ""
+  }, x=${placement.x_cm}, y=${placement.y_cm}, rot=${placement.rotation_degrees}°`;
 
   // Colores y bordes según estado
   let outerStroke = "stroke-zinc-400/60";
