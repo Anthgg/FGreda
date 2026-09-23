@@ -7,6 +7,10 @@ import type {
   KilnBatchAssignmentCreateIn,
   KilnBatchCreateIn,
   KilnBatchFilters,
+  KilnBatchLayout,
+  KilnBatchLayoutSuggestIn,
+  KilnBatchLayoutSuggestion,
+  KilnBatchLayoutUpdateIn,
   KilnBatchPage,
   KilnBatchSuggestion,
 } from "@/types/kilnBatches";
@@ -47,4 +51,37 @@ export const fetchProductionBatchSuggestions = (
     `${KILN_BATCHES}/production-orders/${orderId}/batch-suggestions${toQuery({
       firing_type: firingType,
     })}`,
+  );
+
+export const fetchKilnBatchLayout = async (
+  batchId: number,
+): Promise<KilnBatchLayout | null> => {
+  try {
+    return await apiClient.get<KilnBatchLayout>(`${KILN_BATCHES}/${batchId}/layout`);
+  } catch (err: unknown) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "status" in err &&
+      (err as { status: number }).status === 404
+    ) {
+      return null;
+    }
+    throw err;
+  }
+};
+
+export const updateKilnBatchLayout = (
+  batchId: number,
+  payload: KilnBatchLayoutUpdateIn,
+): Promise<KilnBatchLayout> =>
+  apiClient.put<KilnBatchLayout>(`${KILN_BATCHES}/${batchId}/layout`, payload);
+
+export const suggestKilnBatchLayout = (
+  batchId: number,
+  payload?: KilnBatchLayoutSuggestIn,
+): Promise<KilnBatchLayoutSuggestion> =>
+  apiClient.post<KilnBatchLayoutSuggestion>(
+    `${KILN_BATCHES}/${batchId}/layout/suggest`,
+    payload ?? {},
   );

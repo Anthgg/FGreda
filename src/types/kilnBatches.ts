@@ -38,6 +38,17 @@ export interface KilnBatch {
   cancelled_at: string | null;
   cancel_reason: string | null;
   assignments: KilnBatchAssignment[];
+  kiln_width_cm_snapshot?: string | null;
+  kiln_depth_cm_snapshot?: string | null;
+  kiln_height_cm_snapshot?: string | null;
+  usable_width_cm?: string | null;
+  usable_depth_cm?: string | null;
+  usable_height_cm?: string | null;
+  kiln?: {
+    usable_width_cm?: string | null;
+    usable_depth_cm?: string | null;
+    usable_height_cm?: string | null;
+  } | null;
 }
 
 export interface KilnBatchPage {
@@ -118,4 +129,107 @@ export interface FiringPlan {
   open: boolean;
   lines: FiringPlanLine[];
   batches: KilnBatch[];
+}
+
+export interface KilnBatchLayoutLevel {
+  level_index: number;
+  name: string | null;
+  z_cm: string;
+  usable_height_cm: string;
+  plate_label: string | null;
+  plate_thickness_cm: string | null;
+}
+
+export interface KilnBatchLayoutPlacement {
+  id?: number;
+  batch_assignment_id: number;
+  group_index: number;
+  unit_index: number | null;
+  quantity: number;
+  level_index: number;
+  x_cm: string;
+  y_cm: string;
+  rotation_degrees: number;
+  piece_length_cm_snapshot: string;
+  piece_width_cm_snapshot: string;
+  piece_height_cm_snapshot: string;
+  separation_cm_snapshot: string;
+}
+
+export interface KilnBatchLayout {
+  id: number;
+  batch_id: number;
+  version: number;
+  kiln_width_cm_snapshot: string;
+  kiln_depth_cm_snapshot: string;
+  kiln_height_cm_snapshot: string;
+  placed_quantity: number;
+  pending_quantity: number;
+  levels: KilnBatchLayoutLevel[];
+  placements: KilnBatchLayoutPlacement[];
+}
+
+export interface KilnBatchLayoutLevelIn {
+  level_index: number;
+  name?: string | null;
+  z_cm: string;
+  usable_height_cm: string;
+  plate_label?: string | null;
+  plate_thickness_cm?: string | null;
+}
+
+export interface KilnBatchLayoutPlacementIn {
+  batch_assignment_id: number;
+  group_index: number;
+  unit_index?: number | null;
+  quantity: number;
+  level_index: number;
+  x_cm: string;
+  y_cm: string;
+  rotation_degrees: number;
+}
+
+export interface KilnBatchLayoutUpdateIn {
+  expected_version: number;
+  idempotency_key?: string | null;
+  levels: KilnBatchLayoutLevelIn[];
+  placements: KilnBatchLayoutPlacementIn[];
+}
+
+export interface KilnBatchLayoutSuggestIn {
+  expected_version?: number;
+  levels?: KilnBatchLayoutLevelIn[];
+}
+
+export interface SuggestedPlacement {
+  batch_assignment_id: number;
+  group_index: number;
+  unit_index: number;
+  quantity: number;
+  level_index: number;
+  x_cm: string;
+  y_cm: string;
+  rotation_degrees: number;
+  piece_length_cm_snapshot: string;
+  piece_width_cm_snapshot: string;
+  piece_height_cm_snapshot: string;
+  separation_cm_snapshot: string;
+}
+
+export interface UnplacedPiece {
+  batch_assignment_id: number;
+  unit_index: number;
+  quantity: number;
+  reason: string;
+}
+
+export interface KilnBatchLayoutSuggestion {
+  batch_id: number;
+  base_version: number;
+  total_pending: number;
+  suggested_count: number;
+  unplaced_count: number;
+  levels_used: number[];
+  suggested_placements: SuggestedPlacement[];
+  unplaced_pieces: UnplacedPiece[];
 }

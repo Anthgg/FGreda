@@ -289,6 +289,7 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   });
 
   it("vaciar una tarifa retira el acuerdo en vez de mandar un cero", async () => {
+    const user = userEvent.setup();
     const fetchMock = mockV2({
       firing: jsonResponse(200, {
         ...V2_FIRING,
@@ -300,8 +301,8 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
     renderApp(["/cotizador-v2/7/quema"]);
     const panel = await panelDeQuema();
     const campo = within(panel).getByLabelText(/gas baja/i);
-    await userEvent.clear(campo);
-    await userEvent.tab();
+    await user.clear(campo);
+    await user.tab();
 
     await waitFor(() => {
       const put = fetchMock.mock.calls.find(
@@ -316,11 +317,12 @@ describe("Quema de una cotización V2 (Fase 010E)", () => {
   });
 
   it("no manda nada mientras se escribe una tarifa", async () => {
+    const user = userEvent.setup();
     const fetchMock = mockV2();
 
     renderApp(["/cotizador-v2/7/quema"]);
     const panel = await panelDeQuema();
-    await userEvent.type(within(panel).getByLabelText(/gas baja/i), "5");
+    await user.type(within(panel).getByLabelText(/gas baja/i), "5");
 
     const puts = fetchMock.mock.calls.filter(
       ([, init]) => (init as RequestInit | undefined)?.method === "PUT",

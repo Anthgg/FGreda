@@ -35,6 +35,19 @@ function obligatoria(nombre: string): string {
   return valor;
 }
 
+// Fase 010M: kiln-layout-map.spec.ts intercepta todas las rutas de auth y API
+// en Playwright mediante mocks locales deterministas. Si se ejecuta específicamente
+// este spec y no se configuraron variables de entorno, se inyectan valores dummy
+// locales para permitir auditorías y ejecuciones autónomas sin secretos ni backend real.
+const isKilnLayoutOnly = process.argv.some((arg) => arg.includes("kiln-layout-map"));
+if (isKilnLayoutOnly) {
+  process.env.E2E_BASE_URL ||= "http://localhost:4173";
+  process.env.E2E_EMAIL ||= "audit-admin@example.invalid";
+  process.env.E2E_PASSWORD ||= "audit-local-only-password";
+  process.env.E2E_OPERATOR_EMAIL ||= "audit-operator@example.invalid";
+  process.env.E2E_OPERATOR_PASSWORD ||= "audit-local-only-password";
+}
+
 const baseURL = obligatoria("E2E_BASE_URL");
 const host = new URL(baseURL).hostname;
 if (!["localhost", "127.0.0.1"].includes(host)) {

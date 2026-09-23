@@ -7,15 +7,20 @@ import {
   createKilnBatch,
   fetchKilnBatch,
   fetchKilnBatches,
+  fetchKilnBatchLayout,
   fetchProductionBatchSuggestions,
   fetchProductionFiringPlan,
   startKilnBatch,
+  suggestKilnBatchLayout,
+  updateKilnBatchLayout,
 } from "@/api/kilnBatches";
 import type {
   FiringType,
   KilnBatchAssignmentCreateIn,
   KilnBatchCreateIn,
   KilnBatchFilters,
+  KilnBatchLayoutSuggestIn,
+  KilnBatchLayoutUpdateIn,
 } from "@/types/kilnBatches";
 
 export const KILN_BATCHES_KEY = ["kiln-batches"] as const;
@@ -93,5 +98,42 @@ export const useCancelKilnBatch = () => {
   return useMutation({
     mutationFn: ({ id, reason }: { id: number; reason?: string }) => cancelKilnBatch(id, reason),
     onSuccess: invalidate,
+  });
+};
+
+export const kilnBatchLayoutKey = (batchId: number) =>
+  [...kilnBatchKey(batchId), "layout"] as const;
+
+export const useKilnBatchLayout = (batchId: number | null) =>
+  useQuery({
+    queryKey: kilnBatchLayoutKey(batchId!),
+    queryFn: () => fetchKilnBatchLayout(batchId!),
+    enabled: batchId !== null && !Number.isNaN(batchId),
+    retry: (failureCount, error: unknown) => {
+      if (import.meta.env?.MODE === "test") return false;
+      // No reintentar si es 404 (el layout aún no existe) o 422 (falta dimensiones)
+      if (typeof error === "object" && error !== null && "status" in error) {
+        const status = (error as { status: number }).status;
+        if (status === 404 || status === 422) return false;
+      }
+      return failureCount < 2;
+    },
+  });
+
+export const useUpdateKilnBatchLayout = (batchId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: KilnBatchLayoutUpdateIn) => updateKilnBatchLayout(batchId, payload),
+    onSuccess: (data) => {
+      qc.setQueryData(kilnBatchLayoutKey(batchId), data);
+      void qc.invalidateQueries({ queryKey: kilnBatchKey(batchId) });
+      void qc.invalidateQueries({ queryKey: KILN_BATCHES_KEY });
+    },
+  });
+};
+
+export const useSuggestKilnBatchLayout = (batchId: number) => {
+  return useMutation({
+    mutationFn: (payload?: KilnBatchLayoutSuggestIn) => suggestKilnBatchLayout(batchId, payload),
   });
 };

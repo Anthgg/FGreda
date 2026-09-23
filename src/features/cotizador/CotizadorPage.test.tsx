@@ -675,7 +675,7 @@ describe("Cotizador integral", () => {
     await screen.findByRole("heading", { name: "Resumen de quema del lote" });
 
     // Costo total de la quema, tal cual lo devuelve el backend.
-    expect(screen.getByText("S/ 1190.00")).toBeInTheDocument();
+    expect(await screen.findByText("S/ 1190.00")).toBeInTheDocument();
     expect(screen.getByText("S/ 1404.20")).toBeInTheDocument();
     // Y se dice explicitamente que no pertenece a la ultima pieza.
     expect(screen.getByText(/costo total de la quema/i)).toBeInTheDocument();
