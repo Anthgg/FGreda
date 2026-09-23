@@ -1,14 +1,14 @@
-import type { KilnBatchLayoutLevel } from "@/types/kilnBatches";
+import type { KilnBatchLayoutLevel, KilnBatchLayoutLevelIn } from "@/types/kilnBatches";
 
 interface KilnLevelSelectorProps {
-  levels: KilnBatchLayoutLevel[];
+  levels: Array<KilnBatchLayoutLevelIn | KilnBatchLayoutLevel>;
   placements: Array<{ level_index: number }>;
   activeLevelIndex?: number;
   selectedLevelIndex?: number;
   isReadOnly: boolean;
   onSelectLevel: (levelIndex: number) => void;
   onAddLevel?: () => void;
-  onEditLevel?: (level: KilnBatchLayoutLevel) => void;
+  onEditLevel?: (level: KilnBatchLayoutLevelIn) => void;
   onDeleteLevel?: (levelIndex: number) => void;
 }
 

@@ -7,6 +7,7 @@ import type { KilnBatchLayoutLevel } from "@/types/kilnBatches";
 
 const MOCK_LEVELS: KilnBatchLayoutLevel[] = [
   {
+    id: 1,
     level_index: 0,
     name: "Piso 1 - Base",
     z_cm: "0.000000",
@@ -15,6 +16,7 @@ const MOCK_LEVELS: KilnBatchLayoutLevel[] = [
     plate_thickness_cm: "1.500000",
   },
   {
+    id: 2,
     level_index: 1,
     name: "Piso 2 - Superior",
     z_cm: "26.500000",

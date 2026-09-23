@@ -132,6 +132,7 @@ export interface FiringPlan {
 }
 
 export interface KilnBatchLayoutLevel {
+  id: number;
   level_index: number;
   name: string | null;
   z_cm: string;
@@ -141,7 +142,7 @@ export interface KilnBatchLayoutLevel {
 }
 
 export interface KilnBatchLayoutPlacement {
-  id?: number;
+  id: number;
   batch_assignment_id: number;
   group_index: number;
   unit_index: number | null;
@@ -157,16 +158,18 @@ export interface KilnBatchLayoutPlacement {
 }
 
 export interface KilnBatchLayout {
-  id: number;
   batch_id: number;
+  layout_id: number;
   version: number;
   kiln_width_cm_snapshot: string;
   kiln_depth_cm_snapshot: string;
   kiln_height_cm_snapshot: string;
   placed_quantity: number;
   pending_quantity: number;
+  invalid_quantity: number;
   levels: KilnBatchLayoutLevel[];
   placements: KilnBatchLayoutPlacement[];
+  updated_at: string;
 }
 
 export interface KilnBatchLayoutLevelIn {
@@ -204,7 +207,7 @@ export interface KilnBatchLayoutSuggestIn {
 export interface SuggestedPlacement {
   batch_assignment_id: number;
   group_index: number;
-  unit_index: number;
+  unit_index: number | null;
   quantity: number;
   level_index: number;
   x_cm: string;
@@ -218,7 +221,7 @@ export interface SuggestedPlacement {
 
 export interface UnplacedPiece {
   batch_assignment_id: number;
-  unit_index: number;
+  unit_index: number | null;
   quantity: number;
   reason: string;
 }

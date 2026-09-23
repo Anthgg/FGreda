@@ -64,7 +64,7 @@ const MOCK_BATCH = {
 };
 
 let currentLayout = {
-  id: 10,
+  layout_id: 10,
   batch_id: 1,
   version: 1,
   kiln_width_cm_snapshot: "60.000000",
@@ -72,8 +72,11 @@ let currentLayout = {
   kiln_height_cm_snapshot: "80.000000",
   placed_quantity: 1,
   pending_quantity: 2,
+  invalid_quantity: 0,
+  updated_at: "2026-09-23T00:00:00Z",
   levels: [
     {
+      id: 101,
       level_index: 0,
       name: "Piso 1 - Base",
       z_cm: "0.000000",
@@ -82,6 +85,7 @@ let currentLayout = {
       plate_thickness_cm: "1.500000",
     },
     {
+      id: 102,
       level_index: 1,
       name: "Piso 2 - Superior",
       z_cm: "26.500000",
@@ -268,7 +272,10 @@ function handleRequest(req, res) {
         currentLayout = {
           ...currentLayout,
           version: (body.expected_version ?? currentLayout.version) + 1,
-          levels: body.levels ?? currentLayout.levels,
+          levels: (body.levels ?? currentLayout.levels).map((lvl, idx) => ({
+            ...lvl,
+            id: lvl.id ?? idx + 101,
+          })),
           placements: (body.placements ?? []).map((p, idx) => ({
             ...p,
             id: p.id ?? idx + 1,
@@ -362,7 +369,7 @@ module.exports = {
   getLayout: () => currentLayout,
   resetLayout: () => {
     currentLayout = {
-      id: 10,
+      layout_id: 10,
       batch_id: 1,
       version: 1,
       kiln_width_cm_snapshot: "60.000000",
@@ -370,8 +377,11 @@ module.exports = {
       kiln_height_cm_snapshot: "80.000000",
       placed_quantity: 1,
       pending_quantity: 2,
+      invalid_quantity: 0,
+      updated_at: "2026-09-23T00:00:00Z",
       levels: [
         {
+          id: 101,
           level_index: 0,
           name: "Piso 1 - Base",
           z_cm: "0.000000",
@@ -380,6 +390,7 @@ module.exports = {
           plate_thickness_cm: "1.500000",
         },
         {
+          id: 102,
           level_index: 1,
           name: "Piso 2 - Superior",
           z_cm: "26.500000",

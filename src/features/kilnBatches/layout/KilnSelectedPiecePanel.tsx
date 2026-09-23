@@ -1,11 +1,11 @@
 import { ArrowPathIcon, TrashIcon, XMarkIcon } from "./layoutIcons";
 
-import type { KilnBatchLayoutLevel } from "../../../types/kilnBatches";
+import type { KilnBatchLayoutLevel, KilnBatchLayoutLevelIn } from "../../../types/kilnBatches";
 import type { DisplayPlacement } from "./KilnPlacementItem";
 
 interface KilnSelectedPiecePanelProps {
   placement: DisplayPlacement | null;
-  levels: KilnBatchLayoutLevel[];
+  levels: Array<KilnBatchLayoutLevelIn | KilnBatchLayoutLevel>;
   currentLevelIndex: number;
   isReadOnly: boolean;
   onRotate: (id: string | number) => void;
