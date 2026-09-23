@@ -8,7 +8,6 @@ import { CotizadorV2NextPage } from "@/features/cotizadorV2Next/CotizadorV2NextP
 import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
 import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
-import { NuevaQuemaPage } from "@/features/firings/NuevaQuemaPage";
 import { ImportsPage } from "@/features/imports/ImportsPage";
 import { InventoryPage } from "@/features/inventory/InventoryPage";
 import { KilnBatchesPage } from "@/features/kilnBatches/KilnBatchesPage";
@@ -26,7 +25,6 @@ import { PrototypesPage } from "@/features/prototypes/PrototypesPage";
 import { ProductsPage } from "@/features/masters/ProductsPage";
 import { DetalleCotizacionPage } from "@/features/quotations/DetalleCotizacionPage";
 import { EditarCotizacionPage } from "@/features/quotations/EditarCotizacionPage";
-import { NuevaCotizacionPage } from "@/features/quotations/NuevaCotizacionPage";
 import { QuotationsPage } from "@/features/quotations/QuotationsPage";
 import { RecipesPage } from "@/features/recipes/RecipesPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
@@ -89,11 +87,11 @@ export function AppRoutes() {
           <Route path="importaciones" element={<ImportsPage />} />
           <Route path="recetas" element={<RecipesPage />} />
           <Route path="quemas" element={<FiringsPage />} />
-          <Route path="quemas/nueva" element={<NuevaQuemaPage />} />
+          <Route path="quemas/nueva" element={<Navigate to="/solo-quema" replace />} />
           <Route path="quemas/:id" element={<DetalleQuemaPage />} />
           <Route path="quemas/:id/editar" element={<EditarQuemaPage />} />
           <Route path="cotizaciones" element={<QuotationsPage />} />
-          <Route path="cotizaciones/nueva" element={<NuevaCotizacionPage />} />
+          <Route path="cotizaciones/nueva" element={<Navigate to="/cotizador-v2" replace />} />
           <Route path="cotizaciones/:id" element={<DetalleCotizacionPage />} />
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
           <Route path="produccion" element={<ProductionOrdersPage />} />
@@ -128,7 +126,7 @@ export function AppRoutes() {
           <Route path="prototipos/:id/operacion" element={<LegacyPrototypeRedirect section="resumen" />} />
           <Route path="prototipos/:id/evaluacion" element={<LegacyPrototypeRedirect section="evaluacion" />} />
           <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
-          <Route path="cotizador/nuevo" element={<CotizadorPage />} />
+          <Route path="cotizador/nuevo" element={<Navigate to="/cotizador-v2" replace />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
           {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior. */}
           <Route path="cotizador-v2" element={<CotizadorV2Page />} />

@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 
 import { AppRoutes } from "@/routes/AppRoutes";
+import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import type { SessionUser } from "@/types/auth";
 
 export const TEST_USER: SessionUser = {
@@ -68,6 +69,32 @@ export function renderApp(initialEntries: string[] = ["/"]) {
     </QueryClientProvider>,
   );
 
+  return { ...view, queryClient };
+}
+
+export function renderTestRoutes(
+  routes: Array<{ path: string; element: ReactElement }>,
+  initialEntries: string[],
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route element={<ProtectedRoute />}>
+            {routes.map((route) => (
+              <Route key={route.path} path={route.path} element={route.element} />
+            ))}
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
   return { ...view, queryClient };
 }
 

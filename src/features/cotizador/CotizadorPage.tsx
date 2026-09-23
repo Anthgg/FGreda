@@ -23,7 +23,6 @@ import {
   useCotizador,
   useCotizadorPreview,
   useCreateCotizador,
-  useDuplicateCotizador,
   useMarkCotizadorPaid,
   useUpdateCotizador,
 } from "@/features/cotizador/useCotizador";
@@ -128,7 +127,6 @@ export function CotizadorPage() {
   const update = useUpdateCotizador(id ?? 0);
   const confirm = useConfirmCotizador();
   const cancel = useCancelCotizador();
-  const duplicate = useDuplicateCotizador();
   const markPaid = useMarkCotizadorPaid();
   const kilns = useKilns({ active: true, limit: 100 });
   const commercialSettings = useCommercialSettings();
@@ -226,8 +224,8 @@ export function CotizadorPage() {
   // El backend nombra el paso con su codigo interno; aqui se dice como se
   // llama en la pantalla.
   const nextStepLabel = describeNextStep(preview?.next_step);
-  const busy = create.isPending || update.isPending || confirm.isPending || cancel.isPending || duplicate.isPending;
-  const mutationError = create.error ?? update.error ?? confirm.error ?? cancel.error ?? duplicate.error;
+  const busy = create.isPending || update.isPending || confirm.isPending || cancel.isPending;
+  const mutationError = create.error ?? update.error ?? confirm.error ?? cancel.error;
   const sourceChanged = mutationError instanceof ApiError && mutationError.code === "QUOTATION_BUILDER_SOURCE_CHANGED";
 
   const changeDraft = (next: CotizadorDraft) => {
@@ -564,7 +562,6 @@ export function CotizadorPage() {
           {canEdit && status === "DRAFT" ? <PrimaryButton type="button" disabled={busy} onClick={() => save(false)}>{busy ? "Guardando…" : id ? "Guardar borrador" : "Crear borrador"}</PrimaryButton> : null}
           {canEdit && id && status !== "CANCELLED" ? <SecondaryButton disabled={busy} onClick={() => setConfirmCancel(true)}>Anular</SecondaryButton> : null}
           {canEdit && id && persisted && canMarkPaid(status, persisted.payment_status) ? <SecondaryButton disabled={busy} onClick={() => setConfirmPaid(true)}>Marcar como pagada</SecondaryButton> : null}
-          {canEdit && id && status !== "DRAFT" ? <SecondaryButton disabled={busy} onClick={() => duplicate.mutate(id, { onSuccess: (copy) => navigate(`/cotizador/${copy.id}`) })}>Duplicar</SecondaryButton> : null}
           {/* Fase 009I. No se consulta el estado de cobro: producir y cobrar
               son ejes distintos, y exigir el pago aqui pararia el taller por
               una gestion administrativa. */}

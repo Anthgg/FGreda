@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
 import { fetchQuotationPdf } from "@/api/quotations";
@@ -9,7 +9,6 @@ import { Badge } from "@/features/masters/MasterTable";
 import {
   useCancelQuotation,
   useConfirmQuotation,
-  useDuplicateQuotation,
   useUpdateQuotationProductPrice,
 } from "@/features/quotations/useQuotations";
 import { describeError } from "@/features/settings/messages";
@@ -60,17 +59,15 @@ function Metric({
 }
 
 export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; canEdit: boolean }) {
-  const navigate = useNavigate();
   const confirm = useConfirmQuotation();
   const cancel = useCancelQuotation();
-  const duplicate = useDuplicateQuotation();
   const updatePrice = useUpdateQuotationProductPrice();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmPrice, setConfirmPrice] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const stale = confirm.error instanceof ApiError && confirm.error.code === "SOURCE_CHANGED";
-  const busy = confirm.isPending || cancel.isPending || duplicate.isPending || updatePrice.isPending || downloadingPdf;
+  const busy = confirm.isPending || cancel.isPending || updatePrice.isPending || downloadingPdf;
 
   const handleDownloadPdf = async () => {
     try {
@@ -91,7 +88,7 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
     }
   };
 
-  const mutationError = confirm.error ?? cancel.error ?? duplicate.error ?? updatePrice.error;
+  const mutationError = confirm.error ?? cancel.error ?? updatePrice.error;
 
   return (
     <div className="space-y-6">
@@ -152,16 +149,6 @@ export function QuotationDetailPanel({ quote, canEdit }: { quote: QuotationOut; 
                   Anular
                 </SecondaryButton>
               ) : null}
-              <SecondaryButton
-                disabled={busy}
-                onClick={() =>
-                  duplicate.mutate(quote.id, {
-                    onSuccess: (copy) => navigate(copy.workflow === "COTIZADOR" ? `/cotizador/${copy.id}` : `/cotizaciones/${copy.id}`),
-                  })
-                }
-              >
-                Duplicar
-              </SecondaryButton>
               {quote.status === "CONFIRMED" ? (
                 <PrimaryButton disabled={busy} onClick={() => setConfirmPrice(true)}>
                   Actualizar precio

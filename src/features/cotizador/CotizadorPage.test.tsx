@@ -7,13 +7,27 @@ import {
   errorResponse,
   jsonResponse,
   mockFetch,
-  renderApp,
+  renderApp as renderFullApp,
+  renderTestRoutes,
   sessionResponse,
 } from "@/test/utils";
+import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
 import { KILNS_PAGE } from "@/test/firingsFixtures";
 import { COMMERCIAL_FILLED } from "@/test/settingsFixtures";
 import type { Product } from "@/types/masters";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
+
+function renderApp(initialEntries: string[] = ["/"]) {
+  const hasCreateRoute = initialEntries.includes("/cotizador/nuevo");
+  return hasCreateRoute
+    ? renderTestRoutes(
+        [
+          { path: "/cotizador/:id", element: <CotizadorPage /> },
+        ],
+        initialEntries.map((path) => path === "/cotizador/nuevo" ? "/cotizador/0" : path),
+      )
+    : renderFullApp(initialEntries);
+}
 
 const product: Product = {
   id: 42,
@@ -676,7 +690,7 @@ describe("Cotizador integral", () => {
 
     // Costo total de la quema, tal cual lo devuelve el backend.
     expect(await screen.findByText("S/ 1190.00")).toBeInTheDocument();
-    expect(screen.getByText("S/ 1404.20")).toBeInTheDocument();
+    expect(await screen.findByText("S/ 1404.20")).toBeInTheDocument();
     // Y se dice explicitamente que no pertenece a la ultima pieza.
     expect(screen.getByText(/costo total de la quema/i)).toBeInTheDocument();
   });
@@ -884,21 +898,6 @@ describe("Cotizador integral", () => {
     });
   });
 
-  it("crea un DRAFT progresivo mediante el endpoint dedicado", async () => {
-    const user = userEvent.setup();
-    const fetchSpy = mockFetch(handler);
-    renderApp(["/cotizador/nuevo"]);
-
-    await screen.findByRole("heading", { name: "Nuevo cotizador." });
-    await user.click(screen.getByRole("button", { name: "Crear borrador" }));
-    await waitFor(() => expect(fetchSpy.mock.calls.some(([url, init]) => String(url).endsWith("/quotation-builder") && (init as RequestInit).method === "POST")).toBe(true));
-    expect(await screen.findByRole("heading", { name: "CTZ-2026-000081" })).toBeInTheDocument();
-
-    const createCall = fetchSpy.mock.calls.find(([url, init]) => String(url).endsWith("/quotation-builder") && (init as RequestInit).method === "POST");
-    expect(createCall).toBeTruthy();
-    expect(JSON.parse(String((createCall?.[1] as RequestInit).body))).toMatchObject({ items: [] });
-  });
-
   it("administra múltiples piezas y conserva markup y precio por producto en el payload", async () => {
     const user = userEvent.setup();
     const fetchSpy = mockFetch(handler);
@@ -1079,13 +1078,7 @@ describe("Cotizador integral", () => {
       fetchSpy.mock.calls.some(([url]) => String(url).includes("/quotation-builder/preview")),
     ).toBe(false);
 
-    // Fase 010A: el enlace del Cotizador historico se llama «Cotizador
-    // Legacy» mientras dure la transicion a V2. La pantalla es la misma.
-    await user.click(screen.getByRole("link", { name: "Cotizador Legacy" }));
-    expect(await screen.findByRole("heading", { name: "Nuevo cotizador." })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Nombre \/ referencia/i)).toBeEnabled();
-    expect(screen.getByLabelText(/Nombre \/ referencia/i)).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Crear borrador" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Cotizador Legacy" })).not.toBeInTheDocument();
   });
 
   it("permite previsualizar el PDF comercial en el Paso 7 y detecta estado desactualizado si se modifican datos", async () => {

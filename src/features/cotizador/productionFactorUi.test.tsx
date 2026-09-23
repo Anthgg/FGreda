@@ -7,9 +7,11 @@ import {
   errorResponse,
   jsonResponse,
   mockFetch,
-  renderApp,
+  renderApp as renderFullApp,
+  renderTestRoutes,
   sessionResponse,
 } from "@/test/utils";
+import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
 import { COMMERCIAL_FILLED } from "@/test/settingsFixtures";
 import { KILNS_PAGE } from "@/test/firingsFixtures";
 import type { Product } from "@/types/masters";
@@ -62,6 +64,12 @@ const product: Product = {
 
 /** El factor de la casa, tal y como lo devuelve Configuracion en el fixture. */
 const FACTOR = String(COMMERCIAL_FILLED.production_factor_default);
+
+function renderApp(initialEntries: string[] = ["/"]) {
+  return initialEntries.includes("/cotizador/nuevo")
+    ? renderTestRoutes([{ path: "/cotizador/:id", element: <CotizadorPage /> }], initialEntries.map((path) => path === "/cotizador/nuevo" ? "/cotizador/0" : path))
+    : renderFullApp(initialEntries);
+}
 
 /**
  * Lo que el backend contestaria para una linea.

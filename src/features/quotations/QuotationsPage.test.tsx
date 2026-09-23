@@ -2,9 +2,17 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp, sessionResponse, TEST_USER } from "@/test/utils";
+import { csrfResponse, errorResponse, jsonResponse, mockFetch, renderApp as renderFullApp, renderTestRoutes, sessionResponse, TEST_USER } from "@/test/utils";
+import { NuevaCotizacionPage } from "@/features/quotations/NuevaCotizacionPage";
 import type { Product } from "@/types/masters";
 import type { QuotationOut } from "@/types/quotations";
+
+function renderApp(initialEntries: string[] = ["/"]) {
+  if (initialEntries.some((path) => path === "/cotizaciones/nueva")) {
+    return renderTestRoutes([{ path: "/cotizaciones/nueva", element: <NuevaCotizacionPage /> }], initialEntries);
+  }
+  return renderFullApp(initialEntries);
+}
 
 const finished: Product = {
   id: 42,
@@ -114,8 +122,8 @@ describe("pantallas de cotizaciones", () => {
 
     expect(await screen.findByRole("heading", { name: "Cotizaciones." })).toBeInTheDocument();
     expect(await screen.findByText(/no hay cotizaciones/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /cotización heredada/i })).toHaveAttribute("href", "/cotizaciones/nueva");
-    expect(screen.getByRole("link", { name: /abrir cotizador/i })).toHaveAttribute("href", "/cotizador/nuevo");
+    expect(screen.getByRole("link", { name: /nueva cotización v2/i })).toHaveAttribute("href", "/cotizador-v2");
+    expect(screen.queryByRole("link", { name: /heredada|abrir cotizador/i })).not.toBeInTheDocument();
     expect(container.querySelectorAll("select")).toHaveLength(0);
     expect(container.querySelectorAll('input[type="date"]')).toHaveLength(0);
     expect(container.firstElementChild?.querySelector(".w-full")).toBeInTheDocument();

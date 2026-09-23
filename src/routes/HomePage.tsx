@@ -326,7 +326,7 @@ export function HomePage() {
         </div>
 
         <Link
-          to="/cotizador/nuevo"
+          to="/cotizador-v2"
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-xs sm:text-sm font-medium text-white shadow-xs transition-all duration-150 hover:bg-zinc-800 active:scale-[0.98] shrink-0"
         >
           <PlusIcon className="size-4" />
@@ -703,7 +703,7 @@ export function HomePage() {
 
             <div className="mt-3.5 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-2.5">
               <Link
-                to="/cotizador/nuevo"
+                to="/cotizador-v2"
                 className="group flex flex-col items-center justify-center p-3 rounded-2xl bg-white/40 hover:bg-white/80 border border-white/50 shadow-2xs hover:shadow-xs transition-all duration-150 text-center"
               >
                 <div className="flex size-10 items-center justify-center rounded-xl bg-white/80 border border-white/60 text-zinc-800 group-hover:bg-black group-hover:text-white transition-colors mb-1.5 shadow-2xs">
@@ -756,4 +756,3 @@ export function HomePage() {
     </div>
   );
 }
-

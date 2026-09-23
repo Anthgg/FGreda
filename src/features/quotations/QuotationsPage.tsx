@@ -72,11 +72,8 @@ export function QuotationsPage() {
         </div>
         {isAdmin ? (
           <div className="flex flex-wrap gap-2">
-            <Link to="/cotizaciones/nueva" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 shadow-xs hover:bg-zinc-50">
-              Cotización heredada
-            </Link>
-            <Link to="/cotizador/nuevo" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-orange-700 px-5 text-sm font-medium text-white shadow-xs hover:bg-orange-800">
-              Abrir Cotizador
+            <Link to="/cotizador-v2" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-orange-700 px-5 text-sm font-medium text-white shadow-xs hover:bg-orange-800">
+              Nueva cotización V2
             </Link>
           </div>
         ) : null}

@@ -16,6 +16,11 @@ import {
   multiplyDecimalStrings,
 } from "@/features/firings/labels";
 import { aPayload, borradorVacio, nuevaLinea } from "@/features/firings/draft";
+import { NuevaQuemaPage } from "@/features/firings/NuevaQuemaPage";
+import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
+import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
+import { FiringsPage } from "@/features/firings/FiringsPage";
+import { SoloQuemaPage } from "@/features/soloQuema/SoloQuemaPage";
 import {
   CALCULO,
   CALCULO_EXCEDIDO,
@@ -32,10 +37,26 @@ import {
   errorResponse,
   jsonResponse,
   mockFetch,
-  renderApp,
+  renderApp as renderFullApp,
+  renderTestRoutes,
   sessionResponse,
   TEST_USER,
 } from "@/test/utils";
+
+function renderApp(initialEntries: string[] = ["/"]) {
+  return initialEntries.some((path) => path === "/quemas" || path === "/quemas/nueva")
+    ? renderTestRoutes(
+        [
+          { path: "/quemas", element: <FiringsPage /> },
+          { path: "/quemas/nueva", element: <NuevaQuemaPage /> },
+          { path: "/quemas/:id/editar", element: <EditarQuemaPage /> },
+          { path: "/quemas/:id", element: <DetalleQuemaPage /> },
+          { path: "/solo-quema", element: <SoloQuemaPage /> },
+        ],
+        initialEntries,
+      )
+    : renderFullApp(initialEntries);
+}
 
 interface Escenario {
   calculo?: typeof CALCULO;
@@ -166,12 +187,12 @@ describe("quemas: estructura de la pantalla", () => {
     expect(screen.getByRole("tab", { name: "Simulador" })).toBeInTheDocument();
   });
 
-  it("«Nueva quema» es una accion de la cabecera, no una cuarta pestaña", async () => {
+  it("Solo Quema V2 es una accion de la cabecera, no una cuarta pestaña", async () => {
     mockQuemas();
     renderApp(["/quemas"]);
 
     await screen.findByRole("tab", { name: "Listado" });
-    expect(screen.getByRole("link", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Abrir Solo Quema V2" })).toHaveAttribute("href", "/solo-quema");
     expect(screen.queryByRole("tab", { name: /nueva quema/i })).not.toBeInTheDocument();
   });
 
@@ -543,27 +564,22 @@ describe("quemas: permisos", () => {
     renderApp(["/quemas"]);
 
     expect(await screen.findByRole("button", { name: "Confirmar" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Nueva quema" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Abrir Solo Quema V2" })).toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 describe("quemas: nueva quema (/quemas/nueva)", () => {
-  it("navega a /quemas/nueva al hacer clic en 'Nueva quema' y NO renderiza un modal dialog", async () => {
+  it("abre Solo Quema V2 desde el historial, no el alta Legacy", async () => {
     mockQuemas();
     const user = userEvent.setup();
     renderApp(["/quemas"]);
 
-    await user.click(await screen.findByRole("link", { name: "Nueva quema" }));
+    await user.click(await screen.findByRole("link", { name: "Abrir Solo Quema V2" }));
 
-    // La nueva quema es una página real, no un modal dialog
-    expect(screen.queryByRole("dialog", { name: /nueva quema/i })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Nueva quema" })).toBeInTheDocument();
-    expect(screen.getByText("Borrador")).toBeInTheDocument();
-    expect(await screen.findByText("Sesiones de horno")).toBeInTheDocument();
-    expect(screen.getByText("Piezas")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /agregar pieza/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Nueva quema" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Solo quema." })).toBeInTheDocument();
   });
 
   it("no permite guardar una hoja incompleta", async () => {
