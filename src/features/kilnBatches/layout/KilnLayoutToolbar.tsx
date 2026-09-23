@@ -7,6 +7,7 @@ interface KilnLayoutToolbarProps {
   isSuggesting: boolean;
   hasLevels: boolean;
   hasValidDimensions: boolean;
+  isSuggestBlocked?: boolean;
   onSuggest: () => void;
   onSave: () => void;
   onReload: () => void;
@@ -20,11 +21,13 @@ export function KilnLayoutToolbar({
   isSuggesting,
   hasLevels,
   hasValidDimensions,
+  isSuggestBlocked,
   onSuggest,
   onSave,
   onReload,
   onAddLevel,
 }: KilnLayoutToolbarProps) {
+  const isBlocked = isSuggestBlocked ?? isDirty;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-3 shadow-xs">
       <div className="flex flex-wrap items-center gap-2">
@@ -33,7 +36,12 @@ export function KilnLayoutToolbar({
             <button
               type="button"
               onClick={onSuggest}
-              disabled={isSuggesting || isSaving || !hasLevels || !hasValidDimensions}
+              disabled={isSuggesting || isSaving || !hasLevels || !hasValidDimensions || isBlocked}
+              title={
+                isBlocked
+                  ? "Guarda o descarta tus cambios antes de generar una nueva sugerencia."
+                  : undefined
+              }
               className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-2xs hover:bg-purple-100 disabled:opacity-40"
             >
               {isSuggesting ? (

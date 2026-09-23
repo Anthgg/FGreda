@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ExclamationCircleIcon, XMarkIcon } from "./layoutIcons";
 
 import type { KilnBatchLayoutLevelIn } from "../../../types/kilnBatches";
@@ -33,6 +33,28 @@ export function KilnLevelModal({
     initialLevel?.plate_thickness_cm || "",
   );
   const [error, setError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        nameInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -117,6 +139,7 @@ export function KilnLevelModal({
               Nombre o descripción del nivel
             </label>
             <input
+              ref={nameInputRef}
               id="level-name"
               type="text"
               placeholder="p. ej. Nivel 1 - Base"

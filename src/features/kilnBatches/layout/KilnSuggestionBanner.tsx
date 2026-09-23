@@ -13,12 +13,14 @@ import type { KilnBatchLayoutSuggestion } from "../../../types/kilnBatches";
 
 interface KilnSuggestionBannerProps {
   suggestion: KilnBatchLayoutSuggestion;
+  isStale?: boolean;
   onApply: () => void;
   onDismiss: () => void;
 }
 
 export function KilnSuggestionBanner({
   suggestion,
+  isStale = false,
   onApply,
   onDismiss,
 }: KilnSuggestionBannerProps) {
@@ -41,32 +43,66 @@ export function KilnSuggestionBanner({
     <div
       role="region"
       aria-label="Vista previa de sugerencia de acomodo"
-      className="rounded-2xl border border-purple-300 bg-purple-50/80 p-4 shadow-sm"
+      className={`rounded-2xl border p-4 shadow-sm ${
+        isStale
+          ? "border-amber-300 bg-amber-50/90"
+          : "border-purple-300 bg-purple-50/80"
+      }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm">
-            <SparklesIcon className="h-6 w-6" />
+          <div
+            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${
+              isStale ? "bg-amber-600" : "bg-purple-600"
+            }`}
+          >
+            {isStale ? (
+              <ExclamationTriangleIcon className="h-6 w-6" />
+            ) : (
+              <SparklesIcon className="h-6 w-6" />
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-sm font-semibold text-purple-950">
-                Vista previa de acomodo automático sugerido
+              <h4
+                className={`text-sm font-semibold ${
+                  isStale ? "text-amber-950" : "text-purple-950"
+                }`}
+              >
+                {isStale
+                  ? "Sugerencia de acomodo desactualizada"
+                  : "Vista previa de acomodo automático sugerido"}
               </h4>
-              <span className="rounded-full bg-purple-200 px-2.5 py-0.5 text-xs font-semibold text-purple-800">
-                Borrador provisional
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  isStale
+                    ? "bg-amber-200 text-amber-900"
+                    : "bg-purple-200 text-purple-800"
+                }`}
+              >
+                {isStale ? "Versión obsoleta" : "Borrador provisional"}
               </span>
             </div>
-            <p className="mt-1 text-xs text-purple-800">
-              Se han sugerido acomodos para{" "}
-              <span className="font-bold text-purple-950">{suggestion.suggested_count}</span> de{" "}
-              <span className="font-bold text-purple-950">{suggestion.total_pending}</span> piezas
-              pendientes.
-              {suggestion.unplaced_count > 0 && (
-                <span className="ml-1 text-amber-700">
-                  ({suggestion.unplaced_count} piezas no pudieron ubicarse por restricciones de
-                  espacio o altura).
-                </span>
+            <p
+              className={`mt-1 text-xs ${
+                isStale ? "text-amber-900" : "text-purple-800"
+              }`}
+            >
+              {isStale ? (
+                "Esta sugerencia se basó en una versión anterior de la distribución. Descartar y generar una nueva."
+              ) : (
+                <>
+                  Se han sugerido acomodos para{" "}
+                  <span className="font-bold text-purple-950">{suggestion.suggested_count}</span> de{" "}
+                  <span className="font-bold text-purple-950">{suggestion.total_pending}</span> piezas
+                  pendientes.
+                  {suggestion.unplaced_count > 0 && (
+                    <span className="ml-1 text-amber-700">
+                      ({suggestion.unplaced_count} piezas no pudieron ubicarse por restricciones de
+                      espacio o altura).
+                    </span>
+                  )}
+                </>
               )}
             </p>
           </div>
@@ -74,7 +110,7 @@ export function KilnSuggestionBanner({
 
         {/* Botones de acción */}
         <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-          {suggestion.unplaced_count > 0 && (
+          {!isStale && suggestion.unplaced_count > 0 && (
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
@@ -95,16 +131,28 @@ export function KilnSuggestionBanner({
           <button
             type="button"
             onClick={onDismiss}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-white px-3 py-2 text-xs font-semibold text-purple-900 shadow-sm hover:bg-purple-50"
+            className={`inline-flex items-center gap-1.5 rounded-xl border bg-white px-3 py-2 text-xs font-semibold shadow-sm ${
+              isStale
+                ? "border-amber-300 text-amber-900 hover:bg-amber-50"
+                : "border-purple-300 text-purple-900 hover:bg-purple-50"
+            }`}
           >
-            <XMarkIcon className="h-4 w-4 text-purple-700" />
+            <XMarkIcon
+              className={`h-4 w-4 ${isStale ? "text-amber-700" : "text-purple-700"}`}
+            />
             Descartar
           </button>
 
           <button
             type="button"
             onClick={onApply}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
+            disabled={isStale}
+            title={
+              isStale
+                ? "Esta sugerencia está desactualizada. Genere una nueva sugerencia."
+                : undefined
+            }
+            className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckIcon className="h-4 w-4" />
             Aplicar al borrador
@@ -120,8 +168,11 @@ export function KilnSuggestionBanner({
             <span>Piezas que no entraron en el horno:</span>
           </div>
           <div className="mt-2 max-h-40 overflow-y-auto divide-y divide-zinc-100 text-xs text-zinc-700">
-            {suggestion.unplaced_pieces.map((up, idx) => (
-              <div key={idx} className="flex items-center justify-between py-1.5">
+            {suggestion.unplaced_pieces.map((up) => (
+              <div
+                key={`${up.batch_assignment_id}-${up.unit_index ?? 0}-${up.reason}`}
+                className="flex items-center justify-between py-1.5"
+              >
                 <div>
                   <span className="font-semibold text-zinc-900">
                     Asignación #{up.batch_assignment_id}

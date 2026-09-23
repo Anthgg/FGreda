@@ -18,6 +18,14 @@ interface KilnLayoutSvgProps {
   onUpdatePlacementPosition: (id: string | number, new_x_cm: string, new_y_cm: string) => void;
 }
 
+interface PrecomputedBox {
+  id: string | number;
+  left: number;
+  right: number;
+  bottom: number;
+  top: number;
+}
+
 interface DragState {
   placement: DisplayPlacement;
   pointerId: number;
@@ -27,6 +35,8 @@ interface DragState {
   origY_cm: number;
   currentX_cm: number;
   currentY_cm: number;
+  fp: { x_size: number; y_size: number; z_size: number; piece_x: number; piece_y: number; separation: number };
+  otherBoxes: PrecomputedBox[];
   isValid: boolean;
 }
 
@@ -69,7 +79,38 @@ export function KilnLayoutSvg({
     const origX = Number(placement.x_cm);
     const origY = Number(placement.y_cm);
 
-    // Solo iniciar estado de arrastre provisional; la captura de puntero se activa al mover
+    const fp = getReservedFootprint(
+      placement.piece_length_cm_snapshot,
+      placement.piece_width_cm_snapshot,
+      placement.piece_height_cm_snapshot,
+      placement.separation_cm_snapshot,
+      placement.rotation_degrees,
+    );
+
+    // Precalcular las cajas de las demás piezas del nivel una sola vez al inicio del arrastre
+    // Esto optimiza el rendimiento drásticamente para niveles con 100 a 500 piezas
+    const otherBoxes: PrecomputedBox[] = [];
+    for (let i = 0; i < placements.length; i++) {
+      const other = placements[i]!;
+      if (other.id === placement.id) continue;
+      const otherFp = getReservedFootprint(
+        other.piece_length_cm_snapshot,
+        other.piece_width_cm_snapshot,
+        other.piece_height_cm_snapshot,
+        other.separation_cm_snapshot,
+        other.rotation_degrees,
+      );
+      const otherX = Number(other.x_cm);
+      const otherY = Number(other.y_cm);
+      otherBoxes.push({
+        id: other.id!,
+        left: otherX,
+        right: otherX + otherFp.x_size,
+        bottom: otherY,
+        top: otherY + otherFp.y_size,
+      });
+    }
+
     setDragState({
       placement,
       pointerId: e.pointerId,
@@ -79,6 +120,8 @@ export function KilnLayoutSvg({
       origY_cm: origY,
       currentX_cm: origX,
       currentY_cm: origY,
+      fp,
+      otherBoxes,
       isValid: true,
     });
 
@@ -113,18 +156,12 @@ export function KilnLayoutSvg({
     const newX = Math.round(rawNewX * 100) / 100;
     const newY = Math.round(rawNewY * 100) / 100;
 
-    const fp = getReservedFootprint(
-      dragState.placement.piece_length_cm_snapshot,
-      dragState.placement.piece_width_cm_snapshot,
-      dragState.placement.piece_height_cm_snapshot,
-      dragState.placement.separation_cm_snapshot,
-      dragState.placement.rotation_degrees,
-    );
+    const fp = dragState.fp;
 
     // 1. Validar límites del horno
     const inBounds = checkPlacementBounds(newX, newY, fp.x_size, fp.y_size, kilnWidth, kilnDepth);
 
-    // 2. Validar colisión con las demás piezas en este nivel
+    // 2. Validar colisión contra cajas precalculadas O(n) con comparaciones numéricas directas
     let hasCollision = false;
     if (inBounds) {
       const movingBox = {
@@ -134,25 +171,8 @@ export function KilnLayoutSvg({
         top: newY + fp.y_size,
       };
 
-      for (const other of placements) {
-        if (other.id === dragState.placement.id) continue;
-        const otherFp = getReservedFootprint(
-          other.piece_length_cm_snapshot,
-          other.piece_width_cm_snapshot,
-          other.piece_height_cm_snapshot,
-          other.separation_cm_snapshot,
-          other.rotation_degrees,
-        );
-        const otherX = Number(other.x_cm);
-        const otherY = Number(other.y_cm);
-        const otherBox = {
-          left: otherX,
-          right: otherX + otherFp.x_size,
-          bottom: otherY,
-          top: otherY + otherFp.y_size,
-        };
-
-        if (checkCollision(movingBox, otherBox)) {
+      for (let i = 0; i < dragState.otherBoxes.length; i++) {
+        if (checkCollision(movingBox, dragState.otherBoxes[i]!)) {
           hasCollision = true;
           break;
         }
@@ -249,7 +269,9 @@ export function KilnLayoutSvg({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${kilnWidth} ${kilnDepth}`}
-        className="w-full h-auto max-h-[70vh] cursor-default touch-none"
+        className={`w-full h-auto max-h-[70vh] cursor-default ${
+          isReadOnly ? "touch-pan-y" : "touch-none"
+        }`}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}

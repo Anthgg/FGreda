@@ -446,7 +446,9 @@ describe("KilnBatchLayoutPage: Mapa interactivo del horno (M4)", () => {
     await user.click(saveBtn);
 
     // Abre el modal de conflicto
-    expect(await screen.findByRole("dialog", { name: /Conflicto de versión \(409\)/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", { name: /Distribución modificada|Conflicto de versión/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Recargar desde servidor/i })).toBeInTheDocument();
   });
 
@@ -731,4 +733,114 @@ describe("KilnBatchLayoutPage: Mapa interactivo del horno (M4)", () => {
     expect(screen.getByRole("button", { name: /añadir nivel/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /guardar distribución/i })).toBeDisabled();
   });
+
+  it("BLOQUEO SUGERIR CUANDO HAY CAMBIOS SIN GUARDAR (isDirty): deshabilita el botón con tooltip explicativo", async () => {
+    layoutMock();
+    const user = userEvent.setup();
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    await screen.findByText("KB-2026-000001");
+
+    const suggestBtn = screen.getByRole("button", { name: /sugerir acomodo/i });
+    expect(suggestBtn).toBeEnabled();
+
+    // Modificar borrador rotando una pieza
+    const pieceItem = await screen.findByRole("button", { name: /Taza de café/i });
+    await user.click(pieceItem);
+    const rotateBtn = screen.getByRole("button", { name: /Rotar 90°/i });
+    await user.click(rotateBtn);
+
+    // Ahora está sucio (isDirty) -> botón sugerir debe estar deshabilitado
+    expect(suggestBtn).toBeDisabled();
+    expect(suggestBtn).toHaveAttribute(
+      "title",
+      "Guarda o descarta tus cambios antes de generar una nueva sugerencia.",
+    );
+  });
+
+  it("RELOAD CON CAMBIOS SIN GUARDAR (isDirty): solicita confirmación con window.confirm antes de recargar", async () => {
+    layoutMock();
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm");
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    await screen.findByText("KB-2026-000001");
+
+    // Modificar borrador rotando una pieza
+    const pieceItem = await screen.findByRole("button", { name: /Taza de café/i });
+    await user.click(pieceItem);
+    const rotateBtn = screen.getByRole("button", { name: /Rotar 90°/i });
+    await user.click(rotateBtn);
+
+    expect(screen.getByText(/Cambios sin guardar/i)).toBeInTheDocument();
+
+    // Caso 1: Usuario cancela la confirmación
+    confirmSpy.mockReturnValueOnce(false);
+    const reloadBtn = screen.getByRole("button", { name: /recargar/i });
+    await user.click(reloadBtn);
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Tienes cambios sin guardar"),
+    );
+    // El borrador sigue sucio
+    expect(screen.getByText(/Cambios sin guardar/i)).toBeInTheDocument();
+
+    // Caso 2: Usuario acepta la confirmación
+    confirmSpy.mockReturnValueOnce(true);
+    await user.click(reloadBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Cambios sin guardar/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("SUGERENCIA OBSOLETA: muestra aviso de versión desfasada y bloquea el botón aplicar", async () => {
+    // Simulamos que la sugerencia proviene de la versión 0 pero el layout ya está en versión 1
+    const staleSuggestion: KilnBatchLayoutSuggestion = {
+      ...MOCK_SUGGESTION,
+      base_version: 0,
+    };
+    layoutMock({
+      suggestResponse: staleSuggestion,
+    });
+    const user = userEvent.setup();
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    await screen.findByText("KB-2026-000001");
+
+    const suggestBtn = screen.getByRole("button", { name: /sugerir acomodo/i });
+    await user.click(suggestBtn);
+
+    // Debe mostrarse el aviso de sugerencia desfasada
+    expect(
+      await screen.findByText(/Esta sugerencia se basó en una versión anterior de la distribución/i),
+    ).toBeInTheDocument();
+
+    // Botón "Aplicar al borrador" debe estar deshabilitado
+    const applyBtn = screen.getByRole("button", { name: /Aplicar al borrador/i });
+    expect(applyBtn).toBeDisabled();
+  });
+
+  it("ACCESIBILIDAD Y MODALES: el modal de nivel se cierra al presionar la tecla Escape", async () => {
+    layoutMock();
+    const user = userEvent.setup();
+    renderApp(["/produccion/hornadas/1/mapa"]);
+
+    await screen.findByText("KB-2026-000001");
+
+    // Abrir modal de nivel
+    const addLevelBtn = screen.getByRole("button", { name: /añadir nivel/i });
+    await user.click(addLevelBtn);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Añadir nuevo nivel")).toBeInTheDocument();
+
+    // Presionar Escape
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
 });
+

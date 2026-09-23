@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "./layoutIcons";
 
 interface KilnConflictModalProps {
@@ -11,6 +12,34 @@ export function KilnConflictModal({
   onReload,
   onClose,
 }: KilnConflictModalProps) {
+  const reloadButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElementRef.current = document.activeElement as HTMLElement | null;
+      // Enfocar acción principal
+      const timer = setTimeout(() => {
+        reloadButtonRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    } else if (previousActiveElementRef.current) {
+      previousActiveElementRef.current.focus();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -25,7 +54,7 @@ export function KilnConflictModal({
           <div className="flex items-center gap-2 text-amber-600">
             <ExclamationTriangleIcon className="h-6 w-6" />
             <h3 id="conflict-modal-title" className="text-base font-semibold text-zinc-900">
-              Conflicto de versión (409)
+              Distribución modificada en otra sesión
             </h3>
           </div>
           <button
@@ -40,12 +69,12 @@ export function KilnConflictModal({
 
         <div className="mt-4 space-y-2 text-xs text-zinc-600">
           <p>
-            La distribución física de esta hornada fue modificada por otro usuario o en otra sesión
-            mientras editabas este borrador.
+            La distribución física de esta hornada fue guardada con una versión más reciente
+            en otra sesión o por otro usuario mientras trabajabas en este borrador.
           </p>
           <p className="font-medium text-zinc-800">
-            Para evitar sobrescribir los cambios de otros usuarios, debes recargar la versión actual
-            del servidor.
+            Para evitar sobrescribir los cambios recientes, puedes recargar la versión actual del
+            servidor o cerrar esta ventana para revisar tu borrador local antes de decidir.
           </p>
         </div>
 
@@ -58,6 +87,7 @@ export function KilnConflictModal({
             Cerrar y revisar borrador
           </button>
           <button
+            ref={reloadButtonRef}
             type="button"
             onClick={onReload}
             className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-700"

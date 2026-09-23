@@ -120,7 +120,7 @@ export function KilnPendingPanel({ assignments, placements }: KilnPendingPanelPr
                   {/* Barra de progreso de colocación */}
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
                     <div
-                      className="h-full bg-zinc-700 transition-all"
+                      className="h-full bg-zinc-700 transition-[width] duration-300"
                       style={{
                         width: `${Math.min(100, Math.round((placed / asgn.quantity) * 100))}%`,
                       }}

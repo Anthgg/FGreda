@@ -345,9 +345,28 @@ export function KilnBatchLayoutPage() {
     }
   };
 
+  // Protección ante cierre o recarga del navegador con cambios sin guardar
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // Detección de sugerencia de auto-packing obsoleta si la versión del layout cambió
+  const isSuggestionStale = Boolean(
+    suggestion && layout && suggestion.base_version !== layout.version,
+  );
+
+  // Bloquear sugerir si el borrador está sucio respecto a lo persistido
+  const isSuggestBlocked = layout !== null ? isDirty : draftPlacements.length > 0 && isDirty;
+
   // Solicitar sugerencia de auto-packing M3
   const handleSuggest = async () => {
-    if (isReadOnly || !dimensions.isValid) return;
+    if (isReadOnly || !dimensions.isValid || isSuggestBlocked || suggestMutation.isPending) return;
     setLocalError(null);
     try {
       const expectedVersion = layout ? layout.version : 0;
@@ -397,7 +416,7 @@ export function KilnBatchLayoutPage() {
 
   // Aplicar sugerencia al borrador
   const handleApplySuggestion = () => {
-    if (!suggestion || !dimensions.isValid) return;
+    if (!suggestion || !dimensions.isValid || isSuggestionStale) return;
     // Marcar como piezas normales del borrador
     setDraftPlacements((prev) =>
       prev.map((p) => (p.isSuggested ? { ...p, isSuggested: false } : p)),
@@ -490,11 +509,20 @@ export function KilnBatchLayoutPage() {
     }
   };
 
-  // Recargar layout desde el servidor
+  // Recargar layout desde el servidor con confirmación si hay cambios sin guardar
   const handleReload = () => {
+    if (isDirty) {
+      const confirmed = window.confirm(
+        "Tienes cambios sin guardar en la distribución física. ¿Deseas recargar desde el servidor y descartar los cambios locales?",
+      );
+      if (!confirmed) return;
+    }
     void layoutQuery.refetch();
+    setSuggestion(null);
+    setIsDirty(false);
     setIsConflictModalOpen(false);
     setLocalError(null);
+    setSelectedPlacementId(null);
   };
 
   if (batchQuery.isPending || layoutQuery.isPending) {
@@ -556,6 +584,14 @@ export function KilnBatchLayoutPage() {
       <div className="flex items-center justify-between">
         <Link
           to="/produccion/hornadas"
+          onClick={(e) => {
+            if (
+              isDirty &&
+              !window.confirm("Tienes cambios sin guardar. ¿Deseas salir y descartar los cambios?")
+            ) {
+              e.preventDefault();
+            }
+          }}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-zinc-900"
         >
           <ArrowLeftIcon className="h-4 w-4" /> Volver a Hornadas
@@ -621,6 +657,7 @@ export function KilnBatchLayoutPage() {
         isSuggesting={suggestMutation.isPending}
         hasLevels={draftLevels.length > 0}
         hasValidDimensions={dimensions.isValid}
+        isSuggestBlocked={isSuggestBlocked}
         onSuggest={handleSuggest}
         onSave={handleSave}
         onReload={handleReload}
@@ -635,6 +672,7 @@ export function KilnBatchLayoutPage() {
       {suggestion && (
         <KilnSuggestionBanner
           suggestion={suggestion}
+          isStale={isSuggestionStale}
           onApply={handleApplySuggestion}
           onDismiss={handleDismissSuggestion}
         />

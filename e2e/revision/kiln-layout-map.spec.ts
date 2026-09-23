@@ -560,7 +560,9 @@ test.describe("Mapa interactivo de distribución física del horno (Fase 010M - 
     await saveBtn.click();
 
     // Abre el modal de conflicto
-    await expect(page.getByRole("dialog", { name: /conflicto de versión/i })).toBeVisible();
+    await expect(
+      page.getByRole("dialog", { name: /distribución modificada|conflicto de versión/i }),
+    ).toBeVisible();
     const reloadBtn = page.getByRole("button", { name: /recargar desde servidor/i });
     await expect(reloadBtn).toBeVisible();
   });
@@ -683,4 +685,112 @@ test.describe("Mapa interactivo de distribución física del horno (Fase 010M - 
     await expect(page.getByRole("button", { name: /añadir nivel/i })).toBeDisabled();
     await expect(page.getByRole("button", { name: /guardar distribución/i })).toBeDisabled();
   });
+
+  test("HARDENING: botón 'Sugerir acomodo' se deshabilita cuando el borrador tiene cambios sin guardar", async ({
+    page,
+  }) => {
+    await setupAuthRoutes(page);
+
+    await page.route("**/api/v1/kiln-batches/1", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_BATCH),
+      });
+    });
+
+    await page.route("**/api/v1/kiln-batches/1/layout", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_LAYOUT),
+      });
+    });
+
+    await login(page);
+    await page.goto("/produccion/hornadas/1/mapa");
+
+    const suggestBtn = page.getByRole("button", { name: /sugerir acomodo/i });
+    await expect(suggestBtn).toBeEnabled();
+
+    // Seleccionar y rotar una pieza para ensuciar el borrador
+    const piece = page.getByRole("button", { name: /taza de café/i }).first();
+    await piece.click();
+
+    const rotateBtn = page.getByRole("button", { name: /rotar 90°/i });
+    await rotateBtn.click();
+
+    // Debe mostrar badge de cambios sin guardar
+    await expect(page.getByText(/cambios sin guardar/i)).toBeVisible();
+
+    // El botón sugerir ahora debe estar deshabilitado con tooltip
+    await expect(suggestBtn).toBeDisabled();
+    await expect(suggestBtn).toHaveAttribute(
+      "title",
+      "Guarda o descarta tus cambios antes de generar una nueva sugerencia.",
+    );
+  });
+
+  test("HARDENING: recargar con cambios sin guardar solicita confirmación y descarta o cancela según decisión", async ({
+    page,
+  }) => {
+    await setupAuthRoutes(page);
+
+    await page.route("**/api/v1/kiln-batches/1", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_BATCH),
+      });
+    });
+
+    await page.route("**/api/v1/kiln-batches/1/layout", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_LAYOUT),
+      });
+    });
+
+    await login(page);
+    await page.goto("/produccion/hornadas/1/mapa");
+
+    // Seleccionar y rotar una pieza para ensuciar el borrador
+    const piece = page.getByRole("button", { name: /taza de café/i }).first();
+    await piece.click();
+
+    const rotateBtn = page.getByRole("button", { name: /rotar 90°/i });
+    await rotateBtn.click();
+
+    await expect(page.getByText(/cambios sin guardar/i)).toBeVisible();
+
+    // 1. Cancelar recarga
+    let dialogHandled = false;
+    page.once("dialog", async (dialog) => {
+      expect(dialog.message()).toContain("Tienes cambios sin guardar");
+      dialogHandled = true;
+      await dialog.dismiss();
+    });
+
+    const reloadBtn = page.getByRole("button", { name: /recargar/i });
+    await reloadBtn.click();
+    expect(dialogHandled).toBe(true);
+
+    // Los cambios siguen presentes
+    await expect(page.getByText(/cambios sin guardar/i)).toBeVisible();
+
+    // 2. Aceptar recarga
+    let reloadAccepted = false;
+    page.once("dialog", async (dialog) => {
+      reloadAccepted = true;
+      await dialog.accept();
+    });
+
+    await reloadBtn.click();
+    expect(reloadAccepted).toBe(true);
+
+    // Los cambios sin guardar ya no deben estar
+    await expect(page.getByText(/cambios sin guardar/i)).not.toBeVisible();
+  });
 });
+
