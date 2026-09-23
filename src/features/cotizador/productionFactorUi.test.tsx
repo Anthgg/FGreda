@@ -1,6 +1,6 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   csrfResponse,
@@ -14,6 +14,15 @@ import { COMMERCIAL_FILLED } from "@/test/settingsFixtures";
 import { KILNS_PAGE } from "@/test/firingsFixtures";
 import type { Product } from "@/types/masters";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
+
+// Fase 010J. Esta suite prueba el FORMULARIO Legacy, que sigue sirviendo para
+// terminar borradores existentes. La creación nueva está retirada en la app
+// (legacyCutover); aquí se enciende solo para poder montar el formulario.
+vi.mock("@/features/cotizador/legacyCutover", () => ({
+  CREACION_LEGACY_HABILITADA: true,
+  CreacionLegacyRetirada: () => null,
+}));
+
 
 /**
  * Fase 009K.4.1 — T01 a T23. El factor de produccion visto desde la pantalla.

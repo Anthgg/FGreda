@@ -27,6 +27,10 @@ import { ProductsPage } from "@/features/masters/ProductsPage";
 import { DetalleCotizacionPage } from "@/features/quotations/DetalleCotizacionPage";
 import { EditarCotizacionPage } from "@/features/quotations/EditarCotizacionPage";
 import { NuevaCotizacionPage } from "@/features/quotations/NuevaCotizacionPage";
+import {
+  CREACION_LEGACY_HABILITADA,
+  CreacionLegacyRetirada,
+} from "@/features/cotizador/legacyCutover";
 import { QuotationsPage } from "@/features/quotations/QuotationsPage";
 import { RecipesPage } from "@/features/recipes/RecipesPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
@@ -93,7 +97,11 @@ export function AppRoutes() {
           <Route path="quemas/:id" element={<DetalleQuemaPage />} />
           <Route path="quemas/:id/editar" element={<EditarQuemaPage />} />
           <Route path="cotizaciones" element={<QuotationsPage />} />
-          <Route path="cotizaciones/nueva" element={<NuevaCotizacionPage />} />
+          {/* Fase 010J: crear Legacy por las vías generales se retiró. */}
+          <Route
+            path="cotizaciones/nueva"
+            element={CREACION_LEGACY_HABILITADA ? <NuevaCotizacionPage /> : <CreacionLegacyRetirada />}
+          />
           <Route path="cotizaciones/:id" element={<DetalleCotizacionPage />} />
           <Route path="cotizaciones/:id/editar" element={<EditarCotizacionPage />} />
           <Route path="produccion" element={<ProductionOrdersPage />} />
@@ -128,7 +136,10 @@ export function AppRoutes() {
           <Route path="prototipos/:id/operacion" element={<LegacyPrototypeRedirect section="resumen" />} />
           <Route path="prototipos/:id/evaluacion" element={<LegacyPrototypeRedirect section="evaluacion" />} />
           <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
-          <Route path="cotizador/nuevo" element={<CotizadorPage />} />
+          <Route
+            path="cotizador/nuevo"
+            element={CREACION_LEGACY_HABILITADA ? <CotizadorPage /> : <CreacionLegacyRetirada />}
+          />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
           {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior. */}
           <Route path="cotizador-v2" element={<CotizadorV2Page />} />

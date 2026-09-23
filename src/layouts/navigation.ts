@@ -8,6 +8,8 @@
  * corresponde a fases posteriores y no se adelanta aqui.
  */
 
+import { CREACION_LEGACY_HABILITADA } from "@/features/cotizador/legacyCutover";
+
 export type NavigationIconKey =
   | "home"
   | "users"
@@ -44,24 +46,28 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/cotizador-v2",
     enabled: true,
     icon: "file-text",
-    description: "Motor nuevo del cotizador. En construcción por fases (familia 010).",
+    description: "El cotizador vigente: cotizar, emitir y enviar a producción.",
   },
+  // Fase 010J: el «Cotizador Legacy» llevaba a CREAR una cotización Legacy.
+  // Solo aparece si esa creación está encendida, que tras el corte no lo está.
+  ...(CREACION_LEGACY_HABILITADA
+    ? [
+        {
+          label: "Cotizador Legacy",
+          to: "/cotizador/nuevo",
+          enabled: true,
+          icon: "file-text" as const,
+          description: "Cotizador anterior.",
+        },
+      ]
+    : []),
   {
-    // Fase 010A: el Cotizador de siempre pasa a llamarse Legacy mientras dure
-    // la transicion. Sigue operativo y sus cotizaciones no se tocan; el nombre
-    // solo deja de ser ambiguo ahora que hay dos motores.
-    label: "Cotizador Legacy",
-    to: "/cotizador/nuevo",
-    enabled: true,
-    icon: "file-text",
-    description: "Cotizador histórico. Se mantiene durante la transición a V2.",
-  },
-  {
-    label: "Cotizaciones",
+    // Lo histórico se consulta desde aquí: abrir y ver el PDF.
+    label: "Cotizaciones Legacy",
     to: "/cotizaciones",
     enabled: true,
     icon: "file-text",
-    description: "Crear y administrar cotizaciones de piezas y pedidos.",
+    description: "Cotizaciones del cotizador anterior: consulta y PDF.",
   },
   {
     label: "Productos",
