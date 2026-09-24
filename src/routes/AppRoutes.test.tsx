@@ -78,23 +78,19 @@ describe("rutas protegidas y Dashboard", () => {
     expect(enlaces).toContain("/cotizaciones");
   });
 
-  it("Fase 010A: el menu distingue el Cotizador V2 del Cotizador Legacy", async () => {
+  it("muestra Cotizador V2 y conserva el historial sin entrada de creación Legacy", async () => {
     mockFetch(() => sessionResponse());
 
     renderApp(["/"]);
     await screen.findByRole("heading", { name: /inicio/i });
 
-    // Dos entradas, dos destinos. Que el historico se llame «Legacy» no es
-    // cosmetico: desde 010A hay dos motores y un menu que dijera «Cotizador» a
-    // secas obligaria a adivinar cual se esta abriendo.
     expect(screen.getByRole("link", { name: "Cotizador V2" })).toHaveAttribute(
       "href",
       "/cotizador-v2",
     );
-    expect(screen.getByRole("link", { name: "Cotizador Legacy" })).toHaveAttribute(
-      "href",
-      "/cotizador/nuevo",
-    );
+    expect(screen.getAllByRole("link", { name: "Cotizaciones" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Cotizaciones" }).every((link) => link.getAttribute("href") === "/cotizaciones")).toBe(true);
+    expect(screen.queryByRole("link", { name: "Cotizador Legacy" })).not.toBeInTheDocument();
   });
 
   it("Fase 010A: /cotizador-v2 abre el Cotizador V2 y no el historico", async () => {
@@ -216,7 +212,7 @@ describe("rutas protegidas y Dashboard", () => {
     expect(await screen.findByRole("heading", { name: /inicio/i })).toBeInTheDocument();
   });
 
-  it("renderiza la ruta dedicada de /quemas/nueva dentro de AppShell", async () => {
+  it("redirige la ruta directa de creación de quema a Solo Quema V2", async () => {
     mockFetch((url) => {
       if (url.includes("/auth/csrf")) return csrfResponse();
       if (url.includes("/auth/me")) return sessionResponse();
@@ -227,7 +223,19 @@ describe("rutas protegidas y Dashboard", () => {
 
     renderApp(["/quemas/nueva"]);
 
-    expect(await screen.findByRole("heading", { name: "Nueva quema" })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: /nueva quema/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /solo quema/i })).toBeInTheDocument();
   });
+
+  it.each(["/cotizador/nuevo", "/cotizaciones/nueva"])(
+    "redirige %s al Cotizador V2",
+    async (path) => {
+      mockFetch((url) =>
+        url.includes("/quotations-v2")
+          ? jsonResponse(200, { items: [], total: 0 })
+          : sessionResponse(),
+      );
+      renderApp([path]);
+      expect(await screen.findByRole("heading", { level: 1, name: /cotizador v2/i })).toBeInTheDocument();
+    },
+  );
 });

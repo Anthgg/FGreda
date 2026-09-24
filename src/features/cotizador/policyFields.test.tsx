@@ -7,13 +7,21 @@ import {
   errorResponse,
   jsonResponse,
   mockFetch,
-  renderApp,
+  renderApp as renderFullApp,
+  renderTestRoutes,
   sessionResponse,
 } from "@/test/utils";
+import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
 import { COMMERCIAL_FILLED } from "@/test/settingsFixtures";
 import { KILNS_PAGE } from "@/test/firingsFixtures";
 import type { Product } from "@/types/masters";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
+
+function renderApp(initialEntries: string[] = ["/"]) {
+  return initialEntries.includes("/cotizador/nuevo")
+    ? renderTestRoutes([{ path: "/cotizador/:id", element: <CotizadorPage /> }], initialEntries.map((path) => path === "/cotizador/nuevo" ? "/cotizador/0" : path))
+    : renderFullApp(initialEntries);
+}
 
 /**
  * Fase 009K.3 — las dos decisiones nuevas, vistas desde la pantalla.

@@ -86,10 +86,10 @@ export function FiringsPage() {
         </div>
         {isAdmin ? (
           <Link
-            to="/quemas/nueva"
+            to="/solo-quema"
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-black"
           >
-            Nueva quema
+            Abrir Solo Quema V2
           </Link>
         ) : null}
       </header>
