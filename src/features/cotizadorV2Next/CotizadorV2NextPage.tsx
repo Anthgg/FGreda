@@ -2,7 +2,7 @@ import { Navigate, useParams } from "react-router-dom";
 
 import { EmptyState } from "@/features/masters/MasterTable";
 import { PASOS, esPasoValido } from "@/features/cotizadorV2/pasos";
-import { V2NextQuotationList } from "@/features/cotizadorV2Next/V2NextQuotationList";
+import { V2NextQuotationList } from "@/features/cotizadorV2Next/list/V2NextQuotationList";
 import { RUTA_V2_NEXT } from "@/features/cotizadorV2Next/shell/rutas";
 import { V2NextWizard } from "@/features/cotizadorV2Next/shell/V2NextWizard";
 

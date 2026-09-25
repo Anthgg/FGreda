@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCreateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
@@ -21,9 +21,15 @@ export function V2CreateQuotationDialog({ onClose, onSuccess }: V2CreateQuotatio
   const create = useCreateV2Quotation();
   const contenedor = useDialogoAccesible<HTMLDivElement>(true);
 
+  // Guardia SÍNCRONA contra el doble envío. `create.isPending` es el valor del
+  // último render: un doble clic llega antes de que React vuelva a pintar y
+  // pasaba las dos veces, creando dos cotizaciones (lo cazó el E2E al integrar).
+  const enviando = useRef(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (create.isPending) return;
+    if (enviando.current || create.isPending) return;
+    enviando.current = true;
 
     create.mutate(
       {
@@ -34,6 +40,10 @@ export function V2CreateQuotationDialog({ onClose, onSuccess }: V2CreateQuotatio
       {
         onSuccess: (data) => {
           onSuccess(data.id, customerId !== null);
+        },
+        // Un error deja el diálogo abierto para reintentar.
+        onError: () => {
+          enviando.current = false;
         },
       }
     );

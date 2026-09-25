@@ -11,7 +11,7 @@ import { CotizadorV2NextPage } from "@/features/cotizadorV2Next/CotizadorV2NextP
  * rehacerse sin tocar esta prueba.
  */
 
-vi.mock("@/features/cotizadorV2Next/V2NextQuotationList", () => ({
+vi.mock("@/features/cotizadorV2Next/list/V2NextQuotationList", () => ({
   V2NextQuotationList: () => <p>listado</p>,
 }));
 

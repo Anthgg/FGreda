@@ -101,5 +101,20 @@ describe("V2CreateQuotationDialog", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(onSuccess).not.toHaveBeenCalled();
   });
-});
 
+  it("un doble clic en «Empezar cotización» manda UN solo POST", async () => {
+    // Integración de 010O.4: `isPending` es del render anterior y el segundo
+    // clic pasaba, creando dos cotizaciones.
+    let resolver: (valor: V2Quotation) => void = () => {};
+    vi.mocked(api.createV2Quotation).mockImplementation(
+      () => new Promise<V2Quotation>((resolve) => (resolver = resolve)),
+    );
+    renderWithProviders(<V2CreateQuotationDialog onClose={onClose} onSuccess={onSuccess} />);
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Empezar cotización" }));
+    resolver({ id: 7 } as V2Quotation);
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(7, false));
+    expect(api.createV2Quotation).toHaveBeenCalledTimes(1);
+  });
+});

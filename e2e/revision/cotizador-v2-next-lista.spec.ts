@@ -1,163 +1,131 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test.describe("Cotizador V2 Next - Lista y Alta", () => {
-  test.beforeEach(async ({ page }) => {
-    // 1. Interceptar el perfil
-    await page.route("**/users/me", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          user: { id: "1", email: "test@example.invalid", display_name: "Operador Test", role: "OPERATOR" },
-        }),
-      });
-    });
+import { COTIZACION, interceptarApi, vigilarConsola } from "./support/cotizadorV2NextMocks";
 
-    // 2. Interceptar el listado
-    await page.route("**/quotations-v2?limit=50", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          items: [
-            {
-              id: 7,
-              code: "V2-0007",
-              pricing_engine_version: "V2",
-              status: "DRAFT",
-              production_type: "RETAIL",
-              customer_name: "E2E Customer",
-              name: "E2E Test",
-              created_at: new Date().toISOString(),
-              effective_status: "DRAFT",
-              valid_until: null,
-            }
-          ],
-          total: 1
-        }),
-      });
-    });
-    
-    // 3. Interceptar POST para crear
-    await page.route("**/quotations-v2", async (route) => {
-      if (route.request().method() === "POST") {
-        await route.fulfill({
-          status: 201,
-          contentType: "application/json",
-          body: JSON.stringify({ id: 7 }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
+/**
+ * Listado y alta del Cotizador V2 rediseñado, en Chromium (010O.4).
+ *
+ * Con la API interceptada: sin backend ni credenciales. Lo que se protege en
+ * el navegador real: la búsqueda es LOCAL (el backend no acepta `q` y la
+ * ignoraría en silencio), el filtro manda `status`, el alta es UN POST y lleva
+ * al paso que toca, y nada desborda en un teléfono.
+ *
+ * Reescrito por el orquestador al integrar: la versión original interceptaba
+ * `/users/me`, que no es la ruta de sesión de la aplicación.
+ */
 
-    // 4. Interceptar GET para el shell después de crear
-    await page.route("**/quotations-v2/7", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: 7,
-          code: "V2-0007",
-          pricing_engine_version: "V2",
-          status: "DRAFT",
-          production_type: "RETAIL",
-          customer_id: null,
-          customer_name: null,
-          name: "E2E Test",
-          notes: null,
-          customer_kind: "EXTERNAL",
-          tax_percent: "18.00",
-          currency_code: "PEN",
-          currency_symbol: "S/",
-          exchange_rate: "1.000",
-          validity_days: 15,
-          workday_hours: "8.00",
-          space_service_cost_per_day: "50.00",
-          administrative_cost: "10.00",
-          commercial_factor: "2.0",
-          commercial_factor_min: "1.5",
-          commercial_factor_max: "3.0",
-          low_fire_enabled: true,
-          high_fire_enabled: true,
-          settings_version: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          client_notes: null,
-          effective_status: "DRAFT",
-          issued_at: null,
-          valid_until: null,
-          expires_at: null,
-          issued_by_name: null,
-          cancelled_at: null,
-          cancelled_by_name: null,
-          cancel_reason: null,
-          duplicated_from_id: null,
-          open_duplicate_id: null,
-          production_handoff: null,
-        }),
-      });
-    });
-    
-    // 5. Interceptar bloqueos
-    await page.route("**/quotations-v2/7/confirmation-preview", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          quotation_id: 7,
-          code: "V2-0007",
-          status: "DRAFT",
-          effective_status: "DRAFT",
-          can_confirm: false,
-          blockers: [{ code: "MISSING_CUSTOMER", line_id: null }],
-          warnings: [],
-          fingerprint: "hash",
-          name: "E2E Test",
-          client_notes: null,
-          currency_code: "PEN",
-          currency_symbol: "S/",
-          exchange_rate: "1.000",
-          tax_percent: "18.00",
-          commercial_factor: "2.0",
-          validity_days: 15,
-          valid_until: null,
-          subtotal_amount: "0.00",
-          tax_amount: "0.00",
-          total_amount: "0.00",
-          lines: [],
-        }),
-      });
-    });
+function fila(id: number, cambios: Record<string, unknown> = {}) {
+  return {
+    id,
+    code: `CTZ-V2-2026-00000${id}`,
+    pricing_engine_version: "V2",
+    status: "DRAFT",
+    production_type: "RETAIL",
+    customer_name: "Cliente",
+    name: "Pedido",
+    created_at: "2026-09-20T10:00:00Z",
+    effective_status: "DRAFT",
+    valid_until: null,
+    ...cambios,
+  };
+}
+
+const FILAS = [
+  fila(7, { customer_name: "Café Tostado Norte", name: "Tazas para barra" }),
+  fila(8, { customer_name: "Hotel Mirador", name: "Vajilla restaurante", effective_status: "EXPIRED" }),
+  fila(9, { customer_name: null, name: null }),
+];
+
+const NUEVA = { ...COTIZACION, customer_id: null, customer_name: null, name: "Feria de octubre" };
+
+async function preparar(page: Page) {
+  const pedidas: string[] = [];
+  page.on("request", (peticion) => {
+    if (peticion.url().includes("/api/v1/quotations-v2")) pedidas.push(peticion.url());
   });
+  const escrituras = await interceptarApi(page, (ruta, metodo) => {
+    if (ruta.endsWith("/api/v1/quotations-v2") && metodo === "GET") {
+      return { items: FILAS, total: FILAS.length };
+    }
+    if (ruta.endsWith("/api/v1/quotations-v2") && metodo === "POST") return NUEVA;
+    if (ruta.endsWith("/quotations-v2/7")) return NUEVA;
+    return undefined;
+  });
+  return { pedidas, escrituras };
+}
 
-  test("flujo completo de creación de cotización", async ({ page }) => {
+function desbordeDelMain(page: Page) {
+  return page.evaluate(() => {
+    const principal = document.querySelector("main") as HTMLElement;
+    return principal.scrollWidth - principal.clientWidth;
+  });
+}
+
+test.describe("Listado y alta del rediseño (010O.4)", () => {
+  test("buscar filtra en local y NUNCA manda q; el filtro manda status", async ({ page }) => {
+    const errores = vigilarConsola(page);
+    const { pedidas } = await preparar(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/cotizador-v2-next");
 
-    // 1. Validar que la tabla se pintó y hay un registro
-    await expect(page.getByRole("heading", { name: "Cotizaciones" })).toBeVisible();
-    await expect(page.getByText("E2E Customer")).toBeVisible();
-    await expect(page.getByText("V2-0007")).toBeVisible();
+    await expect(page.getByText("Café Tostado Norte")).toBeVisible();
+    await page.getByPlaceholder("Buscar por cliente, nombre o código").fill("vajilla");
+    await expect(page.getByText("Hotel Mirador")).toBeVisible();
+    await expect(page.getByText("Café Tostado Norte")).toHaveCount(0);
 
-    // 2. Abrir diálogo de alta
+    await page.getByRole("radio", { name: /Emitidas/ }).click();
+    await expect.poll(() => pedidas.some((url) => url.includes("status=CONFIRMED"))).toBe(true);
+    expect(pedidas.some((url) => /[?&]q=/.test(url))).toBe(false);
+    expect(errores).toEqual([]);
+  });
+
+  test("cada fila tiene un solo enlace, a la cotización", async ({ page }) => {
+    await preparar(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/cotizador-v2-next");
+
+    const fila = page.getByRole("row", { name: /Café Tostado Norte/ });
+    await expect(fila.getByRole("link")).toHaveCount(1);
+    await expect(fila.getByRole("link")).toHaveAttribute("href", "/cotizador-v2-next/7");
+    await expect(fila.getByTestId("v2-estado-efectivo")).toHaveText(/Borrador/);
+  });
+
+  test("el alta es UN POST y, sin cliente, lleva al paso Cliente", async ({ page }) => {
+    const errores = vigilarConsola(page);
+    const { escrituras } = await preparar(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/cotizador-v2-next");
+
     await page.getByRole("button", { name: "Nueva cotización" }).click();
-    const dialog = page.getByRole("dialog", { name: "Nueva cotización" });
-    await expect(dialog).toBeVisible();
+    const dialogo = page.getByRole("dialog", { name: "Nueva cotización" });
+    await expect(dialogo).toBeVisible();
+    await dialogo.getByLabel(/Ponle un nombre/).fill("Feria de octubre");
+    await dialogo.getByRole("button", { name: "Empezar cotización" }).dblclick();
 
-    // 3. Escribir nombre de pedido y enviar
-    await dialog.getByLabel("Ponle un nombre (opcional)").fill("E2E Test");
-    
-    // Validar visualmente que no haya desbordamiento horizontal
-    const viewportSize = page.viewportSize();
-    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-    expect(scrollWidth).toBeLessThanOrEqual(viewportSize!.width);
+    await expect(page).toHaveURL(/\/cotizador-v2-next\/7\/cliente$/);
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Cliente", exact: true }),
+    ).toBeVisible();
+    const altas = escrituras.filter((e) => e.metodo === "POST" && e.ruta.endsWith("/quotations-v2"));
+    expect(altas).toEqual([
+      {
+        metodo: "POST",
+        ruta: "/api/v1/quotations-v2",
+        cuerpo: { name: "Feria de octubre", customer_id: null, production_type: "RETAIL" },
+      },
+    ]);
+    expect(errores).toEqual([]);
+  });
 
-    await dialog.getByRole("button", { name: "Empezar cotización" }).click();
+  test("a 375 px ni el listado ni el diálogo desbordan la página", async ({ page }) => {
+    await preparar(page);
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/cotizador-v2-next");
+    await expect(page.getByText("Café Tostado Norte")).toBeVisible();
+    expect(await desbordeDelMain(page)).toBeLessThanOrEqual(0);
 
-    // 4. Validar navegación (al shell paso "Cliente")
-    await expect(page).toHaveURL(/\/cotizador-v2-next\/7\/cliente/);
-    await expect(page.getByRole("heading", { name: "Paso 1 de 7" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Cliente" })).toBeVisible();
+    await page.getByRole("button", { name: "Nueva cotización" }).click();
+    await expect(page.getByRole("dialog", { name: "Nueva cotización" })).toBeVisible();
+    expect(await desbordeDelMain(page)).toBeLessThanOrEqual(0);
   });
 });

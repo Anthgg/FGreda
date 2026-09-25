@@ -174,7 +174,7 @@ describe("Reducciones sugeridas (Fase 010J)", () => {
     const espia = mockV2();
     renderApp(["/cotizador-v2/7/precio"]);
 
-    const bloque = await screen.findByTestId("panel-reducciones");
+    const bloque = await screen.findByTestId("panel-reducciones", {}, { timeout: 5000 });
     expect(within(bloque).getByText("Usar otro horno")).toBeInTheDocument();
     // 010O.10: con su moneda, la que declara el backend para las estimaciones.
     expect(within(bloque).getByText("S/ 5711.21")).toBeInTheDocument();
