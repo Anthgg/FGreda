@@ -12,7 +12,11 @@ import {
   alcanceDeGuardado,
   invalidarCotizacion,
   QUOTER_V2_KEY,
+  V2_PREVIEW_KEY,
 } from "@/features/cotizadorV2/claves";
+
+// Desde 010O.3 la clave vive en `claves.ts`, que la invalida tras cada guardado.
+export { V2_PREVIEW_KEY } from "@/features/cotizadorV2/claves";
 
 /**
  * Emitir, anular, duplicar y pasar a producción. Fase 010H.
@@ -32,7 +36,6 @@ import {
  * que el diálogo convierte en «revise los valores actualizados».
  */
 
-export const V2_PREVIEW_KEY = ["quoter-v2", "confirmation-preview"] as const;
 export const V2_HISTORY_KEY = ["quoter-v2", "history"] as const;
 
 export const useV2ConfirmationPreview = (id: number, enabled: boolean) =>

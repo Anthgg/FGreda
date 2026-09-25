@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { V2NextClientStep } from "@/features/cotizadorV2Next/steps/V2NextClientStep";
+import { V2NextMaterialsStep } from "@/features/cotizadorV2Next/steps/V2NextMaterialsStep";
 import { COTIZACION } from "@/test/v2next/shellFixtures";
 
 /**
@@ -9,8 +9,8 @@ import { COTIZACION } from "@/test/v2next/shellFixtures";
  * props del shell. Quien reescriba el paso sustituye también esta prueba.
  */
 
-vi.mock("@/features/cotizadorV2/V2ClienteStep", () => ({
-  V2ClienteStep: (props: Record<string, unknown>) => (
+vi.mock("@/features/cotizadorV2/V2ProductLines", () => ({
+  V2ProductLines: (props: Record<string, unknown>) => (
     <p data-testid="panel-anterior">{JSON.stringify(props, (clave, valor) => (clave === "cotizacion" ? (valor as { id: number }).id : typeof valor === "function" ? "fn" : valor))}</p>
   ),
 }));
@@ -29,16 +29,9 @@ const PROPS = {
   irAPaso: () => {},
 };
 
-describe("V2NextClientStep (interino)", () => {
+describe("V2NextMaterialsStep (interino)", () => {
   it("pinta el panel del asistente anterior con las props del shell", () => {
-    render(<V2NextClientStep {...PROPS} />);
-    expect(JSON.parse(screen.getByTestId("panel-anterior").textContent ?? "{}")).toEqual({ cotizacion: 7, canEdit: true });
-  });
-
-  it("sin la cotización todavía no pinta nada", () => {
-    const { container } = render(
-      <V2NextClientStep {...PROPS} datos={{ ...PROPS.datos, cotizacion: undefined }} />,
-    );
-    expect(container).toBeEmptyDOMElement();
+    render(<V2NextMaterialsStep {...PROPS} />);
+    expect(JSON.parse(screen.getByTestId("panel-anterior").textContent ?? "{}")).toEqual({ quotationId: 7, canEdit: true, vista: "materiales" });
   });
 });
