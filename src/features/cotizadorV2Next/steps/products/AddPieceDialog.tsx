@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { ProductSelectField } from "@/components/ProductSelectField";
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
 import { useAddV2QuotationProduct } from "@/features/cotizadorV2/useQuoterV2Materials";
+import { SecondaryButton } from "@/components/form";
+import { describeError } from "@/features/settings/messages";
 
 export function AddPieceDialog({
   quotationId,
@@ -22,19 +24,21 @@ export function AddPieceDialog({
     onClose();
   };
 
+  const enfocarCantidadNueva = () => {
+    setTimeout(() => {
+      const inputs = document.querySelectorAll<HTMLInputElement>('input[aria-label="Cantidad"]');
+      inputs[inputs.length - 1]?.focus();
+      inputs[inputs.length - 1]?.select();
+    }, 100);
+  };
+
   const handleSelect = (productId: number) => {
     anadir.mutate(
       { product_id: productId, quantity: 1 },
       {
         onSuccess: () => {
           handleClose();
-          setTimeout(() => {
-            const inputs = document.querySelectorAll<HTMLInputElement>('input[aria-label="Cantidad"]');
-            if (inputs.length > 0) {
-              inputs[inputs.length - 1]?.focus();
-              inputs[inputs.length - 1]?.select();
-            }
-          }, 100);
+          enfocarCantidadNueva();
         },
       },
     );
@@ -46,13 +50,7 @@ export function AddPieceDialog({
       {
         onSuccess: () => {
           handleClose();
-          setTimeout(() => {
-            const inputs = document.querySelectorAll<HTMLInputElement>('input[aria-label="Cantidad"]');
-            if (inputs.length > 0) {
-              inputs[inputs.length - 1]?.focus();
-              inputs[inputs.length - 1]?.select();
-            }
-          }, 100);
+          enfocarCantidadNueva();
         },
       },
     );
@@ -68,7 +66,7 @@ export function AddPieceDialog({
         onKeyDown={(e) => {
           if (e.key === "Escape") handleClose();
         }}
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        className="glass-panel w-full max-w-md rounded-2xl p-6 shadow-xl"
         tabIndex={-1}
       >
         <h2 id="add-piece-title" className="mb-4 text-lg font-medium text-zinc-900">
@@ -80,20 +78,23 @@ export function AddPieceDialog({
           value=""
           onChange={(val) => handleSelect(Number(val))}
           productType="FINISHED_PRODUCT"
+          disabled={anadir.isPending}
           allowCreate
           createLabel={(texto) => `Pieza a medida «${texto}»`}
           onCreateRequested={handleCreate}
           searchPlaceholder="Busca o escribe el nombre..."
         />
 
+        {anadir.isError ? (
+          <p role="alert" className="mt-4 text-sm text-red-700">
+            {describeError(anadir.error)}
+          </p>
+        ) : null}
+
         <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100"
-          >
+          <SecondaryButton type="button" onClick={handleClose} disabled={anadir.isPending}>
             Cancelar
-          </button>
+          </SecondaryButton>
         </div>
       </div>
     </div>,

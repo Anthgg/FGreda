@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
@@ -6,7 +6,25 @@ import { DecimalField } from "@/components/DecimalField";
 import { DeferredTextField } from "@/components/DeferredTextField";
 import { QuantityStepper } from "./QuantityStepper";
 import { formatDecimalString } from "@/features/firings/labels";
-import { WARNING_LABEL, type V2QuotationProduct } from "@/types/quoterV2Materials";
+import {
+  WARNING_LABEL,
+  type V2QuotationProduct,
+  type V2QuotationProductInput,
+} from "@/types/quoterV2Materials";
+import { PrimaryButton, SecondaryButton } from "@/components/form";
+
+const AVISO_GENERICO = "Hay un aviso pendiente de revisar en esta pieza.";
+
+function textoDeAviso(codigo: string): string {
+  return WARNING_LABEL[codigo] ?? AVISO_GENERICO;
+}
+
+function formatearLitros(valorCm3: string | null | undefined): string {
+  if (!valorCm3) return "—";
+  const litros = Number(valorCm3) / 1000;
+  if (!Number.isFinite(litros)) return "—";
+  return formatDecimalString(String(litros), 2);
+}
 
 export function PieceCard({
   linea,
@@ -16,10 +34,11 @@ export function PieceCard({
 }: {
   linea: V2QuotationProduct;
   canEdit: boolean;
-  onUpdate: (payload: Record<string, unknown>) => void;
+  onUpdate: (payload: V2QuotationProductInput) => void;
   onDelete: () => void;
 }) {
   const [showDelete, setShowDelete] = useState(false);
+  const cantidadId = useId();
 
   const isCatalog = linea.product_id !== null;
 
@@ -30,12 +49,8 @@ export function PieceCard({
     </div>
   );
 
-  const totalVolLiters = linea.total_volume_cm3
-    ? formatDecimalString(String(Number(linea.total_volume_cm3) / 1000), 2)
-    : "—";
-  const unitVolLiters = linea.unit_volume_cm3
-    ? formatDecimalString(String(Number(linea.unit_volume_cm3) / 1000), 2)
-    : "—";
+  const totalVolLiters = formatearLitros(linea.total_volume_cm3);
+  const unitVolLiters = formatearLitros(linea.unit_volume_cm3);
   const occPercent = linea.firing_occupancy_percent
     ? formatDecimalString(linea.firing_occupancy_percent, 2)
     : "—";
@@ -52,7 +67,7 @@ export function PieceCard({
           <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
             <ul className="list-inside list-disc">
               {linea.warnings.map((w, i) => (
-                <li key={i}>{WARNING_LABEL[w as keyof typeof WARNING_LABEL] ?? w}</li>
+                <li key={i}>{textoDeAviso(w)}</li>
               ))}
             </ul>
           </div>
@@ -98,7 +113,8 @@ export function PieceCard({
         <button
           type="button"
           onClick={() => setShowDelete(true)}
-          className="rounded-lg px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600"
+          aria-label={`Quitar ${linea.product_name ?? "pieza sin nombre"}`}
+          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-700 transition-all hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600"
         >
           Quitar
         </button>
@@ -108,7 +124,7 @@ export function PieceCard({
         <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
           <ul className="list-inside list-disc">
             {linea.warnings.map((w, i) => (
-              <li key={i}>{WARNING_LABEL[w as keyof typeof WARNING_LABEL] ?? w}</li>
+              <li key={i}>{textoDeAviso(w)}</li>
             ))}
           </ul>
         </div>
@@ -116,8 +132,11 @@ export function PieceCard({
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-900">Cantidad</label>
+          <label htmlFor={cantidadId} className="mb-2 block text-sm font-medium text-zinc-900">
+            Cantidad
+          </label>
           <QuantityStepper
+            inputId={cantidadId}
             value={linea.quantity}
             onSave={(val) => onUpdate({ quantity: val })}
           />
@@ -144,7 +163,7 @@ export function PieceCard({
 
         <fieldset className="sm:col-span-2">
           <legend className="mb-2 block text-sm font-medium text-zinc-900">Medidas de una pieza</legend>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <DecimalField
               label="Largo"
               value={linea.length_cm}
@@ -168,7 +187,7 @@ export function PieceCard({
       </div>
 
       <div className="mt-6 border-t border-black/[0.06] pt-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {renderFact("Ocupa en el horno", totalVolLiters !== "—" ? `${totalVolLiters} litros` : "—")}
           {renderFact("Cada una", unitVolLiters !== "—" ? `${unitVolLiters} litros` : "—")}
           {renderFact("% del horno", occPercent !== "—" ? `${occPercent} %` : "—")}
@@ -195,7 +214,8 @@ function DeleteConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const dialogRef = useDialogoAccesible({ isOpen: true, onClose });
+  const dialogRef = useDialogoAccesible<HTMLDivElement>(true);
+  const titleId = useId();
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -203,30 +223,30 @@ function DeleteConfirmDialog({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="delete-dialog-title"
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+        aria-labelledby={titleId}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+        }}
+        className="glass-panel w-full max-w-sm rounded-2xl p-6 shadow-xl"
+        tabIndex={-1}
       >
-        <h2 id="delete-dialog-title" className="mb-4 text-lg font-medium text-zinc-900">
+        <h2 id={titleId} className="mb-4 text-lg font-medium text-zinc-900">
           ¿Quitar pieza?
         </h2>
         <p className="mb-6 text-sm text-zinc-600">
           Se quitará la pieza de la cotización. Esta acción no se puede deshacer.
         </p>
         <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-600"
-          >
+          <SecondaryButton type="button" onClick={onClose}>
             Cancelar
-          </button>
-          <button
+          </SecondaryButton>
+          <PrimaryButton
             type="button"
             onClick={onConfirm}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600"
+            className="bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-red-600"
           >
-            Quitar
-          </button>
+            Quitar pieza
+          </PrimaryButton>
         </div>
       </div>
     </div>,

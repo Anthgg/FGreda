@@ -11,14 +11,35 @@ import {
 } from "@/features/cotizadorV2/useQuoterV2Materials";
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { PlusIcon } from "@/components/icons";
+import { PrimaryButton } from "@/components/form";
+import { Spinner } from "@/components/Spinner";
+import { describeError } from "@/features/settings/messages";
 
 export function V2NextProductsStep({ quotationId, canEdit }: PasoDelAsistenteProps) {
   const [adding, setAdding] = useState(false);
-  
+
   const query = useV2QuotationProducts(quotationId);
   const actualizar = useUpdateV2QuotationProduct(quotationId);
   const borrar = useDeleteV2QuotationProduct(quotationId);
   const esperarGuardado = useEsperarGuardado(quotationId);
+
+  if (query.isPending) {
+    return (
+      <Panel>
+        <Spinner className="size-5" label="Cargando piezas..." />
+      </Panel>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Panel>
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+          {describeError(query.error)}
+        </div>
+      </Panel>
+    );
+  }
 
   const lineas = query.data?.items ?? [];
 
@@ -48,20 +69,17 @@ export function V2NextProductsStep({ quotationId, canEdit }: PasoDelAsistentePro
 
         {canEdit && (
           <div className="mt-2">
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => setAdding(true)}
-              className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
             >
               <PlusIcon className="size-4" />
               Agregar pieza
-            </button>
+            </PrimaryButton>
           </div>
         )}
 
-        {adding && (
-          <AddPieceDialog quotationId={quotationId} onClose={() => setAdding(false)} />
-        )}
+        {adding && <AddPieceDialog quotationId={quotationId} onClose={() => setAdding(false)} />}
       </div>
     </Panel>
   );
