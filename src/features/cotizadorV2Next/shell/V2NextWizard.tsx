@@ -75,6 +75,13 @@ import type { V2DuplicateWarning, V2EffectiveStatus, V2Quotation } from "@/types
  * anterior; reescribir un paso no toca este archivo.
  */
 
+/**
+ * Pasos que pintan ellos mismos los avisos del backend (`firing.warnings`,
+ * `pricing.warnings`), con más detalle. Aquí arriba solo va lo que falta: repetir
+ * los avisos ponía cada uno dos veces en pantalla.
+ */
+const PASOS_CON_AVISOS_PROPIOS: ReadonlySet<PasoId> = new Set<PasoId>(["quema", "precio"]);
+
 const PASO_COMPONENTE: Record<PasoId, ComponentType<PasoDelAsistenteProps>> = {
   cliente: V2NextClientStep,
   productos: V2NextProductsStep,
@@ -248,7 +255,9 @@ function Asistente({
   const indice = PASOS.findIndex((item) => item.id === paso);
   const anterior = indice > 0 ? PASOS[indice - 1] : undefined;
   const siguiente = indice < PASOS.length - 1 ? PASOS[indice + 1] : undefined;
-  const senales = estados[indice]?.senales ?? [];
+  const senales = (estados[indice]?.senales ?? []).filter(
+    (senal) => senal.severidad === "error" || !PASOS_CON_AVISOS_PROPIOS.has(paso),
+  );
   const Paso = PASO_COMPONENTE[paso];
   const avisos = visual
     .filter((uno) => uno.id !== "resumen")
@@ -271,7 +280,7 @@ function Asistente({
           className="@min-[760px]:sticky @min-[760px]:top-0 @min-[760px]:z-10"
         />
 
-        <section aria-labelledby={tituloDelPaso} className="min-w-0 space-y-4">
+        <section aria-labelledby={tituloDelPaso} className="@container min-w-0 space-y-4">
           <div>
             <p className="text-[11.5px] font-semibold uppercase tracking-wider text-zinc-500">
               Paso {indice + 1} de {PASOS.length}

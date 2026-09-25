@@ -26,6 +26,7 @@ import {
   useV2Processes,
 } from "@/features/cotizadorV2/useQuoterV2Processes";
 import type { PasoDelAsistenteProps } from "@/features/cotizadorV2Next/shell/pasosDelAsistente";
+import { formatDecimalString } from "@/features/firings/labels";
 import { Panel } from "@/features/masters/MasterTable";
 import { currencySymbol, formatMoney } from "@/features/quotations/money";
 import { describeError } from "@/features/settings/messages";
@@ -61,7 +62,8 @@ function importeCosto(valor: string | null | undefined, decimales = 2): string {
 }
 
 function textoHoras(valor: string | null | undefined): string {
-  return valor ? `${valor} h` : "Pendiente";
+  // Solo presentación: el backend manda seis decimales («5.333333»).
+  return valor ? `${formatDecimalString(valor, 2)} h` : "Pendiente";
 }
 
 function hayCantidad(valor: string | null | undefined): boolean {
@@ -337,7 +339,7 @@ function ProcesoFila({
       data-testid={`labor-process-${proceso.id}`}
       className="rounded-2xl border border-black/[0.06] bg-white/70 p-4"
     >
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] lg:items-start">
+      <div className="grid grid-cols-1 gap-3 @min-[480px]:grid-cols-2 @min-[860px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] @min-[860px]:items-start">
         <dl>
           <Dato
             label="Técnica"
@@ -440,7 +442,7 @@ function ProcesoFila({
             aria-label={`Quitar ${proceso.technique_name} de esta cotización`}
             onClick={() => quitar.mutate(proceso.id)}
             disabled={quitar.isPending}
-            className="min-h-8 justify-self-start rounded-lg px-2 py-1 text-xs font-semibold text-red-700 underline underline-offset-2 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 lg:justify-self-end"
+            className="min-h-8 justify-self-start rounded-lg px-2 py-1 text-xs font-semibold text-red-700 underline underline-offset-2 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 @min-[860px]:justify-self-end"
           >
             Quitar
           </button>
@@ -483,7 +485,7 @@ function DetalleDeTarea({
 
   if (!tarea) {
     return (
-      <dl className="mt-3 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 sm:grid-cols-2">
+      <dl className="mt-3 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 @min-[480px]:grid-cols-2">
         <Dato label="Horas finales" value={textoHoras(proceso.final_hours)} />
         <Dato label="Costo" value={formatCosto(proceso.labor_cost)} />
       </dl>
@@ -497,7 +499,7 @@ function DetalleDeTarea({
 
   if (!canEdit) {
     return (
-      <dl className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-black/[0.04] bg-white/60 p-3 sm:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-black/[0.04] bg-white/60 p-3 @min-[480px]:grid-cols-4">
         <Dato
           label="Horas finales"
           value={textoHoras(tarea.final_hours)}
@@ -519,7 +521,7 @@ function DetalleDeTarea({
         Ajustar horas y tarifa
       </summary>
 
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-4 @min-[480px]:grid-cols-2">
         <div>
           <DecimalField
             label="Horas finales"
@@ -539,7 +541,7 @@ function DetalleDeTarea({
               onClick={() => guardar({ final_hours_override: null })}
               className="mt-2 min-h-8 rounded-lg px-2 py-1 text-xs font-semibold text-zinc-700 underline underline-offset-2 hover:bg-zinc-100"
             >
-              Volver al estándar ({tarea.calculated_hours} h)
+              Volver al estándar ({textoHoras(tarea.calculated_hours)})
             </button>
           ) : null}
         </div>
@@ -552,7 +554,7 @@ function DetalleDeTarea({
         />
       </div>
 
-      <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 sm:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 @min-[480px]:grid-cols-4">
         <Dato
           label="Rendimiento estándar"
           value={`${tarea.standard_capacity} / jornada`}
@@ -600,7 +602,7 @@ function AgregarProceso({
           ...disponibles.map((una) => ({ value: String(una.id), label: una.name })),
         ]}
         onChange={setTecnica}
-        className="min-w-0 flex-1 sm:max-w-xs"
+        className="min-w-0 flex-1 @min-[480px]:max-w-xs"
         hint="Solo para esta cotización: la ficha de la pieza no cambia."
       />
       <PrimaryButton
@@ -674,7 +676,7 @@ function PersonalAdicional({
       )}
 
       {canEdit ? (
-        <div className="mt-3 grid grid-cols-1 items-end gap-3 border-t border-black/[0.04] pt-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <div className="mt-3 grid grid-cols-1 items-end gap-3 border-t border-black/[0.04] pt-3 @min-[480px]:grid-cols-2 @min-[860px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
           <SelectField
             label="Trabajador de apoyo"
             requirement="optional"
@@ -798,7 +800,7 @@ function TareaAdicional({
       </div>
 
       {canEdit ? (
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-4 @min-[480px]:grid-cols-2 @min-[860px]:grid-cols-4">
           <SelectField
             label="Pieza"
             requirement="optional"
@@ -843,11 +845,11 @@ function TareaAdicional({
           onClick={() => guardar({ final_hours_override: null })}
           className="mt-2 min-h-8 rounded-lg px-2 py-1 text-xs font-semibold text-zinc-700 underline underline-offset-2 hover:bg-zinc-100"
         >
-          Volver al estándar ({tarea.calculated_hours} h)
+          Volver al estándar ({textoHoras(tarea.calculated_hours)})
         </button>
       ) : null}
 
-      <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 sm:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 @min-[480px]:grid-cols-4">
         <Dato label="Rendimiento estándar" value={`${tarea.standard_capacity} / jornada`} />
         <Dato label="Horas calculadas" value={textoHoras(tarea.calculated_hours)} />
         <Dato label="Tarifa actual" value={importeCosto(tarea.hourly_rate, 4)} />
@@ -920,7 +922,7 @@ function DiasDeTaller({
   return (
     <section className="rounded-2xl border border-black/[0.06] bg-white/60 p-4">
       <h3 className="text-base font-bold text-zinc-950">Días de taller</h3>
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-end">
+      <div className="mt-3 grid grid-cols-1 gap-4 @min-[480px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @min-[480px]:items-end">
         {canEdit ? (
           <DecimalField
             label="¿Cuántos días le dedicarás?"
@@ -1024,7 +1026,7 @@ function Ilustracion({ quotationId, canEdit }: { quotationId: number; canEdit: b
             ilustracion={ilustracion}
             guardar={(payload) => esperarGuardado(guardar, "ilustracion", payload)}
           />
-          <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 sm:grid-cols-4">
+          <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 @min-[480px]:grid-cols-4">
             <Dato label="Rendimiento" value={`${ilustracion.capacity_per_workday ?? "Pendiente"} / jornada`} />
             <Dato label="Tarifa por hora" value={formatCosto(ilustracion.hourly_rate)} />
             <Dato label="Horas" value={textoHoras(ilustracion.total_hours)} />
@@ -1052,7 +1054,7 @@ function LineasDeIlustracion({
   guardar: (payload: { lines?: { line_id: number; quantity: string }[]; illustration_quantity?: string }) => void;
 }) {
   return (
-    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="mt-3 grid grid-cols-1 gap-3 @min-[480px]:grid-cols-2">
       {ilustracion.lines.map((linea) => (
         <LineaIlustracion
           key={linea.line_id}

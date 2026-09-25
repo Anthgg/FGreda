@@ -33,6 +33,8 @@ export interface MonedaDeCotizacion {
 
 /** Un COSTO interno. Siempre en moneda base, sea cual sea la de la cotización. */
 export function formatCosto(valor: string | null | undefined): string {
+  // Sin cifra no hay moneda que mostrar: «—», no «S/ —».
+  if (valor === null || valor === undefined || valor === "") return "—";
   return formatMoney(valor, MONEDA_BASE);
 }
 
@@ -41,6 +43,7 @@ export function formatPrecio(
   valor: string | null | undefined,
   moneda: MonedaDeCotizacion | null | undefined,
 ): string {
+  if (valor === null || valor === undefined || valor === "") return "—";
   return formatMoney(valor, moneda?.currency_code ?? MONEDA_BASE, {
     symbolSnapshot: moneda?.currency_symbol ?? null,
   });

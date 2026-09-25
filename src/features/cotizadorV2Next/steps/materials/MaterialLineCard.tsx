@@ -3,6 +3,7 @@ import { SelectField, type SelectOption } from "@/components/SelectField";
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { formatCosto, MONEDA_BASE } from "@/features/cotizadorV2/moneda";
 import { useUpdateV2QuotationProduct } from "@/features/cotizadorV2/useQuoterV2Materials";
+import { formatDecimalString } from "@/features/firings/labels";
 import { formatMoney } from "@/features/quotations/money";
 import { describeError } from "@/features/settings/messages";
 import {
@@ -46,7 +47,8 @@ function opcionesDeMateriales(
 }
 
 function textoConUnidad(valor: string | null | undefined, unidad: string | null | undefined): string {
-  const numero = valor ?? "—";
+  // Solo presentación: el backend manda seis decimales («4000.000000»).
+  const numero = formatDecimalString(valor, 2);
   return unidad ? `${numero} ${unidad}` : numero;
 }
 
@@ -150,7 +152,10 @@ function DetalleEsmalte({ linea }: { linea: V2QuotationProduct }) {
     return (
       <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Dato label="Esmalte" value="No lleva esmalte" />
-        <Dato label="Costo de esmalte" value={formatCosto(linea.glaze_cost)} />
+        <Dato
+          label="Costo de esmalte"
+          value={linea.glaze_cost == null ? "—" : formatCosto(linea.glaze_cost)}
+        />
       </dl>
     );
   }
@@ -170,7 +175,10 @@ function DetalleEsmalte({ linea }: { linea: V2QuotationProduct }) {
           value={`${linea.glaze_volume_ml} ml`}
           hint={linea.glaze_conversion_is_fallback ? "Conversión de reserva 1 g = 1 ml" : undefined}
         />
-        <Dato label="Costo de esmalte" value={formatCosto(linea.glaze_cost)} />
+        <Dato
+          label="Costo de esmalte"
+          value={linea.glaze_cost == null ? "—" : formatCosto(linea.glaze_cost)}
+        />
       </dl>
       {linea.glaze_is_reference ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

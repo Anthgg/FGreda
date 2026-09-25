@@ -107,7 +107,7 @@ function Dinero({
       </p>
 
       <dl className="mt-3 border-t border-black/[0.06] pt-3">
-        <Fila etiqueta="Nos cuesta" valor={formatCosto(precio.real_cost)} />
+        <Fila etiqueta="Costo real" valor={formatCosto(precio.real_cost)} />
         <Fila
           etiqueta={perdida ? "Ganamos (pérdida)" : "Ganamos"}
           valor={sinFactor ? "—" : formatCosto(precio.estimated_profit)}

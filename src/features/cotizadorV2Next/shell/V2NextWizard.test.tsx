@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { errorResponse, jsonResponse, renderApp } from "@/test/utils";
+import { V2_FIRING } from "@/test/quoterV2Fixtures";
 import { COTIZACION, mockShell, resumenDeEmision } from "@/test/v2next/shellFixtures";
 
 /**
@@ -233,5 +234,21 @@ describe("shell del Cotizador V2 rediseñado: estructura", () => {
     expect(asistente.querySelector(".overflow-y-auto, .overflow-auto")).toBeNull();
     expect(screen.queryByRole("button", { name: /guardar borrador/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/último guardado/i)).not.toBeInTheDocument();
+  });
+
+  it("en Horno cada aviso sale una vez: lo pinta el paso, no también el shell", async () => {
+    mockShell({
+      extra: (url) =>
+        url.includes("/firing")
+          ? jsonResponse(200, { ...V2_FIRING, warnings: ["V2_FIRING_OVER_CAPACITY"] })
+          : undefined,
+    });
+    renderApp(["/cotizador-v2-next/7/quema"]);
+
+    const avisos = await screen.findByTestId("v2next-avisos-horno");
+    expect(avisos).toHaveTextContent(/más de una hornada/);
+    expect(screen.queryByTestId("v2next-senales-del-paso")).not.toBeInTheDocument();
+    // La barra de pasos lo sigue contando.
+    expect(screen.getByRole("button", { name: /Paso 5: Horno 1 aviso/ })).toBeInTheDocument();
   });
 });

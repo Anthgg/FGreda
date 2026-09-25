@@ -31,7 +31,7 @@ describe("resumen lateral", () => {
     render(<V2QuotationSummaryRail {...BASE} />);
     const resumen = resumenAncho();
     expect(resumen.getByTestId("v2next-total")).toHaveTextContent("S/ 9077.74");
-    expect(resumen.getByText("Nos cuesta").nextSibling).toHaveTextContent("S/ 1868.43");
+    expect(resumen.getByText("Costo real").nextSibling).toHaveTextContent("S/ 1868.43");
     expect(resumen.getByText("Ganamos").nextSibling).toHaveTextContent("S/ 5824.57");
     expect(resumen.getByText("Margen").nextSibling).toHaveTextContent("75.7 %");
   });
@@ -51,7 +51,7 @@ describe("resumen lateral", () => {
     );
     const resumen = resumenAncho();
     expect(resumen.getByTestId("v2next-total")).toHaveTextContent("US$ 2420.73");
-    expect(resumen.getByText("Nos cuesta").nextSibling).toHaveTextContent("S/ 1868.43");
+    expect(resumen.getByText("Costo real").nextSibling).toHaveTextContent("S/ 1868.43");
     expect(resumen.getByText("Ganamos").nextSibling).toHaveTextContent("S/ 5824.57");
     expect(resumen.getByText(/lo que cuesta y lo que se gana, en soles/)).toBeInTheDocument();
   });

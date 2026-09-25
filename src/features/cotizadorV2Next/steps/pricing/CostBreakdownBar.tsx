@@ -4,7 +4,7 @@ import { formatCosto } from "@/features/cotizadorV2/moneda";
 import type { V2Pricing } from "@/types/quoterV2Pricing";
 
 /**
- * «Lo que nos cuesta»: el costo de producción y de qué está hecho. 010O.10.
+ * «Costo de producción»: el costo con el horno a tarifa y de qué está hecho. 010O.10.
  *
  * El total es `production_cost` TAL CUAL llega del backend. Las partes se
  * enseñan al lado, y la barra solo reparte ANCHOS proporcionales para verlas de
@@ -34,7 +34,7 @@ export function CostBreakdownBar({ precio }: { precio: V2Pricing }) {
     <section aria-labelledby={titulo} data-testid="v2next-costo">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id={titulo} className="text-base font-bold text-zinc-950">
-          Lo que nos cuesta
+          Costo de producción
         </h3>
         <p
           data-testid="v2next-costo-produccion"

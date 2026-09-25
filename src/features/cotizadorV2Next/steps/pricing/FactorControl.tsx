@@ -127,19 +127,27 @@ export function FactorControl({
             onBlur={confirmar}
             className="w-full cursor-pointer accent-zinc-900"
           />
-          <div className="relative mt-1 h-4 text-[11.5px] text-zinc-500">
-            <span className="absolute left-0">{etiquetaDeFactor(valores[0] ?? 0)} mínimo</span>
-            {posicionObjetivo > 0 && posicionObjetivo < 1 ? (
+          {/* La marca va sobre la pista; su texto, en la leyenda. Con el
+              objetivo cerca de un extremo, un texto posicionado se montaba
+              sobre el del mínimo (×2 y ×3 en un rango ×2–×10). */}
+          {posicionObjetivo > 0 && posicionObjetivo < 1 ? (
+            <div aria-hidden="true" className="relative h-1.5">
               <span
-                className="absolute -translate-x-1/2 whitespace-nowrap"
+                data-testid="v2next-factor-marca-objetivo"
+                className="absolute top-0 h-1.5 w-px bg-zinc-500"
                 style={{ left: `${posicionObjetivo * 100}%` }}
-              >
-                {etiquetaDeFactor(Number(objetivo))} objetivo
-              </span>
+              />
+            </div>
+          ) : null}
+          <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-[11.5px] text-zinc-500">
+            <span>
+              {etiquetaDeFactor(valores[0] ?? 0)} mínimo{posicionObjetivo === 0 ? " y objetivo" : ""}
+            </span>
+            {posicionObjetivo > 0 && posicionObjetivo < 1 ? (
+              <span>{etiquetaDeFactor(Number(objetivo))} objetivo</span>
             ) : null}
-            <span className="absolute right-0">
-              {etiquetaDeFactor(valores[ultimo] ?? 0)}
-              {posicionObjetivo === 1 ? " objetivo" : " máximo"}
+            <span>
+              {etiquetaDeFactor(valores[ultimo] ?? 0)} máximo{posicionObjetivo === 1 ? " y objetivo" : ""}
             </span>
           </div>
         </div>

@@ -229,7 +229,7 @@ describe("V2NextMaterialsStep", () => {
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByText("Arcilla Terranova")).toBeInTheDocument();
-    expect(screen.getByText("300.000000 g")).toBeInTheDocument();
+    expect(screen.getByText("300.00 g")).toBeInTheDocument();
     expect(screen.getAllByText("Esmalte Transparente")).toHaveLength(2);
   });
 
