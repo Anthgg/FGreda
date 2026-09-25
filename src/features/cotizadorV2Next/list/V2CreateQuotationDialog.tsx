@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useCreateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
 import { CustomerSelectField } from "@/components/CustomerSelectField";
-import { TextField } from "@/components/form";
+import { TextField, PrimaryButton, SecondaryButton } from "@/components/form";
 import { ChoiceCardGroup } from "@/components/ChoiceCardGroup";
 import type { V2ProductionType } from "@/types/quoterV2";
 import { describeError } from "@/features/settings/messages";
@@ -77,67 +77,63 @@ export function V2CreateQuotationDialog({ onClose, onSuccess }: V2CreateQuotatio
                 </div>
               )}
 
-              <CustomerSelectField
-                label="¿Para quién es?"
-                value={customerId}
-                onChange={setCustomerId}
-                requirement="optional"
-                placeholder="Lo elijo después"
-                hint={
-                  <>
-                    ¿No está? Regístralo en <Link to="/terceros" className="underline hover:text-zinc-700">Terceros</Link>.
-                  </> as unknown as string // hint is typed as string in field, but we can pass react nodes sometimes, let's cast or wait
-                }
-              />
+              <div>
+                <CustomerSelectField
+                  label="¿Para quién es?"
+                  value={customerId}
+                  onChange={setCustomerId}
+                  requirement="optional"
+                  placeholder="Lo elijo después"
+                  hint="¿No está en la lista? Regístralo en Terceros."
+                />
+                <div className="mt-2 text-sm">
+                  <Link to="/terceros" className="text-zinc-600 underline hover:text-zinc-900">Registrar cliente en Terceros</Link>
+                </div>
+              </div>
 
               <TextField
-                label="Ponle un nombre (opcional)"
+                label="Ponle un nombre"
+                requirement="optional"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={setName}
                 maxLength={200}
                 hint="Solo para encontrarla en tu lista. El cliente no lo ve."
               />
 
-              <div>
-                <label className="block text-sm font-semibold text-zinc-900 mb-3">
-                  ¿Cómo es el pedido?
-                </label>
-                <ChoiceCardGroup<V2ProductionType>
-                  value={productionType}
-                  onChange={setProductionType}
-                  options={[
-                    {
-                      value: "RETAIL",
-                      title: "Pocas piezas",
-                      description: "Por menor. Sugiere el horno chico.",
-                    },
-                    {
-                      value: "WHOLESALE",
-                      title: "Muchas piezas",
-                      description: "Por mayor. Sugiere el horno grande.",
-                    }
-                  ]}
-                  columns={2}
-                />
-              </div>
+              <ChoiceCardGroup<V2ProductionType>
+                label="¿Cómo es el pedido?"
+                value={productionType}
+                onChange={setProductionType}
+                options={[
+                  {
+                    value: "RETAIL",
+                    title: "Pocas piezas",
+                    description: "Por menor. Sugiere el horno chico.",
+                  },
+                  {
+                    value: "WHOLESALE",
+                    title: "Muchas piezas",
+                    description: "Por mayor. Sugiere el horno grande.",
+                  }
+                ]}
+                columns={2}
+              />
             </div>
 
             <div className="p-6 border-t border-black/[0.06] bg-zinc-50/50 flex flex-col-reverse sm:flex-row justify-end gap-3">
-              <button
+              <SecondaryButton
                 type="button"
                 onClick={onClose}
                 disabled={create.isPending}
-                className="h-10 px-4 rounded-xl border border-black/10 bg-white text-zinc-700 text-sm font-bold hover:bg-zinc-50 transition-colors disabled:opacity-50"
               >
                 Cancelar
-              </button>
-              <button
+              </SecondaryButton>
+              <PrimaryButton
                 type="submit"
                 disabled={create.isPending}
-                className="h-10 px-4 rounded-xl bg-zinc-900 text-white text-sm font-bold hover:bg-zinc-800 transition-colors disabled:opacity-50"
               >
                 {create.isPending ? "Creando..." : "Empezar cotización"}
-              </button>
+              </PrimaryButton>
             </div>
           </form>
         </div>

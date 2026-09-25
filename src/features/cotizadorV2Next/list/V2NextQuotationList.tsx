@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useV2Quotations } from "@/features/cotizadorV2/useQuoterV2";
-import { V2_EFFECTIVE_STATUS_LABEL } from "@/types/quoterV2";
 import { formatDisplayDate } from "@/components/dateFormat";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
@@ -9,9 +8,10 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { RUTA_V2_NEXT } from "@/features/cotizadorV2Next/shell/rutas";
 import { MasterHeader } from "@/features/masters/MasterTable";
 import { TypewriterTitle } from "@/components/TypewriterTitle";
-import { PrimaryButton } from "@/components/buttons";
+import { PrimaryButton } from "@/components/form";
 import { V2CreateQuotationDialog } from "@/features/cotizadorV2Next/list/V2CreateQuotationDialog";
 import { useNavigate } from "react-router-dom";
+import { EstadoV2 } from "@/features/cotizadorV2/V2CicloDeVida";
 
 export function V2NextQuotationList() {
   const [status, setStatus] = useState<string>("all");
@@ -57,7 +57,7 @@ export function V2NextQuotationList() {
   };
 
   return (
-    <div className="flex flex-col h-full mx-auto w-full max-w-5xl px-4 py-8">
+    <div className="flex flex-col h-full w-full space-y-6">
       <MasterHeader
         title={<TypewriterTitle text="Cotizador V2." className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl" />}
         subtitle="Motor nuevo. El Cotizador anterior sigue disponible como Legacy y sus cotizaciones no se recalculan."
@@ -127,10 +127,10 @@ export function V2NextQuotationList() {
                 {filteredItems.map((row) => (
                   <tr
                     key={row.id}
-                    className="transition-colors hover:bg-white/70 group"
+                    className="transition-colors hover:bg-zinc-50 group"
                   >
                     <td className="p-0 align-middle">
-                      <Link to={`${RUTA_V2_NEXT}/${row.id}`} className="block py-3 px-4 focus:outline-none focus:bg-zinc-50">
+                      <Link to={`${RUTA_V2_NEXT}/${row.id}`} className="block py-3 px-4 focus:outline-none focus:bg-zinc-100 rounded-lg m-1">
                         <div className="font-bold text-zinc-900 text-sm">{row.customer_name || "Sin cliente"}</div>
                         <div className="text-xs text-zinc-500 mt-0.5">
                           {row.name ?? "Sin nombre"} <span className="mx-1 font-normal opacity-50">·</span> <span className="text-[11px] font-medium text-zinc-400">{row.code}</span>
@@ -138,27 +138,19 @@ export function V2NextQuotationList() {
                       </Link>
                     </td>
                     <td className="p-0 align-middle">
-                      <Link to={`${RUTA_V2_NEXT}/${row.id}`} className="block py-3 px-4 focus:outline-none focus:bg-zinc-50 h-full w-full">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-[9px] font-extrabold tracking-wider uppercase border ${
-                          row.effective_status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          row.effective_status === 'READY_FOR_PRODUCTION' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                          row.effective_status === 'EXPIRED' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                          row.effective_status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' :
-                          'bg-zinc-100 text-zinc-600 border-zinc-200'
-                        }`}>
-                          {V2_EFFECTIVE_STATUS_LABEL[row.effective_status] || row.effective_status}
-                        </span>
-                      </Link>
+                      <div className="py-3 px-4 h-full w-full">
+                        <EstadoV2 estado={row.effective_status} />
+                      </div>
                     </td>
                     <td className="p-0 align-middle">
-                      <Link to={`${RUTA_V2_NEXT}/${row.id}`} className="block py-3 px-4 focus:outline-none focus:bg-zinc-50 text-sm text-zinc-600 h-full w-full">
+                      <div className="py-3 px-4 text-sm text-zinc-600 h-full w-full">
                         {formatDisplayDate(row.created_at)}
-                      </Link>
+                      </div>
                     </td>
                     <td className="p-0 align-middle">
-                      <Link to={`${RUTA_V2_NEXT}/${row.id}`} className="block py-3 px-4 focus:outline-none focus:bg-zinc-50 text-sm text-zinc-600 h-full w-full">
+                      <div className="py-3 px-4 text-sm text-zinc-600 h-full w-full">
                         {row.valid_until ? formatDisplayDate(row.valid_until) : "—"}
-                      </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -1,16 +1,34 @@
-import { screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderApp } from "@/test/utils";
 import { V2NextQuotationList } from "./V2NextQuotationList";
 import { mockQuotationPage, mockQuotationListItem } from "@/test/v2next/listFixtures";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RUTA_V2_NEXT } from "@/features/cotizadorV2Next/shell/rutas";
 import * as api from "@/api/quoterV2";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactElement } from "react";
 
 vi.mock("@/api/quoterV2", () => ({
   fetchV2Quotations: vi.fn(),
   createV2Quotation: vi.fn(),
 }));
+
+function renderWithProviders(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/"]}>
+        {ui}
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
 
 describe("V2NextQuotationList", () => {
   beforeEach(() => {
@@ -27,7 +45,7 @@ describe("V2NextQuotationList", () => {
     ]);
     vi.mocked(api.fetchV2Quotations).mockResolvedValue(page);
 
-    renderApp(["/cotizador-v2-next"], <V2NextQuotationList />);
+    renderWithProviders(<V2NextQuotationList />);
 
     await waitFor(() => {
       expect(screen.getByText("Cliente A")).toBeInTheDocument();
@@ -41,6 +59,23 @@ describe("V2NextQuotationList", () => {
     expect(link).toHaveAttribute("href", `${RUTA_V2_NEXT}/1`);
   });
 
+  it("has exactly ONE link per row", async () => {
+    const page = mockQuotationPage([
+      mockQuotationListItem({ id: 1, customer_name: "Cliente A", name: "Pedido 1", code: "V2-001" })
+    ]);
+    vi.mocked(api.fetchV2Quotations).mockResolvedValue(page);
+
+    renderWithProviders(<V2NextQuotationList />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cliente A")).toBeInTheDocument();
+    });
+
+    const row = screen.getByRole("row", { name: /Cliente A/i });
+    const linksInRow = within(row).getAllByRole("link");
+    expect(linksInRow).toHaveLength(1);
+  });
+
   it("filters locally by q without sending q to API", async () => {
     const page = mockQuotationPage([
       mockQuotationListItem({ id: 1, customer_name: "Apple", name: "Pedido 1" }),
@@ -48,7 +83,7 @@ describe("V2NextQuotationList", () => {
     ]);
     vi.mocked(api.fetchV2Quotations).mockResolvedValue(page);
 
-    renderApp(["/cotizador-v2-next"], <V2NextQuotationList />);
+    renderWithProviders(<V2NextQuotationList />);
 
     await waitFor(() => {
       expect(screen.getByText("Apple")).toBeInTheDocument();
@@ -68,7 +103,7 @@ describe("V2NextQuotationList", () => {
   it("sends status filter to API", async () => {
     vi.mocked(api.fetchV2Quotations).mockResolvedValue(mockQuotationPage([]));
 
-    renderApp(["/cotizador-v2-next"], <V2NextQuotationList />);
+    renderWithProviders(<V2NextQuotationList />);
 
     await waitFor(() => {
       expect(api.fetchV2Quotations).toHaveBeenCalledWith({ limit: 50 });
@@ -93,7 +128,7 @@ describe("V2NextQuotationList", () => {
       .mockResolvedValueOnce(page)
       .mockResolvedValueOnce(nextPage);
 
-    renderApp(["/cotizador-v2-next"], <V2NextQuotationList />);
+    renderWithProviders(<V2NextQuotationList />);
 
     await waitFor(() => {
       expect(screen.getByText("Buscando en las 50 más recientes de 150.")).toBeInTheDocument();
@@ -110,7 +145,7 @@ describe("V2NextQuotationList", () => {
   it("handles loading, error, and empty states", async () => {
     // Empty state
     vi.mocked(api.fetchV2Quotations).mockResolvedValue(mockQuotationPage([]));
-    const { unmount } = renderApp(["/cotizador-v2-next"], <V2NextQuotationList />);
+    const { unmount } = renderWithProviders(<V2NextQuotationList />);
     
     await waitFor(() => {
       expect(screen.getByText("No hay cotizaciones aquí. Crea una nueva o cambia el filtro.")).toBeInTheDocument();
@@ -119,7 +154,7 @@ describe("V2NextQuotationList", () => {
 
     // Error state
     vi.mocked(api.fetchV2Quotations).mockRejectedValue(new Error("Failed"));
-    renderApp(["/cotizador-v2-next"], <V2NextQuotationList />);
+    renderWithProviders(<V2NextQuotationList />);
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
