@@ -184,6 +184,48 @@ export const claveDeGuardado = (quotationId: number, tipo: TipoDeGuardado) =>
  */
 export const alcanceDeGuardado = (quotationId: number) => ({ id: `cotizacion-v2:${quotationId}` });
 
+const turnos = new Map<number, Promise<unknown>>();
+
+/**
+ * El turno de UNA cotización en el backend: escrituras y lecturas que
+ * recalculan, de una en una y en el orden en que se pidieron.
+ *
+ * Lo encontró la E2E de la revisión tras el corte 010O.13, como un 500
+ * intermitente: `GET /pricing`, `GET /firing`, `GET /reductions` y
+ * `GET /confirmation-preview` recalculan y escriben las líneas dentro de su
+ * transacción (luego la descartan), y dos de ellas —o una y un `PUT`— sobre la
+ * misma cotización se bloqueaban en orden cruzado: `deadlock detected`. El
+ * rediseño pide precio, horno y pendientes juntos tras cada guardado, mientras
+ * la siguiente escritura de la fila ya sale; la pantalla anterior lo hacía menos.
+ *
+ * Se arregla sin tocar el backend: desde esta pestaña nunca van dos a la vez.
+ * El `scope` de TanStack sigue ordenando las escrituras entre sí; el turno
+ * además las separa de esas lecturas. Una lectura que no recalcula (la
+ * cabecera, las líneas, el historial) no necesita turno.
+ */
+export function enTurno<T>(quotationId: number, trabajo: () => Promise<T>): Promise<T> {
+  const anterior = turnos.get(quotationId) ?? Promise.resolve();
+  const actual = anterior.then(trabajo, trabajo);
+  const cola: Promise<unknown> = actual.then(
+    () => undefined,
+    () => undefined,
+  );
+  turnos.set(quotationId, cola);
+  void cola.then(() => {
+    if (turnos.get(quotationId) === cola) turnos.delete(quotationId);
+  });
+  return actual;
+}
+
+/**
+ * Solo para pruebas: cada caso empieza con los turnos libres. Una prueba que
+ * deja a propósito una petición colgada (un guardado «en vuelo») retendría si
+ * no las lecturas de la misma cotización en las pruebas siguientes.
+ */
+export function vaciarTurnos(): void {
+  turnos.clear();
+}
+
 /**
  * Cuánto tiempo se recuerda una escritura terminada.
  *

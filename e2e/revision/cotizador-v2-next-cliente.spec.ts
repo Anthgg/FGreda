@@ -25,7 +25,7 @@ test.describe("Cotizador V2 Next - Cliente", () => {
       return undefined; // fall back to default
     });
 
-    await page.goto("/cotizador-v2-next/7/cliente");
+    await page.goto("/cotizador-v2/7/cliente");
 
     // Esperar a que el título del paso cargue (del shell)
     await expect(page.getByRole("heading", { level: 2, name: "Cliente", exact: true })).toBeVisible();

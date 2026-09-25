@@ -28,7 +28,7 @@ function acciones() {
 
 async function abrir(cotizacion: Partial<V2Quotation>, extra?: NonNullable<Parameters<typeof mockShell>[0]>["extra"]) {
   const espia = mockShell({ cotizacion, ...(extra ? { extra } : {}) });
-  renderApp(["/cotizador-v2-next/7/resumen"]);
+  renderApp(["/cotizador-v2/7/resumen"]);
   await screen.findByRole("heading", { level: 2, name: "Revisar y emitir" });
   return espia;
 }

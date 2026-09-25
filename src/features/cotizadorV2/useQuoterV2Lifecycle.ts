@@ -13,6 +13,7 @@ import {
   invalidarCotizacion,
   QUOTER_V2_KEY,
   V2_PREVIEW_KEY,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 
 // Desde 010O.3 la clave vive en `claves.ts`, que la invalida tras cada guardado.
@@ -41,7 +42,7 @@ export const V2_HISTORY_KEY = ["quoter-v2", "history"] as const;
 export const useV2ConfirmationPreview = (id: number, enabled: boolean) =>
   useQuery({
     queryKey: [...V2_PREVIEW_KEY, id],
-    queryFn: () => fetchV2ConfirmationPreview(id),
+    queryFn: () => enTurno(id, () => fetchV2ConfirmationPreview(id)),
     enabled,
     // El resumen es lo que se va a congelar: se pide fresco cada vez que se
     // abre el diálogo, nunca de una caché de hace un minuto.
@@ -68,7 +69,8 @@ export const useConfirmV2Quotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     scope: alcanceDeGuardado(id),
-    mutationFn: (fingerprint: string) => confirmV2Quotation(id, fingerprint),
+    mutationFn: (fingerprint: string) =>
+      enTurno(id, () => confirmV2Quotation(id, fingerprint)),
     onSuccess: (data) => {
       client.setQueryData([...QUOTER_V2_KEY, id], data);
       refrescarTodo(client, id);
@@ -80,7 +82,8 @@ export const useCancelV2Quotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     scope: alcanceDeGuardado(id),
-    mutationFn: (reason: string | null) => cancelV2Quotation(id, reason),
+    mutationFn: (reason: string | null) =>
+      enTurno(id, () => cancelV2Quotation(id, reason)),
     onSuccess: (data) => {
       client.setQueryData([...QUOTER_V2_KEY, id], data);
       refrescarTodo(client, id);

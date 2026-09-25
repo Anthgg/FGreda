@@ -50,7 +50,7 @@ test.describe("Shell del Cotizador V2 rediseñado (010O.3)", () => {
       const errores = vigilarConsola(page);
       await interceptarApi(page);
       await page.setViewportSize({ width: ancho, height: 900 });
-      await page.goto("/cotizador-v2-next/7/productos");
+      await page.goto("/cotizador-v2/7/productos");
 
       await expect(page.getByRole("heading", { level: 2, name: "Piezas", exact: true })).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Pasos" })).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("Shell del Cotizador V2 rediseñado (010O.3)", () => {
   test("1024 px con el menú plegado: el contenedor gana sitio y pasa a dos columnas", async ({ page }) => {
     await interceptarApi(page);
     await page.setViewportSize({ width: 1024, height: 900 });
-    await page.goto("/cotizador-v2-next/7/cliente");
+    await page.goto("/cotizador-v2/7/cliente");
     await expect(page.getByRole("heading", { level: 2, name: "Cliente", exact: true })).toBeVisible();
     expect((await maquetado(page)).columnas).toBe(1);
 
@@ -91,11 +91,11 @@ test.describe("Shell del Cotizador V2 rediseñado (010O.3)", () => {
     const errores = vigilarConsola(page);
     await interceptarApi(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7");
+    await page.goto("/cotizador-v2/7");
 
     // Sin paso: al primero que el backend bloquea.
     await expect(page.getByRole("heading", { level: 2, name: "Horno", exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/\/cotizador-v2-next\/7\/quema$/);
+    await expect(page).toHaveURL(/\/cotizador-v2\/7\/quema$/);
 
     const resumen = page.getByRole("complementary", { name: "Resumen de la cotización" });
     await expect(resumen.getByTestId("v2next-total").last()).toHaveText("S/ 3339.40");
@@ -111,12 +111,20 @@ test.describe("Shell del Cotizador V2 rediseñado (010O.3)", () => {
   test("un diálogo del ciclo de vida cubre la ventana entera", async ({ page }) => {
     await interceptarApi(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/cliente");
+    await page.goto("/cotizador-v2/7/cliente");
     await page.getByRole("button", { name: "Anular cotización" }).click();
 
     const dialogo = page.getByRole("dialog", { name: "Anular cotización" });
     await expect(dialogo).toBeVisible();
     const caja = await dialogo.boundingBox();
     expect(caja).toMatchObject({ x: 0, y: 0, width: 1440, height: 900 });
+  });
+
+  test("la ruta de pruebas del rediseño lleva a la definitiva (corte 010O.13)", async ({ page }) => {
+    await interceptarApi(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/cotizador-v2-next/7/precio?origen=enlace");
+    await expect(page).toHaveURL(/\/cotizador-v2\/7\/precio\?origen=enlace$/);
+    await expect(page.getByRole("heading", { level: 2, name: "Precio", exact: true })).toBeVisible();
   });
 });

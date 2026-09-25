@@ -60,7 +60,7 @@ test.describe("Paso «Horno» del rediseño (010O.9)", () => {
     });
 
     await page.setViewportSize({ width: 375, height: 900 });
-    await page.goto("/cotizador-v2-next/7/quema");
+    await page.goto("/cotizador-v2/7/quema");
     await expect(page.getByTestId("v2next-paso-horno")).toBeVisible();
 
     await page.getByRole("radio", { name: /Horno grande/ }).click();

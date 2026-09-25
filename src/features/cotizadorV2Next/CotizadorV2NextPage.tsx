@@ -1,12 +1,12 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useParams } from "react-router-dom";
 
 import { EmptyState } from "@/features/masters/MasterTable";
 import { PASOS, esPasoValido } from "@/features/cotizadorV2/pasos";
 import { V2NextQuotationList } from "@/features/cotizadorV2Next/list/V2NextQuotationList";
-import { RUTA_V2_NEXT } from "@/features/cotizadorV2Next/shell/rutas";
+import { RUTA_V2_NEXT, RUTA_V2_PRUEBAS } from "@/features/cotizadorV2Next/shell/rutas";
 import { V2NextWizard } from "@/features/cotizadorV2Next/shell/V2NextWizard";
 
-/** `/cotizador-v2-next/7/3` → el tercer paso por su nombre. Enlaces de antes de 010O.3. */
+/** `/cotizador-v2/7/3` → el tercer paso por su nombre. Enlaces numéricos de antes. */
 const PASO_NUMERICO = /^[1-7]$/;
 
 /**
@@ -34,4 +34,14 @@ export function CotizadorV2NextPage() {
   return (
     <V2NextWizard key={quotationId} quotationId={quotationId} paso={paso} rutaBase={RUTA_V2_NEXT} />
   );
+}
+
+/**
+ * `/cotizador-v2-next/…` → `/cotizador-v2/…`, con el mismo resto de la ruta y
+ * la misma consulta. La ruta de pruebas del rediseño deja de existir en 010O.13.
+ */
+export function RedireccionV2Next() {
+  const { pathname, search, hash } = useLocation();
+  const resto = pathname.slice(RUTA_V2_PRUEBAS.length);
+  return <Navigate to={`${RUTA_V2_NEXT}${resto}${search}${hash}`} replace />;
 }

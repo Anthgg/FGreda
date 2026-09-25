@@ -66,7 +66,7 @@ test.describe("Listado y alta del rediseño (010O.4)", () => {
     const errores = vigilarConsola(page);
     const { pedidas } = await preparar(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next");
+    await page.goto("/cotizador-v2");
 
     await expect(page.getByText("Café Tostado Norte")).toBeVisible();
     await page.getByPlaceholder("Buscar por cliente, nombre o código").fill("vajilla");
@@ -82,11 +82,11 @@ test.describe("Listado y alta del rediseño (010O.4)", () => {
   test("cada fila tiene un solo enlace, a la cotización", async ({ page }) => {
     await preparar(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next");
+    await page.goto("/cotizador-v2");
 
     const fila = page.getByRole("row", { name: /Café Tostado Norte/ });
     await expect(fila.getByRole("link")).toHaveCount(1);
-    await expect(fila.getByRole("link")).toHaveAttribute("href", "/cotizador-v2-next/7");
+    await expect(fila.getByRole("link")).toHaveAttribute("href", "/cotizador-v2/7");
     await expect(fila.getByTestId("v2-estado-efectivo")).toHaveText(/Borrador/);
   });
 
@@ -94,7 +94,7 @@ test.describe("Listado y alta del rediseño (010O.4)", () => {
     const errores = vigilarConsola(page);
     const { escrituras } = await preparar(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next");
+    await page.goto("/cotizador-v2");
 
     await page.getByRole("button", { name: "Nueva cotización" }).click();
     const dialogo = page.getByRole("dialog", { name: "Nueva cotización" });
@@ -102,7 +102,7 @@ test.describe("Listado y alta del rediseño (010O.4)", () => {
     await dialogo.getByLabel(/Ponle un nombre/).fill("Feria de octubre");
     await dialogo.getByRole("button", { name: "Empezar cotización" }).dblclick();
 
-    await expect(page).toHaveURL(/\/cotizador-v2-next\/7\/cliente$/);
+    await expect(page).toHaveURL(/\/cotizador-v2\/7\/cliente$/);
     await expect(
       page.getByRole("heading", { level: 2, name: "Cliente", exact: true }),
     ).toBeVisible();
@@ -120,7 +120,7 @@ test.describe("Listado y alta del rediseño (010O.4)", () => {
   test("a 375 px ni el listado ni el diálogo desbordan la página", async ({ page }) => {
     await preparar(page);
     await page.setViewportSize({ width: 375, height: 800 });
-    await page.goto("/cotizador-v2-next");
+    await page.goto("/cotizador-v2");
     await expect(page.getByText("Café Tostado Norte")).toBeVisible();
     expect(await desbordeDelMain(page)).toBeLessThanOrEqual(0);
 

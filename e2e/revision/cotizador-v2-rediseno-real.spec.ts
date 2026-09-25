@@ -12,7 +12,7 @@ import { testName } from "../helpers/fixtures";
  * en la pantalla anterior, y la que lo sustituye en el corte (010O.13).
  */
 
-const RUTA = process.env.E2E_RUTA_V2 ?? "/cotizador-v2-next";
+const RUTA = process.env.E2E_RUTA_V2 ?? "/cotizador-v2";
 
 async function esperarGuardado(page: Page) {
   await expect(page.getByTestId("v2next-estado-guardado")).toHaveText("Guardado", {

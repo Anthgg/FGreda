@@ -21,6 +21,7 @@ import {
   V2_LINES_KEY,
   V2_MATERIALS_KEY,
   V2_STALE_TIME,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 
 export { V2_LINES_KEY, V2_MATERIALS_KEY } from "@/features/cotizadorV2/claves";
@@ -62,7 +63,7 @@ export const useAddV2QuotationProduct = (quotationId: number) => {
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (payload: V2QuotationProductInput) =>
-      addV2QuotationProduct(quotationId, payload),
+      enTurno(quotationId, () => addV2QuotationProduct(quotationId, payload)),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.
     onSuccess: () => {
@@ -78,7 +79,7 @@ export const useUpdateV2QuotationProduct = (quotationId: number) => {
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { lineId: number; payload: V2QuotationProductInput }) =>
-      updateV2QuotationProduct(quotationId, vars.lineId, vars.payload),
+      enTurno(quotationId, () => updateV2QuotationProduct(quotationId, vars.lineId, vars.payload)),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.
     onSuccess: () => {
@@ -93,7 +94,8 @@ export const useDeleteV2QuotationProduct = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "linea-borrar"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (lineId: number) => deleteV2QuotationProduct(quotationId, lineId),
+    mutationFn: (lineId: number) =>
+      enTurno(quotationId, () => deleteV2QuotationProduct(quotationId, lineId)),
     // Anadir, cambiar o quitar una linea mueve el volumen, y con el las
     // hornadas, el reparto de la quema y cada precio unitario.
     onSuccess: () => {

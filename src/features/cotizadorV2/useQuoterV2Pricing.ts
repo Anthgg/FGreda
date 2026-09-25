@@ -9,6 +9,7 @@ import {
   RECORDAR_GUARDADO,
   V2_PRICING_KEY,
   V2_STALE_TIME,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 
 export { V2_PRICING_KEY } from "@/features/cotizadorV2/claves";
@@ -21,14 +22,14 @@ export { V2_PRICING_KEY } from "@/features/cotizadorV2/claves";
 export const useV2Reductions = (quotationId: number) =>
   useQuery({
     queryKey: [...V2_PRICING_KEY, quotationId, "reductions"],
-    queryFn: () => fetchV2Reductions(quotationId),
+    queryFn: () => enTurno(quotationId, () => fetchV2Reductions(quotationId)),
     staleTime: V2_STALE_TIME,
   });
 
 export const useV2Pricing = (quotationId: number) =>
   useQuery({
     queryKey: [...V2_PRICING_KEY, quotationId],
-    queryFn: () => fetchV2Pricing(quotationId),
+    queryFn: () => enTurno(quotationId, () => fetchV2Pricing(quotationId)),
     staleTime: V2_STALE_TIME,
   });
 
@@ -45,7 +46,8 @@ export const useSetV2Pricing = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "precio"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2PricingInput) => setV2Pricing(quotationId, payload),
+    mutationFn: (payload: V2PricingInput) =>
+      enTurno(quotationId, () => setV2Pricing(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },

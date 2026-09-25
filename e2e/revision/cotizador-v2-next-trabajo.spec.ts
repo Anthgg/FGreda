@@ -176,7 +176,7 @@ test.describe("Paso «Trabajo» del rediseño (010O.8)", () => {
     const errores = vigilarConsola(page);
     const escrituras = await interceptarApi(page, (ruta) => respuestasTrabajo(ruta));
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/mano-de-obra");
+    await page.goto("/cotizador-v2/7/mano-de-obra");
 
     await expect(page.getByRole("heading", { level: 2, name: "Trabajo", exact: true })).toBeVisible();
     const fila = page.getByTestId("labor-process-501");
@@ -212,7 +212,7 @@ test.describe("Paso «Trabajo» del rediseño (010O.8)", () => {
     const errores = vigilarConsola(page);
     await interceptarApi(page, (ruta) => respuestasTrabajo(ruta));
     await page.setViewportSize({ width: 375, height: 900 });
-    await page.goto("/cotizador-v2-next/7/mano-de-obra");
+    await page.goto("/cotizador-v2/7/mano-de-obra");
     await expect(page.getByTestId("v2next-paso-trabajo")).toBeVisible();
 
     const desborde = await page.evaluate(() => {

@@ -15,7 +15,7 @@ import { mockShell } from "@/test/v2next/shellFixtures";
 
 async function abrirPrecio(opciones: Parameters<typeof mockShell>[0] = {}) {
   const espia = mockShell(opciones);
-  renderApp(["/cotizador-v2-next/7/precio"]);
+  renderApp(["/cotizador-v2/7/precio"]);
   const paso = await screen.findByTestId("v2next-paso-precio");
   return { espia, paso: within(paso) };
 }

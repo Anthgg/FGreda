@@ -11,20 +11,14 @@ import type { V2Blocker } from "@/types/quoterV2";
  * Los siete pasos tal como los ve quien cotiza. Fase 010O.3.
  *
  * Los identificadores son los de `pasos.ts` —los mismos que viajan en la URL
- * de `/cotizador-v2`—, así que el corte de ruta no rompe un solo enlace. Lo que
- * cambia es la COPIA: el rediseño habla de «Piezas» y «Horno» donde el asistente
- * anterior decía «Productos» y «Quema». Se declara aparte para no mover los
- * títulos de `pasos.ts` mientras la pantalla anterior siga en producción.
+ * de `/cotizador-v2`—, así que el corte de ruta no rompió un solo enlace. Desde
+ * 010O.13 los títulos también son los de `pasos.ts`: una sola fuente.
  */
-export const ETIQUETA_DE_PASO: Record<PasoId, { titulo: string; detalle: string }> = {
-  cliente: { titulo: "Cliente", detalle: "Para quién es" },
-  productos: { titulo: "Piezas", detalle: "Qué y cuántas" },
-  materiales: { titulo: "Arcilla y esmalte", detalle: "Con qué se hacen" },
-  "mano-de-obra": { titulo: "Trabajo", detalle: "Quién y cuánto tiempo" },
-  quema: { titulo: "Horno", detalle: "Dónde se queman" },
-  precio: { titulo: "Precio", detalle: "Cuánto cobrar" },
-  resumen: { titulo: "Revisar y emitir", detalle: "Último vistazo" },
-};
+export const ETIQUETA_DE_PASO: Record<PasoId, { titulo: string; detalle: string }> =
+  Object.fromEntries(PASOS.map(({ id, titulo, detalle }) => [id, { titulo, detalle }])) as Record<
+    PasoId,
+    { titulo: string; detalle: string }
+  >;
 
 /**
  * Lo que recibe cada paso. Es el contrato entre el shell y los siete archivos

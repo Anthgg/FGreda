@@ -24,7 +24,7 @@ test.describe("Paso «Precio» del rediseño (010O.10)", () => {
         : undefined,
     );
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/precio");
+    await page.goto("/cotizador-v2/7/precio");
 
     const deslizador = page.getByRole("slider", { name: "Multiplicar el costo por" });
     await expect(deslizador).toBeVisible();
@@ -53,7 +53,7 @@ test.describe("Paso «Precio» del rediseño (010O.10)", () => {
   test("con el teclado también: una escritura tras dejar de pulsar", async ({ page }) => {
     const escrituras = await interceptarApi(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/precio");
+    await page.goto("/cotizador-v2/7/precio");
 
     const deslizador = page.getByRole("slider", { name: "Multiplicar el costo por" });
     await deslizador.focus();
@@ -75,7 +75,7 @@ test.describe("Paso «Precio» del rediseño (010O.10)", () => {
       return undefined;
     });
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/precio");
+    await page.goto("/cotizador-v2/7/precio");
 
     await expect(page.getByTestId("v2next-subtotal")).toHaveText("US$ 754.67");
     await expect(page.getByTestId("v2next-precio-total")).toHaveText("US$ 890.51");
@@ -85,7 +85,7 @@ test.describe("Paso «Precio» del rediseño (010O.10)", () => {
   test("a 375 px el paso no desborda la página", async ({ page }) => {
     await interceptarApi(page);
     await page.setViewportSize({ width: 375, height: 900 });
-    await page.goto("/cotizador-v2-next/7/precio");
+    await page.goto("/cotizador-v2/7/precio");
     await expect(page.getByTestId("v2next-paso-precio")).toBeVisible();
 
     const desborde = await page.evaluate(() => {

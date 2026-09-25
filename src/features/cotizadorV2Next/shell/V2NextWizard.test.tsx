@@ -21,14 +21,17 @@ import { COTIZACION, mockShell, resumenDeEmision } from "@/test/v2next/shellFixt
 
 const barra = () => within(screen.getByRole("navigation", { name: "Pasos" }));
 const pasoActual = () => barra().getByRole("button", { current: "step" });
-const tituloDelPaso = (nombre: string) => screen.findByRole("heading", { level: 2, name: nombre });
+// Sin paso en la URL el shell espera a todas las consultas antes de decidir a
+// dónde ir: con la suite entera en paralelo eso pasa del segundo por defecto.
+const tituloDelPaso = (nombre: string) =>
+  screen.findByRole("heading", { level: 2, name: nombre }, { timeout: 5000 });
 
 /** Elige una opción de un `SelectField` de los paneles. */
 
 describe("shell del Cotizador V2 rediseñado: rutas", () => {
   it("abre el paso de la URL por su nombre, con la cabecera de la cotización", async () => {
     mockShell();
-    renderApp(["/cotizador-v2-next/7/productos"]);
+    renderApp(["/cotizador-v2/7/productos"]);
 
     expect(await tituloDelPaso("Piezas")).toBeInTheDocument();
     expect(screen.getByText("Paso 2 de 7")).toBeInTheDocument();
@@ -37,7 +40,7 @@ describe("shell del Cotizador V2 rediseñado: rutas", () => {
     expect(screen.getByText(COTIZACION.code)).toBeInTheDocument();
     expect(within(screen.getByTestId("v2next-cabecera")).getByRole("link", { name: /Cotizaciones/ })).toHaveAttribute(
       "href",
-      "/cotizador-v2-next",
+      "/cotizador-v2",
     );
     // El estado lo pinta el bloque del ciclo de vida, una sola vez.
     expect(screen.getAllByTestId("v2-estado-efectivo")).toHaveLength(1);
@@ -45,20 +48,20 @@ describe("shell del Cotizador V2 rediseñado: rutas", () => {
 
   it("un paso numérico de antes lleva al paso por su nombre", async () => {
     mockShell();
-    renderApp(["/cotizador-v2-next/7/3"]);
+    renderApp(["/cotizador-v2/7/3"]);
     expect(await tituloDelPaso("Arcilla y esmalte")).toBeInTheDocument();
   });
 
   it("sin paso lleva al primero que el backend bloquea", async () => {
     mockShell({ bloqueos: [{ code: "V2_CONFIRM_KILN_REQUIRED", line_id: null }] });
-    renderApp(["/cotizador-v2-next/7"]);
+    renderApp(["/cotizador-v2/7"]);
     expect(await tituloDelPaso("Horno")).toBeInTheDocument();
     expect(pasoActual()).toHaveAccessibleName(/Horno/);
   });
 
   it("un paso que no existe cae en el primero pendiente; si no falta nada, en revisar", async () => {
     mockShell();
-    renderApp(["/cotizador-v2-next/7/no-existe"]);
+    renderApp(["/cotizador-v2/7/no-existe"]);
     expect(await tituloDelPaso("Revisar y emitir")).toBeInTheDocument();
   });
 
@@ -71,7 +74,7 @@ describe("shell del Cotizador V2 rediseñado: rutas", () => {
         valid_until: "2026-10-10",
       },
     });
-    renderApp(["/cotizador-v2-next/7"]);
+    renderApp(["/cotizador-v2/7"]);
     expect(await tituloDelPaso("Revisar y emitir")).toBeInTheDocument();
     expect(screen.queryByTestId("v2next-estado-guardado")).not.toBeInTheDocument();
     expect(await screen.findByTestId("v2-documento-emitido")).toBeInTheDocument();
@@ -82,7 +85,7 @@ describe("shell del Cotizador V2 rediseñado: rutas", () => {
       extra: (url) =>
         url.endsWith("/quotations-v2/7") ? errorResponse(404, "V2_QUOTATION_NOT_FOUND") : undefined,
     });
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     expect(await screen.findByText("Esa cotización V2 no existe. Comprueba el enlace.")).toBeInTheDocument();
   });
 });
@@ -90,7 +93,7 @@ describe("shell del Cotizador V2 rediseñado: rutas", () => {
 describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
   it("la barra juzga cada paso con los bloqueos, no por su posición", async () => {
     mockShell({ bloqueos: [{ code: "V2_CONFIRM_LINE_BODY_MATERIAL_REQUIRED", line_id: 11 }] });
-    renderApp(["/cotizador-v2-next/7/precio"]);
+    renderApp(["/cotizador-v2/7/precio"]);
     await tituloDelPaso("Precio");
 
     await waitFor(() =>
@@ -106,7 +109,7 @@ describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
   it("«Siguiente» y «anterior» mueven el paso y el foco va a su título", async () => {
     const user = userEvent.setup();
     mockShell();
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     await tituloDelPaso("Cliente");
 
     await user.click(screen.getByRole("button", { name: "Siguiente: Piezas" }));
@@ -127,7 +130,7 @@ describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
           ? new Promise<Response>(() => {})
           : undefined,
     });
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     await tituloDelPaso("Cliente");
 
     await user.click(await screen.findByRole("radio", { name: /alumno/i }));
@@ -148,7 +151,7 @@ describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
           ? errorResponse(422, "V2_VALIDATION_ERROR", "No válido")
           : undefined,
     });
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     await tituloDelPaso("Cliente");
 
     await user.click(await screen.findByRole("radio", { name: /alumno/i }));
@@ -176,7 +179,7 @@ describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
 describe("shell del Cotizador V2 rediseñado: resumen y pendientes", () => {
   it("el resumen enseña las cifras del backend y los pendientes del resumen de emisión", async () => {
     mockShell({ bloqueos: [{ code: "V2_CONFIRM_KILN_REQUIRED", line_id: null }] });
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     await tituloDelPaso("Cliente");
 
     const resumen = screen.getByRole("complementary", { name: "Resumen de la cotización" });
@@ -200,7 +203,7 @@ describe("shell del Cotizador V2 rediseñado: resumen y pendientes", () => {
         );
       },
     });
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     await tituloDelPaso("Cliente");
     const resumen = screen.getByRole("complementary", { name: "Resumen de la cotización" });
     await within(within(resumen).getByTestId("v2next-pendientes")).findByText("Falta elegir el horno.");
@@ -215,7 +218,7 @@ describe("shell del Cotizador V2 rediseñado: resumen y pendientes", () => {
 describe("shell del Cotizador V2 rediseñado: estructura", () => {
   it("tres zonas con consulta de contenedor, sin pie fijo ni botón falso", async () => {
     mockShell();
-    renderApp(["/cotizador-v2-next/7/cliente"]);
+    renderApp(["/cotizador-v2/7/cliente"]);
     await tituloDelPaso("Cliente");
 
     const asistente = screen.getByTestId("v2next-asistente");
@@ -243,7 +246,7 @@ describe("shell del Cotizador V2 rediseñado: estructura", () => {
           ? jsonResponse(200, { ...V2_FIRING, warnings: ["V2_FIRING_OVER_CAPACITY"] })
           : undefined,
     });
-    renderApp(["/cotizador-v2-next/7/quema"]);
+    renderApp(["/cotizador-v2/7/quema"]);
 
     const avisos = await screen.findByTestId("v2next-avisos-horno");
     expect(avisos).toHaveTextContent(/más de una hornada/);

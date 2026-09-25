@@ -30,7 +30,7 @@ test.describe("«Revisar y emitir» del rediseño (010O.11)", () => {
       return undefined;
     });
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/resumen");
+    await page.goto("/cotizador-v2/7/resumen");
 
     await expect(page.getByTestId("v2next-documento")).toBeVisible();
     await page.getByRole("button", { name: "Emitir cotización" }).click();
@@ -49,7 +49,7 @@ test.describe("«Revisar y emitir» del rediseño (010O.11)", () => {
   test("con bloqueos el botón no emite y la lista lleva al paso", async ({ page }) => {
     await interceptarApi(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/cotizador-v2-next/7/resumen");
+    await page.goto("/cotizador-v2/7/resumen");
 
     await expect(page.getByRole("button", { name: "Emitir cotización" })).toBeDisabled();
     await page.getByTestId("v2next-checklist").getByRole("button", { name: /Completar/ }).click();
@@ -61,7 +61,7 @@ test.describe("«Revisar y emitir» del rediseño (010O.11)", () => {
       ruta.includes("/confirmation-preview") ? SIN_BLOQUEOS : undefined,
     );
     await page.setViewportSize({ width: 375, height: 900 });
-    await page.goto("/cotizador-v2-next/7/resumen");
+    await page.goto("/cotizador-v2/7/resumen");
     await expect(page.getByTestId("v2next-documento")).toBeVisible();
     const desborde = await page.evaluate(() => {
       const principal = document.querySelector("main") as HTMLElement;

@@ -30,7 +30,7 @@ const LINEA: V2PreviewLine = {
 
 async function abrirRevision(opciones: Parameters<typeof mockShell>[0] = {}) {
   const espia = mockShell(opciones);
-  renderApp(["/cotizador-v2-next/7/resumen"]);
+  renderApp(["/cotizador-v2/7/resumen"]);
   const paso = await screen.findByTestId("v2next-paso-revisar");
   return { espia, paso: within(paso) };
 }
@@ -108,6 +108,32 @@ describe("«Revisar y emitir» del rediseño", () => {
     expect(within(documento).getByTestId("v2next-documento-total")).toHaveTextContent("S/ 4177.20");
     expect(documento).toHaveTextContent("Válida hasta el 01/10/2026 si se emite hoy · 20 días");
     expect(documento).toHaveTextContent("Adelanto del 50 %.");
+  });
+
+  it("lo que se emite lleva los datos del cliente y el pago, nunca un costo interno", async () => {
+    // Heredado del diálogo de emisión anterior (010H), retirado en el corte.
+    const user = userEvent.setup();
+    const { paso } = await abrirRevision({
+      extra: (url) =>
+        url.includes("/confirmation-preview")
+          ? jsonResponse(200, {
+              ...resumenDeEmision(),
+              customer_document: "RUC: 20600000001",
+              customer_address: "Jr. Barro 456, Lima",
+              payment_notes: "Transferencia bancaria.",
+              lines: [LINEA],
+            })
+          : undefined,
+    });
+    const documento = await paso.findByTestId("v2next-documento");
+    expect(documento).toHaveTextContent("RUC: 20600000001");
+    expect(documento).toHaveTextContent("Jr. Barro 456, Lima");
+    expect(documento).toHaveTextContent("Transferencia bancaria.");
+    expect(documento).not.toHaveTextContent(/costo real|ganancia|margen|gas real|factor/i);
+
+    await user.click(paso.getByRole("button", { name: "Emitir cotización" }));
+    const dialogo = await screen.findByRole("dialog", { name: "¿Emitir la cotización?" });
+    expect(dialogo).toHaveTextContent("los valores comerciales quedan congelados");
   });
 
   it("en dólares el documento va en US$", async () => {
@@ -191,7 +217,7 @@ describe("«Revisar y emitir» del rediseño", () => {
         valid_until: "2026-10-10",
       },
     });
-    renderApp(["/cotizador-v2-next/7/resumen"]);
+    renderApp(["/cotizador-v2/7/resumen"]);
     expect(await screen.findByTestId("v2-documento-emitido")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Emitir cotización" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("v2next-checklist")).not.toBeInTheDocument();

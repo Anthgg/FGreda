@@ -122,7 +122,7 @@ export function V2NextWizard({
   quotationId: number;
   /** El paso de la URL, o `null` si no dice uno válido. */
   paso: PasoId | null;
-  /** Dónde vive el asistente: `/cotizador-v2-next` hasta el corte. */
+  /** Dónde vive el asistente: `RUTA_V2_NEXT` (`/cotizador-v2` desde 010O.13). */
   rutaBase: string;
 }) {
   const consulta = useV2Quotation(quotationId);
@@ -188,6 +188,9 @@ function Asistente({
     productos.isPending || manoDeObra.isPending || quema.isPending || precio.isPending;
   const bloqueos = resumenDeEmision.data?.blockers;
   const editable = cotizacion.status === "DRAFT";
+  // Un backend anterior a 010H no manda `effective_status`: se dice el estado
+  // guardado, igual que el ciclo de vida, en vez de dejar la cabecera muda.
+  const estadoEfectivo = cotizacion.effective_status ?? cotizacion.status;
   const visual = estadoVisualDePasos(estados, bloqueos, cargando, !editable);
 
   const irAPaso = (destino: PasoId) => navigate(`${rutaBase}/${quotationId}/${destino}`);
@@ -223,7 +226,7 @@ function Asistente({
       titulo={cotizacion.name ?? cotizacion.customer_name ?? "Nueva cotización"}
       codigo={cotizacion.code}
       rutaListado={rutaBase}
-      estado={cotizacion.effective_status}
+      estado={estadoEfectivo}
     >
       <V2CicloDeVida
         cotizacion={cotizacion}
@@ -232,12 +235,12 @@ function Asistente({
         rutaBase={rutaBase}
         conEstado={false}
       />
-      {!editable && cotizacion.effective_status !== "DRAFT" ? (
+      {!editable && estadoEfectivo !== "DRAFT" ? (
         <p
           data-testid="v2next-solo-lectura"
           className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-2 text-[13px] text-zinc-700"
         >
-          {SOLO_LECTURA[cotizacion.effective_status]}
+          {SOLO_LECTURA[estadoEfectivo]}
         </p>
       ) : null}
     </V2QuotationHeader>

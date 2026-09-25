@@ -37,13 +37,13 @@ import type { V2Pricing } from "@/types/quoterV2Pricing";
 import type { V2Quotation } from "@/types/quoterV2";
 
 export const PASOS = [
-  { id: "cliente", titulo: "Cliente", detalle: "A quién se cotiza y en qué moneda." },
-  { id: "productos", titulo: "Productos", detalle: "Qué piezas, cuántas y de qué medida." },
-  { id: "materiales", titulo: "Materiales", detalle: "Pasta y esmalte de cada pieza." },
-  { id: "mano-de-obra", titulo: "Mano de obra", detalle: "Técnicas, horas, ilustración y días." },
-  { id: "quema", titulo: "Quema", detalle: "Horno, hornadas y gas." },
-  { id: "precio", titulo: "Margen y precio", detalle: "Costo, factor y totales." },
-  { id: "resumen", titulo: "Resumen", detalle: "Todo junto, antes de emitir." },
+  { id: "cliente", titulo: "Cliente", detalle: "Para quién es" },
+  { id: "productos", titulo: "Piezas", detalle: "Qué y cuántas" },
+  { id: "materiales", titulo: "Arcilla y esmalte", detalle: "Con qué se hacen" },
+  { id: "mano-de-obra", titulo: "Trabajo", detalle: "Quién y cuánto tiempo" },
+  { id: "quema", titulo: "Horno", detalle: "Dónde se queman" },
+  { id: "precio", titulo: "Precio", detalle: "Cuánto cobrar" },
+  { id: "resumen", titulo: "Revisar y emitir", detalle: "Último vistazo" },
 ] as const;
 
 export type PasoId = (typeof PASOS)[number]["id"];

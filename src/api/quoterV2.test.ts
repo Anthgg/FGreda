@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +13,12 @@ function imports(relativePath: string): string[] {
   // solo mire las dobles dejaria de ver los imports y la prueba pasaria en
   // verde sin comprobar nada.
   return [...contenido.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1] as string);
+}
+
+function modulosDe(carpeta: string): string[] {
+  return readdirSync(resolve(SRC, carpeta), { recursive: true, withFileTypes: true })
+    .filter((entrada) => entrada.isFile() && /\.tsx?$/.test(entrada.name) && !/\.test\./.test(entrada.name))
+    .map((entrada) => relative(SRC, resolve(entrada.parentPath, entrada.name)).replaceAll("\\", "/"));
 }
 
 //: Todo el dominio V2 del frontend. La lista crece con cada fase: un modulo
@@ -30,31 +36,28 @@ const V2_MODULES = [
   "features/settings/useQuoterV2Settings.ts",
   // Tambien las pantallas: el aislamiento se rompe igual de facil desde un
   // componente que desde un cliente HTTP, y ahi no hay nadie mirando.
-  "features/cotizadorV2/CotizadorV2Page.tsx",
-  "features/cotizadorV2/V2ProductLines.tsx",
   "features/settings/QuoterV2Section.tsx",
   "features/settings/V2MaterialsTable.tsx",
   "api/quoterV2Labor.ts",
   "types/quoterV2Labor.ts",
   "features/cotizadorV2/useQuoterV2Labor.ts",
-  "features/cotizadorV2/V2LaborLines.tsx",
   "features/settings/V2WorkforceTable.tsx",
   "api/quoterV2Firing.ts",
   "types/quoterV2Firing.ts",
   "features/cotizadorV2/useQuoterV2Firing.ts",
-  "features/cotizadorV2/V2FiringPanel.tsx",
   "api/quoterV2Pricing.ts",
   "types/quoterV2Pricing.ts",
   "features/cotizadorV2/useQuoterV2Pricing.ts",
-  "features/cotizadorV2/V2PricingPanel.tsx",
   // Fase 010H
   "features/cotizadorV2/useQuoterV2Lifecycle.ts",
   "features/cotizadorV2/V2CicloDeVida.tsx",
-  "features/cotizadorV2/V2EmitirCotizacion.tsx",
   "features/cotizadorV2/V2DocumentoEmitido.tsx",
   "features/cotizadorV2/mensajesCicloDeVida.ts",
   "features/cotizadorV2/fechaLima.ts",
   "features/cotizadorV2/useDialogoAccesible.ts",
+  // Fase 010O: la interfaz rediseñada entera, archivo por archivo. Se lee del
+  // disco para que un paso nuevo no pueda quedarse fuera de la lista.
+  ...modulosDe("features/cotizadorV2Next"),
 ];
 
 describe("cliente del Cotizador V2", () => {
@@ -63,6 +66,12 @@ describe("cliente del Cotizador V2", () => {
     // `/quotations-v2` no es un subrecurso de `/quotations`: son dos raices
     // distintas, asi que ninguna URL de un motor cae en la del otro.
     expect(QUOTER_V2_BASE.startsWith("/quotations/")).toBe(false);
+  });
+
+  it("la lista de módulos incluye la interfaz rediseñada leída del disco", () => {
+    expect(V2_MODULES).toContain("features/cotizadorV2Next/CotizadorV2NextPage.tsx");
+    expect(V2_MODULES).toContain("features/cotizadorV2Next/shell/V2NextWizard.tsx");
+    expect(V2_MODULES).toContain("features/cotizadorV2Next/steps/pricing/FactorControl.tsx");
   });
 
   it("no importa el cliente ni los tipos del Cotizador Legacy", () => {

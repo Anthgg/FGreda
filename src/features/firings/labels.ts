@@ -39,9 +39,9 @@ export const FIRING_STATUS_TONE: Record<FiringStatus, "neutral" | "positive" | "
  */
 export function formatDecimalString(value: string | null | undefined, decimals: number): string {
   if (value === null || value === undefined || value === "") return "—";
-  if (!/^-?\d*(\.\d+)?$/.test(value.trim())) return "—";
+  const limpio = sinExponente(value.trim());
+  if (!/^-?\d*(\.\d+)?$/.test(limpio)) return "—";
 
-  const limpio = value.trim();
   const negative = limpio.startsWith("-");
   const cuerpo = negative ? limpio.slice(1) : limpio;
   const [enteraCruda = "0", decimalCruda = ""] = cuerpo.split(".");
@@ -61,6 +61,27 @@ export function formatDecimalString(value: string | null | undefined, decimals: 
 
   if (decimals <= 0) return `${signo}${texto}`;
   return `${signo}${texto.slice(0, corte)}.${texto.slice(corte)}`;
+}
+
+/**
+ * «0E-12» → «0.000000000000». Un `Decimal` de Python que resulta de multiplicar
+ * por cero se serializa en notación científica (el costo de una persona del
+ * taller: horas × 0), y leído tal cual el importe salía «—». Se desplaza la coma
+ * sobre la cadena, sin pasar por coma flotante. Lo que no es notación científica
+ * vuelve igual.
+ */
+function sinExponente(texto: string): string {
+  const partes = /^(-?)(\d*)(?:\.(\d*))?[eE]([+-]?\d+)$/.exec(texto);
+  if (!partes) return texto;
+  const [, signo = "", entera = "", fraccion = "", exponenteCrudo = "0"] = partes;
+  if (entera === "" && fraccion === "") return texto;
+  const exponente = Number(exponenteCrudo);
+  if (!Number.isSafeInteger(exponente) || Math.abs(exponente) > 400) return texto;
+  const digitos = `${entera}${fraccion}`;
+  const coma = entera.length + exponente;
+  if (coma <= 0) return `${signo}0.${"0".repeat(-coma)}${digitos}`;
+  if (coma >= digitos.length) return `${signo}${digitos}${"0".repeat(coma - digitos.length)}`;
+  return `${signo}${digitos.slice(0, coma)}.${digitos.slice(coma)}`;
 }
 
 /** Porcentaje con un decimal, listo para mostrar. */

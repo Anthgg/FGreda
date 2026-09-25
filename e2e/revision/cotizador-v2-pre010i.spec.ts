@@ -1,99 +1,65 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
+import { E2E_OPERATOR_EMAIL, E2E_OPERATOR_PASSWORD } from "../helpers/fixtures";
 import {
-  E2E_OPERATOR_EMAIL,
-  E2E_OPERATOR_PASSWORD,
-  testName,
-} from "../helpers/fixtures";
+  anadirPieza,
+  anadirPiezaDelCatalogo,
+  cabecera,
+  decidirDias,
+  elegir,
+  esperarGuardado,
+  irAPaso,
+  nuevoBorrador,
+} from "./support/cotizadorV2Ui";
 
-function paso(page: Page, numero: number, titulo: string) {
-  return page.getByRole("button", { name: new RegExp(`${numero}\\.\\s*${titulo}`, "i") });
+/**
+ * PRE-010I, reescrita en el corte 010O.13 para la interfaz rediseñada: el caso
+ * canónico del Excel armado desde la UI, las barreras de emisión y el RBAC local.
+ */
+
+/** La tarjeta de una pieza en «Arcilla y esmalte», por el nombre de su título. */
+function tarjetaDeMaterial(page: Page, nombre: string): Locator {
+  return page.locator("article").filter({ has: page.getByRole("heading", { name: nombre, exact: true }) });
 }
 
-async function seleccionar(
-  page: Page,
-  scope: Page | Locator,
-  label: string | RegExp,
-  option: string | RegExp,
-): Promise<void> {
-  await scope.getByRole("combobox", { name: label }).click();
-  const search = page.getByPlaceholder(/buscar opci[oó]n/i);
-  if (await search.isVisible().catch(() => false)) {
-    await search.fill(typeof option === "string" ? option : "");
+async function cantidadDe(page: Page, nombre: string, cantidad: string): Promise<void> {
+  // En Piezas la tarjeta más reciente es la última; se ajusta su cantidad.
+  const campo = page.getByRole("textbox", { name: "Cantidad" }).last();
+  await campo.fill(cantidad);
+  await campo.blur();
+  await esperarGuardado(page);
+  await expect(page.getByText(nombre, { exact: true }).last()).toBeVisible();
+}
+
+async function configurarMaterial(page: Page, nombre: string, arcilla: string, esmalte: boolean) {
+  await irAPaso(page, "Arcilla y esmalte");
+  const tarjeta = tarjetaDeMaterial(page, nombre);
+  await elegir(page, tarjeta.getByRole("combobox", { name: "Arcilla", exact: true }), new RegExp(`^${arcilla}`));
+  await esperarGuardado(page);
+  const interruptor = tarjeta.getByRole("switch", { name: /Lleva esmalte/ });
+  if ((await interruptor.isChecked()) !== esmalte) {
+    // El input es `sr-only`: se pulsa su etiqueta, como lo haría una persona.
+    await tarjeta.getByText("Lleva esmalte", { exact: true }).click();
+    await esperarGuardado(page);
   }
-  await page.getByRole("option", { name: option }).click();
+  await expect(interruptor).toBeChecked({ checked: esmalte });
 }
 
-async function nuevoBorrador(page: Page, etiqueta: string): Promise<number> {
-  await page.goto("/cotizador-v2");
-  await page.getByLabel(/referencia/i).fill(testName(etiqueta));
-  await page.getByRole("button", { name: /crear cotizaci[oó]n v2/i }).click();
-  await expect(page.getByTestId("pasos-cotizacion")).toBeVisible({ timeout: 15_000 });
-  const match = page.url().match(/\/cotizador-v2\/(\d+)/);
-  expect(match, `URL con id de cotizacion: ${page.url()}`).not.toBeNull();
-  return Number(match?.[1]);
-}
-
-async function elegirCliente(page: Page): Promise<void> {
-  await paso(page, 1, "Cliente").click();
-  await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
-  await page.getByRole("option").nth(1).click();
-}
-
-function tarjetaDeProducto(page: Page, nombre: string): Locator {
-  return page
-    .getByRole("heading", { name: nombre, exact: true })
-    .locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
-}
-
-async function agregarPiezaCatalogo(page: Page, nombre: string, cantidad: string): Promise<void> {
-  await paso(page, 2, "Productos").click();
-  await seleccionar(page, page, "Pieza del catálogo", nombre);
-  await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
-  const card = tarjetaDeProducto(page, nombre);
-  await expect(card).toBeVisible({ timeout: 15_000 });
-  const campoCantidad = card.getByLabel(/^cantidad/i);
-  await campoCantidad.fill(cantidad);
-  await campoCantidad.blur();
-}
-
-async function configurarMaterial(
-  page: Page,
-  nombre: string,
-  pasta: string,
-  esmalte: boolean,
-): Promise<void> {
-  await paso(page, 3, "Materiales").click();
-  const card = tarjetaDeProducto(page, nombre);
-  await seleccionar(page, card, "Pasta", pasta);
-  await seleccionar(page, card, "Esmalte", esmalte ? "Con esmalte" : "Sin esmalte");
-}
-
-async function asignarProceso(
-  page: Page,
-  tecnica: string | RegExp,
-  trabajador: string | RegExp,
-): Promise<void> {
-  const fila = page.locator("li").filter({ hasText: tecnica }).first();
+async function asignarProceso(page: Page, tecnica: string | RegExp, trabajador: RegExp) {
+  const fila = page.locator('[data-testid^="labor-process-"]').filter({ hasText: tecnica }).first();
   await expect(fila).toBeVisible({ timeout: 15_000 });
-  await seleccionar(page, fila, "Trabajador", trabajador);
-}
-
-async function esperarGuardado(page: Page): Promise<void> {
-  await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
-    timeout: 30_000,
-  });
+  await elegir(page, fila.getByRole("combobox", { name: "Lo hace" }), trabajador);
+  await esperarGuardado(page);
 }
 
 /**
- * Fase 010J. El caso canonico del Excel FINAL, armado entero desde la UI.
+ * Fase 010J. El caso canónico del Excel FINAL, armado entero desde la UI.
  *
- * Externo, por menor, horno chico, baja + alta, quema COMPARTIDA, separacion
- * 3 cm, factor x3, 4 dias. Todo el trabajo lo hace el trabajador del taller
- * (interno: costo cero) y los 20 «Plato palta» llevan ilustracion. Ya no hay
- * divergencia con la hoja: la ilustracion se carga al producto que la lleva,
- * como en el Excel, y el documento coincide al centimo.
+ * Externo, por menor, horno chico, baja + alta, quema COMPARTIDA, separación
+ * 3 cm, factor ×3, 4 días. Todo el trabajo lo hace el trabajador del taller
+ * (interno: costo cero) y los 20 «Plato palta» llevan ilustración. El
+ * documento coincide con la hoja al céntimo.
  */
 const esperado = {
   materials: 285.36,
@@ -118,66 +84,60 @@ function close(actual: number, expected: number, tolerance = 0.01): void {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
 }
 
-test.describe("PRE-010I: Excel UI y RBAC local", () => {
-  test("A2H-001: el caso canonico del Excel FINAL se arma desde la UI y no queda incompleto", async ({
-    page,
-  }) => {
+test.describe("PRE-010I: Excel UI y RBAC local (interfaz 010O)", () => {
+  test("A2H-001: el caso canónico del Excel FINAL se arma desde la UI y no queda incompleto", async ({ page }) => {
     await login(page);
-    const quotationId = await nuevoBorrador(page, "PRE010I-Excel");
-    await elegirCliente(page);
+    const { id: quotationId } = await nuevoBorrador(page, "PRE010I-Excel");
 
-    await agregarPiezaCatalogo(page, "Plato palta", "20");
-    await agregarPiezaCatalogo(page, "Tasa Buho", "50");
-    await agregarPiezaCatalogo(page, "PLATOS HONDOS CHICOS", "12");
-    await esperarGuardado(page);
+    await anadirPiezaDelCatalogo(page, "Plato palta");
+    await cantidadDe(page, "Plato palta", "20");
+    await anadirPiezaDelCatalogo(page, "Tasa Buho");
+    await cantidadDe(page, "Tasa Buho", "50");
+    await anadirPiezaDelCatalogo(page, "PLATOS HONDOS CHICOS");
+    await cantidadDe(page, "PLATOS HONDOS CHICOS", "12");
 
     await configurarMaterial(page, "Plato palta", "Arcilla Terranova", true);
     await configurarMaterial(page, "Tasa Buho", "Arcilla Terranova", false);
     await configurarMaterial(page, "PLATOS HONDOS CHICOS", "Arcilla reciclada del taller", true);
-    await esperarGuardado(page);
 
-    await paso(page, 4, "Mano de obra").click();
-    await expect(page.getByTestId("panel-mano-de-obra")).toBeVisible();
+    await irAPaso(page, "Trabajo");
     await asignarProceso(page, "A mano", /E2E-Trabajador taller/);
     await asignarProceso(page, /Vidriado por inmersion/i, /E2E-Trabajador taller/);
     await asignarProceso(page, /Torno facil/i, /E2E-Trabajador taller/);
     await asignarProceso(page, /Torno dificil/i, /E2E-Trabajador taller/);
     await asignarProceso(page, /Vidriado a mano alzada/i, /E2E-Trabajador taller/);
-    await seleccionar(page, page, "Ilustración", "Con ilustración");
-    const ilustradas = page.getByLabel(/piezas a ilustrar · Plato palta/i);
+    const ilustracion = page.getByRole("switch", { name: "Lleva ilustración" });
+    if (!(await ilustracion.isChecked())) await ilustracion.click();
+    await esperarGuardado(page);
+    const ilustradas = page.getByRole("textbox", { name: /^Piezas a ilustrar · Plato palta/ });
     await ilustradas.fill("20");
     await ilustradas.blur();
-    const dias = page.getByLabel(/d[ií]as efectivos/i);
-    await dias.fill("4");
-    await dias.blur();
     await esperarGuardado(page);
+    await decidirDias(page, "4");
 
-    await paso(page, 7, "Resumen").click();
-    await expect(page.getByTestId("paso-resumen")).toBeVisible();
-    await expect(page.getByTestId("resumen-pendientes")).toBeHidden();
-    const resumen = page.getByTestId("resumen-precio");
-    await expect(resumen).toContainText("S/ 11864.90", { timeout: 30_000 });
+    await irAPaso(page, "Revisar y emitir");
+    await expect(page.getByTestId("v2next-pendientes")).toContainText("Todo listo para emitir", {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("v2next-total")).toHaveText("S/ 11864.90", { timeout: 30_000 });
 
     // La quema en pantalla: compartida, la sugerencia del grande y nada aplicado.
-    await paso(page, 5, "Quema").click();
-    const quemaUi = page.getByTestId("panel-quema");
-    await expect(quemaUi.getByRole("combobox", { name: "Modo de quema" })).toContainText(
-      "Compartida",
-    );
-    await expect(quemaUi.getByTestId("sugerencia-horno")).toContainText(
-      "reduce la quema estimada en S/ 1447.93",
-    );
+    await irAPaso(page, "Horno");
     await expect(
-      quemaUi.getByRole("combobox", { name: "Horno de esta cotización" }),
+      page.getByRole("radiogroup", { name: "¿Comparte el horno?" }).getByRole("radio", { name: "Compartido" }),
+    ).toBeChecked();
+    await expect(page.getByTestId("v2next-sugerencia-horno")).toContainText("reduce la quema en S/ 1447.93");
+    await expect(
+      page.getByRole("radiogroup", { name: "Horno de esta cotización" }).getByRole("radio", { checked: true }),
     ).toContainText("Horno chico E2E");
 
     // Las reducciones del Excel, en la pantalla de precio.
-    await paso(page, 6, "Margen y precio").click();
+    await irAPaso(page, "Precio");
     const reducciones = page.getByTestId("panel-reducciones");
     await expect(reducciones).toContainText("5711.21", { timeout: 30_000 });
     await expect(reducciones).toContainText("6707.17");
     await expect(reducciones).toContainText("9923.00");
-    await paso(page, 7, "Resumen").click();
+    await irAPaso(page, "Revisar y emitir");
 
     const [productos, manoDeObra, quema, precio] = await Promise.all([
       page.request.get(`/api/v1/quotations-v2/${quotationId}/products`),
@@ -209,92 +169,58 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
     close(asNumber(precioJson.tax), esperado.tax);
     close(asNumber(precioJson.total), esperado.total);
 
-    // INVENTORY_GATE: cotizar, emitir y pasar a produccion NO consumen
-    // existencia. Se mide aqui, alrededor de las tres acciones, en vez de
-    // comprobarlo a mano una vez.
+    // INVENTORY_GATE: cotizar, emitir y pasar a producción NO consumen existencia.
     const movimientosAntes = await page.request.get("/api/v1/inventory/movements?limit=1");
     expect(movimientosAntes.ok()).toBeTruthy();
     const totalAntes = asNumber((await movimientosAntes.json()).total);
 
-    await page.getByRole("button", { name: /^confirmar y emitir$/i }).click();
-    const dialogoEmision = page.getByRole("dialog", { name: /confirmar y emitir/i });
-    await expect(dialogoEmision).toBeVisible();
+    await page.getByRole("button", { name: "Emitir cotización" }).click();
+    const dialogoEmision = page.getByRole("dialog", { name: "¿Emitir la cotización?" });
     await expect(dialogoEmision).toContainText("S/ 11864.90");
-    await dialogoEmision.getByRole("button", { name: /^confirmar y emitir$/i }).click();
+    await dialogoEmision.getByRole("button", { name: "Confirmar y emitir" }).click();
     await expect(page.getByTestId("v2-documento-emitido")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("v2-estado-efectivo")).toContainText(/emitida/i);
+    await expect(cabecera(page).getByTestId("v2-estado-efectivo")).toContainText(/emitida/i);
 
-    await page.getByRole("button", { name: /^enviar a producci[oó]n$/i }).click();
+    await cabecera(page).getByRole("button", { name: /^enviar a producci[oó]n$/i }).click();
     const dialogoProduccion = page.getByRole("dialog", { name: /enviar a producci[oó]n/i });
-    await expect(dialogoProduccion).toBeVisible();
     await dialogoProduccion.getByRole("button", { name: /^enviar a producci[oó]n$/i }).click();
     await expect(page.getByTestId("v2-lista-produccion")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("v2-estado-efectivo")).toContainText(/lista para producci[oó]n/i);
+    await expect(cabecera(page).getByTestId("v2-estado-efectivo")).toContainText(/lista para producci[oó]n/i);
 
     const movimientosDespues = await page.request.get("/api/v1/inventory/movements?limit=1");
     expect(movimientosDespues.ok()).toBeTruthy();
     expect(asNumber((await movimientosDespues.json()).total)).toBe(totalAntes);
   });
 
-  test("A2H-001 negativo: una pieza con material pendiente no se puede emitir", async ({
-    page,
-  }) => {
+  test("A2H-001 negativo: una pieza con material pendiente no se puede emitir", async ({ page }) => {
     await login(page);
     await nuevoBorrador(page, "PRE010I-Incompleta");
-    await elegirCliente(page);
-    await agregarPiezaCatalogo(page, "Plato palta", "20");
-    await paso(page, 7, "Resumen").click();
-    await expect(page.getByTestId("resumen-pendientes")).toContainText(
-      /pasta|material|trabajador|proceso/i,
-      { timeout: 30_000 },
-    );
-    await page.getByTestId("emitir-cotizacion").getByRole("button", { name: /confirmar y emitir/i }).click();
-    const dialogo = page.getByRole("dialog", { name: /confirmar y emitir/i });
-    await expect(dialogo.getByTestId("emision-bloqueos")).toContainText(
-      /pasta|material|trabajador|proceso/i,
-      { timeout: 15_000 },
-    );
-    await expect(dialogo.getByRole("button", { name: /^confirmar y emitir$/i })).toBeDisabled();
-  });
+    await anadirPiezaDelCatalogo(page, "Plato palta");
+    await cantidadDe(page, "Plato palta", "20");
 
-  test("FREE_PRODUCT_GATE: una linea libre sin procesos tampoco se puede emitir", async ({
-    page,
-  }) => {
-    // El agujero que la auditoria dejaba abierto. Una pieza que no esta en el
-    // catalogo no tiene ficha con tecnicas requeridas, asi que la comparacion
-    // contra esa ficha la daba siempre por buena: se podia emitir con mano de
-    // obra 0. Una pieza de encargo tambien la fabrica alguien.
-    await login(page);
-    await nuevoBorrador(page, "PRE010I-LineaLibre");
-    await elegirCliente(page);
-
-    await paso(page, 2, "Productos").click();
-    await page.getByLabel(/nueva l[ií]nea/i).fill("Taza personalizada");
-    await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
-    const card = tarjetaDeProducto(page, "Taza personalizada");
-    await expect(card).toBeVisible({ timeout: 15_000 });
-    const cantidad = card.getByLabel(/^cantidad/i);
-    await cantidad.fill("20");
-    await cantidad.blur();
-
-    // Con pasta y gramaje: lo unico que falta son los procesos, para que el
-    // bloqueo que se comprueba sea exactamente ese y no el del material.
-    await configurarMaterial(page, "Taza personalizada", "Arcilla Terranova", false);
-    await esperarGuardado(page);
-
-    await paso(page, 7, "Resumen").click();
-    await expect(page.getByTestId("resumen-pendientes")).toContainText(/mano de obra|proceso/i, {
+    await irAPaso(page, "Revisar y emitir");
+    await expect(page.getByTestId("v2next-pendientes")).toContainText(/pasta|arcilla|material|trabaj|proceso/i, {
       timeout: 30_000,
     });
-    await page
-      .getByTestId("emitir-cotizacion")
-      .getByRole("button", { name: /confirmar y emitir/i })
-      .click();
-    const dialogo = page.getByRole("dialog", { name: /confirmar y emitir/i });
-    await expect(dialogo.getByTestId("emision-bloqueos")).toContainText(/mano de obra|proceso/i, {
-      timeout: 15_000,
+    await expect(page.getByRole("button", { name: "Emitir cotización" })).toBeDisabled();
+  });
+
+  test("FREE_PRODUCT_GATE: una línea libre sin procesos tampoco se puede emitir", async ({ page }) => {
+    // Una pieza fuera del catálogo no tiene ficha con técnicas requeridas: sin
+    // esta barrera se podía emitir con mano de obra 0. También la fabrica alguien.
+    await login(page);
+    await nuevoBorrador(page, "PRE010I-LineaLibre");
+    await anadirPieza(page, "Taza personalizada", "20", ["10", "10", "10"]);
+
+    // Con arcilla: lo único que falta son los procesos, para que el bloqueo que
+    // se comprueba sea exactamente ese y no el del material.
+    await configurarMaterial(page, "Taza personalizada", "Arcilla Terranova", false);
+
+    await irAPaso(page, "Revisar y emitir");
+    await expect(page.getByTestId("v2next-pendientes")).toContainText(/mano de obra|nadie la fabrica|proceso/i, {
+      timeout: 30_000,
     });
-    await expect(dialogo.getByRole("button", { name: /^confirmar y emitir$/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Emitir cotización" })).toBeDisabled();
   });
 
   test("A2H-002: operador local ve UI restringida y la API responde 403", async ({ page }) => {
@@ -304,9 +230,7 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
     await expect(page.getByText(/su rol no permite modificar esta configuracion/i).first()).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByRole("button", { name: /guardar configuraci[oó]n v2/i })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("button", { name: /guardar configuraci[oó]n v2/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^editar$/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^configurar$/i })).toHaveCount(0);
 
@@ -321,8 +245,5 @@ test.describe("PRE-010I: Excel UI y RBAC local", () => {
   });
 
   // La frontera del inventario —el operador AJUSTA existencia pero no ABRE
-  // almacenes— tiene su propia prueba en `inventario-operador.spec.ts`, que
-  // hace el ajuste de verdad por la pantalla y comprueba el saldo y el
-  // movimiento. Aqui habia una version que se llamaba «ajusta existencia» sin
-  // ajustar nada, y cuyo 403 salia de un cuerpo que el esquema ya rechaza.
+  // almacenes— tiene su propia prueba en `inventario-operador.spec.ts`.
 });

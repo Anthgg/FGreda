@@ -37,7 +37,7 @@ test.describe("Cotizador V2 Next - Paso Piezas", () => {
       }
     });
 
-    await page.goto(`/cotizador-v2-next/${COTIZACION.id}/productos`);
+    await page.goto(`/cotizador-v2/${COTIZACION.id}/productos`);
   });
 
   test.afterEach(() => {

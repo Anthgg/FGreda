@@ -1,7 +1,9 @@
 /**
- * Dónde vive el Cotizador V2 rediseñado. Fase 010O.3.
+ * Dónde vive el Cotizador V2. Fase 010O.3; definitiva desde el corte (010O.13).
  *
- * Experimental hasta el corte: `/cotizador-v2` sigue siendo producción. El
- * corte será cambiar este valor y la tabla de rutas, sin tocar el shell.
+ * `/cotizador-v2-next`, la ruta de pruebas del rediseño, redirige aquí.
  */
-export const RUTA_V2_NEXT = "/cotizador-v2-next";
+export const RUTA_V2_NEXT = "/cotizador-v2";
+
+/** La ruta de pruebas de 010O.3–010O.12. Solo para redirigir sus enlaces. */
+export const RUTA_V2_PRUEBAS = "/cotizador-v2-next";

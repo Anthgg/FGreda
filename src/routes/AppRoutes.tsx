@@ -3,8 +3,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
 import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
-import { CotizadorV2Page } from "@/features/cotizadorV2/CotizadorV2Page";
-import { CotizadorV2NextPage } from "@/features/cotizadorV2Next/CotizadorV2NextPage";
+import { CotizadorV2NextPage, RedireccionV2Next } from "@/features/cotizadorV2Next/CotizadorV2NextPage";
 import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
 import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
@@ -128,14 +127,14 @@ export function AppRoutes() {
           <Route path="prototipos/:id/iteraciones" element={<LegacyPrototypeRedirect section="iteraciones" />} />
           <Route path="cotizador/nuevo" element={<Navigate to="/cotizador-v2" replace />} />
           <Route path="cotizador/:id" element={<CotizadorPage />} />
-          {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior. */}
-          <Route path="cotizador-v2" element={<CotizadorV2Page />} />
-          <Route path="cotizador-v2/:id" element={<CotizadorV2Page />} />
-          <Route path="cotizador-v2/:id/:step" element={<CotizadorV2Page />} />
-          {/* V2 NEXT: Fase 001 Rediseño */}
-          <Route path="cotizador-v2-next" element={<CotizadorV2NextPage />} />
-          <Route path="cotizador-v2-next/:id" element={<CotizadorV2NextPage />} />
-          <Route path="cotizador-v2-next/:id/:step" element={<CotizadorV2NextPage />} />
+          {/* Fase 010A. Cotizador V2: rama propia, no un modo del anterior.
+              Desde 010O.13 es la interfaz rediseñada; los pasos conservan sus
+              nombres, así que los enlaces de antes siguen abriendo lo mismo. */}
+          <Route path="cotizador-v2" element={<CotizadorV2NextPage />} />
+          <Route path="cotizador-v2/:id" element={<CotizadorV2NextPage />} />
+          <Route path="cotizador-v2/:id/:step" element={<CotizadorV2NextPage />} />
+          {/* La ruta de pruebas del rediseño (010O.3–010O.12) lleva a la definitiva. */}
+          <Route path="cotizador-v2-next/*" element={<RedireccionV2Next />} />
           {/* Fase 010K. Solo Quema: quemar piezas que trae el cliente. Rama
               propia, no un modo del Cotizador V2: distinto talonario, distinto
               factor y distinto documento. Tampoco cuelga de `quemas`, que
