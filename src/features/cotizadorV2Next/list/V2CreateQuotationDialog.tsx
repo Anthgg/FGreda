@@ -51,8 +51,11 @@ export function V2CreateQuotationDialog({ onClose, onSuccess }: V2CreateQuotatio
 
   return (
     <>
-      <div 
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity" 
+      {/* El fondo cierra con el ratón; con teclado cierra Escape (en el diálogo). */}
+      <div
+        role="presentation"
+        aria-hidden="true"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity"
         onClick={() => !create.isPending && onClose()}
       />
       

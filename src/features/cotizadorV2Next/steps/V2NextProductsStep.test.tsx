@@ -215,7 +215,9 @@ describe("V2NextProductsStep", () => {
     await user.click(screen.getByRole("button", { name: "Agregar pieza" }));
     await user.click(screen.getByRole("combobox", { name: "Buscar en catálogo o escribir nombre" }));
     await user.type(screen.getByPlaceholderText("Busca o escribe el nombre..."), "Nueva cosa");
-    await user.click(await screen.findByText("Pieza a medida «Nueva cosa»"));
+    // La opción de crear aparece tras el debounce del buscador: con la suite
+    // entera en paralelo eso pasa del segundo por defecto.
+    await user.click(await screen.findByText("Pieza a medida «Nueva cosa»", {}, { timeout: 5000 }));
 
     expect(hooks.anadir.mutate).toHaveBeenCalledWith(
       { product_name: "Nueva cosa", quantity: 1 },

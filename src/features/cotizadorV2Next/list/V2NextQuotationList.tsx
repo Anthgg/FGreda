@@ -58,7 +58,7 @@ export function V2NextQuotationList() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full space-y-6">
+    <div className="v2-legible-movil flex flex-col h-full w-full space-y-6">
       <MasterHeader
         title={<TypewriterTitle text="Cotizador V2." className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl" />}
         subtitle="Motor nuevo. El Cotizador anterior sigue disponible como Legacy y sus cotizaciones no se recalculan."

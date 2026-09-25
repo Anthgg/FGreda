@@ -48,18 +48,32 @@ export function V2NextReviewStep({ quotationId, datos, estados, irAPaso }: PasoD
       .map((senal) => ({ ...senal, paso: estado.id })),
   );
 
+  const intro = (
+    <p className="max-w-[64ch] text-[13px] text-zinc-600">
+      Así lo verá el cliente. Al emitir, la cotización queda fija con su fecha y vigencia.
+    </p>
+  );
+
+  // Todo a la vez: pintar cada bloque cuando llegaba su consulta insertaba la
+  // lista de pasos encima del documento a los dos segundos y empujaba el resto
+  // (Lighthouse: CLS 0.21 en este paso). Se espera a los pasos y al resumen.
+  if (cargando || resumen.isPending) {
+    return (
+      <Panel>
+        <div data-testid="v2next-paso-revisar" className="space-y-6">
+          {intro}
+          <Spinner className="size-5" label="Revisando la cotización…" />
+        </div>
+      </Panel>
+    );
+  }
+
   return (
     <Panel>
       <div data-testid="v2next-paso-revisar" className="space-y-6">
-        <p className="max-w-[64ch] text-[13px] text-zinc-600">
-          Así lo verá el cliente. Al emitir, la cotización queda fija con su fecha y vigencia.
-        </p>
+        {intro}
 
-        {cargando ? (
-          <Spinner className="size-5" label="Revisando los pasos…" />
-        ) : (
-          <ChecklistDePasos pasos={pasos} irAPaso={irAPaso} />
-        )}
+        <ChecklistDePasos pasos={pasos} irAPaso={irAPaso} />
 
         {deConfiguracion.length > 0 ? (
           <ul
@@ -74,9 +88,7 @@ export function V2NextReviewStep({ quotationId, datos, estados, irAPaso }: PasoD
           </ul>
         ) : null}
 
-        {resumen.isPending ? (
-          <Spinner className="size-5" label="Preparando el documento…" />
-        ) : resumen.isError ? (
+        {resumen.isError ? (
           <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">
             {describeError(resumen.error)}
           </p>

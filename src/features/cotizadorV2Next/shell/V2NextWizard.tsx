@@ -267,7 +267,7 @@ function Asistente({
     .reduce((total, uno) => total + uno.avisos, 0);
 
   return (
-    <div ref={raiz} data-testid="v2next-asistente" className="@container min-w-0 space-y-5">
+    <div ref={raiz} data-testid="v2next-asistente" className="v2-legible-movil @container min-w-0 space-y-5">
       {encabezado}
 
       <V2FailedSaves guardado={guardado} irAPaso={irAPaso} />
@@ -327,13 +327,19 @@ function Asistente({
             </ul>
           ) : null}
 
-          <Paso
-            quotationId={quotationId}
-            canEdit={editable}
-            datos={datos}
-            estados={estados}
-            irAPaso={irAPaso}
-          />
+          {/* Un alto mínimo para el paso: mientras carga es un indicador de
+              pocas líneas, y el pie y el resumen —que en dos columnas va debajo—
+              saltaban hacia abajo al llegar los datos (Lighthouse: CLS 0.196
+              en Precio a 1350 px). Casi todos los pasos ya miden más. */}
+          <div data-testid="v2next-contenido-del-paso" className="min-h-[44rem]">
+            <Paso
+              quotationId={quotationId}
+              canEdit={editable}
+              datos={datos}
+              estados={estados}
+              irAPaso={irAPaso}
+            />
+          </div>
 
           <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] pt-4">
             <div className="min-w-0">

@@ -114,7 +114,7 @@ export function PieceCard({
           type="button"
           onClick={() => setShowDelete(true)}
           aria-label={`Quitar ${linea.product_name ?? "pieza sin nombre"}`}
-          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-700 transition-all hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600"
+          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600"
         >
           Quitar
         </button>

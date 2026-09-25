@@ -242,7 +242,7 @@ export function ChoiceCardGroup<T extends string = string>({
             {option.badge && (
               <div className="absolute -top-2.5 right-4 z-10 pointer-events-none">
                 {typeof option.badge === "string" ? (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-2xs tracking-wide">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-700 text-white shadow-2xs tracking-wide">
                     {option.badge}
                   </span>
                 ) : (

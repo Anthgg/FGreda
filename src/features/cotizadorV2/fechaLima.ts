@@ -6,15 +6,17 @@
  * día después de lo que dice el PDF. Solo presenta: no decide vencimientos.
  */
 
+const FORMATO_LIMA = new Intl.DateTimeFormat("es-PE", {
+  timeZone: "America/Lima",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
 export function fechaLima(instante: string | null | undefined): string {
   if (!instante) return "";
   const fecha = new Date(instante);
   if (Number.isNaN(fecha.getTime())) return "";
-  return new Intl.DateTimeFormat("es-PE", {
-    timeZone: "America/Lima",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(fecha);
+  return FORMATO_LIMA.format(fecha);
 }
 

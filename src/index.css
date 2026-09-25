@@ -175,6 +175,19 @@ body {
   scrollbar-width: none;
 }
 
+/*
+ * Cotizador V2 en un teléfono: ningún texto por debajo de 12 px. La base de la
+ * aplicación es 14 px, así que `text-xs` queda en 10,5 px, y el rediseño usa
+ * además 11 y 11,5 px; en móvil solo el 26 % del texto era legible (Lighthouse,
+ * 010O.FINAL). Fuera de capas a propósito: así gana a las utilidades sin
+ * `!important`. En escritorio se mantienen los tamaños aprobados.
+ */
+@media (max-width: 639.98px) {
+  .v2-legible-movil :where(.text-xs, [class*="text-[10"], [class*="text-[11"]) {
+    font-size: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-card-enter,
   .login-caret-blink,
