@@ -6,7 +6,7 @@ import {
   useUltimoDescarte,
   type ResultadoDeGuardado,
 } from "@/components/borradores";
-import { TextField } from "@/components/form";
+import { Field, TextField } from "@/components/form";
 import {
   interpretarDecimal,
   interpretarEntero,
@@ -58,6 +58,8 @@ interface DecimalFieldProps {
   entero?: boolean | undefined;
   permitirNegativo?: boolean | undefined;
   className?: string | undefined;
+  /** Unidad visual fuera del valor numérico; por ejemplo cm, g, h o días. */
+  sufijo?: string | undefined;
 }
 
 /**
@@ -94,6 +96,7 @@ export function DecimalField({
   entero = false,
   permitirNegativo = false,
   className,
+  sufijo,
 }: DecimalFieldProps) {
   const guardado = paraEditar(value);
   const [borrador, setBorrador] = useState(guardado);
@@ -244,18 +247,62 @@ export function DecimalField({
     setError(null);
   }, [descarte, escribiendo, firmaFallida]);
 
+  const cambiarBorrador = (texto: string) => {
+    setBorrador(texto);
+    // El error se retira en cuanto se toca el campo: dejarlo puesto
+    // mientras se corrige convierte la ayuda en ruido.
+    if (error) setError(null);
+  };
+
+  if (sufijo) {
+    return (
+      <Field
+        label={label}
+        requirement={requirement}
+        hint={hint}
+        error={error ?? undefined}
+        className={className}
+      >
+        {(id) => (
+          <div className="relative">
+            <input
+              id={id}
+              type="text"
+              value={borrador}
+              onFocus={() => setEscribiendo(true)}
+              onChange={(event) => cambiarBorrador(event.target.value)}
+              onBlur={confirmar}
+              disabled={disabled}
+              required={requirement === "required"}
+              inputMode="decimal"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={`${id}-sufijo`}
+              className={[
+                "w-full h-10 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-xs px-3 py-2 pr-14 text-xs sm:text-sm text-zinc-900 shadow-2xs",
+                "placeholder:text-zinc-400 transition-all focus:border-black focus:bg-white/80 focus:outline-hidden focus:ring-1 focus:ring-black",
+                "disabled:cursor-not-allowed disabled:bg-white/30 disabled:text-zinc-400 disabled:border-black/[0.04] disabled:shadow-none disabled:opacity-50",
+                error ? "border-red-400 focus:border-red-500 focus:ring-red-500" : "",
+              ].join(" ")}
+            />
+            <span
+              id={`${id}-sufijo`}
+              className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-zinc-500"
+            >
+              {sufijo}
+            </span>
+          </div>
+        )}
+      </Field>
+    );
+  }
+
   return (
     <TextField
       label={label}
       requirement={requirement}
       value={borrador}
       onFocus={() => setEscribiendo(true)}
-      onChange={(texto) => {
-        setBorrador(texto);
-        // El error se retira en cuanto se toca el campo: dejarlo puesto
-        // mientras se corrige convierte la ayuda en ruido.
-        if (error) setError(null);
-      }}
+      onChange={cambiarBorrador}
       onBlur={confirmar}
       disabled={disabled}
       inputMode="decimal"

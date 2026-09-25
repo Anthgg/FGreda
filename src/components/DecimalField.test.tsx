@@ -345,4 +345,48 @@ describe("DecimalField", () => {
     await user.tab();
     expect(screen.queryByText(/coma o punto/i)).toBeNull();
   });
+
+  it("muestra un sufijo accesible fuera del valor y conserva la coma peruana", async () => {
+    const onCommit = vi.fn();
+    render(<DecimalField label="Altura" value="12.000000" onCommit={onCommit} sufijo="cm" />);
+    const user = userEvent.setup();
+    const input = screen.getByLabelText(/^Altura/);
+    const suffix = screen.getByText("cm");
+
+    expect(input).toHaveValue("12");
+    expect(input).toHaveAttribute("aria-describedby", suffix.id);
+    await user.clear(input);
+    await user.type(input, "12,5");
+    expect(input).toHaveValue("12,5");
+    await user.tab();
+
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith("12.5");
+  });
+
+  it("mantiene la validación de enteros junto al sufijo", async () => {
+    const onCommit = vi.fn();
+    render(
+      <DecimalField label="Días" value="3" onCommit={onCommit} entero sufijo="días" />,
+    );
+    const user = userEvent.setup();
+    const input = screen.getByLabelText(/^Días/);
+
+    expect(screen.getByText("días")).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, "4");
+    await user.tab();
+
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith("4");
+  });
+
+  it("con sufijo un campo vacío sigue mandando null, no cero", async () => {
+    const onCommit = vi.fn();
+    render(<DecimalField label="Peso" value="500" onCommit={onCommit} sufijo="g" />);
+    const user = userEvent.setup();
+
+    await user.clear(screen.getByLabelText(/^Peso/));
+    await user.tab();
+
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith(null);
+  });
 });

@@ -1,15 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchPartners } from "@/api/masters";
-import {
-  seguirEnvio,
-  useBorradorProtegido,
-  useUltimoDescarte,
-  type ResultadoDeGuardado,
-} from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
-import { SelectField, TextAreaField, TextField } from "@/components/form";
+import { DeferredTextField } from "@/components/DeferredTextField";
+import { SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
@@ -74,105 +69,6 @@ function useEspera(valor: string, milisegundos = 300): string {
   return reposado;
 }
 
-/**
- * Texto que se guarda al SALIR del campo, no en cada tecla.
- *
- * La misma razón que en `DecimalField`: escribir un nombre de ocho letras no
- * son ocho peticiones, y una edición que acaba donde empezó no gasta ninguna.
- */
-function useTextoDiferido(
-  guardado: string,
-  guardar: (valor: string | null) => void | Promise<ResultadoDeGuardado>,
-  habilitado: boolean,
-) {
-  const [borrador, setBorrador] = useState(guardado);
-  const [escribiendo, setEscribiendo] = useState(false);
-  // Lo enviado: tras salir del campo se sigue enseñando hasta que lo guardado
-  // coincida con ello. Sin esto el campo volvía a pintar el valor ANTERIOR hasta
-  // el refetch, y quien
-  // volvía a entrar enseguida editaba el viejo.
-  const [enviado, setEnviado] = useState<{ valor: string } | null>(null);
-  // No se sincroniza con lo guardado mientras el campo está abierto. Lo encontró
-  // Codex: escribir «Feria», salir —se guarda—, volver a entrar y seguir con
-  // «Feria de octubre»; al llegar el refetch lo guardado pasa a «Feria» y, sin
-  // esta guarda, el efecto borraba « de octubre» sin blur y sin aviso. Los
-  // campos numéricos y los de las líneas ya lo hacían; este se había quedado.
-  useEffect(() => {
-    if (escribiendo) return;
-    if (enviado !== null) {
-      // Solo si COINCIDE: que lo guardado cambie por un envío anterior no
-      // alcanza este. Ver `DecimalField`.
-      const alcanzado = guardado.trim() === enviado.valor.trim();
-      if (!alcanzado) return;
-      setEnviado(null);
-    }
-    setBorrador(guardado);
-  }, [guardado, escribiendo, enviado]);
-
-  // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
-  // que el campo enseña. Si el servidor lo aceptó Y la pantalla ya tiene el
-  // dato posterior al guardado (`fresco`), el campo enseña lo guardado tal cual
-  // lo normalizó el backend: `20,5000004` pasa a `20.5`. Aceptado sin dato
-  // fresco, sigue enseñando lo enviado. Si falla, se recuerda su firma para que
-  // un descarte sepa que es este campo el que tiene que revertir.
-  const envios = useRef(0);
-  const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
-  const seguir = (resultado: unknown) => {
-    const secuencia = ++envios.current;
-    seguirEnvio(
-      resultado,
-      () => envios.current === secuencia,
-      (final) => {
-        if (final.ok) {
-          setFirmaFallida(null);
-          // Solo con un dato posterior a ESTE guardado. Si el refetch no llegó,
-          // se sigue enseñando lo enviado: alinearse con lo que hay pintaría
-          // el valor viejo, y quien volviera a entrar editaría lo obsoleto.
-          if (final.fresco !== false) setEnviado(null);
-        } else {
-          setFirmaFallida(final.firma);
-        }
-      },
-    );
-  };
-
-  const confirmar = () => {
-    setEscribiendo(false);
-    if (borrador.trim() === guardado.trim()) return;
-    // Vaciar un texto libre SÍ es retirarlo: a diferencia de un importe, un
-    // nombre en blanco no puede confundirse con un cero.
-    setEnviado({ valor: borrador });
-    seguir(guardar(borrador.trim() === "" ? null : borrador));
-  };
-  // Lo YA enviado no cuenta como borrador, y sin permiso de edición no se
-  // declara ni se confirma nada. Ver `DecimalField`.
-  const sucio =
-    habilitado &&
-    borrador.trim() !== guardado.trim() &&
-    (enviado === null || borrador.trim() !== enviado.valor.trim());
-  useBorradorProtegido(sucio, confirmar);
-
-  // El descarte es DIRIGIDO: solo vuelve a lo guardado el campo cuyo último
-  // envío falló con la firma descartada. Un campo con un envío en vuelo no lo
-  // escucha, porque su guardado todavía puede salir bien.
-  const descarte = useUltimoDescarte();
-  const descarteVisto = useRef(descarte.n);
-  useEffect(() => {
-    if (descarte.n === descarteVisto.current) return;
-    descarteVisto.current = descarte.n;
-    if (escribiendo || firmaFallida === null || firmaFallida !== descarte.firma) return;
-    setFirmaFallida(null);
-    setEnviado(null);
-  }, [descarte, escribiendo, firmaFallida]);
-
-  return {
-    borrador,
-    setBorrador,
-    alEntrar: () => setEscribiendo(true),
-    confirmar,
-  };
-}
-
 export function V2ClienteStep({
   cotizacion,
   canEdit,
@@ -183,24 +79,6 @@ export function V2ClienteStep({
   const guardar = useUpdateV2Quotation(cotizacion.id);
   const esperarGuardado = useEsperarGuardado(cotizacion.id);
   const [busqueda, setBusqueda] = useState("");
-
-  const nombre = useTextoDiferido(
-    cotizacion.name ?? "",
-    (name) => esperarGuardado(guardar, "cabecera", { name }),
-    canEdit,
-  );
-  const notas = useTextoDiferido(
-    cotizacion.notes ?? "",
-    (notes) => esperarGuardado(guardar, "cabecera", { notes }),
-    canEdit,
-  );
-  // Fase 010H. Lo que SÍ lee el cliente: sale en el PDF. Va aparte de las notas
-  // internas para que nadie publique sin querer lo que escribió para el taller.
-  const notasCliente = useTextoDiferido(
-    cotizacion.client_notes ?? "",
-    (client_notes) => esperarGuardado(guardar, "cabecera", { client_notes }),
-    canEdit,
-  );
 
   const busquedaReposada = useEspera(busqueda);
   const terceros = useQuery({
@@ -272,13 +150,15 @@ export function V2ClienteStep({
           {...(terceros.isPending ? { hint: "Cargando terceros..." } : {})}
         />
 
-        <TextField
+        <DeferredTextField
           label="Nombre de la cotización"
           requirement="optional"
-          value={nombre.borrador}
-          onChange={nombre.setBorrador}
-          onFocus={nombre.alEntrar}
-          onBlur={nombre.confirmar}
+          value={cotizacion.name ?? ""}
+          onCommit={(name) =>
+            esperarGuardado(guardar, "cabecera", {
+              name: name.trim() === "" ? null : name,
+            })
+          }
           placeholder="Pedido de tazas — setiembre"
           disabled={!canEdit}
           maxLength={200}
@@ -331,32 +211,33 @@ export function V2ClienteStep({
         ) : null}
       </div>
 
-      {/* `TextAreaField` no expone `onBlur`. El de React es `focusout`, que sí
-          burbujea, así que el contenedor sirve para confirmar el borrador al
-          salir del área. Cambiar la primitiva compartida por un solo uso
-          saldría más caro. */}
-      <div onFocus={notas.alEntrar} onBlur={notas.confirmar}>
-        <TextAreaField
-          label="Notas internas"
-          requirement="optional"
-          value={notas.borrador}
-          onChange={notas.setBorrador}
-          rows={2}
-          disabled={!canEdit}
-          hint="Para el taller. No salen en el documento del cliente."
-        />
-      </div>
-      <div onFocus={notasCliente.alEntrar} onBlur={notasCliente.confirmar}>
-        <TextAreaField
-          label="Observaciones para el cliente"
-          requirement="optional"
-          value={notasCliente.borrador}
-          onChange={notasCliente.setBorrador}
-          rows={2}
-          disabled={!canEdit}
-          hint="Salen en el PDF que recibe el cliente, junto a las condiciones comerciales."
-        />
-      </div>
+      <DeferredTextField
+        multiline
+        label="Notas internas"
+        requirement="optional"
+        value={cotizacion.notes ?? ""}
+        onCommit={(notes) =>
+          esperarGuardado(guardar, "cabecera", { notes: notes.trim() === "" ? null : notes })
+        }
+        rows={2}
+        disabled={!canEdit}
+        hint="Para el taller. No salen en el documento del cliente."
+      />
+      {/* Fase 010H: este texto sí sale en el PDF; permanece aparte de las notas internas. */}
+      <DeferredTextField
+        multiline
+        label="Observaciones para el cliente"
+        requirement="optional"
+        value={cotizacion.client_notes ?? ""}
+        onCommit={(client_notes) =>
+          esperarGuardado(guardar, "cabecera", {
+            client_notes: client_notes.trim() === "" ? null : client_notes,
+          })
+        }
+        rows={2}
+        disabled={!canEdit}
+        hint="Salen en el PDF que recibe el cliente, junto a las condiciones comerciales."
+      />
 
       <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-black/[0.06] bg-white/40 p-4 sm:grid-cols-4">
         <div>

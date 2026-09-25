@@ -1,15 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchProducts } from "@/api/masters";
 import { PrimaryButton, SelectField, TextField } from "@/components/form";
+import { DeferredTextField } from "@/components/DeferredTextField";
 import { Spinner } from "@/components/Spinner";
-import {
-  seguirEnvio,
-  useBorradorProtegido,
-  useUltimoDescarte,
-  type ResultadoDeGuardado,
-} from "@/components/borradores";
 import { DecimalField } from "@/components/DecimalField";
 import { EmptyState, Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
@@ -96,122 +91,6 @@ function Dato({
   );
 }
 
-/**
- * Campo de TEXTO que solo avisa cuando el usuario termina.
- *
- * Queda aquí y no se comparte porque es para texto libre —el nombre de una
- * pieza de encargo—. Todo lo numérico usa `DecimalField`, que además acepta la
- * coma decimal y distingue un campo vacío de un cero.
- */
-function CampoDeTexto({
-  label,
-  value,
-  onCommit,
-  disabled,
-  hint,
-}: {
-  label: string;
-  value: string;
-  onCommit: (valor: string) => void | Promise<ResultadoDeGuardado>;
-  disabled: boolean;
-  hint?: string | undefined;
-}) {
-  const [borrador, setBorrador] = useState(value);
-  const [escribiendo, setEscribiendo] = useState(false);
-  // Lo enviado: se sigue enseñando hasta que lo guardado coincida con ello.
-  // Ver `DecimalField`.
-  const [enviado, setEnviado] = useState<{ valor: string } | null>(null);
-  // Si el valor guardado cambia por fuera —otra edición, un refetch— el campo
-  // lo sigue, pero NO mientras alguien lo tiene abierto: desde que cambiar
-  // cualquier cosa invalida la cotización entera, un refresco puede resolverse
-  // a mitad de una palabra, y borrarla sería peor que enseñar un valor viejo
-  // durante los segundos que dura la edición. Al salir se sincroniza igual.
-  useEffect(() => {
-    if (escribiendo) return;
-    if (enviado !== null) {
-      // Solo si COINCIDE: que lo guardado cambie por un envío anterior no
-      // alcanza este. Ver `DecimalField`.
-      const alcanzado = value.trim() === enviado.valor;
-      if (!alcanzado) return;
-      setEnviado(null);
-    }
-    setBorrador(value);
-  }, [value, escribiendo, enviado]);
-
-  // Cada envío lleva un número; solo el resultado del ÚLTIMO dice algo de lo
-  // que el campo enseña. Si el servidor lo aceptó Y la pantalla ya tiene el
-  // dato posterior al guardado (`fresco`), el campo enseña lo guardado tal cual
-  // lo normalizó el backend: `20,5000004` pasa a `20.5`. Aceptado sin dato
-  // fresco, sigue enseñando lo enviado. Si falla, se recuerda su firma para que
-  // un descarte sepa que es este campo el que tiene que revertir.
-  const envios = useRef(0);
-  const [firmaFallida, setFirmaFallida] = useState<string | null>(null);
-  const seguir = (resultado: unknown) => {
-    const secuencia = ++envios.current;
-    seguirEnvio(
-      resultado,
-      () => envios.current === secuencia,
-      (final) => {
-        if (final.ok) {
-          setFirmaFallida(null);
-          // Solo con un dato posterior a ESTE guardado. Si el refetch no llegó,
-          // se sigue enseñando lo enviado: alinearse con lo que hay pintaría
-          // el valor viejo, y quien volviera a entrar editaría lo obsoleto.
-          if (final.fresco !== false) setEnviado(null);
-        } else {
-          setFirmaFallida(final.firma);
-        }
-      },
-    );
-  };
-
-  const confirmar = () => {
-    setEscribiendo(false);
-    // Se compara y se manda ya recortado: un nombre con espacios al final es el
-    // mismo nombre y no merece ni una petición ni una fila distinta.
-    const limpio = borrador.trim();
-    if (limpio !== value.trim()) {
-      setEnviado({ valor: limpio });
-      seguir(onCommit(limpio));
-    }
-  };
-  // Lo tecleado sin salir del campo cuenta como cambio sin guardar, y se
-  // confirma si el campo se desmonta sin blur. Lo YA enviado no cuenta —si no,
-  // un desmontaje con el envío en vuelo lo mandaba dos veces— y un campo
-  // deshabilitado no declara ni confirma nada. Ver `DecimalField`.
-  const limpioAhora = borrador.trim();
-  const sucio =
-    !disabled &&
-    limpioAhora !== value.trim() &&
-    (enviado === null || limpioAhora !== enviado.valor.trim());
-  useBorradorProtegido(sucio, confirmar);
-
-  // El descarte es DIRIGIDO: solo vuelve a lo guardado el campo cuyo último
-  // envío falló con la firma descartada. Un campo con un envío en vuelo no lo
-  // escucha, porque su guardado todavía puede salir bien.
-  const descarte = useUltimoDescarte();
-  const descarteVisto = useRef(descarte.n);
-  useEffect(() => {
-    if (descarte.n === descarteVisto.current) return;
-    descarteVisto.current = descarte.n;
-    if (escribiendo || firmaFallida === null || firmaFallida !== descarte.firma) return;
-    setFirmaFallida(null);
-    setEnviado(null);
-  }, [descarte, escribiendo, firmaFallida]);
-
-  return (
-    <TextField
-      label={label}
-      requirement="required"
-      value={borrador}
-      onFocus={() => setEscribiendo(true)}
-      onChange={setBorrador}
-      onBlur={confirmar}
-      disabled={disabled}
-      {...(hint ? { hint } : {})}
-    />
-  );
-}
 
 function Linea({
   linea,
@@ -265,11 +144,13 @@ function Linea({
       {vista === "piezas" ? (
         <>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <CampoDeTexto
+            <DeferredTextField
               label="Nombre de la pieza"
               value={linea.product_name ?? ""}
               onCommit={(valor) => guardarYEsperar({ product_name: valor })}
               disabled={!canEdit || linea.product_id !== null}
+              requirement="required"
+              trimOnCommit
               {...(linea.product_id !== null
                 ? { hint: "Lo fija el catálogo: esta línea cuelga de un producto." }
                 : {})}
@@ -290,11 +171,13 @@ function Linea({
           </div>
 
           <div className="mt-3">
-            <CampoDeTexto
+            <DeferredTextField
               label="Observación para el cliente"
               value={linea.client_observation ?? ""}
               onCommit={(valor) => guardarYEsperar({ client_observation: valor })}
               disabled={!canEdit}
+              requirement="required"
+              trimOnCommit
               hint="Opcional. Sale en el PDF junto a esta pieza: acabado, color, un detalle del encargo."
             />
           </div>
