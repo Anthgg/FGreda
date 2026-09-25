@@ -118,7 +118,7 @@ export function DocumentoDelCliente({
 
       {resumen.exchange_rate ? (
         <p className="mt-3 text-right text-xs text-zinc-500">
-          Tipo de cambio congelado: {resumen.exchange_rate}
+          Tipo de cambio congelado: TC {Number(resumen.exchange_rate).toFixed(3)}
         </p>
       ) : null}
 

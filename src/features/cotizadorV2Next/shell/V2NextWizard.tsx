@@ -37,7 +37,7 @@ import { V2NextMaterialsStep } from "@/features/cotizadorV2Next/steps/V2NextMate
 import { V2NextPricingStep } from "@/features/cotizadorV2Next/steps/V2NextPricingStep";
 import { V2NextProductsStep } from "@/features/cotizadorV2Next/steps/V2NextProductsStep";
 import { V2NextReviewStep } from "@/features/cotizadorV2Next/steps/V2NextReviewStep";
-import type { V2DuplicateWarning, V2Quotation } from "@/types/quoterV2";
+import type { V2DuplicateWarning, V2EffectiveStatus, V2Quotation } from "@/types/quoterV2";
 
 /**
  * El shell del Cotizador V2 rediseñado. Fase 010O.3.
@@ -83,6 +83,22 @@ const PASO_COMPONENTE: Record<PasoId, ComponentType<PasoDelAsistenteProps>> = {
   quema: V2NextKilnStep,
   precio: V2NextPricingStep,
   resumen: V2NextReviewStep,
+};
+
+/**
+ * Qué se dice arriba de una cotización que ya no es borrador (010O.12).
+ *
+ * Solo lo que el backend permite: una emitida vigente NO se duplica —para otra
+ * versión se anula y se duplica la anulada—; una vencida o anulada, sí.
+ */
+const SOLO_LECTURA: Record<Exclude<V2EffectiveStatus, "DRAFT">, string> = {
+  CONFIRMED:
+    "Emitida: se lee, no se edita. Para ofrecer otra versión, anúlela y duplíquela: la nueva se calcula con los precios de hoy.",
+  EXPIRED:
+    "Vencida: se lee, no se edita. Duplíquela para ofrecerla otra vez con los precios de hoy.",
+  READY_FOR_PRODUCTION: "Enviada a producción: se lee, no se edita.",
+  CANCELLED:
+    "Anulada: se lee, no se edita. Puede duplicarla para empezar otra con los precios de hoy.",
 };
 
 /** Lo que la duplicación deja en el estado de la navegación al llegar aquí. */
@@ -200,12 +216,23 @@ function Asistente({
       titulo={cotizacion.name ?? cotizacion.customer_name ?? "Nueva cotización"}
       codigo={cotizacion.code}
       rutaListado={rutaBase}
+      estado={cotizacion.effective_status}
     >
       <V2CicloDeVida
         cotizacion={cotizacion}
         avisosDeDuplicacion={llegada?.avisosDeDuplicacion}
         duplicacionCreada={llegada?.duplicacionCreada}
+        rutaBase={rutaBase}
+        conEstado={false}
       />
+      {!editable && cotizacion.effective_status !== "DRAFT" ? (
+        <p
+          data-testid="v2next-solo-lectura"
+          className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-2 text-[13px] text-zinc-700"
+        >
+          {SOLO_LECTURA[cotizacion.effective_status]}
+        </p>
+      ) : null}
     </V2QuotationHeader>
   );
 

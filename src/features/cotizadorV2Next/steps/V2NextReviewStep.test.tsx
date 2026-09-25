@@ -127,7 +127,7 @@ describe("«Revisar y emitir» del rediseño", () => {
     expect(within(documento).getByTestId("v2next-documento-total")).toHaveTextContent(
       "US$ 1113.92",
     );
-    expect(documento).toHaveTextContent("Tipo de cambio congelado: 3.750000");
+    expect(documento).toHaveTextContent("Tipo de cambio congelado: TC 3.750");
   });
 
   it("emitir confirma en un diálogo y manda la huella del resumen, una vez", async () => {

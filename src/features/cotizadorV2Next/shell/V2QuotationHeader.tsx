@@ -7,11 +7,10 @@ import type { V2EffectiveStatus } from "@/types/quoterV2";
 /**
  * La cabecera de la cotización: vale igual en los siete pasos. Fase 010O.3.
  *
- * Dice de quién es la cotización y cómo se llama, y deja un hueco para las
- * acciones del ciclo de vida. En 010O.3 ese hueco lo ocupa `V2CicloDeVida` tal
- * cual —anular, PDF, duplicar, enviar a producción—, que ya pinta el estado; por
- * eso `estado` es opcional: se enseña aquí cuando las acciones dejen de
- * hacerlo (010O.12), nunca dos veces.
+ * Dice de quién es la cotización, cómo se llama y en qué estado está, y deja un
+ * hueco para el ciclo de vida —anular, PDF, duplicar, enviar a producción—.
+ * Desde 010O.12 el estado se pinta aquí y `V2CicloDeVida` se monta con
+ * `conEstado={false}`: el mismo estado dos veces en la pantalla es ruido.
  */
 export function V2QuotationHeader({
   titulo,
