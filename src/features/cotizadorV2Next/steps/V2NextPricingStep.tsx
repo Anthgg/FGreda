@@ -157,7 +157,9 @@ export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsiste
           aria-label="Factor comercial"
           className="rounded-2xl border border-black/[0.06] bg-white/60 p-4 sm:p-5"
         >
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          {/* En un teléfono el factor va a lo ancho y el precio debajo: lado a
+              lado, las marcas del deslizador se pisaban. */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <FactorControl
               factor={precio.commercial_factor}
               minimo={precio.factor_min}
@@ -167,7 +169,7 @@ export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsiste
               fallo={guardar.isError}
               onCommit={(valor) => guardar.mutate({ commercial_factor: valor })}
             />
-            <div className="text-right">
+            <div className="sm:text-right">
               <p className="text-[13px] text-zinc-600">Precio sin IGV</p>
               <p
                 data-testid="v2next-subtotal"
