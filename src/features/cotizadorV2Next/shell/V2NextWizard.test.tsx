@@ -23,10 +23,6 @@ const pasoActual = () => barra().getByRole("button", { current: "step" });
 const tituloDelPaso = (nombre: string) => screen.findByRole("heading", { level: 2, name: nombre });
 
 /** Elige una opción de un `SelectField` de los paneles. */
-async function elegir(user: ReturnType<typeof userEvent.setup>, campo: string, opcion: RegExp) {
-  await user.click(await screen.findByRole("combobox", { name: campo }));
-  await user.click(await screen.findByRole("option", { name: opcion }));
-}
 
 describe("shell del Cotizador V2 rediseñado: rutas", () => {
   it("abre el paso de la URL por su nombre, con la cabecera de la cotización", async () => {
@@ -133,7 +129,7 @@ describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
     renderApp(["/cotizador-v2-next/7/cliente"]);
     await tituloDelPaso("Cliente");
 
-    await elegir(user, "Tipo de cliente", /alumno/i);
+    await user.click(await screen.findByRole("radio", { name: /alumno/i }));
     await waitFor(() =>
       expect(screen.getByTestId("v2next-estado-guardado")).toHaveTextContent("Guardando…"),
     );
@@ -154,7 +150,7 @@ describe("shell del Cotizador V2 rediseñado: pasos y navegación", () => {
     renderApp(["/cotizador-v2-next/7/cliente"]);
     await tituloDelPaso("Cliente");
 
-    await elegir(user, "Tipo de cliente", /alumno/i);
+    await user.click(await screen.findByRole("radio", { name: /alumno/i }));
     const aviso = await screen.findByTestId("v2next-guardados-fallidos");
     expect(aviso).toHaveTextContent("Un cambio no se guardó.");
     expect(screen.getByTestId("v2next-estado-guardado")).toHaveTextContent("Error al guardar");
@@ -208,7 +204,7 @@ describe("shell del Cotizador V2 rediseñado: resumen y pendientes", () => {
     const resumen = screen.getByRole("complementary", { name: "Resumen de la cotización" });
     await within(within(resumen).getByTestId("v2next-pendientes")).findByText("Falta elegir el horno.");
 
-    await elegir(user, "Tipo de cliente", /alumno/i);
+    await user.click(await screen.findByRole("radio", { name: /alumno/i }));
 
     await within(within(resumen).getByTestId("v2next-pendientes")).findByText("Todo listo para emitir");
     expect(resumenes).toBeGreaterThanOrEqual(2);

@@ -26,7 +26,7 @@ const TEXTAREA_CONTROL =
 interface FieldProps {
   label: string;
   requirement?: "required" | "optional" | "automatic" | undefined;
-  hint?: string | undefined;
+  hint?: ReactNode | undefined;
   error?: string | undefined;
   children: (id: string) => ReactNode;
   className?: string | undefined;
@@ -105,7 +105,7 @@ interface TextFieldProps {
    */
   type?: "text" | "email" | "url" | "tel" | "number" | "password" | undefined;
   placeholder?: string | undefined;
-  hint?: string | undefined;
+  hint?: ReactNode | undefined;
   error?: string | undefined;
   maxLength?: number | undefined;
   inputMode?: "text" | "numeric" | "decimal" | "tel" | "email" | "url" | undefined;
@@ -171,7 +171,7 @@ interface TextAreaFieldProps {
   disabled?: boolean | undefined;
   rows?: number | undefined;
   placeholder?: string | undefined;
-  hint?: string | undefined;
+  hint?: ReactNode | undefined;
   error?: string | undefined;
   className?: string | undefined;
 }
