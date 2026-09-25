@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useV2Quotations } from "@/features/cotizadorV2/useQuoterV2";
 import { formatDisplayDate } from "@/components/dateFormat";
+import { fechaLima } from "@/features/cotizadorV2/fechaLima";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 import { SegmentedControl } from "@/components/SegmentedControl";
@@ -144,7 +145,7 @@ export function V2NextQuotationList() {
                     </td>
                     <td className="p-0 align-middle">
                       <div className="py-3 px-4 text-sm text-zinc-600 h-full w-full">
-                        {formatDisplayDate(row.created_at)}
+                        {fechaLima(row.created_at)}
                       </div>
                     </td>
                     <td className="p-0 align-middle">

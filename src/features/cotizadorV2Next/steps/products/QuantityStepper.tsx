@@ -14,10 +14,13 @@ export function QuantityStepper({
   disabled?: boolean;
 }) {
   const [draft, setDraft] = useState<string>(String(value));
+  // Lo enviado y aún sin respuesta. Es estado, no ref: al enviar, el campo
+  // tiene que volver a pintarse ya limpio aunque el texto no cambie.
+  const [enviado, setEnviado] = useState<number | null>(null);
   const groupRef = useRef<HTMLDivElement | null>(null);
   const draftRef = useRef<string>(String(value));
-  const savedRef = useRef(value);
   const enviadoRef = useRef<number | null>(null);
+  const valorRef = useRef(value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const limpiarTimer = () => {
@@ -30,6 +33,11 @@ export function QuantityStepper({
     setDraft(texto);
   };
 
+  const guardarEnviado = (valor: number | null) => {
+    enviadoRef.current = valor;
+    setEnviado(valor);
+  };
+
   const parsear = (texto: string) => {
     const parsed = parseInt(texto, 10);
     return !Number.isNaN(parsed) && parsed > 0 ? parsed : null;
@@ -39,38 +47,38 @@ export function QuantityStepper({
     limpiarTimer();
     const parsed = parsear(draftRef.current);
     if (parsed === null) {
-      guardarDraft(String(savedRef.current));
+      guardarDraft(String(enviadoRef.current ?? valorRef.current));
       return;
     }
-    if (parsed === savedRef.current || parsed === enviadoRef.current) {
-      guardarDraft(String(parsed));
-      return;
-    }
-    enviadoRef.current = parsed;
     guardarDraft(String(parsed));
+    if (parsed === (enviadoRef.current ?? valorRef.current)) return;
+    guardarEnviado(parsed);
     onSave(parsed);
   };
 
   const draftNumerico = parsear(draft);
-  const referencia = enviadoRef.current ?? savedRef.current;
+  const referencia = enviado ?? value;
   const isDirty = disabled
     ? false
     : draftNumerico === null
-      ? draft !== String(savedRef.current)
+      ? draft !== String(referencia)
       : draftNumerico !== referencia;
 
   useBorradorProtegido(isDirty, commit);
 
+  // Llega un valor del servidor. Si el campo seguía lo último enviado (o lo
+  // guardado), lo adopta: es la respuesta, sea la pedida u otra. Si la persona
+  // ya escribió algo distinto, se respeta su borrador.
   useEffect(() => {
-    savedRef.current = value;
-    if (enviadoRef.current === value) enviadoRef.current = null;
-    if (!isDirty) {
-      draftRef.current = String(value);
-      setDraft(String(value));
-    } else {
-      draftRef.current = draft;
+    const anterior = enviadoRef.current ?? valorRef.current;
+    valorRef.current = value;
+    if (parsear(draftRef.current) === anterior) {
+      guardarDraft(String(value));
+      guardarEnviado(null);
+    } else if (enviadoRef.current === value) {
+      guardarEnviado(null);
     }
-  }, [value, isDirty, draft]);
+  }, [value]);
 
   useEffect(() => {
     return () => limpiarTimer();

@@ -59,6 +59,21 @@ describe("V2NextQuotationList", () => {
     expect(link).toHaveAttribute("href", `${RUTA_V2_NEXT}/1`);
   });
 
+  it("la fecha de creación es un instante y se pinta en hora de Lima", async () => {
+    // El backend manda `created_at` como datetime; `formatDisplayDate` solo
+    // entiende YYYY-MM-DD y dejaba la columna vacía con datos reales.
+    vi.mocked(api.fetchV2Quotations).mockResolvedValue(
+      mockQuotationPage([
+        mockQuotationListItem({ id: 1, customer_name: "Cliente A", created_at: "2026-09-21T03:30:00Z" }),
+      ]),
+    );
+
+    renderWithProviders(<V2NextQuotationList />);
+
+    const row = await screen.findByRole("row", { name: /Cliente A/i });
+    expect(within(row).getByText("20/09/2026")).toBeInTheDocument();
+  });
+
   it("has exactly ONE link per row", async () => {
     const page = mockQuotationPage([
       mockQuotationListItem({ id: 1, customer_name: "Cliente A", name: "Pedido 1", code: "V2-001" })
