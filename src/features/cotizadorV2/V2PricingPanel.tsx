@@ -3,6 +3,7 @@ import { Spinner } from "@/components/Spinner";
 import { Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
 import { V2ExtrasPanel } from "@/features/cotizadorV2/V2ExtrasPanel";
+import { factorSeleccionado, opcionesDeFactor } from "@/features/cotizadorV2/factor";
 import { V2ReductionsPanel } from "@/features/cotizadorV2/V2ReductionsPanel";
 import { useSetV2Pricing, useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
 import { PRICING_WARNING_LABEL, type V2Pricing } from "@/types/quoterV2Pricing";
@@ -30,66 +31,9 @@ import { PRICING_WARNING_LABEL, type V2Pricing } from "@/types/quoterV2Pricing";
  * cliente. Ese documento es de 010H y lleva otros números.
  */
 
-/**
- * Los multiplicadores que ofrece el selector, sacados del rango de la cotización.
- *
- * El suelo de ×2 es una regla cerrada del negocio. El techo NO: ×3 es solo el
- * valor por defecto y la casa puede subirlo a ×4 o a ×10 desde Configuración.
- * Por eso la lista se construye desde `factor_min` y `factor_max` en vez de
- * estar escrita aquí: una lista fija dejaría fuera los factores que el propio
- * taller acaba de habilitar, y el usuario no tendría forma de elegirlos.
- *
- * El paso se abre cuando el rango crece para que la lista siga siendo usable:
- * de ×2 a ×3 en pasos de 0,25 son cinco opciones; de ×2 a ×10 en pasos de uno
- * son nueve. Con pasos de 0,25 serían treinta y tres.
- */
-function pasoDeFactor(minimo: number, maximo: number): number {
-  const rango = maximo - minimo;
-  if (rango <= 2) return 0.25;
-  if (rango <= 5) return 0.5;
-  return 1;
-}
-
-/** Las opciones del selector, con el factor guardado dentro venga como venga. */
-function opcionesDeFactor(
-  actual: string | null,
-  minimo: string | null,
-  maximo: string | null,
-): { value: string; label: string }[] {
-  const suelo = Number(minimo ?? 2);
-  const techo = Number(maximo ?? 3);
-  const paso = pasoDeFactor(suelo, techo);
-
-  const valores: number[] = [];
-  for (let valor = suelo; valor <= techo + 1e-9; valor += paso) {
-    valores.push(Number(valor.toFixed(2)));
-  }
-  if (valores.at(-1) !== techo) valores.push(techo);
-  // El factor guardado puede no caer en ningún paso —un ×2,1 pactado a mano—.
-  // Añadirlo es la diferencia entre verlo y que el selector aparezca vacío.
-  if (actual !== null && !valores.some((valor) => valor === Number(actual))) {
-    valores.push(Number(actual));
-  }
-
-  return valores
-    .sort((a, b) => a - b)
-    .map((valor) => ({ value: String(valor), label: `×${valor.toFixed(2)}` }));
-}
-
-/**
- * El valor de la lista que corresponde al factor guardado.
- *
- * El backend devuelve `3.000000` y la lista dice `3`: comparados como texto no
- * son el mismo valor, y el selector se quedaba en «Seleccionar...» enseñando un
- * factor vacío sobre una cotización que sí lo tiene. Se comparan como NÚMEROS.
- */
-function factorSeleccionado(actual: string | null, opciones: { value: string }[]): string {
-  if (actual === null) return opciones.at(-1)?.value ?? "3";
-  return (
-    opciones.find((opcion) => Number(opcion.value) === Number(actual))?.value ??
-    String(Number(actual))
-  );
-}
+// Las opciones de factor viven en `factor.ts` desde 010O.10: las comparten este
+// panel y el paso de precio del rediseño. Este panel conserva su reserva
+// histórica de ×2–×3 para un rango ausente; el rediseño no la tiene.
 
 function Aviso({ codigo }: { codigo: string }) {
   return <li className="text-xs text-amber-700">{PRICING_WARNING_LABEL[codigo] ?? codigo}</li>;
@@ -195,7 +139,11 @@ export function V2PricingPanel({
   // pérdida, y el prefijo lo pintaría de rojo.
   const perdida = Number(precio.estimated_profit ?? 0) < 0;
   const moneda = precio.currency_code ?? "PEN";
-  const opciones = opcionesDeFactor(precio.commercial_factor, precio.factor_min, precio.factor_max);
+  const opciones = opcionesDeFactor(
+    precio.commercial_factor,
+    precio.factor_min ?? "2",
+    precio.factor_max ?? "3",
+  );
 
   return (
     <Panel>
@@ -281,7 +229,11 @@ export function V2PricingPanel({
             <SelectField
               label="Factor comercial"
               requirement="required"
-              value={factorSeleccionado(precio.commercial_factor, opciones)}
+              value={
+                factorSeleccionado(precio.commercial_factor, opciones) ??
+                opciones.at(-1)?.value ??
+                "3"
+              }
               options={opciones}
               onChange={(valor) => guardar.mutate({ commercial_factor: valor })}
               disabled={!canEdit}

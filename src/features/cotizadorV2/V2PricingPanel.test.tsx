@@ -176,9 +176,10 @@ describe("Reducciones sugeridas (Fase 010J)", () => {
 
     const bloque = await screen.findByTestId("panel-reducciones");
     expect(within(bloque).getByText("Usar otro horno")).toBeInTheDocument();
-    expect(within(bloque).getByText("5711.21")).toBeInTheDocument();
-    expect(within(bloque).getByText("6707.17")).toBeInTheDocument();
-    expect(within(bloque).getByText("9923.00")).toBeInTheDocument();
+    // 010O.10: con su moneda, la que declara el backend para las estimaciones.
+    expect(within(bloque).getByText("S/ 5711.21")).toBeInTheDocument();
+    expect(within(bloque).getByText("S/ 6707.17")).toBeInTheDocument();
+    expect(within(bloque).getByText("S/ 9923.00")).toBeInTheDocument();
     expect(within(bloque).getByText(/Nunca por debajo de ×2/)).toBeInTheDocument();
     expect(within(bloque).getByText("Horno sugerido: Horno grande.")).toBeInTheDocument();
     // Sugerir no es aplicar: ninguna escritura sale de este bloque.
@@ -424,7 +425,8 @@ describe("Adicionales de la cotización (corrección 010H)", () => {
 
     const seccion = await screen.findByTestId("adicionales");
     expect(seccion).toHaveTextContent("Empaque especial");
-    expect(seccion).toHaveTextContent("50.000000000000000000");
+    // 010O.10: un costo, en moneda base y con dos decimales.
+    expect(seccion).toHaveTextContent("S/ 50.00");
     // Y no se cuelan en la mano de obra: son un costo que se decide.
     expect(seccion).toHaveTextContent(/no son material ni técnica/i);
   });
