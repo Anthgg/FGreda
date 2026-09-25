@@ -28,7 +28,7 @@ test.describe("Cotizador V2 Next - Cliente", () => {
     await page.goto("/cotizador-v2-next/7/cliente");
 
     // Esperar a que el título del paso cargue (del shell)
-    await expect(page.getByRole("heading", { name: /Cliente y datos/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Cliente", exact: true })).toBeVisible();
 
     // Verificamos que al principio es PEN (Soles)
     await expect(page.getByRole("radio", { name: "Soles" })).toBeChecked();
