@@ -793,8 +793,10 @@ describe("009K.4 · regresiones de lo que no se toca", () => {
       <ProductionFactorField
         enabled={false}
         configuredFactor="3"
+        value=""
         disabled={false}
         onChange={() => {}}
+        onValueChange={() => {}}
       />,
     );
 

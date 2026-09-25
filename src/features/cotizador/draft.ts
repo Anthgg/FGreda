@@ -93,13 +93,10 @@ export interface CotizadorDraft {
   customerId: string;
   customerLabel: string;
   kilnId: string;
-  /**
-   * Fase 009K.3. Si esta cotizacion aplica el factor de produccion. Nace
-   * apagado. El valor no se guarda aqui a proposito: cuando esta encendido lo
-   * pone Configuracion, y tenerlo tambien en el borrador daria dos numeros
-   * para lo mismo.
-   */
+  /** Fase 009K.3. Si esta cotizacion aplica el factor de produccion. */
   productionFactorEnabled: boolean;
+  /** Fase 009K.4.2. Valor manual de factor para esta cotizacion. */
+  productionFactor: string;
   /** Fase 009K.3. Todo junto en una hornada, o una hornada por producto. */
   kilnMode: KilnMode;
   /** Fase 009F. Moneda en la que se EMITE. Los costos siguen en soles. */
@@ -115,6 +112,7 @@ export const emptyCotizadorDraft = (): CotizadorDraft => ({
   customerLabel: "",
   kilnId: "",
   productionFactorEnabled: false,
+  productionFactor: "",
   kilnMode: "TOGETHER",
   currencyCode: "PEN",
   exchangeRate: "",
@@ -313,10 +311,11 @@ export function cotizadorFromOutput(value: QuotationBuilderOut): CotizadorDraft 
     customerId: decimal(value.customer_id),
     customerLabel: value.customer_name_snapshot ?? "",
     kilnId: decimal(value.kiln_id),
-    // Fase 009K.3: las dos decisiones vuelven del backend, que sabe leer el
-    // NULL de lo anterior a la fase. Deducirlas aqui del factor efectivo
-    // ensenaria «sin factor» en una cotizacion que se cobro con factor uno.
+    // Fase 009K.4.2: la intencion y el valor vuelven del backend. El valor
+    // confirmado queda congelado en el snapshot y no se reconstruye desde
+    // Configuracion.
     productionFactorEnabled: value.production_factor_enabled,
+    productionFactor: decimal(value.production_factor),
     kilnMode: value.kiln_mode,
     // La moneda vuelve del backend; el frontend no la deduce del simbolo.
     currencyCode: value.currency_code_snapshot === "USD" ? "USD" : "PEN",
@@ -335,10 +334,10 @@ export function cotizadorToPayload(draft: CotizadorDraft): QuotationBuilderDraft
     ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
     ...(customerId ? { customer_id: customerId } : {}),
     ...(kilnId ? { kiln_id: kilnId } : {}),
-    // Fase 009K.3: viaja la INTENCION, nunca un valor de factor. Mandar un
-    // numero desde aqui dejaria que el navegador eligiera el factor de la
-    // casa, que es de Configuracion.
     production_factor_enabled: draft.productionFactorEnabled,
+    ...(draft.productionFactorEnabled && draft.productionFactor.trim()
+      ? { production_factor: draft.productionFactor.trim() }
+      : {}),
     kiln_mode: draft.kilnMode,
     currency_code: draft.currencyCode,
     // La tasa solo viaja con USD. Mandarla con PEN es un 422: en soles no
