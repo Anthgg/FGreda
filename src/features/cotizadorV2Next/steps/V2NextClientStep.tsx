@@ -5,6 +5,7 @@ import { DecimalField } from "@/components/DecimalField";
 import { DeferredTextField } from "@/components/DeferredTextField";
 import { describeError } from "@/features/settings/messages";
 import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
+import { formatDecimalString } from "@/features/firings/labels";
 import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { Panel } from "@/features/masters/MasterTable";
@@ -35,13 +36,13 @@ export function V2NextClientStep({ quotationId, datos, canEdit }: PasoDelAsisten
           <div>
             <dt className="text-xs text-zinc-500">IGV</dt>
             <dd className="text-sm font-medium text-zinc-800">
-              {cotizacion.tax_percent !== null ? `${Number(cotizacion.tax_percent)} %` : "—"}
+              {cotizacion.tax_percent !== null ? `${formatDecimalString(cotizacion.tax_percent, 2).replace(/\.?0+$/, "")} %` : "—"}
             </dd>
           </div>
           <div>
             <dt className="text-xs text-zinc-500">Jornada</dt>
             <dd className="text-sm font-medium text-zinc-800">
-              {cotizacion.workday_hours !== null ? `${Number(cotizacion.workday_hours)} h` : "—"}
+              {cotizacion.workday_hours !== null ? `${formatDecimalString(cotizacion.workday_hours, 2).replace(/\.?0+$/, "")} h` : "—"}
             </dd>
           </div>
         </dl>
@@ -57,10 +58,7 @@ export function V2NextClientStep({ quotationId, datos, canEdit }: PasoDelAsisten
       <Panel>
         <div className="space-y-6">
           <header>
-            <h2 className="text-lg font-semibold text-zinc-900">
-              Cliente y datos de la cotización
-            </h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="text-sm text-zinc-500">
               Elige el cliente y cómo se le cobra. Estos datos solo afectan a esta cotización.
             </p>
           </header>
@@ -92,7 +90,7 @@ export function V2NextClientStep({ quotationId, datos, canEdit }: PasoDelAsisten
             {esExtranjera && (
               <div>
                 <dt className="text-sm font-medium text-zinc-500">Tipo de cambio</dt>
-                <dd className="mt-1 text-sm text-zinc-900">{cotizacion.exchange_rate}</dd>
+                <dd className="mt-1 text-sm text-zinc-900">{cotizacion.exchange_rate !== null ? formatDecimalString(cotizacion.exchange_rate, 3).replace(/\.?0+$/, "") : "—"}</dd>
               </div>
             )}
             <div>
@@ -131,29 +129,27 @@ export function V2NextClientStep({ quotationId, datos, canEdit }: PasoDelAsisten
     <Panel>
       <div className="space-y-6">
         <header>
-          <h2 className="text-lg font-semibold text-zinc-900">
-            Cliente y datos de la cotización
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="text-sm text-zinc-500">
             Elige el cliente y cómo se le cobra. Estos datos solo afectan a esta cotización.
           </p>
         </header>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <CustomerSelectField
-            label="Cliente"
-            requirement="required"
-            value={cotizacion.customer_id}
-            {...(cotizacion.customer_name ? { selectedLabel: cotizacion.customer_name } : {})}
-            onChange={(id) => guardar.mutate({ customer_id: id })}
-            hint={
-              <>
-                <Link to="/terceros" className="text-emerald-600 hover:text-emerald-700 hover:underline">
-                  Registrar cliente nuevo en Terceros
-                </Link>
-              </>
-            }
-          />
+          <div className="space-y-1">
+            <CustomerSelectField
+              label="Cliente"
+              requirement="required"
+              value={cotizacion.customer_id}
+              {...(cotizacion.customer_name ? { selectedLabel: cotizacion.customer_name } : {})}
+              onChange={(id) => guardar.mutate({ customer_id: id })}
+              hint="¿No está en la lista? Regístralo en Terceros."
+            />
+            <div className="text-[11px]">
+              <Link to="/terceros" className="text-emerald-600 hover:text-emerald-700 hover:underline">
+                Registrar cliente nuevo en Terceros
+              </Link>
+            </div>
+          </div>
 
           <SegmentedControl
             label="Tipo de cliente"

@@ -23,7 +23,7 @@ export interface CustomerSelectFieldProps {
   requirement?: "required" | "optional" | "automatic";
   placeholder?: string;
   searchPlaceholder?: string;
-  hint?: React.ReactNode;
+  hint?: string;
   error?: string;
   className?: string;
 }

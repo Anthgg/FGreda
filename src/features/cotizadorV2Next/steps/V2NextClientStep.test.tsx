@@ -151,4 +151,19 @@ describe("V2NextClientStep", () => {
     
     expect(await screen.findByRole("alert")).toHaveTextContent(/No se pudo conectar/i);
   });
+
+  it("no tiene h2 (título lo pone el shell) y tiene enlace a terceros en ambos modos", () => {
+    const { unmount } = renderStep(<V2NextClientStep {...PROPS} canEdit={true} />);
+    
+    // En modo editable
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /registrar cliente nuevo en terceros/i })).toHaveAttribute("href", "/terceros");
+    
+    unmount();
+
+    // En modo lectura
+    renderStep(<V2NextClientStep {...PROPS} canEdit={false} />);
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ver en terceros/i })).toHaveAttribute("href", "/terceros");
+  });
 });
