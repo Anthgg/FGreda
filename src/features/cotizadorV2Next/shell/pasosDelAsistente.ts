@@ -74,12 +74,20 @@ export interface EstadoVisualDePaso {
  * Un bloqueo sin paso —el IGV o el redondeo de la configuración— no se arregla
  * en ningún paso del asistente: se cuenta en «Revisar y emitir», que es donde
  * impide emitir. Ese último paso está en falta si lo está cualquier otro.
+ *
+ * Una cotización CONGELADA (ya no es borrador) no tiene nada que completar: se
+ * emitió porque el backend la dio por buena, y marcar «falta» sobre algo que
+ * no se puede editar solo confunde (010O.12).
  */
 export function estadoVisualDePasos(
   estados: readonly EstadoPaso[],
   blockers: readonly V2Blocker[] | undefined,
   cargando: boolean,
+  congelada = false,
 ): EstadoVisualDePaso[] {
+  if (congelada) {
+    return PASOS.map((paso) => ({ id: paso.id, situacion: "listo", faltas: 0, avisos: 0 }));
+  }
   if (cargando) {
     return PASOS.map((paso) => ({ id: paso.id, situacion: "cargando", faltas: 0, avisos: 0 }));
   }

@@ -89,6 +89,16 @@ describe("estado visual de los pasos", () => {
     expect(situacionDe(visual, "resumen")?.situacion).toBe("listo");
   });
 
+  it("una cotización congelada no tiene nada en falta ni avisos", () => {
+    const visual = estadoVisualDePasos(
+      estados({ quema: [error("Elija el horno")], precio: [aviso("x")] }),
+      [{ code: "V2_CONFIRM_KILN_REQUIRED", line_id: null }],
+      false,
+      true,
+    );
+    expect(visual.every((paso) => paso.situacion === "listo" && paso.faltas === 0)).toBe(true);
+  });
+
   it("el estado no depende del paso en que uno está", () => {
     // Lo que tenía V2Next: «hecho» era todo lo anterior al paso actual.
     const visual = estadoVisualDePasos(estados({ productos: [error("Añada un producto")] }), [], false);

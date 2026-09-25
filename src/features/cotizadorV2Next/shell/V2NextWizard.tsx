@@ -180,8 +180,8 @@ function Asistente({
   const cargando =
     productos.isPending || manoDeObra.isPending || quema.isPending || precio.isPending;
   const bloqueos = resumenDeEmision.data?.blockers;
-  const visual = estadoVisualDePasos(estados, bloqueos, cargando);
   const editable = cotizacion.status === "DRAFT";
+  const visual = estadoVisualDePasos(estados, bloqueos, cargando, !editable);
 
   const irAPaso = (destino: PasoId) => navigate(`${rutaBase}/${quotationId}/${destino}`);
 

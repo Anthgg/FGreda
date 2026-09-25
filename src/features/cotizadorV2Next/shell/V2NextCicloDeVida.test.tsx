@@ -26,7 +26,7 @@ function acciones() {
   return within(screen.getByTestId("v2next-cabecera"));
 }
 
-async function abrir(cotizacion: Partial<V2Quotation>, extra?: Parameters<typeof mockShell>[0]["extra"]) {
+async function abrir(cotizacion: Partial<V2Quotation>, extra?: NonNullable<Parameters<typeof mockShell>[0]>["extra"]) {
   const espia = mockShell({ cotizacion, ...(extra ? { extra } : {}) });
   renderApp(["/cotizador-v2-next/7/resumen"]);
   await screen.findByRole("heading", { level: 2, name: "Revisar y emitir" });
