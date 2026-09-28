@@ -490,6 +490,71 @@ describe("ficha de una orden V2", () => {
     expect(screen.getByTestId("resultado-produccion")).toHaveTextContent("entrega al cliente se registra por separado");
   });
 
+  it("Solo quema completa con la referencia V2F y cantidad devueltas por GET", async () => {
+    const soloQuema = ordenV2({
+      origin_type: "SOLO_QUEMA",
+      v2_quotation_id: null,
+      pending_consumption_kinds: [],
+      result_lines: [{
+        line_ref: "V2F:601",
+        started_quantity: "10",
+        source_kind: "V2F",
+        product_id: null,
+        product_name: "Servicio de quema",
+        production_order_line_id: null,
+        v2_quotation_product_id: null,
+        v2_firing_quotation_line_id: 601,
+        prototype_id: null,
+      }],
+    });
+    const spy = backend({
+      orden: soloQuema,
+      extra: (url, init) =>
+        url.includes("/production-orders/5/complete") && init.method === "POST"
+          ? jsonResponse(200, {
+              order: soloQuema,
+              results: [{
+                id: 91,
+                production_order_id: soloQuema.id,
+                line_ref: "V2F:601",
+                product_id: null,
+                started_quantity: "10",
+                good_quantity: "8",
+                scrap_quantity: "2",
+                scrap_reason: "Pieza agrietada",
+                recorded_by_name: "Operario",
+                recorded_at: "2026-09-28T16:00:00Z",
+              }],
+            })
+          : undefined,
+    });
+    const user = userEvent.setup();
+    renderApp(["/produccion/5"]);
+
+    expect(screen.queryByTestId("solo-quema-resultados-bloqueados")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Marcar completada" }));
+    const dialog = await screen.findByRole("dialog", { name: "Registrar resultados de producción" });
+    expect(within(dialog).getByText("Servicio de quema")).toBeInTheDocument();
+    expect(within(dialog).getByText("Cantidad iniciada:")).toHaveTextContent("10");
+    await user.type(within(dialog).getByLabelText("Buenas"), "8");
+    await user.type(within(dialog).getByLabelText("Merma"), "2");
+    await user.type(within(dialog).getByLabelText("Motivo de merma"), "Pieza agrietada");
+    await user.click(within(dialog).getByRole("button", { name: "Completar producción" }));
+
+    await waitFor(() => expect(posts(spy, "/production-orders/5/complete")).toHaveLength(1));
+    expect(cuerpo(posts(spy, "/production-orders/5/complete")[0]!)).toEqual({
+      results: [{
+        line_ref: "V2F:601",
+        good_quantity: "8",
+        scrap_quantity: "2",
+        scrap_reason: "Pieza agrietada",
+      }],
+    });
+    const result = await screen.findByTestId("resultado-produccion");
+    expect(result).toHaveTextContent("Iniciadas 10 · Buenas 8 · Merma 2");
+    expect(result).not.toHaveTextContent("Stock terminado actualizado");
+  });
+
   it("si el backend rechaza finalizar, se traduce lo que falta", async () => {
     backend({
       orden: ordenV2({ pending_consumption_kinds: [] }),

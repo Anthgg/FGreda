@@ -311,11 +311,6 @@ export function ProductionOrderDetailPage() {
           {describeError(errorTransicion)}
         </p>
       ) : null}
-      {data.origin_type === "SOLO_QUEMA" ? (
-        <p role="status" data-testid="solo-quema-resultados-bloqueados" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-          Esta orden es de Solo quema. El backend exige resultados con referencias V2F, pero la consulta de la orden no devuelve los identificadores ni cantidades de esas líneas. Se necesita ampliar el contrato del backend para registrar buenas y merma con seguridad.
-        </p>
-      ) : null}
       {resultadoProduccion ? (
         <div role="status" data-testid="resultado-produccion" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <p className="font-semibold">Producción completada · {resultadoProduccion}</p>
