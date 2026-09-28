@@ -268,10 +268,10 @@ export function ProductionOrderDetailPage() {
     !estaCobrada(data.quotation_payment_status);
   const enCurso = start.isPending || complete.isPending || cancel.isPending;
   const errorTransicion = start.error ?? (dialogoResultados ? null : complete.error) ?? cancel.error;
-  const lineasResultado = data.origin_type === "SOLO_QUEMA" ? [] : data.lines.map((line) => ({
-    line_ref: `POL:${line.id}`,
+  const lineasResultado = (data.result_lines ?? []).map((line) => ({
+    line_ref: line.line_ref,
     product_name: line.product_name,
-    started_quantity: String(line.quantity ?? 0),
+    started_quantity: line.started_quantity,
   }));
 
   return (
@@ -551,7 +551,7 @@ export function ProductionOrderDetailPage() {
                   {start.isPending ? "Arrancando…" : "Arrancar producción"}
                 </PrimaryButton>
               ) : null}
-              {puede.completarProduccion && canComplete(data.status) && data.origin_type !== "SOLO_QUEMA" && lineasResultado.length > 0 ? (
+              {puede.completarProduccion && canComplete(data.status) && lineasResultado.length > 0 ? (
                 <PrimaryButton
                   type="button"
                   className="w-full"

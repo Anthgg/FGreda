@@ -120,10 +120,10 @@ export function OrdenV2({ order }: { order: ProductionOrder }) {
     "BODY",
     ...(piezas.some((pieza) => pieza.requires_glaze) ? (["GLAZE"] as const) : []),
   ];
-  const lineasResultado = piezas.map((pieza) => ({
-    line_ref: `V2P:${pieza.id}`,
-    product_name: pieza.product_name,
-    started_quantity: String(pieza.quantity),
+  const lineasResultado = (order.result_lines ?? []).map((line) => ({
+    line_ref: line.line_ref,
+    product_name: line.product_name,
+    started_quantity: line.started_quantity,
   }));
 
   const cerrar = () => setDialogo(null);

@@ -73,6 +73,30 @@ function ordenV2(cambios: Partial<ProductionOrder> = {}): ProductionOrder {
     lines: [],
     readiness: { ready: true, issues: [] },
     pending_consumption_kinds: ["BODY"],
+    result_lines: [
+      {
+        line_ref: "V2P:301",
+        started_quantity: "20",
+        source_kind: "V2P",
+        product_id: null,
+        product_name: "Taza de café",
+        production_order_line_id: null,
+        v2_quotation_product_id: 301,
+        v2_firing_quotation_line_id: null,
+        prototype_id: null,
+      },
+      {
+        line_ref: "V2P:302",
+        started_quantity: "5",
+        source_kind: "V2P",
+        product_id: null,
+        product_name: "Plato hondo",
+        production_order_line_id: null,
+        v2_quotation_product_id: 302,
+        v2_firing_quotation_line_id: null,
+        prototype_id: null,
+      },
+    ],
     v2_pieces: [
       {
         id: 301,

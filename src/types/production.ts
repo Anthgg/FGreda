@@ -108,6 +108,9 @@ export interface ProductionOrderSummary {
    */
   v2_quotation_id?: number | null;
   v2_quotation_code?: string | null;
+  /** Fase 010P. Origen Solo Quema; usa un espacio de IDs separado de V2Q. */
+  v2_firing_quotation_id?: number | null;
+  v2_firing_quotation_code?: string | null;
   /** Fase 010I. El cliente CONGELADO en la cotización de origen. Nulo en muestras. */
   customer_name?: string | null;
   /** Fase 010I. «20 × Taza, 5 × Plato», armado por el backend. */
@@ -136,6 +139,8 @@ export interface ProductionOrder extends ProductionOrderSummary {
    */
   quotation_payment_status: QuotationPaymentStatus | null;
   lines: ProductionOrderLine[];
+  /** Lo que GET expone como lineas exactas que acepta POST /complete. */
+  result_lines?: ProductionResultLineSource[];
   readiness: ProductionReadiness;
   /**
    * Fase 010I, decisión D3. Las clases de material que la cotización V2
@@ -145,6 +150,18 @@ export interface ProductionOrder extends ProductionOrderSummary {
   pending_consumption_kinds?: ProductionConsumptionKind[];
   /** Fase 010I. Las piezas de la cotización V2 congelada, sin importes. */
   v2_pieces?: V2ProductionPiece[];
+}
+
+export interface ProductionResultLineSource {
+  line_ref: string;
+  started_quantity: string;
+  source_kind: "POL" | "V2P" | "V2F";
+  product_id: number | null;
+  product_name: string;
+  production_order_line_id: number | null;
+  v2_quotation_product_id: number | null;
+  v2_firing_quotation_line_id: number | null;
+  prototype_id: number | null;
 }
 
 export interface ProductionOrderPage {
