@@ -38,7 +38,7 @@ export type ProductionReadinessCode =
  * pantalla acabaría discrepando de la base el día que cambiara cualquiera de
  * las dos.
  */
-export type ProductionOrderOrigin = "QUOTATION" | "PROTOTYPE" | "V2_QUOTATION";
+export type ProductionOrderOrigin = "QUOTATION" | "PROTOTYPE" | "V2_QUOTATION" | "SOLO_QUEMA";
 
 export interface ReadinessIssue {
   code: ProductionReadinessCode;
@@ -245,9 +245,58 @@ export interface ProductionConsumptionCreateIn {
   quantity: string;
   kind: ProductionConsumptionKind;
   v2_quotation_product_id?: number;
+  /** Obligatorio al consumir PREPARED_MATERIAL; el operador elige el lote. */
+  preparation_id?: number;
   note?: string;
   /** Obligatoria: una por intención de consumo, la misma en cada reintento. */
   idempotency_key: string;
+}
+
+export interface ProductionResultLineIn {
+  line_ref: string;
+  good_quantity: string;
+  scrap_quantity: string;
+  scrap_reason?: string | null;
+}
+
+export interface ProductionOrderCompleteIn {
+  results: ProductionResultLineIn[];
+}
+
+export interface ProductionOrderResult {
+  id: number;
+  production_order_id: number;
+  line_ref: string;
+  product_id: number | null;
+  started_quantity: string;
+  good_quantity: string;
+  scrap_quantity: string;
+  scrap_reason: string | null;
+  recorded_by_name: string | null;
+  recorded_at: string;
+}
+
+export interface ProductionOrderCompletion {
+  order: ProductionOrder;
+  results: ProductionOrderResult[];
+}
+
+export type ProductionWipStage =
+  | "EN_PRODUCCION"
+  | "PROGRAMADA_HORNO"
+  | "EN_HORNO"
+  | "QUEMADA";
+
+export interface ProductionWipItem {
+  production_order_id: number;
+  production_order_code: string;
+  source: ProductionOrderOrigin;
+  line_ref: string;
+  product_name: string;
+  started_quantity: string;
+  stage: ProductionWipStage;
+  kiln_batch_id: number | null;
+  kiln_batch_code: string | null;
 }
 
 export type ProductionNoteKind = "NOTE" | "FIRING_NOTE";

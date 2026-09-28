@@ -7,6 +7,10 @@ import { Spinner } from "@/components/Spinner";
 import { capabilitiesFor } from "@/features/auth/capabilities";
 import { useSession } from "@/features/auth/useSession";
 import { Badge, EmptyState } from "@/features/masters/MasterTable";
+import { DialogoResultadosProduccion } from "@/features/production/DialogoResultadosProduccion";
+import { esPositivo } from "@/features/production/decimales";
+import { resumenResultadosProduccion } from "@/features/production/resumenResultadosProduccion";
+import { describeProductionError } from "@/features/production/mensajesProduccion";
 import {
   canCancel,
   canComplete,
@@ -29,7 +33,7 @@ import {
 import { OrdenV2 } from "@/features/production/OrdenV2";
 import { PrototypeOrderContext } from "@/features/production/PrototypeOrderContext";
 import { describeError } from "@/features/settings/messages";
-import type { ProductionOrder, ReadinessIssue } from "@/types/production";
+import type { ProductionOrder, ProductionResultLineIn, ReadinessIssue } from "@/types/production";
 
 function fechaHora(valor: string | null): string {
   if (!valor) return "—";
@@ -117,6 +121,7 @@ function IssueRow({ issue }: { issue: ReadinessIssue }) {
  * las dos acabarían discrepando.
  */
 function Origen({ data }: { data: ProductionOrder }) {
+  if (data.origin_type === "SOLO_QUEMA") return <span>Solo quema</span>;
   if (data.origin_type === "PROTOTYPE") {
     return (
       <span>
@@ -166,6 +171,8 @@ export function ProductionOrderDetailPage() {
   const complete = useCompleteProductionOrder();
   const cancel = useCancelProductionOrder();
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [dialogoResultados, setDialogoResultados] = useState(false);
+  const [resultadoProduccion, setResultadoProduccion] = useState<string | null>(null);
   const [documento, setDocumento] = useState<{
     url: string;
     filename: string;
@@ -260,7 +267,12 @@ export function ProductionOrderDetailPage() {
     readiness.ready &&
     !estaCobrada(data.quotation_payment_status);
   const enCurso = start.isPending || complete.isPending || cancel.isPending;
-  const errorTransicion = start.error ?? complete.error ?? cancel.error;
+  const errorTransicion = start.error ?? (dialogoResultados ? null : complete.error) ?? cancel.error;
+  const lineasResultado = data.origin_type === "SOLO_QUEMA" ? [] : data.lines.map((line) => ({
+    line_ref: `POL:${line.id}`,
+    product_name: line.product_name,
+    started_quantity: String(line.quantity ?? 0),
+  }));
 
   return (
     <div className="w-full space-y-5">
@@ -298,6 +310,17 @@ export function ProductionOrderDetailPage() {
         >
           {describeError(errorTransicion)}
         </p>
+      ) : null}
+      {data.origin_type === "SOLO_QUEMA" ? (
+        <p role="status" data-testid="solo-quema-resultados-bloqueados" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          Esta orden es de Solo quema. El backend exige resultados con referencias V2F, pero la consulta de la orden no devuelve los identificadores ni cantidades de esas líneas. Se necesita ampliar el contrato del backend para registrar buenas y merma con seguridad.
+        </p>
+      ) : null}
+      {resultadoProduccion ? (
+        <div role="status" data-testid="resultado-produccion" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-semibold">Producción completada · {resultadoProduccion}</p>
+          <p className="mt-1">{data.origin_type === "PROTOTYPE" ? "El stock terminado refleja sólo las unidades buenas; la entrega se registra por separado." : "La producción completada no significa que el pedido esté entregado. Registra la entrega por separado desde Inventario."}</p>
+        </div>
       ) : null}
       {documentError ? (
         <p
@@ -528,12 +551,12 @@ export function ProductionOrderDetailPage() {
                   {start.isPending ? "Arrancando…" : "Arrancar producción"}
                 </PrimaryButton>
               ) : null}
-              {puede.completarProduccion && canComplete(data.status) ? (
+              {puede.completarProduccion && canComplete(data.status) && data.origin_type !== "SOLO_QUEMA" && lineasResultado.length > 0 ? (
                 <PrimaryButton
                   type="button"
                   className="w-full"
                   disabled={enCurso}
-                  onClick={() => complete.mutate(data.id)}
+                  onClick={() => { setResultadoProduccion(null); setDialogoResultados(true); }}
                 >
                   {complete.isPending ? "Cerrando…" : "Marcar completada"}
                 </PrimaryButton>
@@ -643,6 +666,26 @@ export function ProductionOrderDetailPage() {
           elimina. */}
       {esMuestra && data.prototype_id !== null ? (
         <PrototypeOrderContext prototypeId={data.prototype_id} />
+      ) : null}
+      {dialogoResultados ? (
+        <DialogoResultadosProduccion
+          key={data.id}
+          lines={lineasResultado}
+          pending={complete.isPending}
+          error={complete.error ? describeProductionError(complete.error) : null}
+          onClose={() => setDialogoResultados(false)}
+          onSubmit={(results: ProductionResultLineIn[]) => {
+            complete.mutate({ id: data.id, payload: { results } }, {
+              onSuccess: (completion) => {
+                setDialogoResultados(false);
+                const inventoryNote = data.origin_type === "SOLO_QUEMA" || !completion.results.some((item) => esPositivo(item.good_quantity))
+                  ? ""
+                  : " · Stock terminado actualizado con unidades buenas";
+                setResultadoProduccion(`${resumenResultadosProduccion(completion.results)}${inventoryNote}`);
+              },
+            });
+          }}
+        />
       ) : null}
     </div>
   );

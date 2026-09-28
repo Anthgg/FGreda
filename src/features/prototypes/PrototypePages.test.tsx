@@ -152,6 +152,7 @@ function installBackend(
     if (path.endsWith("/auth/me"))
       return sessionResponse({ ...TEST_USER, role });
     if (path.endsWith("/auth/csrf")) return csrfResponse();
+    if (path.endsWith("/production/wip")) return jsonResponse(200, []);
     if (path.endsWith("/products")) return jsonResponse(200, productPage);
     if (path.endsWith("/inventory/locations"))
       return jsonResponse(200, [

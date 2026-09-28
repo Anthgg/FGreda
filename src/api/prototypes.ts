@@ -3,6 +3,7 @@ import { toQuery } from "@/api/masters";
 import type { QuotationBuilderOut } from "@/types/quotationBuilder";
 import type {
   Prototype,
+  PrototypeCompleteInput,
   PrototypeCreateInput,
   PrototypeFilters,
   PrototypeMaterialInput,
@@ -32,8 +33,8 @@ export const setPrototypeMaterials = (
 export const startPrototype = (id: number): Promise<Prototype> =>
   apiClient.post(`${PROTOTYPES}/${id}/start`, {});
 
-export const completePrototype = (id: number): Promise<Prototype> =>
-  apiClient.post(`${PROTOTYPES}/${id}/complete`, {});
+export const completePrototype = (id: number, payload: PrototypeCompleteInput): Promise<Prototype> =>
+  apiClient.post(`${PROTOTYPES}/${id}/complete`, payload);
 
 export const approvePrototype = (id: number, note?: string): Promise<Prototype> =>
   apiClient.post(`${PROTOTYPES}/${id}/approve`, { note: note || null });

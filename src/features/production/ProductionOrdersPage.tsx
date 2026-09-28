@@ -9,7 +9,7 @@ import { TypewriterTitle } from "@/components/TypewriterTitle";
 import { fechaLima } from "@/features/cotizadorV2/fechaLima";
 import { Badge, EmptyState, Pagination } from "@/features/masters/MasterTable";
 import { describeStatus, statusTone } from "@/features/production/readiness";
-import { useProductionOrders } from "@/features/production/useProductionOrders";
+import { useProductionOrders, useProductionWip } from "@/features/production/useProductionOrders";
 import { describeError } from "@/features/settings/messages";
 import type {
   ProductionOrderFilters,
@@ -121,6 +121,7 @@ export function ProductionOrdersPage() {
     offset,
   };
   const orders = useProductionOrders(filters);
+  const wip = useProductionWip();
 
   // El filtro de origen se aplica en la pantalla y no en la consulta: el
   // backend todavía no lo acepta como parámetro, y añadirlo sólo para esto
@@ -151,6 +152,48 @@ export function ProductionOrdersPage() {
       </header>
 
       <div className="glass-panel rounded-2xl border border-white/60 p-4 shadow-sm sm:rounded-3xl sm:p-6">
+        <section aria-labelledby="wip-title" className="mb-6 rounded-2xl border border-zinc-200 bg-white/75 p-4">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 id="wip-title" className="text-sm font-semibold text-zinc-900">Trabajo en curso</h2>
+              <p className="mt-1 text-xs text-zinc-500">Etapa y cantidad informadas por el backend.</p>
+            </div>
+            {wip.data ? <span className="text-xs tabular-nums text-zinc-600">{wip.data.length} líneas</span> : null}
+          </div>
+          {wip.isPending ? <Spinner label="Cargando trabajo en curso…" /> : wip.isError ? (
+            <p role="alert" className="text-xs text-red-700">{describeError(wip.error)}</p>
+          ) : wip.data.length === 0 ? (
+            <p className="text-xs text-zinc-500">No hay trabajo en curso.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+              <table className="min-w-full text-left text-xs" data-testid="production-wip">
+                <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Pieza/producto</th>
+                    <th className="px-3 py-2 font-semibold">Orden</th>
+                    <th className="px-3 py-2 text-right font-semibold">Iniciadas</th>
+                    <th className="px-3 py-2 font-semibold">Etapa</th>
+                    <th className="px-3 py-2 font-semibold">Hornada</th>
+                    <th className="px-3 py-2 font-semibold">Origen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {wip.data.map((item) => (
+                    <tr key={`${item.production_order_id}-${item.line_ref}`}>
+                      <td className="px-3 py-2 font-medium text-zinc-900">{item.product_name}</td>
+                      <td className="px-3 py-2"><Link className="font-mono text-zinc-700 hover:underline" to={`/produccion/${item.production_order_id}`}>{item.production_order_code}</Link></td>
+                      <td className="px-3 py-2 text-right tabular-nums">{item.started_quantity}</td>
+                      <td className="px-3 py-2">{item.stage}</td>
+                      <td className="px-3 py-2">{item.kiln_batch_code ?? "—"}</td>
+                      <td className="px-3 py-2">{item.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <SelectField label="Estado" value={status} options={STATUS_OPTIONS} onChange={setStatus} />
           <SelectField

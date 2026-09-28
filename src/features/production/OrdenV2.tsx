@@ -6,9 +6,11 @@ import { capabilitiesFor } from "@/features/auth/capabilities";
 import { useSession } from "@/features/auth/useSession";
 import { Badge } from "@/features/masters/MasterTable";
 import { DialogoConsumo } from "@/features/production/DialogoConsumo";
+import { DialogoResultadosProduccion } from "@/features/production/DialogoResultadosProduccion";
 import { DialogoComunicacion, DialogoNota } from "@/features/production/DialogosSeguimiento";
 import { normalizar, sumar } from "@/features/production/decimales";
 import { fechaHoraLima } from "@/features/production/instanteLima";
+import { resumenResultadosProduccion } from "@/features/production/resumenResultadosProduccion";
 import {
   describeConsumptionKind,
   describeProductionError,
@@ -33,10 +35,11 @@ import type {
   ProductionConsumption,
   ProductionConsumptionKind,
   ProductionOrder,
+  ProductionResultLineIn,
   V2ProductionPiece,
 } from "@/types/production";
 
-type Dialogo = "consumo" | "nota" | "quema" | "comunicacion" | null;
+type Dialogo = "consumo" | "nota" | "quema" | "comunicacion" | "resultados" | null;
 
 function medidasV2(pieza: V2ProductionPiece): string {
   const partes = [pieza.length_cm, pieza.width_cm, pieza.height_cm];
@@ -100,6 +103,7 @@ export function OrdenV2({ order }: { order: ProductionOrder }) {
   const cancel = useCancelProductionOrder();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<string | null>(null);
   const [confirmandoAnulacion, setConfirmandoAnulacion] = useState(false);
 
   const piezas = order.v2_pieces ?? [];
@@ -110,18 +114,24 @@ export function OrdenV2({ order }: { order: ProductionOrder }) {
   const comunicaciones = eventos.filter((e) => e.type === "COMMUNICATION");
   const activa = order.status === "CREATED" || order.status === "STARTED";
   const enCurso = start.isPending || complete.isPending || cancel.isPending;
-  const errorTransicion = start.error ?? complete.error ?? cancel.error;
+  const errorTransicion = start.error ?? (dialogo === "resultados" ? null : complete.error) ?? cancel.error;
   const conConsumos = listaConsumos.length > 0;
   const clasesPlan: ProductionConsumptionKind[] = [
     "BODY",
     ...(piezas.some((pieza) => pieza.requires_glaze) ? (["GLAZE"] as const) : []),
   ];
+  const lineasResultado = piezas.map((pieza) => ({
+    line_ref: `V2P:${pieza.id}`,
+    product_name: pieza.product_name,
+    started_quantity: String(pieza.quantity),
+  }));
 
   const cerrar = () => setDialogo(null);
   // Un aviso de éxito vale para la acción que lo produjo: la siguiente lo borra,
   // o «Consumo registrado» seguiría ahí después de finalizar la orden.
   const abrir = (cual: Exclude<Dialogo, null>) => {
     setAviso(null);
+    setResultado(null);
     setDialogo(cual);
   };
   const transicion = (accion: (id: number) => void) => {
@@ -184,8 +194,8 @@ export function OrdenV2({ order }: { order: ProductionOrder }) {
               <PrimaryButton
                 type="button"
                 className="w-full sm:w-auto"
-                disabled={enCurso || pendientes.length > 0}
-                onClick={() => transicion(complete.mutate)}
+                disabled={enCurso || pendientes.length > 0 || lineasResultado.length === 0}
+                onClick={() => abrir("resultados")}
               >
                 {complete.isPending ? "Procesando…" : "Finalizar producción"}
               </PrimaryButton>
@@ -226,6 +236,12 @@ export function OrdenV2({ order }: { order: ProductionOrder }) {
           <p role="status" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
             {aviso}
           </p>
+        ) : null}
+        {resultado ? (
+          <div role="status" data-testid="resultado-produccion" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+            <p className="font-semibold">Producción completada · {resultado}</p>
+            {order.v2_pieces?.length ? <p className="mt-1">El producto terminado queda en stock cuando hubo unidades buenas. La entrega al cliente se registra por separado.</p> : null}
+          </div>
         ) : null}
       </header>
 
@@ -486,6 +502,23 @@ export function OrdenV2({ order }: { order: ProductionOrder }) {
           order={order}
           onClose={cerrar}
           onRegistered={() => alRegistrar("Comunicación registrada en el seguimiento.")}
+        />
+      ) : null}
+      {dialogo === "resultados" ? (
+        <DialogoResultadosProduccion
+          key={order.id}
+          lines={lineasResultado}
+          pending={complete.isPending}
+          error={complete.error ? describeProductionError(complete.error) : null}
+          onClose={cerrar}
+          onSubmit={(results: ProductionResultLineIn[]) => {
+            complete.mutate({ id: order.id, payload: { results } }, {
+              onSuccess: (completion) => {
+                setDialogo(null);
+                setResultado(resumenResultadosProduccion(completion.results));
+              },
+            });
+          }}
         />
       ) : null}
     </div>

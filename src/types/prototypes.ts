@@ -140,6 +140,25 @@ export interface Prototype extends PrototypeSummary {
    */
   production_order_id: number | null;
   production_order_code: string | null;
+  production_result?: PrototypeProductionResult | null;
+}
+
+export interface PrototypeProductionResult {
+  prototype_id: number;
+  product_id: number | null;
+  started_quantity: string;
+  good_quantity: string;
+  scrap_quantity: string;
+  scrap_reason: string | null;
+  recorded_by_name: string | null;
+  recorded_at: string;
+}
+
+export interface PrototypeCompleteInput {
+  started_quantity: string;
+  good_quantity: string;
+  scrap_quantity: string;
+  scrap_reason: string | null;
 }
 
 export interface PrototypePage {

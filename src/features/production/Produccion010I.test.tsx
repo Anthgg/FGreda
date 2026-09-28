@@ -27,6 +27,7 @@ import type { SessionUser } from "@/types/auth";
 import type {
   ProductionConsumption,
   ProductionOrder,
+  ProductionOrderCompletion,
   ProductionOrderSummary,
   ProductionTimelineEvent,
 } from "@/types/production";
@@ -113,6 +114,24 @@ function ordenV2(cambios: Partial<ProductionOrder> = {}): ProductionOrder {
       },
     ],
     ...cambios,
+  };
+}
+
+function resultadoV2(order: ProductionOrder = ordenV2({ status: "COMPLETED", pending_consumption_kinds: [] })): ProductionOrderCompletion {
+  return {
+    order,
+    results: (order.v2_pieces ?? []).map((piece, index) => ({
+      id: index + 1,
+      production_order_id: order.id,
+      line_ref: `V2P:${piece.id}`,
+      product_id: null,
+      started_quantity: String(piece.quantity),
+      good_quantity: String(piece.quantity),
+      scrap_quantity: "0",
+      scrap_reason: null,
+      recorded_by_name: "Operario",
+      recorded_at: "2026-09-18T16:00:00Z",
+    })),
   };
 }
 
@@ -241,16 +260,21 @@ function backend({
     if (propia) return propia;
     if (url.includes("/auth/me")) return sessionResponse(usuario);
     if (url.includes("/auth/csrf")) return csrfResponse();
+    if (url.includes("/production/wip")) return jsonResponse(200, []);
     if (url.includes("/production-orders/5/timeline")) {
       return jsonResponse(200, { items: eventos });
     }
     if (url.includes("/production-orders/5/consumptions")) {
       return jsonResponse(200, { items: consumos, total: consumos.length });
     }
+    if (url.includes("/production-orders/5/complete") && init.method === "POST") {
+      return jsonResponse(200, resultadoV2(orden));
+    }
     if (url.includes("/production-orders/5")) return jsonResponse(200, orden);
     if (url.includes("/inventory/locations")) {
       return jsonResponse(200, [{ id: 1, name: "Taller principal", active: true }]);
     }
+    if (url.includes("/inventory/lots")) return jsonResponse(200, []);
     if (url.includes("/inventory")) {
       return jsonResponse(200, {
         items: [
@@ -268,6 +292,13 @@ function backend({
         limit: 200,
         offset: 0,
       });
+    }
+    if (url.includes("/products")) {
+      const productType = new URL(url, "http://localhost").searchParams.get("product_type");
+      const items = productType === "RAW_MATERIAL"
+        ? [{ id: 88, internal_reference: "MP-0088", name: "Pasta gres blanco", product_type: "RAW_MATERIAL", active: true }]
+        : [];
+      return jsonResponse(200, { items, total: items.length, limit: 200, offset: 0 });
     }
     if (url.includes("/kilns")) {
       return jsonResponse(200, {
@@ -327,6 +358,7 @@ describe("listado de producción", () => {
     const fila: ProductionOrderSummary = { ...ordenV2() };
     mockFetch((url) => {
       if (url.includes("/auth/me")) return sessionResponse(OPERARIO);
+      if (url.includes("/production/wip")) return jsonResponse(200, []);
       if (url.includes("/production-orders")) {
         return jsonResponse(200, { items: [fila], total: 1, limit: 25, offset: 0 });
       }
@@ -347,6 +379,7 @@ describe("listado de producción", () => {
   it("para ADMIN el código de la V2 enlaza a la cotización", async () => {
     mockFetch((url) => {
       if (url.includes("/auth/me")) return sessionResponse(TEST_USER);
+      if (url.includes("/production/wip")) return jsonResponse(200, []);
       if (url.includes("/production-orders")) {
         return jsonResponse(200, { items: [ordenV2()], total: 1, limit: 25, offset: 0 });
       }
@@ -416,7 +449,21 @@ describe("ficha de una orden V2", () => {
     expect(finalizar).toBeEnabled();
     expect(screen.queryByTestId("orden-faltantes")).not.toBeInTheDocument();
     await user.click(finalizar);
+    const dialog = await screen.findByRole("dialog", { name: "Registrar resultados de producción" });
+    const buenas = within(dialog).getAllByLabelText("Buenas");
+    const mermas = within(dialog).getAllByLabelText("Merma");
+    await user.type(buenas[0]!, "20");
+    await user.type(mermas[0]!, "0");
+    await user.type(buenas[1]!, "5");
+    await user.type(mermas[1]!, "0");
+    await user.click(within(dialog).getByRole("button", { name: "Completar producción" }));
     await waitFor(() => expect(posts(spy, "/production-orders/5/complete")).toHaveLength(1));
+    expect(cuerpo(posts(spy, "/production-orders/5/complete")[0]!)).toEqual({ results: [
+      { line_ref: "V2P:301", good_quantity: "20", scrap_quantity: "0", scrap_reason: null },
+      { line_ref: "V2P:302", good_quantity: "5", scrap_quantity: "0", scrap_reason: null },
+    ] });
+    expect(await screen.findByTestId("resultado-produccion")).toHaveTextContent("Iniciadas 25 · Buenas 25 · Merma 0");
+    expect(screen.getByTestId("resultado-produccion")).toHaveTextContent("entrega al cliente se registra por separado");
   });
 
   it("si el backend rechaza finalizar, se traduce lo que falta", async () => {
@@ -437,6 +484,12 @@ describe("ficha de una orden V2", () => {
     renderApp(["/produccion/5"]);
 
     await user.click(await screen.findByRole("button", { name: "Finalizar producción" }));
+    const dialog = await screen.findByRole("dialog", { name: "Registrar resultados de producción" });
+    await user.type(within(dialog).getAllByLabelText("Buenas")[0]!, "20");
+    await user.type(within(dialog).getAllByLabelText("Merma")[0]!, "0");
+    await user.type(within(dialog).getAllByLabelText("Buenas")[1]!, "5");
+    await user.type(within(dialog).getAllByLabelText("Merma")[1]!, "0");
+    await user.click(within(dialog).getByRole("button", { name: "Completar producción" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Falta registrar consumo real de: esmalte",
@@ -575,6 +628,14 @@ describe("registrar consumo", () => {
       if (url.includes("/inventory/locations")) {
         return jsonResponse(200, [{ id: 1, name: "Taller principal", active: true }]);
       }
+      if (url.includes("/products")) {
+        return jsonResponse(200, {
+          items: [{ id: 88, internal_reference: "MP-0088", name: "Pasta gres blanco", product_type: "RAW_MATERIAL", active: true }],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
       if (url.includes("/inventory")) {
         return jsonResponse(200, {
           items: [
@@ -712,6 +773,103 @@ describe("registrar consumo", () => {
       "No hay stock suficiente para registrar este consumo",
     );
     expect(within(dialogo).getByRole("button", { name: "Confirmar consumo" })).toBeDisabled();
+  });
+
+  it("exige escoger el segundo lote preparado y manda su preparation_id sin FIFO", async () => {
+    const original = ordenV2();
+    const ordenPreparada = ordenV2({
+      v2_pieces: (original.v2_pieces ?? []).map((piece) => ({
+        ...piece,
+        body_material_id: 99,
+        body_material_name: "Pasta preparada",
+        body_uom: "kg",
+      })),
+    });
+    const spy = backend({
+      orden: ordenPreparada,
+      extra: (url, init) => {
+        if (url.includes("/products?") && url.includes("PREPARED_MATERIAL")) {
+          return jsonResponse(200, {
+            items: [{ id: 99, internal_reference: "MP-0099", name: "Pasta preparada", product_type: "PREPARED_MATERIAL", active: true }],
+            total: 1,
+            limit: 200,
+            offset: 0,
+          });
+        }
+        if (url.includes("/inventory/lots")) {
+          return jsonResponse(200, [
+            { preparation_id: 101, preparation_code: "PREP-1", product_id: 99, location_id: 1, quantity: "5", uom_code: "kg" },
+            { preparation_id: 102, preparation_code: "PREP-2", product_id: 99, location_id: 1, quantity: "15", uom_code: "kg" },
+          ]);
+        }
+        if (new URL(url, "http://localhost").pathname.endsWith("/inventory")) {
+          return jsonResponse(200, {
+            items: [{ product_id: 99, internal_reference: "MP-0099", product_name: "Pasta preparada", location_id: 1, location_name: "Taller principal", uom_code: "kg", quantity: "20" }],
+            total: 1,
+            limit: 200,
+            offset: 0,
+          });
+        }
+        if (url.includes("/consumptions") && init.method === "POST") return jsonResponse(201, consumo());
+        return undefined;
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(["/produccion/5"]);
+
+    const dialogo = await abrirConsumo(user);
+    await waitFor(() => expect(within(dialogo).getByRole("combobox", { name: /^Material/ })).toHaveTextContent("Pasta preparada"));
+    const selectorLote = within(dialogo).getByRole("combobox", { name: "Lote de preparado" });
+    expect(selectorLote).toBeEnabled();
+    await user.click(selectorLote);
+    await user.click(within(dialogo).getByRole("option", { name: /PREP-2/ }));
+    await user.type(within(dialogo).getByLabelText(/Cantidad/i), "6");
+    await user.click(within(dialogo).getByRole("button", { name: "Revisar consumo" }));
+
+    expect(within(dialogo).getByText("PREP-2")).toBeInTheDocument();
+    await user.click(within(dialogo).getByRole("button", { name: "Confirmar consumo" }));
+    await waitFor(() => expect(posts(spy, "/consumptions")).toHaveLength(1));
+    expect(cuerpo(posts(spy, "/consumptions")[0]!)).toMatchObject({
+      product_id: 99,
+      preparation_id: 102,
+      quantity: "6",
+    });
+  });
+
+  it("traduce LOT_INSUFFICIENT_STOCK para un lote elegido", async () => {
+    const original = ordenV2();
+    const ordenPreparada = ordenV2({
+      v2_pieces: (original.v2_pieces ?? []).map((piece) => ({ ...piece, body_material_id: 99, body_material_name: "Pasta preparada", body_uom: "kg" })),
+    });
+    const spy = backend({
+      orden: ordenPreparada,
+      extra: (url, init) => {
+        if (url.includes("/products?") && url.includes("PREPARED_MATERIAL")) {
+          return jsonResponse(200, { items: [{ id: 99, internal_reference: "MP-0099", name: "Pasta preparada", product_type: "PREPARED_MATERIAL", active: true }], total: 1, limit: 200, offset: 0 });
+        }
+        if (url.includes("/inventory/lots")) {
+          return jsonResponse(200, [{ preparation_id: 102, preparation_code: "PREP-2", product_id: 99, location_id: 1, quantity: "15", uom_code: "kg" }]);
+        }
+        if (new URL(url, "http://localhost").pathname.endsWith("/inventory")) {
+          return jsonResponse(200, { items: [{ product_id: 99, internal_reference: "MP-0099", product_name: "Pasta preparada", location_id: 1, location_name: "Taller principal", uom_code: "kg", quantity: "15" }], total: 1, limit: 200, offset: 0 });
+        }
+        if (url.includes("/consumptions") && init.method === "POST") return errorResponse(409, "LOT_INSUFFICIENT_STOCK");
+        return undefined;
+      },
+    });
+    const user = userEvent.setup();
+    renderApp(["/produccion/5"]);
+
+    const dialogo = await abrirConsumo(user);
+    await waitFor(() => expect(within(dialogo).getByRole("combobox", { name: /^Material/ })).toHaveTextContent("Pasta preparada"));
+    await user.click(within(dialogo).getByRole("combobox", { name: "Lote de preparado" }));
+    await user.click(within(dialogo).getByRole("option", { name: /PREP-2/ }));
+    await user.type(within(dialogo).getByLabelText(/Cantidad/i), "6");
+    await user.click(within(dialogo).getByRole("button", { name: "Revisar consumo" }));
+    await user.click(within(dialogo).getByRole("button", { name: "Confirmar consumo" }));
+
+    expect(await within(dialogo).findByText(/El lote elegido ya no tiene cantidad suficiente/)).toBeInTheDocument();
+    expect(cuerpo(posts(spy, "/consumptions")[0]!)).toMatchObject({ preparation_id: 102 });
   });
 });
 

@@ -79,6 +79,8 @@ export function describeProductionError(
       return contexto === "consumo"
         ? "No hay stock suficiente para registrar este consumo. Se volvió a leer el saldo: revíselo y ajuste la cantidad."
         : describeError(error);
+    case "LOT_INSUFFICIENT_STOCK":
+      return "El lote elegido ya no tiene cantidad suficiente. Actualice los lotes disponibles y vuelva a revisar el consumo.";
     case "PRODUCTION_ORDER_NOT_CONSUMABLE":
       return (
         "Esta orden ya no admite consumos: sólo se registran en INICIO o EN " +
