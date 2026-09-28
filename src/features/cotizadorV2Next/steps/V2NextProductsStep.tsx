@@ -15,7 +15,7 @@ import { PrimaryButton } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
 
-export function V2NextProductsStep({ quotationId, canEdit }: PasoDelAsistenteProps) {
+export function V2NextProductsStep({ quotationId, canEdit, datos }: PasoDelAsistenteProps) {
   const [adding, setAdding] = useState(false);
 
   const query = useV2QuotationProducts(quotationId);
@@ -42,6 +42,7 @@ export function V2NextProductsStep({ quotationId, canEdit }: PasoDelAsistentePro
   }
 
   const lineas = query.data?.items ?? [];
+  const mostrarCampos010P = datos.cotizacion?.pricing_rules_version === 2;
 
   return (
     <Panel>
@@ -59,6 +60,7 @@ export function V2NextProductsStep({ quotationId, canEdit }: PasoDelAsistentePro
               key={linea.id}
               linea={linea}
               canEdit={canEdit}
+              mostrarCampos010P={mostrarCampos010P}
               onUpdate={(payload) =>
                 esperarGuardado(actualizar, "linea-editar", { lineId: linea.id, payload })
               }

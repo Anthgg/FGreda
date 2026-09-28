@@ -179,6 +179,60 @@ describe("V2NextProductsStep", () => {
     expect(screen.getByText(/20.0 L/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Quitar/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Agregar pieza" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Tiempo por pieza")).not.toBeInTheDocument();
+  });
+
+  it("serializa horas y minutos a minutos exactos y guarda mold_count entero", async () => {
+    const user = userEvent.setup();
+    const props010P = {
+      ...PROPS,
+      datos: { ...PROPS.datos, cotizacion: { ...COTIZACION, pricing_rules_version: 2 } },
+    };
+    renderConProvider(<V2NextProductsStep {...props010P} />);
+
+    const horas = screen.getAllByLabelText("Horas")[0]!;
+    const minutos = screen.getAllByLabelText("Minutos")[0]!;
+    await user.type(horas, "1");
+    await user.type(minutos, "30");
+    await user.tab();
+    await user.tab();
+
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { production_time_per_unit_minutes: "90" },
+    });
+
+    const moldes = screen.getAllByLabelText("Moldes")[0]!;
+    await user.clear(moldes);
+    await user.type(moldes, "3");
+    await user.tab();
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { mold_count: 3 },
+    });
+  });
+
+  it("muestra tiempo, moldes y cálculos del backend en una pieza 010P de sólo lectura", () => {
+    const pieza010P = {
+      ...CUSTOM_PIECE,
+      quantity: 30,
+      production_time_per_unit_minutes: "45.000000",
+      mold_count: 3,
+      cycles: 10,
+      line_active_minutes: "450.000000",
+    };
+    hooks.productsQuery.data = paginaConPiezas([pieza010P]);
+    renderConProvider(
+      <V2NextProductsStep
+        {...PROPS}
+        canEdit={false}
+        datos={{ ...PROPS.datos, cotizacion: { ...COTIZACION, pricing_rules_version: 2 } }}
+      />,
+    );
+
+    expect(screen.getByText(/45(?:\.00)? min/)).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText(/7 h 30(?:\.00)? min/)).toBeInTheDocument();
   });
 
   it("agrega una pieza de catálogo con product_id y búsqueda FINISHED_PRODUCT", async () => {

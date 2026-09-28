@@ -193,6 +193,7 @@ export const MANO_DE_OBRA_TRABAJO: V2LaborPage & { warnings: string[] } = {
       hours_overridden: true,
       is_additional_personnel: false,
       labor_cost: "0.000000",
+      assignment_origin: "MANUAL",
       warnings: ["V2_LABOR_WORKDAY_EXCEEDED", "V2_AVISO_NUEVO"],
     },
     {
@@ -216,6 +217,7 @@ export const MANO_DE_OBRA_TRABAJO: V2LaborPage & { warnings: string[] } = {
       hours_overridden: true,
       is_additional_personnel: true,
       labor_cost: "200.000000",
+      assignment_origin: "MANUAL",
       warnings: [],
     },
   ],

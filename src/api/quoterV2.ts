@@ -69,6 +69,19 @@ export const duplicateV2Quotation = (id: number): Promise<V2DuplicateResult> =>
 export const sendV2QuotationToProduction = (id: number): Promise<V2SendToProductionResult> =>
   apiClient.post(`${QUOTER_V2_BASE}/${id}/send-to-production`);
 
+export interface V2WholesaleDefaultsResult {
+  quotation: V2Quotation;
+  warnings: string[];
+}
+
+/** Aplica los valores por mayor decididos por BGreda. */
+export const applyV2WholesaleDefaults = (id: number): Promise<V2WholesaleDefaultsResult> =>
+  apiClient.post(`${QUOTER_V2_BASE}/${id}/apply-wholesale-defaults`);
+
+/** Declina la recomendación; el servidor conserva el tipo comercial actual. */
+export const declineV2WholesaleSuggestion = (id: number): Promise<V2Quotation> =>
+  apiClient.post(`${QUOTER_V2_BASE}/${id}/decline-wholesale-suggestion`);
+
 /** El PDF del cliente. Lo genera el backend con lo congelado al emitir. */
 export const fetchV2QuotationPdf = (id: number) =>
   apiClient.getBlobWithFilename(`${QUOTER_V2_BASE}/${id}/pdf`);

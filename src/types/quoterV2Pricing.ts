@@ -36,6 +36,9 @@ export interface V2PricingLine {
   /** Las dos bases de la línea: una con la tarifa de quema, otra con el gas. */
   production_cost: string;
   real_cost: string;
+  external_commercial_cost: string;
+  external_real_cost: string;
+  line_active_minutes: string | null;
 
   line_price: string;
   unit_price_raw: string;
@@ -49,6 +52,7 @@ export interface V2PricingLine {
 }
 
 export interface V2Pricing {
+  pricing_rules_version: number;
   materials_cost: string;
   labor_cost: string;
   illustration_cost: string;
@@ -91,8 +95,35 @@ export interface V2Pricing {
   /** Sobre el precio, no sobre el costo. */
   effective_margin_percent: string;
 
+  active_production_minutes: string;
+  active_production_hours: string;
+  commercial_external_labor_cost: string;
+  real_external_labor_cost: string;
+  labor_cost_gap: string;
+  external_workers: V2ExternalWorkerPricing[];
+  space_cost_per_hour_snapshot: string | null;
+  space_cost_per_hour_override: string | null;
+  effective_space_cost_per_hour: string;
+  passive_time_hours: string;
+  passive_space_suggestion: string;
+  wholesale_threshold: number | null;
+  total_units: number;
+  wholesale_suggested: boolean;
+  wholesale_suggestion_declined: boolean;
+
   lines: V2PricingLine[];
   warnings: string[];
+}
+
+export interface V2ExternalWorkerPricing {
+  worker_id: number;
+  name: string | null;
+  daily_rate: string;
+  workday_hours: string;
+  hourly_equivalent: string;
+  days_paid: number;
+  commercial_cost: string;
+  real_cost: string;
 }
 
 /** Fase 010J. Una palanca para bajar el precio. Estimación; nunca se aplica sola. */
@@ -124,6 +155,8 @@ export interface V2Reductions {
 export interface V2PricingInput {
   /** Factor, no porcentaje: 3 significa ×3. */
   commercial_factor?: string;
+  space_cost_per_hour_override?: string | null;
+  passive_time_hours?: string;
 }
 
 /** Los avisos que devuelve el backend, en lenguaje de taller. */
@@ -138,6 +171,12 @@ export const PRICING_WARNING_LABEL: Record<string, string> = {
   V2_PRICING_NO_COST: "Todavía no hay costo que valorizar.",
   V2_PRICING_WORK_DAYS_NOT_SET:
     "Faltan los días efectivos de taller. Sin ellos el espacio no entra en el costo, y lo decide usted.",
+  V2_CONFIRM_LINE_TIME_REQUIRED:
+    "Indique el tiempo de producción por pieza en cada línea para calcular el precio y poder emitir.",
+  V2_WHOLESALE_EXTERNAL_WORKER_MISSING:
+    "No se encontró un trabajador externo configurado para la recomendación por mayor. Revise la mano de obra.",
+  V2_WHOLESALE_DEFAULT_WORKER_LACKS_TECHNIQUE:
+    "El trabajador predeterminado no tiene habilitada una técnica necesaria. Revise sus técnicas antes de asignarlo.",
   V2_PRICING_LINE_WITHOUT_QUANTITY:
     "Alguna línea no tiene piezas y por eso no lleva importe. Revise si falta la cantidad.",
   V2_PRICING_SELLING_BELOW_REAL_COST:

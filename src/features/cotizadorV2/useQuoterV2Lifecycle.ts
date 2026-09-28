@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   cancelV2Quotation,
+  applyV2WholesaleDefaults,
   confirmV2Quotation,
+  declineV2WholesaleSuggestion,
   duplicateV2Quotation,
   fetchV2ConfirmationPreview,
   fetchV2QuotationHistory,
@@ -106,6 +108,24 @@ export const useSendV2ToProduction = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => sendV2QuotationToProduction(id),
+    onSuccess: () => refrescarTodo(client, id),
+  });
+};
+
+export const useApplyV2WholesaleDefaults = (id: number) => {
+  const client = useQueryClient();
+  return useMutation({
+    scope: alcanceDeGuardado(id),
+    mutationFn: () => enTurno(id, () => applyV2WholesaleDefaults(id)),
+    onSuccess: () => refrescarTodo(client, id),
+  });
+};
+
+export const useDeclineV2WholesaleSuggestion = (id: number) => {
+  const client = useQueryClient();
+  return useMutation({
+    scope: alcanceDeGuardado(id),
+    mutationFn: () => enTurno(id, () => declineV2WholesaleSuggestion(id)),
     onSuccess: () => refrescarTodo(client, id),
   });
 };

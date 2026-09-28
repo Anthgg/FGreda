@@ -13,6 +13,8 @@ export interface SessionUser {
   email: string;
   display_name: string;
   role: UserRole;
+  /** Capacidades declaradas por BGreda; los roles no las sustituyen. */
+  capabilities?: string[];
 }
 
 export interface SessionResponse {

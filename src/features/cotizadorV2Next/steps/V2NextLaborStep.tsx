@@ -1,13 +1,16 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 import { DecimalField } from "@/components/DecimalField";
-import { PrimaryButton, SecondaryButton, SelectField } from "@/components/form";
+import { interpretarDecimal } from "@/components/decimal";
+import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { formatCosto, MONEDA_BASE } from "@/features/cotizadorV2/moneda";
 import {
   useAddV2Labor,
+  useCreateV2Technique,
+  useCreateV2Worker,
   useDeleteV2Labor,
   useSetV2Illustration,
   useSetV2Planning,
@@ -30,13 +33,17 @@ import { formatDecimalString } from "@/features/firings/labels";
 import { Panel } from "@/features/masters/MasterTable";
 import { currencySymbol, formatMoney } from "@/features/quotations/money";
 import { describeError } from "@/features/settings/messages";
+import { hasQuickCreateCapability } from "@/features/auth/capabilities";
+import { useSession } from "@/features/auth/useSession";
 import type {
   V2Illustration,
   V2IllustrationLine,
   V2LaborLine,
   V2LaborPage,
   V2Technique,
+  V2TechniqueCreateInput,
   V2Worker,
+  V2WorkerCreateInput,
   V2WorkerLoad,
   V2WorkerType,
 } from "@/types/quoterV2Labor";
@@ -139,6 +146,7 @@ export function V2NextLaborStep({
   const productos = useV2QuotationProducts(quotationId);
   const trabajadores = useV2Workers(true);
   const tecnicas = useV2Techniques(true);
+  const { data: usuario } = useSession();
 
   if (
     manoDeObra.isPending ||
@@ -170,6 +178,8 @@ export function V2NextLaborStep({
     (tarea) => tarea.is_additional_personnel || !laborConProceso.has(tarea.id),
   );
   const sinMaestros = listaTrabajadores.length === 0 || listaTecnicas.length === 0;
+  const puedeAltaRapida = hasQuickCreateCapability(usuario);
+  const reglas010P = datos.cotizacion?.pricing_rules_version === 2;
 
   return (
     <Panel>
@@ -186,6 +196,13 @@ export function V2NextLaborStep({
             </p>
           </div>
         </div>
+
+        {reglas010P ? (
+          <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-zinc-200 bg-white/60 px-4 py-3 text-sm">
+            <span><strong>Horas activas del pedido:</strong> {datos.precio ? textoHoras(datos.precio.active_production_hours) : "Calculando…"}</span>
+            <span className="text-zinc-600">El personal interno se conserva en el plan; su costo de mano de obra es S/ 0.</span>
+          </div>
+        ) : null}
 
         {sinMaestros ? (
           <p
@@ -232,12 +249,18 @@ export function V2NextLaborStep({
 
             <CargaDeJornada carga={pagina.workday_load} />
 
-            <DiasDeTaller
-              quotationId={quotationId}
-              canEdit={canEdit}
-              labor={pagina}
-              costoPorDia={datos.cotizacion?.space_service_cost_per_day}
-            />
+            {!reglas010P ? (
+              <DiasDeTaller
+                quotationId={quotationId}
+                canEdit={canEdit}
+                labor={pagina}
+                costoPorDia={datos.cotizacion?.space_service_cost_per_day}
+              />
+            ) : null}
+
+            {puedeAltaRapida ? (
+              <AltaRapidaMaestros trabajadores={listaTrabajadores} tecnicas={listaTecnicas} />
+            ) : null}
 
             <Ilustracion quotationId={quotationId} canEdit={canEdit} />
           </>
@@ -332,7 +355,9 @@ function ProcesoFila({
   const cambiarPiezas = useSetV2ProcessQuantity(quotationId);
   const esperarGuardado = useEsperarGuardado(quotationId);
   const capaces = trabajadores.filter((worker) => worker.technique_ids.includes(proceso.technique_id));
-  const costo = tarea?.labor_cost ?? proceso.labor_cost;
+  const trabajadorAsignado = trabajadores.find((worker) => worker.id === proceso.worker_id);
+  const tipoTrabajador = tarea?.worker_type ?? trabajadorAsignado?.worker_type;
+  const origenAsignacion = tarea?.assignment_origin;
 
   return (
     <li
@@ -423,17 +448,26 @@ function ProcesoFila({
           <dl>
             <Dato
               label="Lo hace"
-              value={proceso.worker_name ?? "Sin asignar"}
+              value={
+                <span className="flex flex-col gap-1">
+                  <span>{proceso.worker_name ?? "Sin asignar"}</span>
+                  {tipoTrabajador ? <span className="text-[11px] font-medium">{WORKER_TYPE_LABEL[tipoTrabajador]}</span> : null}
+                  {origenAsignacion ? <span className="text-[11px] font-normal text-zinc-500">{origenAsignacion === "DEFAULT" ? "Asignación automática" : "Asignación manual"}</span> : null}
+                </span>
+              }
               hint={proceso.worker_id === null ? "Aún no cuesta." : undefined}
             />
           </dl>
         )}
 
         <dl>
-          <Dato
-            label="Costo del proceso"
-            value={proceso.worker_id === null ? "Sin asignar: aún no cuesta" : formatCosto(costo)}
-          />
+          {tipoTrabajador === "INTERNAL" ? (
+            <Dato label="Costo de mano de obra" value="S/ 0" hint="Personal interno: sigue asignado al trabajo." />
+          ) : tipoTrabajador === "EXTERNAL" ? (
+            <Dato label="Costo externo" value="Ver detalle en Precio" />
+          ) : (
+            <Dato label="Asignación" value="Sin asignar" />
+          )}
         </dl>
 
         {canEdit ? (
@@ -785,7 +819,9 @@ function TareaAdicional({
           <p className="text-sm font-semibold text-zinc-900">
             {tarea.worker_name} · {tarea.technique_name}
           </p>
-          <p className="mt-0.5 text-[11.5px] text-zinc-500">{nombreProducto}</p>
+          <p className="mt-0.5 text-[11.5px] text-zinc-500">
+            {nombreProducto} · {WORKER_TYPE_LABEL[tarea.worker_type]} · {tarea.assignment_origin === "DEFAULT" ? "Asignación automática" : "Asignación manual"}
+          </p>
         </div>
         {canEdit ? (
           <button
@@ -850,6 +886,7 @@ function TareaAdicional({
       ) : null}
 
       <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-black/[0.04] pt-3 @min-[480px]:grid-cols-4">
+        {tarea.worker_type === "INTERNAL" ? <Dato label="Costo de mano de obra" value="S/ 0" /> : <Dato label="Costo externo" value="Ver detalle en Precio" />}
         <Dato label="Rendimiento estándar" value={`${tarea.standard_capacity} / jornada`} />
         <Dato label="Horas calculadas" value={textoHoras(tarea.calculated_hours)} />
         <Dato label="Tarifa actual" value={importeCosto(tarea.hourly_rate, 4)} />
@@ -1129,5 +1166,165 @@ function LineaIlustracion({
         <Dato label="Costo" value={formatCosto(linea.cost)} />
       </dl>
     </div>
+  );
+}
+
+function AltaRapidaMaestros({
+  trabajadores,
+  tecnicas,
+}: {
+  trabajadores: V2Worker[];
+  tecnicas: V2Technique[];
+}) {
+  const [modo, setModo] = useState<"trabajador" | "tecnica">("trabajador");
+  const crearTrabajador = useCreateV2Worker();
+  const crearTecnica = useCreateV2Technique();
+  const [nombreTrabajador, setNombreTrabajador] = useState("");
+  const [tipo, setTipo] = useState<V2WorkerType>("INTERNAL");
+  const [jornal, setJornal] = useState("");
+  const [jornada, setJornada] = useState("");
+  const [tecnicasElegidas, setTecnicasElegidas] = useState<number[]>([]);
+  const [trabajadorActivo, setTrabajadorActivo] = useState(true);
+  const [codigoTecnica, setCodigoTecnica] = useState("");
+  const [nombreTecnica, setNombreTecnica] = useState("");
+  const [capacidad, setCapacidad] = useState("");
+  const [unidad, setUnidad] = useState("");
+  const [requiereEsmalte, setRequiereEsmalte] = useState(false);
+  const [horasManuales, setHorasManuales] = useState(false);
+  const [tecnicaActiva, setTecnicaActiva] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [guardado, setGuardado] = useState<string | null>(null);
+
+  const decimal = (raw: string): string | null => {
+    const value = interpretarDecimal(raw);
+    return value.tipo === "valido" ? value.canonico : null;
+  };
+
+  const enviarTrabajador = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const tarifa = decimal(jornal);
+    const horasJornada = jornada.trim() === "" ? null : decimal(jornada);
+    if (!nombreTrabajador.trim() || tarifa === null || (jornada.trim() !== "" && horasJornada === null)) {
+      setError("Completa nombre y jornal; la jornada debe ser un número válido si la indicas.");
+      return;
+    }
+    if (tecnicasElegidas.length === 0) {
+      setError("Selecciona al menos una técnica para que el trabajador pueda asignarse.");
+      return;
+    }
+    setError(null);
+    setGuardado(null);
+    const payload: V2WorkerCreateInput = {
+      name: nombreTrabajador.trim(),
+      worker_type: tipo,
+      daily_rate: tarifa,
+      ...(horasJornada !== null ? { workday_hours: horasJornada } : {}),
+      active: trabajadorActivo,
+      technique_ids: tecnicasElegidas,
+    };
+    crearTrabajador.mutate(payload, {
+      onSuccess: (worker) => {
+        setGuardado(`${worker.name} quedó disponible en la lista. No se asignó al pedido.`);
+        setNombreTrabajador("");
+        setJornal("");
+        setJornada("");
+        setTecnicasElegidas([]);
+        setTrabajadorActivo(true);
+      },
+      onError: (cause) => setError(describeError(cause)),
+    });
+  };
+
+  const enviarTecnica = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const rendimiento = decimal(capacidad);
+    if (!codigoTecnica.trim() || !nombreTecnica.trim() || !unidad.trim() || rendimiento === null) {
+      setError("Completa código, nombre, unidad y rendimiento numérico.");
+      return;
+    }
+    setError(null);
+    setGuardado(null);
+    const payload: V2TechniqueCreateInput = {
+      code: codigoTecnica.trim(),
+      name: nombreTecnica.trim(),
+      default_capacity_per_workday: rendimiento,
+      unit: unidad.trim(),
+      requires_glaze: requiereEsmalte,
+      manual_hours: horasManuales,
+      active: tecnicaActiva,
+    };
+    crearTecnica.mutate(payload, {
+      onSuccess: (technique) => {
+        setGuardado(`${technique.name} quedó disponible en la lista.`);
+        setCodigoTecnica("");
+        setNombreTecnica("");
+        setCapacidad("");
+        setUnidad("");
+        setRequiereEsmalte(false);
+        setHorasManuales(false);
+        setTecnicaActiva(true);
+      },
+      onError: (cause) => setError(describeError(cause)),
+    });
+  };
+
+  return (
+    <details className="rounded-2xl border border-zinc-200 bg-white/60 p-4">
+      <summary className="cursor-pointer text-sm font-semibold text-zinc-900">Alta rápida de trabajador o técnica</summary>
+      <p className="mt-1 text-xs text-zinc-600">El alta actualiza las opciones. El nuevo trabajador no se asigna automáticamente.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <SecondaryButton type="button" onClick={() => { setModo("trabajador"); setError(null); setGuardado(null); }}>
+          Nuevo trabajador
+        </SecondaryButton>
+        <SecondaryButton type="button" onClick={() => { setModo("tecnica"); setError(null); setGuardado(null); }}>
+          Nueva técnica
+        </SecondaryButton>
+      </div>
+
+      {modo === "trabajador" ? (
+        <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={enviarTrabajador}>
+          <TextField label="Nombre" requirement="required" value={nombreTrabajador} onChange={setNombreTrabajador} />
+          <SelectField label="Tipo" requirement="required" value={tipo} options={[{ value: "INTERNAL", label: "Interno" }, { value: "EXTERNAL", label: "Externo" }]} onChange={(value) => setTipo(value as V2WorkerType)} />
+          <TextField label="Jornal" requirement="required" value={jornal} onChange={setJornal} inputMode="decimal" />
+          <TextField label="Jornada" requirement="optional" value={jornada} onChange={setJornada} inputMode="decimal" hint="Vacío: usa la jornada del taller." />
+          <fieldset className="sm:col-span-2">
+            <legend className="mb-2 text-xs font-semibold text-zinc-800">Técnicas habilitadas</legend>
+            {tecnicas.length === 0 ? <p className="text-xs text-amber-800">Primero crea una técnica.</p> : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {tecnicas.map((technique) => (
+                  <label key={technique.id} className="flex min-h-9 items-center gap-2 rounded-lg border border-zinc-200 bg-white/70 px-3 text-xs text-zinc-800">
+                    <input
+                      type="checkbox"
+                      checked={tecnicasElegidas.includes(technique.id)}
+                      onChange={(event) => setTecnicasElegidas((current) => event.target.checked ? [...current, technique.id] : current.filter((id) => id !== technique.id))}
+                    />
+                    {technique.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </fieldset>
+          <label className="flex items-center gap-2 text-xs text-zinc-800"><input type="checkbox" checked={trabajadorActivo} onChange={(event) => setTrabajadorActivo(event.target.checked)} />Activo</label>
+          <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+            <PrimaryButton type="submit" disabled={crearTrabajador.isPending || tecnicas.length === 0}>{crearTrabajador.isPending ? "Creando…" : "Crear trabajador"}</PrimaryButton>
+            <span className="text-[11px] text-zinc-500">No se piden email, contraseña ni acceso.</span>
+          </div>
+        </form>
+      ) : (
+        <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={enviarTecnica}>
+          <TextField label="Código" requirement="required" value={codigoTecnica} onChange={setCodigoTecnica} />
+          <TextField label="Nombre" requirement="required" value={nombreTecnica} onChange={setNombreTecnica} />
+          <TextField label="Rendimiento por jornada" requirement="required" value={capacidad} onChange={setCapacidad} inputMode="decimal" />
+          <TextField label="Unidad" requirement="required" value={unidad} onChange={setUnidad} />
+          <label className="flex items-center gap-2 text-xs text-zinc-800"><input type="checkbox" checked={requiereEsmalte} onChange={(event) => setRequiereEsmalte(event.target.checked)} />Requiere esmalte</label>
+          <label className="flex items-center gap-2 text-xs text-zinc-800"><input type="checkbox" checked={horasManuales} onChange={(event) => setHorasManuales(event.target.checked)} />Horas manuales</label>
+          <label className="flex items-center gap-2 text-xs text-zinc-800"><input type="checkbox" checked={tecnicaActiva} onChange={(event) => setTecnicaActiva(event.target.checked)} />Activa</label>
+          <PrimaryButton type="submit" disabled={crearTecnica.isPending}>{crearTecnica.isPending ? "Creando…" : "Crear técnica"}</PrimaryButton>
+        </form>
+      )}
+      {error ? <p role="alert" className="mt-3 text-xs text-red-700">{error}</p> : null}
+      {guardado ? <p role="status" className="mt-3 text-xs text-emerald-800">{guardado}</p> : null}
+      <p className="sr-only" aria-live="polite">{trabajadores.length} trabajadores y {tecnicas.length} técnicas disponibles.</p>
+    </details>
   );
 }

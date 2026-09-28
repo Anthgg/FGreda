@@ -1,4 +1,5 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import type { FocusEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
@@ -26,14 +27,172 @@ function formatearLitros(valorCm3: string | null | undefined): string {
   return formatDecimalString(String(litros), 2);
 }
 
+const ESCALA_TIEMPO = 1_000_000n;
+
+function aMicrominutos(valor: string): bigint | null {
+  if (!/^\d+(?:[.,]\d{1,6})?$/.test(valor.trim())) return null;
+  const [entera = "0", fraccion = ""] = valor.trim().replace(",", ".").split(".");
+  return BigInt(entera) * ESCALA_TIEMPO + BigInt(fraccion.padEnd(6, "0") || "0");
+}
+
+function desdeMicrominutos(valor: bigint): string {
+  const enteros = valor / ESCALA_TIEMPO;
+  const fraccion = (valor % ESCALA_TIEMPO).toString().padStart(6, "0").replace(/0+$/, "");
+  return fraccion ? `${enteros}.${fraccion}` : String(enteros);
+}
+
+function partesDelTiempo(valor: string | null) {
+  if (!valor) return { horas: "", minutos: "" };
+  const total = aMicrominutos(valor);
+  if (total === null) return { horas: "", minutos: valor };
+  const porHora = ESCALA_TIEMPO * 60n;
+  return {
+    horas: String(total / porHora),
+    minutos: desdeMicrominutos((total % porHora) / 1n),
+  };
+}
+
+function formatearMinutos(valor: string | null): string {
+  if (valor === null) return "Sin definir";
+  const micro = aMicrominutos(valor);
+  if (micro === null) return `${valor} min`;
+  const porHora = ESCALA_TIEMPO * 60n;
+  const horas = micro / porHora;
+  const minutos = micro % porHora;
+  if (horas === 0n) return `${formatDecimalString(desdeMicrominutos(minutos), 2)} min`;
+  return minutos === 0n
+    ? `${horas} h`
+    : `${horas} h ${formatDecimalString(desdeMicrominutos(minutos), 2)} min`;
+}
+
+function TiempoUnitario({
+  value,
+  onCommit,
+}: {
+  value: string | null;
+  onCommit: (value: string | null) => void;
+}) {
+  const id = useId();
+  const horasRef = useRef<HTMLInputElement>(null);
+  const minutosRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const partes = partesDelTiempo(value);
+
+  const alSalir = (event: FocusEvent<HTMLFieldSetElement>) => {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+    const horas = horasRef.current?.value.trim() ?? "";
+    const minutos = minutosRef.current?.value.trim() ?? "";
+    if (horas === "" && minutos === "") {
+      if (value !== null) onCommit(null);
+      setError(null);
+      return;
+    }
+    const microHoras = horas === "" ? 0n : /^\d+$/.test(horas) ? BigInt(horas) : null;
+    const microMinutos = minutos === "" ? 0n : aMicrominutos(minutos);
+    if (microHoras === null || microMinutos === null || microMinutos >= ESCALA_TIEMPO * 60n) {
+      setError("Use horas enteras y minutos menores de 60.");
+      return;
+    }
+    const total = microHoras * ESCALA_TIEMPO * 60n + microMinutos;
+    if (total === 0n) {
+      setError("El tiempo debe ser mayor que cero.");
+      return;
+    }
+    setError(null);
+    const canonico = desdeMicrominutos(total);
+    if (canonico !== value) onCommit(canonico);
+  };
+
+  return (
+    <fieldset onBlur={alSalir} className="sm:col-span-2">
+      <legend className="mb-2 text-sm font-medium text-zinc-900">Tiempo por pieza</legend>
+      <div className="grid grid-cols-2 gap-3">
+        <label htmlFor={`${id}-horas`} className="text-xs font-medium text-zinc-700">
+          Horas
+          <input
+            ref={horasRef}
+            id={`${id}-horas`}
+            key={`h-${value ?? ""}`}
+            type="number"
+            min="0"
+            step="1"
+            defaultValue={partes.horas}
+            inputMode="numeric"
+            className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white/70 px-3 text-sm text-zinc-900 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          />
+        </label>
+        <label htmlFor={`${id}-minutos`} className="text-xs font-medium text-zinc-700">
+          Minutos
+          <input
+            ref={minutosRef}
+            id={`${id}-minutos`}
+            key={`m-${value ?? ""}`}
+            type="number"
+            min="0"
+            max="59.999999"
+            step="any"
+            defaultValue={partes.minutos}
+            inputMode="decimal"
+            className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white/70 px-3 text-sm text-zinc-900 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          />
+        </label>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-500">Se guarda en minutos. Ejemplo: 1 h y 30 min.</p>
+      {error ? <p role="alert" className="mt-1 text-xs text-red-700">{error}</p> : null}
+      {value !== null ? (
+        <button
+          type="button"
+          className="mt-2 text-xs font-medium text-zinc-600 underline underline-offset-2"
+          onClick={() => onCommit(null)}
+        >
+          Quitar tiempo
+        </button>
+      ) : null}
+    </fieldset>
+  );
+}
+
+function MoldCountField({ value, onCommit }: { value: number; onCommit: (value: number) => void }) {
+  const id = useId();
+  return (
+    <label htmlFor={id} className="text-sm font-medium text-zinc-900">
+      Moldes
+      <input
+        id={id}
+        key={value}
+        type="number"
+        min="1"
+        step="1"
+        defaultValue={value}
+        onBlur={(event) => {
+          const text = event.currentTarget.value;
+          if (!/^\d+$/.test(text)) {
+            event.currentTarget.value = String(value);
+            return;
+          }
+          const parsed = Number(text);
+          if (!Number.isSafeInteger(parsed) || parsed < 1) {
+            event.currentTarget.value = String(value);
+            return;
+          }
+          if (parsed !== value) onCommit(parsed);
+        }}
+        className="mt-2 h-10 w-full rounded-xl border border-black/[0.08] bg-white/70 px-3 text-sm text-zinc-900 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+      />
+    </label>
+  );
+}
+
 export function PieceCard({
   linea,
   canEdit,
+  mostrarCampos010P,
   onUpdate,
   onDelete,
 }: {
   linea: V2QuotationProduct;
   canEdit: boolean;
+  mostrarCampos010P: boolean;
   onUpdate: (payload: V2QuotationProductInput) => void;
   onDelete: () => void;
 }) {
@@ -98,6 +257,12 @@ export function PieceCard({
           {renderFact("Ocupa en el horno", totalVolLiters !== "—" ? `${totalVolLiters} litros` : "—")}
           {renderFact("Cada una", unitVolLiters !== "—" ? `${unitVolLiters} litros` : "—")}
           {renderFact("% del horno", occPercent !== "—" ? `${occPercent} %` : "—")}
+          {mostrarCampos010P ? <>
+            {renderFact("Tiempo por pieza", formatearMinutos(linea.production_time_per_unit_minutes))}
+            {renderFact("Moldes", String(linea.mold_count))}
+            {renderFact("Ciclos", String(linea.cycles))}
+            {renderFact("Tiempo activo de esta línea", linea.line_active_minutes ? formatearMinutos(linea.line_active_minutes) : "—")}
+          </> : null}
         </dl>
       </div>
     );
@@ -110,6 +275,18 @@ export function PieceCard({
           <h3 className="text-base font-medium text-zinc-900">{linea.product_name}</h3>
           <p className="text-sm text-zinc-500">{isCatalog ? "Del catálogo" : "Pieza a medida"}</p>
         </div>
+
+        {mostrarCampos010P ? <>
+          <TiempoUnitario
+            key={`tiempo-${linea.production_time_per_unit_minutes ?? "sin-definir"}`}
+            value={linea.production_time_per_unit_minutes}
+            onCommit={(val) => onUpdate({ production_time_per_unit_minutes: val })}
+          />
+          <MoldCountField
+            value={linea.mold_count}
+            onCommit={(val) => onUpdate({ mold_count: val })}
+          />
+        </> : null}
         <button
           type="button"
           onClick={() => setShowDelete(true)}
@@ -191,6 +368,10 @@ export function PieceCard({
           {renderFact("Ocupa en el horno", totalVolLiters !== "—" ? `${totalVolLiters} litros` : "—")}
           {renderFact("Cada una", unitVolLiters !== "—" ? `${unitVolLiters} litros` : "—")}
           {renderFact("% del horno", occPercent !== "—" ? `${occPercent} %` : "—")}
+          {mostrarCampos010P ? <>
+            {renderFact("Ciclos (backend)", String(linea.cycles))}
+            {renderFact("Tiempo activo de la línea", linea.line_active_minutes ? formatearMinutos(linea.line_active_minutes) : "—")}
+          </> : null}
         </div>
       </div>
 

@@ -252,6 +252,7 @@ export const V2_LABOR_PAGE: V2LaborPage = {
       hours_overridden: false,
       is_additional_personnel: false,
       labor_cost: "180.000000000000000000",
+      assignment_origin: "MANUAL",
       warnings: ["V2_LABOR_WORKDAY_EXCEEDED"],
     },
   ],
@@ -380,6 +381,7 @@ export const V2_FIRING: V2Firing = {
  * El IGV se aplica al final, sobre el subtotal ya redondeado.
  */
 export const V2_PRICING: V2Pricing = {
+  pricing_rules_version: 1,
   materials_cost: "285.360000000000000000",
   labor_cost: "569.066666666666666000",
   illustration_cost: "44.000000000000000000",
@@ -409,6 +411,21 @@ export const V2_PRICING: V2Pricing = {
   rounding_adjustment: "17.720000000000002000",
   estimated_profit: "5824.573333333333334000",
   effective_margin_percent: "75.712639",
+  active_production_minutes: "0.000000",
+  active_production_hours: "0.000000",
+  commercial_external_labor_cost: "0.000000",
+  real_external_labor_cost: "0.000000",
+  labor_cost_gap: "0.000000",
+  external_workers: [],
+  space_cost_per_hour_snapshot: "0.000000",
+  space_cost_per_hour_override: null,
+  effective_space_cost_per_hour: "0.000000",
+  passive_time_hours: "0.000000",
+  passive_space_suggestion: "0.000000",
+  wholesale_threshold: null,
+  total_units: 20,
+  wholesale_suggested: false,
+  wholesale_suggestion_declined: false,
   lines: [
     {
       line_id: 11,
@@ -428,6 +445,9 @@ export const V2_PRICING: V2Pricing = {
       line_tax: "637.200000000000000000",
       line_total: "4177.200000000000000000",
       profit: "2704.126639040848115000",
+      external_commercial_cost: "0.000000",
+      external_real_cost: "0.000000",
+      line_active_minutes: null,
     },
   ],
   warnings: [],

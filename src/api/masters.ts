@@ -24,6 +24,8 @@ import type {
   RowResolution,
   StockAdjustmentInput,
   StockBalance,
+  StockDeliveryInput,
+  StockLot,
   StockLocation,
   StockMovement,
   UnitOfMeasure,
@@ -118,6 +120,10 @@ export function fetchStock(filters: {
   return apiClient.get<Page<StockBalance>>(`${INVENTORY}${toQuery({ ...filters })}`);
 }
 
+export function fetchLots(filters: { product_id?: number; location_id?: number }): Promise<StockLot[]> {
+  return apiClient.get<StockLot[]>(`${INVENTORY}/lots${toQuery({ ...filters })}`);
+}
+
 export function fetchLocations(): Promise<StockLocation[]> {
   return apiClient.get<StockLocation[]>(`${INVENTORY}/locations`);
 }
@@ -135,6 +141,10 @@ export function fetchMovements(filters: {
 
 export function createAdjustment(payload: StockAdjustmentInput): Promise<StockMovement> {
   return apiClient.post<StockMovement>(`${INVENTORY}/adjustments`, payload);
+}
+
+export function createDelivery(payload: StockDeliveryInput): Promise<StockMovement> {
+  return apiClient.post<StockMovement>(`${INVENTORY}/deliveries`, payload);
 }
 
 // ---------------------------------------------------------------------------

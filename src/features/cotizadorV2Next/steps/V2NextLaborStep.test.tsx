@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatCosto } from "@/features/cotizadorV2/moneda";
 import { V2NextLaborStep } from "@/features/cotizadorV2Next/steps/V2NextLaborStep";
 import type { PasoDelAsistenteProps } from "@/features/cotizadorV2Next/shell/pasosDelAsistente";
+import { jsonResponse, mockFetch, renderWithProviders, sessionResponse, TEST_USER } from "@/test/utils";
 import {
   COTIZACION_TRABAJO,
   COTIZACION_TRABAJO_USD,
@@ -118,7 +119,10 @@ function renderPaso(
     estados: [],
     irAPaso: opciones.irAPaso ?? vi.fn(),
   };
-  return render(<V2NextLaborStep {...props} />);
+  mockFetch((url) =>
+    url.includes("/auth/me") ? sessionResponse(TEST_USER) : jsonResponse(200, {}),
+  );
+  return renderWithProviders(<V2NextLaborStep {...props} />);
 }
 
 async function elegir(
@@ -341,7 +345,9 @@ describe("V2NextLaborStep", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.getAllByText("Celso").length).toBeGreaterThan(0);
-    expect(screen.getByText("Sin asignar: aún no cuesta")).toBeInTheDocument();
+    const procesoSinAsignar = within(screen.getByTestId("labor-process-502"));
+    expect(procesoSinAsignar.getAllByText("Sin asignar")).toHaveLength(2);
+    expect(procesoSinAsignar.getByText("Aún no cuesta.")).toBeInTheDocument();
     expect(screen.getByText("2 días")).toBeInTheDocument();
   });
 

@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 import { Spinner } from "@/components/Spinner";
+import { DecimalField } from "@/components/DecimalField";
+import { PrimaryButton, SecondaryButton } from "@/components/form";
 import { Panel } from "@/features/masters/MasterTable";
 import { describeError } from "@/features/settings/messages";
 import { formatPercentage } from "@/features/firings/labels";
@@ -10,6 +13,10 @@ import { etiquetaDeFactor } from "@/features/cotizadorV2/factor";
 import { formatCosto, formatPrecio, type MonedaDeCotizacion } from "@/features/cotizadorV2/moneda";
 import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
 import { useSetV2Pricing, useV2Pricing } from "@/features/cotizadorV2/useQuoterV2Pricing";
+import {
+  useApplyV2WholesaleDefaults,
+  useDeclineV2WholesaleSuggestion,
+} from "@/features/cotizadorV2/useQuoterV2Lifecycle";
 import type { PasoDelAsistenteProps } from "@/features/cotizadorV2Next/shell/pasosDelAsistente";
 import { CostBreakdownBar } from "@/features/cotizadorV2Next/steps/pricing/CostBreakdownBar";
 import { FactorControl } from "@/features/cotizadorV2Next/steps/pricing/FactorControl";
@@ -86,9 +93,18 @@ function Desplegable({
   );
 }
 
+function formatHours(value: string): string {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return value;
+  return `${new Intl.NumberFormat("es-PE", { maximumFractionDigits: 2 }).format(parsed)} h`;
+}
+
 export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsistenteProps) {
   const query = useV2Pricing(quotationId);
   const guardar = useSetV2Pricing(quotationId);
+  const aplicarPorMayor = useApplyV2WholesaleDefaults(quotationId);
+  const mantenerMinorista = useDeclineV2WholesaleSuggestion(quotationId);
+  const [wholesaleError, setWholesaleError] = useState<string | null>(null);
 
   if (query.isPending) return <Spinner className="size-5" label="Calculando el precio…" />;
   if (query.isError) {
@@ -100,6 +116,7 @@ export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsiste
   }
 
   const precio = query.data;
+  const usaReglas010P = precio.pricing_rules_version === 2;
   const moneda: MonedaDeCotizacion = datos.cotizacion ?? {
     currency_code: precio.currency_code,
     currency_symbol: null,
@@ -131,7 +148,92 @@ export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsiste
 
         <CostBreakdownBar precio={precio} />
 
-        <Desplegable titulo="Costo real y quema">
+        {usaReglas010P ? <section
+          aria-label="Tiempo activo del pedido"
+          className="rounded-xl border border-zinc-200 bg-white/70 px-4 py-3"
+          data-testid="v2next-tiempo-activo"
+        >
+          <p className="text-xs font-medium text-zinc-500">Tiempo activo del pedido</p>
+          <p className="mt-1 text-lg font-bold tabular-nums text-zinc-950">
+            {formatHours(precio.active_production_hours)}
+          </p>
+          <p className="text-[11px] text-zinc-500">El total usa el tramo más largo porque las piezas se trabajan en paralelo.</p>
+        </section> : null}
+
+        {usaReglas010P && precio.wholesale_suggested && !precio.wholesale_suggestion_declined ? (
+          <section
+            role="status"
+            data-testid="v2next-wholesale-banner"
+            className="space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4"
+          >
+            <div>
+              <h2 className="text-sm font-semibold text-amber-950">Este pedido supera el umbral configurado.</h2>
+              <p className="mt-1 text-xs text-amber-900">
+                {precio.total_units} unidades · umbral {precio.wholesale_threshold ?? "—"}. La decisión es tuya.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <PrimaryButton
+                type="button"
+                disabled={!canEdit || aplicarPorMayor.isPending || mantenerMinorista.isPending}
+                onClick={() => {
+                  setWholesaleError(null);
+                  aplicarPorMayor.mutate(undefined, {
+                    onError: (error) => setWholesaleError(describeError(error)),
+                  });
+                }}
+              >
+                {aplicarPorMayor.isPending ? "Aplicando…" : "Aplicar Por mayor"}
+              </PrimaryButton>
+              <SecondaryButton
+                type="button"
+                disabled={!canEdit || aplicarPorMayor.isPending || mantenerMinorista.isPending}
+                onClick={() => {
+                  setWholesaleError(null);
+                  mantenerMinorista.mutate(undefined, {
+                    onError: (error) => setWholesaleError(describeError(error)),
+                  });
+                }}
+              >
+                {mantenerMinorista.isPending ? "Guardando…" : "Mantener como minorista"}
+              </SecondaryButton>
+            </div>
+            {aplicarPorMayor.data?.warnings.length ? (
+              <ul className="space-y-1 text-xs text-amber-950">
+                {aplicarPorMayor.data.warnings.map((code, index) => (
+                  <li key={`${code}-${index}`}>{PRICING_WARNING_LABEL[code] ?? "Revise los avisos del pedido."}</li>
+                ))}
+              </ul>
+            ) : null}
+            {wholesaleError ? <p role="alert" className="text-xs text-red-800">{wholesaleError}</p> : null}
+          </section>
+        ) : null}
+
+        {usaReglas010P ? <section className="grid gap-3 rounded-2xl border border-black/[0.06] bg-white/60 p-4 sm:grid-cols-2">
+          <DecimalField
+            label="Costo de espacio por hora"
+            value={precio.space_cost_per_hour_override}
+            disabled={!canEdit || guardar.isPending}
+            sufijo="S/ por hora"
+            hint={`Usando ${formatCosto(precio.effective_space_cost_per_hour)} · snapshot al crear: ${formatCosto(precio.space_cost_per_hour_snapshot)}. Vacío restaura el snapshot.`}
+            onCommit={(value) => guardar.mutate({ space_cost_per_hour_override: value })}
+          />
+          <DecimalField
+            label="Tiempo pasivo"
+            value={precio.passive_time_hours}
+            disabled={!canEdit || guardar.isPending}
+            sufijo="h"
+            hint={`Sugerencia del sistema: ${formatCosto(precio.passive_space_suggestion)}. No está incluida automáticamente en el total.`}
+            onCommit={(value) => guardar.mutate({ passive_time_hours: value ?? "0" })}
+          />
+          {guardar.isError ? (
+            <p role="alert" className="sm:col-span-2 text-xs text-red-700">
+              No se pudo guardar el cambio de precio: {describeError(guardar.error)}
+            </p>
+          ) : null}
+        </section> : null}
+
+        <Desplegable titulo="Costo comercial, costo real y quema">
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <Cifra
               etiqueta="Costo real"
@@ -144,6 +246,14 @@ export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsiste
               pista="La base comercial: lleva la tarifa que el taller cobra por encender."
             />
             <Cifra etiqueta="Gas real" valor={formatCosto(precio.gas_cost)} />
+            {usaReglas010P ? <>
+              <Cifra etiqueta="Administración" valor={formatCosto(precio.administration_cost)} pista={datos.cotizacion?.production_type === "RETAIL" ? "Por menor: valor que devuelve el backend." : "Valor que devuelve el backend para este pedido."} />
+              <Cifra etiqueta="Mano de obra externa imputada" valor={formatCosto(precio.commercial_external_labor_cost)} />
+              <Cifra etiqueta="Mano de obra externa real" valor={formatCosto(precio.real_external_labor_cost)} />
+              <Cifra etiqueta="Diferencia de mano de obra" valor={formatCosto(precio.labor_cost_gap)} />
+              <Cifra etiqueta="Tiempo activo" valor={formatHours(precio.active_production_hours)} />
+              <Cifra etiqueta="Espacio por hora aplicado" valor={formatCosto(precio.effective_space_cost_per_hour)} />
+            </> : null}
             <Cifra etiqueta="Tarifa de quema" valor={formatCosto(precio.firing_commercial_cost)} />
             <Cifra
               etiqueta="Diferencia de quema"
@@ -151,6 +261,31 @@ export function V2NextPricingStep({ quotationId, canEdit, datos }: PasoDelAsiste
               pista="Lo que deja la quema por sí sola. No es el margen de la cotización."
             />
           </dl>
+          {usaReglas010P && precio.external_workers.length > 0 ? (
+            <div className="mt-4 overflow-x-auto border-t border-zinc-200 pt-4">
+              <h3 className="mb-2 text-xs font-semibold text-zinc-800">Detalle del personal externo</h3>
+              <table className="min-w-full text-left text-xs" data-testid="v2next-external-workers">
+                <thead className="text-[10px] uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="py-2 pr-3">Persona</th><th className="py-2 pr-3">Jornal</th><th className="py-2 pr-3">Jornada</th><th className="py-2 pr-3">Equiv./h</th><th className="py-2 pr-3">Días pagados</th><th className="py-2 pr-3">Comercial</th><th className="py-2">Real</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {precio.external_workers.map((worker) => (
+                    <tr key={worker.worker_id}>
+                      <td className="py-2 pr-3 text-zinc-900">{worker.name ?? "Trabajador externo"}</td>
+                      <td className="py-2 pr-3 tabular-nums">{formatCosto(worker.daily_rate)}</td>
+                      <td className="py-2 pr-3 tabular-nums">{formatHours(worker.workday_hours)}</td>
+                      <td className="py-2 pr-3 tabular-nums">{formatCosto(worker.hourly_equivalent)}</td>
+                      <td className="py-2 pr-3 tabular-nums">{worker.days_paid}</td>
+                      <td className="py-2 pr-3 tabular-nums">{formatCosto(worker.commercial_cost)}</td>
+                      <td className="py-2 tabular-nums">{formatCosto(worker.real_cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </Desplegable>
 
         <section
