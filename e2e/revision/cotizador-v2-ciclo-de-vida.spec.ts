@@ -8,11 +8,13 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 import { login } from "../helpers/auth";
 import { testName } from "../helpers/fixtures";
 import {
+  apiPath,
   agregarProceso,
   anadirPieza,
   anadirPiezaDelCatalogo,
   cabecera,
   campo,
+  configurarTiempoYMoldes,
   decidirDias,
   elegir,
   elegirArcilla,
@@ -64,8 +66,9 @@ function idDeLaUrl(page: Page): number {
 async function borradorCompleto(page: Page, etiqueta: string, piezas: string[]): Promise<number> {
   await login(page);
   const { id } = await nuevoBorrador(page, etiqueta);
-  for (const pieza of piezas) {
+  for (const [indice, pieza] of piezas.entries()) {
     await anadirPieza(page, testName(pieza), "10", ["18", "12", "4"]);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" }, indice);
   }
   for (let indice = 0; indice < piezas.length; indice += 1) {
     await elegirArcilla(page, indice, "400");
@@ -96,7 +99,7 @@ const EXTRAER_TEXTO = [
 
 /** El PDF de la sesión, validado como PDF, y su texto extraído. */
 async function textoDelPdf(api: APIRequestContext, id: number): Promise<string> {
-  const respuesta = await api.get(`/api/v1/quotations-v2/${id}/pdf`);
+  const respuesta = await api.get(apiPath(`/api/v1/quotations-v2/${id}/pdf`));
   expect(respuesta.status()).toBe(200);
   expect(respuesta.headers()["content-type"]).toContain("application/pdf");
   const cuerpo = await respuesta.body();
@@ -172,11 +175,11 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     );
 
     // Otra ronda de confirmaciones simultáneas por la API: misma emisión.
-    const resumen = await (await page.request.get(`/api/v1/quotations-v2/${id}/confirmation-preview`)).json();
+    const resumen = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${id}/confirmation-preview`))).json();
     const token = await csrf(page);
     const respuestas = await Promise.all(
       [1, 2, 3].map(() =>
-        page.request.post(`/api/v1/quotations-v2/${id}/confirm`, {
+        page.request.post(apiPath(`/api/v1/quotations-v2/${id}/confirm`), {
           data: { expected_fingerprint: resumen.fingerprint },
           headers: { "X-CSRF-Token": token },
         }),
@@ -201,7 +204,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await cabecera(page).getByRole("button", { name: "Descargar PDF" }).click();
     expect((await descarga).suggestedFilename()).toMatch(/\.pdf$/);
     const pdf = await comprobarPdf(page.request, id);
-    const datos = await (await page.request.get(`/api/v1/quotations-v2/${id}`)).json();
+    const datos = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${id}`))).json();
     for (const permitido of [datos.code, "clientee2e", "plato", "igv", "total", "válidahasta"]) {
       expect(pdf, `el PDF no contiene «${permitido}»`).toContain(compacto(String(permitido)));
     }
@@ -224,7 +227,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const token = await csrf(page);
     const respuestas = await Promise.all(
       [1, 2, 3].map(() =>
-        page.request.post(`/api/v1/quotations-v2/${id}/send-to-production`, {
+        page.request.post(apiPath(`/api/v1/quotations-v2/${id}/send-to-production`), {
           headers: { "X-CSRF-Token": token },
         }),
       ),
@@ -248,7 +251,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     page,
   }) => {
     await login(page);
-    const listado = await (await page.request.get("/api/v1/quotations-v2?limit=200")).json();
+    const listado = await (await page.request.get(apiPath("/api/v1/quotations-v2?limit=200"))).json();
     // La semilla es la EMITIDA con ese nombre: su duplicado se llama igual.
     const semilla = listado.items.find(
       (item: { name: string | null; status: string }) =>
@@ -269,7 +272,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const pdfAntes = await comprobarPdf(page.request, antiguaId);
     expect(pdfAntes).toContain("3.70");
     const previaAntigua = await (
-      await page.request.get(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`))
     ).json();
 
     await cabecera(page).getByRole("button", { name: "Duplicar y actualizar precios" }).dblclick();
@@ -280,21 +283,21 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const nuevaId = idDeLaUrl(page);
     expect(nuevaId).not.toBe(antiguaId);
 
-    const nueva = await (await page.request.get(`/api/v1/quotations-v2/${nuevaId}`)).json();
+    const nueva = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${nuevaId}`))).json();
     expect(nueva.status).toBe("DRAFT");
     expect(nueva.duplicated_from_id).toBe(antiguaId);
     expect(nueva.currency_code).toBe("USD");
     expect(Number(nueva.exchange_rate)).toBeCloseTo(3.82, 6);
     expect(nueva.code).not.toBe(semilla.code);
     const previaNueva = await (
-      await page.request.get(`/api/v1/quotations-v2/${nuevaId}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${nuevaId}/confirmation-preview`))
     ).json();
     expect(previaNueva.lines).toHaveLength(previaAntigua.lines.length);
     expect(Number(previaNueva.exchange_rate)).toBeCloseTo(3.82, 6);
     expect(previaNueva.total_amount).not.toBe(previaAntigua.total_amount);
 
     // Un solo borrador abierto aunque se pulse otra vez.
-    const otra = await page.request.post(`/api/v1/quotations-v2/${antiguaId}/duplicate`, {
+    const otra = await page.request.post(apiPath(`/api/v1/quotations-v2/${antiguaId}/duplicate`), {
       headers: { "X-CSRF-Token": await csrf(page) },
     });
     expect(otra.status()).toBe(200);
@@ -311,14 +314,14 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       "href",
       `${RUTA_V2}/${nuevaId}`,
     );
-    const antigua = await (await page.request.get(`/api/v1/quotations-v2/${antiguaId}`)).json();
+    const antigua = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${antiguaId}`))).json();
     expect(antigua.status).toBe("CONFIRMED");
     expect(Number(antigua.exchange_rate)).toBeCloseTo(3.7, 6);
     const pdfDespues = await comprobarPdf(page.request, antiguaId);
     expect(pdfDespues).toBe(pdfAntes);
     expect(pdfDespues).not.toContain("3.82");
     const previaDespues = await (
-      await page.request.get(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`))
     ).json();
     expect(previaDespues.total_amount).toBe(previaAntigua.total_amount);
   });
@@ -338,6 +341,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await cantidad.fill("12");
     await cantidad.blur();
     await esperarGuardado(page);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" });
 
     // La arcilla se elige; el peso por pieza ya viene del gramaje del maestro.
     await elegirArcilla(page);
@@ -363,7 +367,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await dialogo.getByRole("button", { name: "Confirmar y emitir" }).click();
     await expect(dialogo).toBeHidden({ timeout: 20_000 });
 
-    const lineas = await (await page.request.get(`/api/v1/quotations-v2/${id}/products`)).json();
+    const lineas = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${id}/products`))).json();
     expect(lineas.items).toHaveLength(1);
     expect(lineas.items[0].product_id).not.toBeNull();
     expect(Number(lineas.items[0].body_unit_weight)).toBeCloseTo(450, 6);
@@ -385,7 +389,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect(documento).not.toContainText(PROHIBIDOS);
 
     const previa = await (
-      await page.request.get(`/api/v1/quotations-v2/${id}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${id}/confirmation-preview`))
     ).json();
     const suma = previa.lines.reduce(
       (total: number, linea: { line_subtotal: string }) => total + Number(linea.line_subtotal),
@@ -402,7 +406,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
   }) => {
     const id = await borradorCompleto(page, "V2-Tecnicas", ["Taza"]);
     const api = page.request;
-    const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
+    const trabajadores = (await (await api.get(apiPath("/api/v1/quoter-v2/workers"))).json()).items as {
       id: number;
       name: string;
       technique_ids: number[];
@@ -413,7 +417,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     // el caso canónico del Excel final entero, torno incluido; el tornero solo tornea.
     expect(taller?.technique_ids).toHaveLength(7);
     expect(tornero?.technique_ids).toHaveLength(2);
-    const tecnicas = (await (await api.get("/api/v1/quoter-v2/techniques")).json()).items as {
+    const tecnicas = (await (await api.get(apiPath("/api/v1/quoter-v2/techniques"))).json()).items as {
       id: number;
       name: string;
     }[];
@@ -437,7 +441,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await seccion.getByRole("button", { name: "Añadir personal" }).click();
     // Se espera al DATO, no al indicador.
     const leerTareas = async () =>
-      (await (await api.get(`/api/v1/quotations-v2/${id}/labor`)).json()).items as {
+      (await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/labor`))).json()).items as {
         worker_id: number;
         technique_name: string;
         is_additional_personnel: boolean;
@@ -454,7 +458,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
 
     // Y la barrera del backend sigue en pie para una petición a mano.
     const token = await csrf(page);
-    const prohibido = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
+    const prohibido = await api.post(apiPath(`/api/v1/quotations-v2/${id}/labor`), {
       data: { worker_id: tornero?.id, technique_id: aMano?.id, quantity: "10" },
       headers: { "X-CSRF-Token": token },
     });
@@ -474,6 +478,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await cantidad.fill("20");
     await cantidad.blur();
     await esperarGuardado(page);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" });
     await elegirArcilla(page);
 
     // Nadie tuvo que acordarse del asa.
@@ -485,7 +490,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
 
     const api = page.request;
     const leerProcesos = async () =>
-      (await (await api.get(`/api/v1/quotations-v2/${id}/processes`)).json()).items as {
+      (await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/processes`))).json()).items as {
         id: number;
         technique_name: string;
         quantity: string;
@@ -506,7 +511,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(Number(asa?.calculated_hours)).toBeCloseTo(3.2, 6);
 
     // Asignar a alguien es lo que crea el costo, y se hace DESDE LA PANTALLA.
-    const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
+    const trabajadores = (await (await api.get(apiPath("/api/v1/quoter-v2/workers"))).json()).items as {
       id: number;
       name: string;
     }[];
@@ -525,13 +530,13 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(Number(asaAsignada?.final_hours)).toBeGreaterThan(0);
     expect(Number(asaAsignada?.labor_cost)).toBe(0);
     // Y el costo se ve en la fila, sin recargar.
-    await expect(filaDelAsa).toContainText("Costo del proceso");
+    await expect(filaDelAsa).toContainText("Costo de mano de obra");
     await expect(filaDelAsa).toContainText("S/ 0.00");
 
     // Un trabajador que no sabe la técnica sigue rechazado, también por aquí.
     const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
     if (tornero !== undefined) {
-      const prohibido = await api.post(`/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`, {
+      const prohibido = await api.post(apiPath(`/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`), {
         data: { worker_id: tornero.id },
         headers: { "X-CSRF-Token": token },
       });
@@ -543,10 +548,10 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect.poll(async () => (await leerProcesos()).length).toBe(2);
     expect((await leerProcesos()).map((fila) => fila.technique_name)).not.toContain("Vidriado por inmersion");
     await expect(paso).not.toContainText("Vidriado por inmersion");
-    const piezas = (await (await api.get("/api/v1/products?product_type=FINISHED_PRODUCT")).json())
+    const piezas = (await (await api.get(apiPath("/api/v1/products?product_type=FINISHED_PRODUCT"))).json())
       .items as { id: number; name: string }[];
     const taza = piezas.find((pieza) => pieza.name === "E2E-Catalogo Taza 250 ml");
-    const maestro = await (await api.get(`/api/v1/quoter-v2/products/${taza?.id}/techniques`)).json();
+    const maestro = await (await api.get(apiPath(`/api/v1/quoter-v2/products/${taza?.id}/techniques`))).json();
     expect(
       (maestro.items as { technique_name: string; active: boolean }[])
         .filter((fila) => fila.active)
@@ -554,8 +559,8 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     ).toContain("Vidriado por inmersion");
 
     // El adicional suma al costo de producción y al costo real, como el Excel.
-    const antes = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
-    const conceptos = (await (await api.get("/api/v1/quoter-v2/extras")).json()).items as {
+    const antes = await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/pricing`))).json();
+    const conceptos = (await (await api.get(apiPath("/api/v1/quoter-v2/extras"))).json()).items as {
       id: number;
       name: string;
     }[];
@@ -572,11 +577,11 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await cantidadAdicional.blur();
     await expect
       .poll(async () =>
-        Number((await (await api.get(`/api/v1/quotations-v2/${id}/extras`)).json()).extras_cost_total),
+        Number((await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/extras`))).json()).extras_cost_total),
       )
       .toBeCloseTo(50, 6);
 
-    const despues = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
+    const despues = await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/pricing`))).json();
     expect(Number(despues.extras_cost)).toBeCloseTo(50, 6);
     expect(Number(despues.production_cost) - Number(antes.production_cost)).toBeCloseTo(50, 6);
     expect(Number(despues.real_cost) - Number(antes.real_cost)).toBeCloseTo(50, 6);

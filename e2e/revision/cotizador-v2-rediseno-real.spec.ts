@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import { testName } from "../helpers/fixtures";
+import { configurarTiempoYMoldes, decidirDias } from "./support/cotizadorV2Ui";
 
 /**
  * El Cotizador V2 rediseñado de punta a punta, contra el BACKEND REAL de la
@@ -76,6 +77,7 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
       await campo.blur();
     }
     await esperarGuardado(page);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" });
 
     // Arcilla: la primera pasta valorizada y su peso.
     await siguiente(page, "Arcilla y esmalte");
@@ -87,7 +89,8 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
     await peso.blur();
     await esperarGuardado(page);
 
-    // Trabajo: una técnica a mano con quien la sabe hacer, y los días.
+    // Trabajo: una técnica a mano con quien la sabe hacer; las horas activas
+    // ya vienen del tiempo por pieza y los moldes de 010P.
     await siguiente(page, "Trabajo");
     await elegirOpcion(page, page.getByRole("combobox", { name: "Agregar proceso" }).first(), "A mano");
     await page.getByRole("button", { name: "Agregar", exact: true }).first().click();
@@ -98,10 +101,7 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
       /E2E-Trabajador taller/,
     );
     await esperarGuardado(page);
-    const dias = page.getByLabel("¿Cuántos días le dedicarás?");
-    await dias.fill("2");
-    await dias.blur();
-    await esperarGuardado(page);
+    await decidirDias(page, "2");
 
     // Horno, precio y revisión: lo que falte lo dicen los pendientes.
     await siguiente(page, "Horno");

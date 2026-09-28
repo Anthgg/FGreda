@@ -171,11 +171,47 @@ export function campoDeDias(page: Page): Locator {
   return page.getByLabel("¿Cuántos días le dedicarás?");
 }
 
+/** La revisión puede servir API y frontend en orígenes locales distintos. */
+export function apiPath(path: string): string {
+  const base = process.env.E2E_API_BASE_URL;
+  if (!base) return path;
+  const url = new URL(base);
+  if (!(["localhost", "127.0.0.1"] as string[]).includes(url.hostname)) {
+    throw new Error("E2E_API_BASE_URL debe apuntar a un backend local.");
+  }
+  return new URL(path, url).toString();
+}
+
 /** Decide los días de taller. */
 export async function decidirDias(page: Page, dias: string): Promise<void> {
   if (!(await tituloDelPaso(page, "Trabajo").isVisible())) await irAPaso(page, "Trabajo");
-  await escribir(campoDeDias(page), dias);
+  const campoDias = campoDeDias(page);
+  if ((await campoDias.count()) === 0) {
+    await page.getByText("Horas activas del pedido:").waitFor({ state: "visible" });
+    return;
+  }
+  await escribir(campoDias, dias);
   await esperarGuardado(page);
+}
+
+/** Configura tiempo unitario y moldes de una pieza en el contrato 010P. */
+export async function configurarTiempoYMoldes(
+  page: Page,
+  valores: { horas: string; minutos: string; moldes: string },
+  indice = 0,
+): Promise<void> {
+  if (!(await tituloDelPaso(page, "Piezas").isVisible())) await irAPaso(page, "Piezas");
+  await page.getByLabel("Horas").nth(indice).fill(valores.horas);
+  await page.getByLabel("Minutos").nth(indice).fill(valores.minutos);
+  await page.getByLabel("Cantidad").nth(indice).focus();
+  await esperarGuardado(page);
+
+  const moldes = page.getByLabel("Moldes").nth(indice);
+  await moldes.fill(valores.moldes);
+  await moldes.blur();
+  await esperarGuardado(page);
+  await page.getByText("Ciclos (backend)", { exact: true }).nth(indice).waitFor({ state: "visible" });
+  await page.getByText("Tiempo activo de la línea", { exact: true }).nth(indice).waitFor({ state: "visible" });
 }
 
 /**
