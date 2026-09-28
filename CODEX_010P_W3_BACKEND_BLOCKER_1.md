@@ -1,21 +1,19 @@
 # CODEX_010P_W3_BACKEND_BLOCKER_1
 
-## Bloqueo: resultados de órdenes Solo quema
+## Estado del contrato de lectura
 
-**Backend examinado:** BGreda W2 `3ce6de0eb563b561e3c2ca1e3142b92b5b764c48`.
+El bloqueo original quedó **RESUELTO** en el backend W3 aislado:
 
-**Endpoint:** `GET /production-orders/{id}` seguido de `POST /production-orders/{id}/complete`.
+- Base W2: `3ce6de0eb563b561e3c2ca1e3142b92b5b764c48`.
+- Commit del contrato: `b5d55caa58a6f7c76df52c666c85858d1467d6e2`.
+- Rama: `feat/010p-w3-production-order-read-contract`.
+- Cambio aditivo en `GET /production-orders/{id}`: `result_lines[]` devuelve el `line_ref` y `started_quantity` autoritativos, junto con identidad/origen disponible.
+- `POST /production-orders/{id}/complete` conserva su payload y sus validaciones. No se creó una migración; Alembic permanece en `0045`.
 
-**Request de cierre:** `ProductionOrderCompleteIn.results[]`, con `line_ref`, `good_quantity`, `scrap_quantity` y `scrap_reason`.
+La salida se prueba para líneas V2 de productos, V2 Solo Quema (`V2F:<firing_quotation_line_id>`) y prototipos. El cliente consume los valores devueltos por el GET; React no deriva ni inventa referencias o cantidades.
 
-**Actual:** el servicio de cierre construye las líneas de una orden Solo quema con referencias `V2F:<id>` de `V2FiringQuotationLine`. La respuesta pública `ProductionOrderOut` no incluye esos IDs ni las cantidades iniciadas de las líneas V2F; sólo expone `lines` y `v2_pieces`.
+## Bloqueo restante: Solo Quema E2E
 
-**Esperado:** que el frontend pueda mostrar cada línea V2F y su cantidad iniciada, y enviar las referencias exactas que valida `complete`.
+`SOLO_QUEMA_E2E` sigue **BLOCKED**. El servidor E2E aislado y las rutas públicas actuales no ofrecen un flujo soportado para crear una orden de producción desde una cotización FQ/Solo Quema. No se inventará un endpoint ni se insertarán datos internos para simular el flujo de usuario.
 
-**Impacto:** la UI no ofrece un cierre que invente una referencia `POL` o envíe cantidades calculadas localmente. La orden Solo quema muestra el bloqueo y no puede registrar buenas/merma desde W3. Enviar `POL:<id>` no satisface el conjunto de referencias V2F que exige el servicio.
-
-**Reproducción:** crear una cotización V2 de Solo quema, enviarla a producción, consultar la orden y revisar que no hay líneas V2F en `ProductionOrderOut`; después comparar con `ProductionOrderService.complete`, que exige referencias `V2F:<id>`.
-
-**Evidencia de contrato W2:** `app/schemas/production.py` (`ProductionOrderOut`, `ProductionOrderCompleteIn`) y `app/services/production.py` (`ProductionOrderService.complete`). No se modificó BGreda.
-
-**Cambio requerido en backend:** exponer en la lectura de la orden las líneas V2F congeladas con su identificador y `started_quantity`, o añadir un endpoint de lectura equivalente. Después se puede integrar la captura en W3 y probar la salida sin inventario de Solo quema.
+Por ello no hay evidencia de navegador para completar 8 buenas + 2 de merma en una orden real Solo Quema y comprobar la ausencia de `PRODUCTION_IN`/incremento de stock terminado. El backend read contract ya no es la causa del bloqueo.

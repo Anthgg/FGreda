@@ -45,3 +45,14 @@ W2 includes `capabilities[]` on authenticated session users; the frontend `Sessi
 ### CODEX_010P_W3_API_DELTA_7 — Stock product type
 
 W2 stock balance rows do not include `product_type`. Delivery eligibility must be resolved through the product master before showing/enabling a finished-product delivery action; W3 will not infer product type from stock balance shape.
+
+## W3 contract addendum — 2026-09-28
+
+The initial audit above describes W2 at `3ce6de0eb563b561e3c2ca1e3142b92b5b764c48`. The isolated backend W3 contract commit `b5d55caa58a6f7c76df52c666c85858d1467d6e2` extends the public order read:
+
+- `GET /production-orders/{id}` returns authoritative `result_lines[]` with `line_ref` and `started_quantity`, and existing source/product identifiers and labels when available.
+- Backend constructs the accepted references for V2 product, V2 firing, and prototype sources. The frontend does not reconstruct these identifiers or infer the started quantity.
+- `POST /production-orders/{id}/complete` remains unchanged and validates the reference against the order and `good_quantity + scrap_quantity == started_quantity`.
+- The W3 read/complete tests use the returned line data as their input. No database migration was added; Alembic remains at `0045`.
+
+The Solo Quema **browser E2E** remains blocked by the absence of a supported public FQ-to-production-order creation flow in the isolated E2E fixture. This is separate from the read-contract fix; details are in `CODEX_010P_W3_BACKEND_BLOCKER_1.md`.
