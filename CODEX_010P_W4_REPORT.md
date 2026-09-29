@@ -31,7 +31,7 @@ La rerun focal de los cuatro fallos DB obtuvo 2 aprobadas y 2 fallidas. Persisti
 - tests/db/test_production_v2_tracking.py::TestNotasYQuemas::test_el_reintento_devuelve_la_misma_nota: 422 PRODUCTION_NOTE_OCCURRED_AT_INVALID porque la marca de tiempo enviada puede preceder a la creación de la orden.
 - tests/db/test_production_v2_tracking.py::TestSeguimiento::test_reune_estados_consumos_notas_y_quemas_en_orden: falla en la secuencia temporal esperada.
 
-Los archivos de esos dos casos y app/services/production.py no difieren respecto a la base W3 08b95e2495ab65b0c9c6e743614bf59f8f2987ad. El fallo es preexistente al delta de código W4, pero el gate de DB full sigue fallando y bloquea el RC.
+Los archivos de esos dos casos y app/services/production.py no difieren respecto a la base W3 08b95e2495ab65b0c9c6e743614bf59f8f2987ad; por tanto, W4 no modificó esas líneas. No se ejecutó la suite sobre W3, así que no se declara probado que los fallos ya ocurrieran antes. El gate DB full sigue fallando y bloquea el RC.
 
 ## Gates frontend
 
