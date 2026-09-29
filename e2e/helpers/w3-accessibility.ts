@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export const W3_VIEWPORT_WIDTHS = [375, 768, 1024, 1440] as const;
+export const W3_VIEWPORT_WIDTHS = [375, 768, 1024, 1280, 1440] as const;
 
 /** Structural Playwright checks for names, labels, dialogs, and visible focus. */
 export async function assertW3AccessibleControls(page: Page, surface: string): Promise<void> {
@@ -9,7 +9,7 @@ export async function assertW3AccessibleControls(page: Page, surface: string): P
     const visible = (element: Element): boolean => {
       const style = window.getComputedStyle(element);
       return style.display !== "none" && style.visibility !== "hidden" &&
-        (element as HTMLElement).offsetParent !== null;
+        element.getClientRects().length > 0;
     };
     const referencedText = (element: Element, attribute: string): string =>
       (element.getAttribute(attribute) ?? "")

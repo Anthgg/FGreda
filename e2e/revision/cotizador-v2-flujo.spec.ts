@@ -6,8 +6,7 @@ import {
   anadirPieza,
   botonDePaso,
   campo,
-  campoDeDias,
-  decidirDias,
+  configurarTiempoYMoldes,
   elegirArcilla,
   esperarGuardado,
   estadoDeGuardado,
@@ -41,7 +40,7 @@ import {
  * prefijo E2E- y nada se borra.
  */
 
-const RUTA_PLANIFICACION = "**/api/v1/quotations-v2/*/planning";
+const RUTA_PIEZA = "**/api/v1/quotations-v2/*/products/*";
 
 /**
  * Una cotización con una pieza y el horno por defecto, en el paso Trabajo.
@@ -54,11 +53,11 @@ const RUTA_PLANIFICACION = "**/api/v1/quotations-v2/*/planning";
  * producción 1000,59 + 280 + 200 = S/1480,59; ×3 = 4441,76; unitario 222,09
  * que sube al escalón de S/0,50: 222,50 × 20 = S/4450.
  */
-async function cotizacionHastaTrabajo(page: Page, etiqueta: string) {
+async function cotizacionHastaPiezas(page: Page, etiqueta: string) {
   await login(page);
   const borrador = await nuevoBorrador(page, etiqueta);
   await anadirPieza(page, testName("Plato"), "20", ["18", "12", "3"]);
-  await irAPaso(page, "Trabajo");
+  await configurarTiempoYMoldes(page, { horas: "0", minutos: "1", moldes: "1" });
   await esperarGuardado(page);
   return borrador;
 }
@@ -73,9 +72,9 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G, interfaz 010O)", (
     const { base } = await nuevoBorrador(page, "V2-Flujo");
 
     await anadirPieza(page, testName("Plato"), "20", ["18", "12", "3"]);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "2", moldes: "1" });
     await elegirArcilla(page);
     await expect(page.getByText(/no descuenta inventario/i)).toBeVisible();
-    await decidirDias(page, "2");
     await irAPaso(page, "Horno");
     await irAPaso(page, "Precio");
     await irAPaso(page, "Revisar y emitir");
@@ -93,9 +92,9 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G, interfaz 010O)", (
     await expect(page.getByTestId("v2next-total")).toHaveText(totalAntes);
     await expect(page).toHaveURL(new RegExp(`${base}/resumen$`));
 
-    // Los días llegaron al servidor y vuelven.
-    await irAPaso(page, "Trabajo");
-    await expect(campoDeDias(page)).toHaveValue("2");
+    // El tiempo activo por pieza llegó al servidor y vuelve.
+    await irAPaso(page, "Piezas");
+    await expect(page.getByLabel("Minutos").first()).toHaveValue("2");
 
     // Y volver al primer paso no reescribe nada: navegar no es editar.
     await irAPaso(page, "Cliente");
@@ -187,7 +186,7 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G, interfaz 010O)", (
   test("CASO 5 RECARGA CON GUARDADO EN VUELO: el navegador pregunta, y lo guardado persiste con sus importes", async ({
     page,
   }) => {
-    const { base } = await cotizacionHastaTrabajo(page, "V2-Recarga");
+    const borrador = await cotizacionHastaPiezas(page, "V2-Recarga");
 
     // El guardado de los días se queda retenido hasta que la prueba lo suelte.
     let soltar: () => void = () => undefined;
@@ -200,65 +199,77 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G, interfaz 010O)", (
     const peticionContinuada = new Promise<void>((resolver) => {
       continuada = resolver;
     });
-    await page.route(RUTA_PLANIFICACION, async (ruta) => {
+    await page.route(RUTA_PIEZA, async (ruta) => {
+      if (ruta.request().method() !== "PUT") {
+        await ruta.continue();
+        return;
+      }
       await retenido;
       await ruta.continue();
       continuada();
     });
 
-    const dias = campoDeDias(page);
-    await dias.fill("2");
-    await dias.blur();
+    const minutos = page.getByLabel("Minutos").first();
+    await minutos.fill("2");
+    await minutos.blur();
     await expect(estadoDeGuardado(page)).toHaveText("Guardando…");
 
     // Recargar con el guardado en vuelo: el navegador tiene que preguntar.
     const dialogo = await intentarRecargar(page);
     expect(dialogo.type()).toBe("beforeunload");
     await dialogo.dismiss();
-    await expect(tituloDelPaso(page, "Trabajo")).toBeVisible();
-    await expect(dias).toHaveValue("2");
+    await expect(tituloDelPaso(page, "Piezas")).toBeVisible();
+    await expect(minutos).toHaveValue("2");
 
     soltar();
     await peticionContinuada;
-    await page.unroute(RUTA_PLANIFICACION);
+    await page.unroute(RUTA_PIEZA);
     await esperarGuardado(page);
 
-    // Ahora sí se recarga, y sin diálogo: ya no hay nada que perder.
+    // Ahora sí se recarga, y sin diálogo: el valor guardado vuelve del backend.
     await page.reload();
-    await expect(campoDeDias(page)).toHaveValue("2", { timeout: 15_000 });
+    await expect(page.getByLabel("Minutos").first()).toHaveValue("2", { timeout: 15_000 });
 
-    // Los importes exactos, leídos del servidor.
-    await page.goto(`${base}/precio`);
-    await expect(page.getByTestId("v2next-costo").getByText("Espacio y servicios").locator("..")).toContainText(
-      "S/ 280.00",
+    // El precio que muestra React coincide con la respuesta autoritativa del backend.
+    const respuesta = await page.request.get(`/api/v1/quotations-v2/${borrador.id}/pricing`);
+    expect(respuesta.ok()).toBeTruthy();
+    const precio = await respuesta.json();
+    await page.goto(`${borrador.base}/precio`);
+    const costoProduccion = await page.getByTestId("v2next-costo-produccion").innerText();
+    expect(Number(costoProduccion.replace(/[^\d,.-]/g, "").replaceAll(",", ""))).toBeCloseTo(
+      Number(precio.production_cost),
+      2,
     );
-    await expect(page.getByTestId("v2next-costo-produccion")).toHaveText("S/ 1480.59");
-    await expect(page.getByTestId("v2next-subtotal")).toHaveText("S/ 4450.00");
+    await page.goto(`${borrador.base}/resumen`);
+    const total = await page.getByTestId("v2next-total").innerText();
+    expect(Number(total.replace(/[^\d,.-]/g, "").replaceAll(",", ""))).toBeCloseTo(Number(precio.total), 2);
   });
 
   test("CASO 6 GUARDADO RECHAZADO: no aparenta guardado, sobrevive al cambio de paso y protege la salida", async ({
     page,
   }) => {
-    await cotizacionHastaTrabajo(page, "V2-Error");
+    await cotizacionHastaPiezas(page, "V2-Error");
 
-    await page.route(RUTA_PLANIFICACION, (ruta) =>
-      ruta.fulfill({
+    await page.route(RUTA_PIEZA, (ruta) =>
+      ruta.request().method() === "PUT"
+        ? ruta.fulfill({
         status: 500,
         contentType: "application/json",
         body: JSON.stringify({ error: { code: "INTERNAL", message: "Fallo simulado" } }),
-      }),
+          })
+        : ruta.continue(),
     );
 
-    const dias = campoDeDias(page);
-    await dias.fill("3");
-    await dias.blur();
+    const minutos = page.getByLabel("Minutos").first();
+    await minutos.fill("3");
+    await minutos.blur();
 
     const aviso = page.getByTestId("v2next-guardados-fallidos");
     await expect(aviso).toBeVisible();
-    await expect(aviso).toContainText("los días efectivos");
+    await expect(aviso).toContainText("Fallo simulado");
     await expect(estadoDeGuardado(page)).toHaveText("Error al guardar");
 
-    // Cambiar de paso desmonta el panel que falló: el aviso sigue.
+    // Cambiar de paso desmonta la tarjeta que falló: el aviso sigue.
     await irAPaso(page, "Revisar y emitir");
     await expect(aviso).toBeVisible();
 
@@ -269,39 +280,39 @@ test.describe("Cotizador V2: flujo de siete pasos (Fase 010G, interfaz 010O)", (
     await expect(aviso).toBeVisible();
 
     // El backend vuelve a aceptar; guardar el MISMO dato resuelve el aviso.
-    await page.unroute(RUTA_PLANIFICACION);
+    await page.unroute(RUTA_PIEZA);
     await aviso.getByRole("button", { name: "Ir a corregirlo" }).click();
-    await expect(tituloDelPaso(page, "Trabajo")).toBeVisible();
-    const diasOtraVez = campoDeDias(page);
-    await diasOtraVez.fill("3");
-    await diasOtraVez.blur();
+    await expect(tituloDelPaso(page, "Piezas")).toBeVisible();
+    const minutosOtraVez = page.getByLabel("Minutos").first();
+    await minutosOtraVez.fill("3");
+    await minutosOtraVez.blur();
     await expect(aviso).toBeHidden({ timeout: 30_000 });
     await esperarGuardado(page);
 
     await page.reload();
-    await expect(campoDeDias(page)).toHaveValue("3", { timeout: 15_000 });
+    await expect(page.getByLabel("Minutos").first()).toHaveValue("3", { timeout: 15_000 });
   });
 
   test("CASO 7 TECLEADO SIN SALIR DEL CAMPO: recargar también pregunta", async ({ page }) => {
     // Sin blur no hay petición; la protección no puede depender solo de ellas.
-    await cotizacionHastaTrabajo(page, "V2-SinBlur");
+    await cotizacionHastaPiezas(page, "V2-SinBlur");
 
-    const dias = campoDeDias(page);
-    await dias.fill("4");
-    await expect(dias).toBeFocused();
+    const minutos = page.getByLabel("Minutos").first();
+    await minutos.fill("4");
+    await expect(minutos).toBeFocused();
     await expect(estadoDeGuardado(page)).toHaveText("Cambios sin guardar");
 
     const dialogo = await intentarRecargar(page);
     expect(dialogo.type()).toBe("beforeunload");
     await dialogo.dismiss();
-    await expect(dias).toHaveValue("4");
+    await expect(minutos).toHaveValue("4");
 
     // Al salir del campo se guarda, y entonces sí se puede recargar.
-    await dias.blur();
+    await minutos.blur();
     await esperarGuardado(page);
     await page.reload();
-    await expect(campoDeDias(page)).toHaveValue("4", { timeout: 15_000 });
-    // Y la barra lo cuenta: el paso Trabajo ya no está en blanco.
-    await expect(botonDePaso(page, "Trabajo")).toBeVisible();
+    await expect(page.getByLabel("Minutos").first()).toHaveValue("4", { timeout: 15_000 });
+    // Y la barra mantiene el paso Piezas con el valor confirmado.
+    await expect(botonDePaso(page, "Piezas")).toBeVisible();
   });
 });

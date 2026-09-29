@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react";
-import type { FocusEvent } from "react";
 import { createPortal } from "react-dom";
 
+import { useBorradorProtegido } from "@/components/borradores";
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
 import { DecimalField } from "@/components/DecimalField";
 import { DeferredTextField } from "@/components/DeferredTextField";
@@ -76,13 +76,17 @@ function TiempoUnitario({
   const horasRef = useRef<HTMLInputElement>(null);
   const minutosRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sucio, setSucio] = useState(false);
+  const sucioRef = useRef(false);
   const partes = partesDelTiempo(value);
 
-  const alSalir = (event: FocusEvent<HTMLFieldSetElement>) => {
-    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+  const confirmar = () => {
+    if (!sucioRef.current) return;
     const horas = horasRef.current?.value.trim() ?? "";
     const minutos = minutosRef.current?.value.trim() ?? "";
     if (horas === "" && minutos === "") {
+      sucioRef.current = false;
+      setSucio(false);
       if (value !== null) onCommit(null);
       setError(null);
       return;
@@ -100,11 +104,21 @@ function TiempoUnitario({
     }
     setError(null);
     const canonico = desdeMicrominutos(total);
+    sucioRef.current = false;
+    setSucio(false);
     if (canonico !== value) onCommit(canonico);
   };
 
+  useBorradorProtegido(sucio, confirmar);
+
   return (
-    <fieldset onBlur={alSalir} className="sm:col-span-2">
+    <fieldset
+      onBlur={(event) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        confirmar();
+      }}
+      className="sm:col-span-2"
+    >
       <legend className="mb-2 text-sm font-medium text-zinc-900">Tiempo por pieza</legend>
       <div className="grid grid-cols-2 gap-3">
         <label htmlFor={`${id}-horas`} className="text-xs font-medium text-zinc-700">
@@ -118,6 +132,10 @@ function TiempoUnitario({
             step="1"
             defaultValue={partes.horas}
             inputMode="numeric"
+            onChange={() => {
+              sucioRef.current = true;
+              setSucio(true);
+            }}
             className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white/70 px-3 text-sm text-zinc-900 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
           />
         </label>
@@ -133,6 +151,10 @@ function TiempoUnitario({
             step="any"
             defaultValue={partes.minutos}
             inputMode="decimal"
+            onChange={() => {
+              sucioRef.current = true;
+              setSucio(true);
+            }}
             className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white/70 px-3 text-sm text-zinc-900 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
           />
         </label>

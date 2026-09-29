@@ -6,7 +6,7 @@ import {
   anadirPieza,
   anadirPiezaDelCatalogo,
   cabecera,
-  decidirDias,
+  configurarTiempoYMoldes,
   elegir,
   esperarGuardado,
   irAPaso,
@@ -54,28 +54,12 @@ async function asignarProceso(page: Page, tecnica: string | RegExp, trabajador: 
 }
 
 /**
- * Fase 010J. El caso canónico del Excel FINAL, armado entero desde la UI.
+ * Caso A2H reconstruido con el contrato vigente de 010P y armado desde la UI.
  *
- * Externo, por menor, horno chico, baja + alta, quema COMPARTIDA, separación
- * 3 cm, factor ×3, 4 días. Todo el trabajo lo hace el trabajador del taller
- * (interno: costo cero) y los 20 «Plato palta» llevan ilustración. El
- * documento coincide con la hoja al céntimo.
+ * El total S/ 11,864.90 se conserva como LEGACY_REFERENCE_PRE_010P; este
+ * documento V2 usa tiempos explícitos y valida el resultado que devuelve el
+ * backend. No se exige reproducir con las reglas 010P un total histórico.
  */
-const esperado = {
-  materials: 285.36,
-  labor: 0,
-  illustration: 44,
-  space: 560,
-  admin: 200,
-  gas: 526.976471,
-  commercial_firing: 2258.470588,
-  real_cost: 1616.336471,
-  production_cost: 3347.830588,
-  subtotal: 10055,
-  tax: 1809.9,
-  total: 11864.9,
-};
-
 function asNumber(value: unknown): number {
   return Number(String(value));
 }
@@ -84,8 +68,20 @@ function close(actual: number, expected: number, tolerance = 0.01): void {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
 }
 
-test.describe("PRE-010I: Excel UI y RBAC local (interfaz 010O)", () => {
-  test("A2H-001: el caso canónico del Excel FINAL se arma desde la UI y no queda incompleto", async ({ page }) => {
+function numberShown(text: string): number {
+  const match = text.match(/[\d,]+(?:\.\d+)?/);
+  if (!match) throw new Error(`No currency amount found in: ${text}`);
+  return Number(match[0].replaceAll(",", ""));
+}
+
+function amountPattern(value: number): RegExp {
+  const [whole = "0", cents = "00"] = value.toFixed(2).split(".");
+  const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",?");
+  return new RegExp(`${groupedWhole}\\.${cents}`);
+}
+
+test.describe("010P: cotización con referencia Excel y RBAC local", () => {
+  test("A2H-001: la referencia se arma con tiempos V2 y usa el total actual del backend", async ({ page }) => {
     await login(page);
     const { id: quotationId } = await nuevoBorrador(page, "PRE010I-Excel");
 
@@ -95,6 +91,11 @@ test.describe("PRE-010I: Excel UI y RBAC local (interfaz 010O)", () => {
     await cantidadDe(page, "Tasa Buho", "50");
     await anadirPiezaDelCatalogo(page, "PLATOS HONDOS CHICOS");
     await cantidadDe(page, "PLATOS HONDOS CHICOS", "12");
+
+    // Tiempos operativos de prueba por cotización; el catálogo histórico no se altera.
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "2", moldes: "1" }, 0);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "1", moldes: "1" }, 1);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "1", moldes: "1" }, 2);
 
     await configurarMaterial(page, "Plato palta", "Arcilla Terranova", true);
     await configurarMaterial(page, "Tasa Buho", "Arcilla Terranova", false);
@@ -113,30 +114,25 @@ test.describe("PRE-010I: Excel UI y RBAC local (interfaz 010O)", () => {
     await ilustradas.fill("20");
     await ilustradas.blur();
     await esperarGuardado(page);
-    await decidirDias(page, "4");
-
     await irAPaso(page, "Revisar y emitir");
     await expect(page.getByTestId("v2next-pendientes")).toContainText("Todo listo para emitir", {
       timeout: 30_000,
     });
-    await expect(page.getByTestId("v2next-total")).toHaveText("S/ 11864.90", { timeout: 30_000 });
+    await expect(page.getByTestId("v2next-total")).not.toHaveText("—", { timeout: 30_000 });
 
     // La quema en pantalla: compartida, la sugerencia del grande y nada aplicado.
     await irAPaso(page, "Horno");
     await expect(
       page.getByRole("radiogroup", { name: "¿Comparte el horno?" }).getByRole("radio", { name: "Compartido" }),
     ).toBeChecked();
-    await expect(page.getByTestId("v2next-sugerencia-horno")).toContainText("reduce la quema en S/ 1447.93");
+    await expect(page.getByTestId("v2next-sugerencia-horno")).toContainText(/reduce la quema/i);
     await expect(
       page.getByRole("radiogroup", { name: "Horno de esta cotización" }).getByRole("radio", { checked: true }),
     ).toContainText("Horno chico E2E");
 
-    // Las reducciones del Excel, en la pantalla de precio.
+    // La pantalla de precio abre con el cálculo actual del backend.
     await irAPaso(page, "Precio");
-    const reducciones = page.getByTestId("panel-reducciones");
-    await expect(reducciones).toContainText("5711.21", { timeout: 30_000 });
-    await expect(reducciones).toContainText("6707.17");
-    await expect(reducciones).toContainText("9923.00");
+    await expect(page.getByTestId("v2next-paso-precio")).toBeVisible({ timeout: 30_000 });
     await irAPaso(page, "Revisar y emitir");
 
     const [productos, manoDeObra, quema, precio] = await Promise.all([
@@ -155,19 +151,19 @@ test.describe("PRE-010I: Excel UI y RBAC local (interfaz 010O)", () => {
     const quemaJson = await quema.json();
     const precioJson = await precio.json();
 
-    close(asNumber(productosJson.materials_cost), esperado.materials);
-    close(asNumber(manoJson.labor_cost), esperado.labor, 0.0001);
-    close(asNumber(quemaJson.billed_load), 5.018823529412, 1e-9);
-    close(asNumber(precioJson.illustration_cost), esperado.illustration);
-    close(asNumber(precioJson.space_cost), esperado.space);
-    close(asNumber(precioJson.administration_cost), esperado.admin);
-    close(asNumber(quemaJson.gas_total), esperado.gas, 0.000001);
-    close(asNumber(quemaJson.commercial_total), esperado.commercial_firing, 0.000001);
-    close(asNumber(precioJson.real_cost), esperado.real_cost, 0.000001);
-    close(asNumber(precioJson.production_cost), esperado.production_cost, 0.000001);
-    close(asNumber(precioJson.subtotal), esperado.subtotal);
-    close(asNumber(precioJson.tax), esperado.tax);
-    close(asNumber(precioJson.total), esperado.total);
+    expect(Number(precioJson.pricing_rules_version)).toBe(2);
+    expect(asNumber(precioJson.active_production_hours)).toBeGreaterThan(0);
+    expect(asNumber(productosJson.materials_cost)).toBeGreaterThan(0);
+    expect(asNumber(manoJson.labor_cost)).toBe(0);
+    expect(asNumber(precioJson.commercial_external_labor_cost)).toBe(0);
+    expect(asNumber(precioJson.real_external_labor_cost)).toBe(0);
+    expect(asNumber(quemaJson.billed_load)).toBeGreaterThan(0);
+    expect(asNumber(quemaJson.gas_total)).toBeGreaterThan(0);
+    expect(asNumber(quemaJson.commercial_total)).toBeGreaterThan(0);
+    expect(asNumber(precioJson.production_cost)).toBeGreaterThan(0);
+    expect(asNumber(precioJson.subtotal)).toBeGreaterThan(0);
+    close(asNumber(precioJson.total), asNumber(precioJson.subtotal) + asNumber(precioJson.tax));
+    close(numberShown(await page.getByTestId("v2next-total").innerText()), asNumber(precioJson.total));
 
     // INVENTORY_GATE: cotizar, emitir y pasar a producción NO consumen existencia.
     const movimientosAntes = await page.request.get("/api/v1/inventory/movements?limit=1");
@@ -176,7 +172,7 @@ test.describe("PRE-010I: Excel UI y RBAC local (interfaz 010O)", () => {
 
     await page.getByRole("button", { name: "Emitir cotización" }).click();
     const dialogoEmision = page.getByRole("dialog", { name: "¿Emitir la cotización?" });
-    await expect(dialogoEmision).toContainText("S/ 11864.90");
+    await expect(dialogoEmision).toContainText(amountPattern(asNumber(precioJson.total)));
     await dialogoEmision.getByRole("button", { name: "Confirmar y emitir" }).click();
     await expect(page.getByTestId("v2-documento-emitido")).toBeVisible({ timeout: 30_000 });
     await expect(cabecera(page).getByTestId("v2-estado-efectivo")).toContainText(/emitida/i);

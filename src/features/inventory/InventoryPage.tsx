@@ -6,7 +6,7 @@
  * respalda.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
@@ -65,10 +65,15 @@ function DeliveryForm({
   const product = useProductMaster(balance.product_id);
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   return (
     <section aria-label="Registrar entrega" className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-      <h2 className="text-sm font-semibold text-zinc-900">Entrega de producto terminado</h2>
+      <h2 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-zinc-900">Entrega de producto terminado</h2>
       {product.isPending ? <Spinner label="Verificando tipo de producto…" /> : product.isError ? (
         <p role="alert" className="mt-2 text-xs text-red-700">No se pudo comprobar el tipo de producto: {describeError(product.error)}</p>
       ) : product.data.product_type !== "FINISHED_PRODUCT" ? (

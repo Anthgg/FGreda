@@ -312,7 +312,11 @@ describe("V2NextProductsStep", () => {
     const user = userEvent.setup();
     renderConProvider(<V2NextProductsStep {...PROPS} />);
 
-    const cantidadCatalogo = screen.getAllByLabelText("Cantidad")[0]!;
+    const tarjetaCatalogo = screen.getByRole("heading", { name: "Plato hondo" }).closest(".group");
+    expect(tarjetaCatalogo).not.toBeNull();
+    const cantidadCatalogo = within(tarjetaCatalogo as HTMLElement).getByRole("textbox", {
+      name: "Cantidad",
+    });
     await user.click(cantidadCatalogo);
     await user.keyboard("{Control>}a{/Control}10");
     await user.tab();

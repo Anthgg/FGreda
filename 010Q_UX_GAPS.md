@@ -1,20 +1,28 @@
-# 010Q UX gaps recorded during 010P W3
+# 010Q UX gaps recorded during 010P W4
 
-This is a capture list for the later UX review. W3 keeps the 010O shell and only adds the controls needed to use the 010P backend.
+This is a deferred review list from the 010P W4 integration. W4 preserved the 010O shell and added no commercial rules or redesign. No CRITICAL usability blocker was observed in the completed live W3 regression flows.
 
-- **Piezas:** time-per-unit and mold inputs add height to each line card; review the editing flow at 375 px and reduce the amount of visible detail if it feels crowded.
-- **Trabajo:** worker, process, assignment origin, and active hours compete for attention; review the hierarchy and scanning order.
-- **Alta rápida:** worker and technique fields are useful to unblock the flow but make the section tall; consider a focused dialog and clearer validation in 010Q.
-- **Precio:** commercial and real costs are now shown together; review whether the distinction remains clear on a narrow screen.
-- **Lotes:** explicit lot selection is safe, but the available-lot list may become cumbersome when a prepared material has many lots.
-- **WIP:** the six-column table needs horizontal scrolling on narrow screens; review a compact card or staged mobile presentation.
-- **Entrega:** the inventory action is in the existing stock table and verifies product type after selection; review how to make finished-product eligibility clearer before opening the form.
-- **Solo quema:** the detail UI now reads authoritative V2F references and started quantities from the W3 backend contract. The real browser E2E remains blocked because the isolated fixture has no supported public FQ-to-production-order flow; see `CODEX_010P_W3_BACKEND_BLOCKER_1.md`.
+## Deferred product UX review
 
-## W3 evidence and deferred review
+- **MEDIUM — Piezas:** time-per-unit and mold inputs add height to each line card. Review the editing flow at 375 px and reduce visible detail if the cards feel crowded.
+- **MEDIUM — Trabajo:** worker, process, assignment origin, and active hours compete for attention. Review hierarchy and scanning order.
+- **MEDIUM — Alta rápida:** worker and technique fields unblock the flow but make the section tall. Consider a focused dialog and clearer validation.
+- **MEDIUM — Precio:** commercial and real costs appear together. Review whether the distinction remains clear on a narrow screen.
+- **LOW — Lotes:** explicit lot selection is safe, but the list may become cumbersome when a prepared material has many lots.
+- **MEDIUM — WIP:** the six-column table uses horizontal scrolling on narrow screens. The scroll is usable and remains acceptable for W4; review a compact card or staged mobile presentation.
+- **MEDIUM — Entrega:** the action is in the existing stock table, so finished-product eligibility is not clear until selection. W4 fixed keyboard focus by moving focus to the delivery heading when the form opens; review earlier discoverability in 010Q.
+- **LOW — Bundle size:** final build remains near the W3 baseline at 1,216.99 kB minified (315.53 kB gzip). Review code splitting in 010Q; no W4-specific growth was identified.
 
-- Responsive E2E passed at 375, 768, 1024, and 1440 px on live local-backend flows for quotation pieces/work/price, explicit lot selection, WIP, production completion, prototype results, inventory, and delivery. No document-level horizontal overflow was found; the WIP table scrolls inside its card at 375 px.
-- Playwright structural checks passed for accessible button names, labeled controls, named dialogs, error associations when present, visible focus after keyboard Tab, and focus contained within an open dialog. This is a scoped semantic/focus check, not an axe scan or full WCAG conformance audit. Do not describe it as zero serious axe violations.
-- React Doctor 0.9.14 exited 0 on the final changed scope (2 files, zero issues). The broader W3 scan recorded 15 warnings and 0 errors across 9 changed/added files. No score or telemetry was produced. Its earlier `prefer-html-dialog` warning did not account for the shared `useDialogoAccesible` hook: the hook wraps Tab/Shift+Tab at both dialog boundaries and restores focus on close, now asserted in Playwright. Other complexity/effect warnings remain review debt for 010Q; no W3 runtime defect was found by these E2Es.
-- The final build's JavaScript chunk is 1,216.97 kB minified (315.52 kB gzip). Keep code splitting in 010Q/cleanup; it was not expanded into W3.
-- Solo Quema remains an API workflow blocker: the local E2E fixture has no supported public FQ-to-production-order creation path. See `CODEX_010P_W3_BACKEND_BLOCKER_1.md`.
+## Closed W4 regression issue
+
+- **Solo Quema — resolved in W4:** the prior W3 note about a missing fixture path was stale. The local browser E2E now completes the supported flow using `line_ref` from GET, with 10 started, 8 good, 2 scrap, no `PRODUCTION_IN`, and unchanged finished-product stock. The broad 70-test revision run is still required for final suite status.
+
+## W4 evidence and limits
+
+- The complete local Playwright revision suite passed **70/70** with zero retries. It includes the retail quote/PDF flow, external 10 h costing, parallel 5 h + 6 h lines, explicit lot selection, the 30 = 27 good + 3 scrap production result, prototype scrap and delivery, WIP entry/exit, and Solo Quema. A focus regression in delivery was fixed and the suite passed after the fix.
+- Responsive helper checks cover 375, 768, 1024, 1280, and 1440 px on the exercised screens. Structural checks cover named controls/dialogs and keyboard focus. They are not an axe scan or a complete WCAG conformance audit.
+- React Doctor 0.9.14 on the W4 changed scope scanned 7 files and reported **1 warning, 0 errors**: high control-flow complexity in `src/features/inventory/InventoryPage.tsx`. The earlier full-codebase scan had unrelated pre-existing findings.
+- The production build passed at **1,217.25 kB minified / 315.67 kB gzip**, compared with the W3 baseline of 1,216.99 / 315.53 kB. Vite still reports the existing >500 kB chunk warning; W4 adds 0.26 kB minified and 0.14 kB gzip.
+- Vitest passed **103/103 files, 1,220/1,220 tests**. ESLint and TypeScript passed. Test output still includes existing React `act(...)` warnings and jsdom's unsupported navigation diagnostic.
+- The required full-suite pass does not replace every scenario named in the W4 acceptance brief. Browser E2E still lacks the exact two-external-worker aggregate, wholesale accept/decline and worker-preservation cases, passive-space exclusion, 27 → 20 → rejected 8 delivery, custom-piece retry, positive quick-create capability flow, V1 settings immutability, and V2 master-change snapshot scenario. Backend unit/database coverage exists for portions of these flows; keep W4 blocked until the required browser scenarios are exercised or their acceptance is explicitly narrowed.
+- No global browser console-error collector or axe scan ran. Several production E2E cases assert zero page/console errors, and the responsive/accessibility helper checks structure and focus; neither proves zero errors or zero serious/critical accessibility findings across every surface. Lighthouse was not run; it is optional in the W4 instructions.
