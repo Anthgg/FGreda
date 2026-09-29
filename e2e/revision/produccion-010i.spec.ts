@@ -373,6 +373,13 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     expect(escalado(tazaResultado!.good_quantity)).toBe(escalado("27"));
     expect(escalado(tazaResultado!.scrap_quantity)).toBe(escalado("3"));
     expect(tazaResultado!.scrap_reason).toBe("Fisura durante el secado");
+    expect(tazaResultado!.product_id).not.toBeNull();
+    const productoPersonalizado = await get<{
+      product_type: string;
+      product_category_path: string | null;
+    }>(page, `/products/${tazaResultado!.product_id}`);
+    expect(productoPersonalizado.product_type).toBe("FINISHED_PRODUCT");
+    expect(productoPersonalizado.product_category_path).toBe("Piezas personalizadas");
     const platoResultado = completion.results.find(
       (result) => escalado(result.started_quantity) === escalado("5"),
     );
@@ -390,6 +397,32 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
       (movement) => movement.production_order_id === ordenId && movement.movement_type === "PRODUCTION_IN",
     );
     expect(entradasFinales).toHaveLength(2);
+    const movimientosAntesDelReintento = await movimientos(page);
+    const reintentoDeCierre = await page.request.post(`${API}/production-orders/${ordenId}/complete`, {
+      data: {
+        results: completion.results.map((result) => ({
+          line_ref: result.line_ref,
+          good_quantity: result.good_quantity,
+          scrap_quantity: result.scrap_quantity,
+          scrap_reason: result.scrap_reason,
+        })),
+      },
+      headers: await csrf(page),
+    });
+    expect(reintentoDeCierre.status()).toBe(200);
+    const completionReintentada = (await reintentoDeCierre.json()) as typeof completion;
+    expect(completionReintentada.results.map((result) => [
+      result.line_ref,
+      result.product_id,
+      result.good_quantity,
+      result.scrap_quantity,
+    ])).toEqual(completion.results.map((result) => [
+      result.line_ref,
+      result.product_id,
+      result.good_quantity,
+      result.scrap_quantity,
+    ]));
+    expect(await movimientos(page)).toBe(movimientosAntesDelReintento);
     expect(entradasFinales.map((movement) => escalado(movement.quantity)).sort()).toEqual(
       [escalado("5"), escalado("27")].sort(),
     );
@@ -400,7 +433,55 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     const wip = await get<{ production_order_id: number }[]>(page, "/production/wip");
     expect(wip.some((line) => line.production_order_id === ordenId)).toBe(false);
 
+    // -- entrega parcial: 27 buenas, entregar 20 y rechazar 8 con saldo 7 ----
+    const productoTaza = tazaResultado!.product_id;
+    expect(productoTaza).not.toBeNull();
+    await page.goto("/inventario");
+    await expect(page.getByRole("heading", { level: 1, name: "Inventario." })).toBeVisible();
+    await page.getByLabel("Buscar existencia").fill("Taza");
+    const filaTaza = page.getByRole("row").filter({ hasText: "Taza" }).filter({ hasText: nombre });
+    await expect(filaTaza).toContainText("27");
+    await filaTaza.getByRole("button", { name: "Entrega…" }).click();
+    const entrega = page.getByRole("region", { name: "Registrar entrega" });
+    await expect(entrega.getByText("Entrega de producto terminado")).toBeVisible();
+    const origenProduccion = entrega.getByLabel("Origen de producción (opcional)");
+    await expect(origenProduccion).toBeVisible();
+    await origenProduccion.click();
+    await entrega.getByRole("option", { name: new RegExp(`Orden #${ordenId}.*Cotización V2 #${ctzId}`) }).click();
+    await entrega.getByLabel("Cantidad a entregar").fill("20");
+    await entrega.getByLabel("Motivo").fill("E2E W4 entrega parcial de 20 unidades");
+    await entrega.getByRole("button", { name: "Registrar entrega" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Entrega registrada: 20" }))
+      .toBeVisible({ timeout: 15_000 });
+    expect(escalado(await saldo(page, productoTaza!, almacen))).toBe(escalado("7"));
+
+    await page.goto("/inventario");
+    await page.getByLabel("Buscar existencia").fill("Taza");
+    const filaSaldoSiete = page.getByRole("row").filter({ hasText: "Taza" }).filter({ hasText: nombre });
+    await expect(filaSaldoSiete).toContainText("7");
+    await filaSaldoSiete.getByRole("button", { name: "Entrega…" }).click();
+    const intentoSobreSaldo = page.getByRole("region", { name: "Registrar entrega" });
+    await intentoSobreSaldo.getByLabel("Cantidad a entregar").fill("8");
+    await intentoSobreSaldo.getByLabel("Motivo").fill("E2E W4 entrega mayor al saldo disponible");
+    const respuestaEntregaRechazada = page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/inventory/deliveries") && response.request().method() === "POST",
+    );
+    await intentoSobreSaldo.getByRole("button", { name: "Registrar entrega" }).click();
+    const entregaRechazada = await respuestaEntregaRechazada;
+    expect(entregaRechazada.ok(), "no se pueden entregar 8 unidades cuando hay 7").toBe(false);
+    await expect(intentoSobreSaldo.getByRole("alert")).toBeVisible({ timeout: 15_000 });
+    expect(escalado(await saldo(page, productoTaza!, almacen))).toBe(escalado("7"));
+    const movimientosEntrega = await get<{
+      items: { production_order_id: number | null; v2_quotation_id: number | null; movement_type: string; quantity: string }[];
+    }>(page, `/inventory/movements?product_id=${productoTaza}&limit=20`);
+    const salidas = movimientosEntrega.items.filter((movement) => movement.movement_type === "DELIVERY_OUT");
+    expect(salidas).toHaveLength(1);
+    expect(salidas[0]!.production_order_id).toBe(ordenId);
+    expect(salidas[0]!.v2_quotation_id).toBe(ctzId);
+    expect(escalado(salidas[0]!.quantity)).toBe(escalado("-20"));
+
     // -- seguimiento completo y en orden -----------------------------------------
+    await page.goto(`/produccion/${ordenId}`);
     const eventos = (await linea(page, ordenId)).items;
     expect(eventos.map((e) => [e.type, e.status])).toEqual([
       ["STATUS", "CREATED"],

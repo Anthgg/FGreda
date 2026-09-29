@@ -20,12 +20,21 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { Spinner } from "@/components/Spinner";
+import { hasQuickCreateCapability } from "@/features/auth/capabilities";
 import { useLogout, useSession } from "@/features/auth/useSession";
 import { NAVIGATION, type NavigationIconKey, type NavigationItem } from "@/layouts/navigation";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Administrador",
   OPERATOR: "Operario",
+};
+
+const QUICK_CREATE_NAVIGATION_ITEM: NavigationItem = {
+  label: "Altas rápidas",
+  to: "/cotizador-v2/altas-rapidas",
+  enabled: true,
+  icon: "users",
+  description: "Crear trabajadores y técnicas con el permiso de alta rápida.",
 };
 
 function renderNavigationIcon(icon: NavigationIconKey, className = "size-5 shrink-0") {
@@ -124,6 +133,9 @@ function NavigationList({ items, collapsed = false, onNavigate }: NavigationList
  */
 export function AppShell() {
   const { data: user } = useSession();
+  const navigation = hasQuickCreateCapability(user)
+    ? [...NAVIGATION.slice(0, 2), QUICK_CREATE_NAVIGATION_ITEM, ...NAVIGATION.slice(2)]
+    : NAVIGATION;
   const logout = useLogout();
   const navigate = useNavigate();
 
@@ -212,7 +224,7 @@ export function AppShell() {
 
               <div className="mt-6">
                 <NavigationList
-                  items={NAVIGATION}
+                  items={navigation}
                   onNavigate={() => setMobileMenuOpen(false)}
                 />
               </div>
@@ -297,7 +309,7 @@ export function AppShell() {
 
           {/* Menú de Navegación */}
           <div className="mt-6 flex-1 overflow-y-auto no-scrollbar">
-            <NavigationList items={NAVIGATION} collapsed={collapsed} />
+            <NavigationList items={navigation} collapsed={collapsed} />
           </div>
         </div>
 

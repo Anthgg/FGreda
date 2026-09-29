@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
 import { DecimalField } from "@/components/DecimalField";
@@ -258,9 +258,7 @@ export function V2NextLaborStep({
               />
             ) : null}
 
-            {puedeAltaRapida ? (
-              <AltaRapidaMaestros trabajadores={listaTrabajadores} tecnicas={listaTecnicas} />
-            ) : null}
+            {puedeAltaRapida ? <AltaRapidaMaestros tecnicas={listaTecnicas} /> : null}
 
             <Ilustracion quotationId={quotationId} canEdit={canEdit} />
           </>
@@ -1169,11 +1167,9 @@ function LineaIlustracion({
   );
 }
 
-function AltaRapidaMaestros({
-  trabajadores,
+export function AltaRapidaMaestros({
   tecnicas,
 }: {
-  trabajadores: V2Worker[];
   tecnicas: V2Technique[];
 }) {
   const [modo, setModo] = useState<"trabajador" | "tecnica">("trabajador");
@@ -1194,6 +1190,11 @@ function AltaRapidaMaestros({
   const [tecnicaActiva, setTecnicaActiva] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const guardadoRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (guardado) guardadoRef.current?.focus();
+  }, [guardado]);
 
   const decimal = (raw: string): string | null => {
     const value = interpretarDecimal(raw);
@@ -1323,8 +1324,17 @@ function AltaRapidaMaestros({
         </form>
       )}
       {error ? <p role="alert" className="mt-3 text-xs text-red-700">{error}</p> : null}
-      {guardado ? <p role="status" className="mt-3 text-xs text-emerald-800">{guardado}</p> : null}
-      <p className="sr-only" aria-live="polite">{trabajadores.length} trabajadores y {tecnicas.length} técnicas disponibles.</p>
+      {guardado ? (
+        <p
+          ref={guardadoRef}
+          role="status"
+          tabIndex={-1}
+          className="mt-3 rounded-md text-xs text-emerald-800 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-black"
+        >
+          {guardado}
+        </p>
+      ) : null}
+      <p className="sr-only" aria-live="polite">{tecnicas.length} técnicas disponibles.</p>
     </details>
   );
 }

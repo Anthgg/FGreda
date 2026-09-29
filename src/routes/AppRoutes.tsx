@@ -4,6 +4,7 @@ import { LoginPage } from "@/features/auth/LoginPage";
 import { ProtectedRoute, PublicOnlyRoute } from "@/features/auth/ProtectedRoute";
 import { CotizadorPage } from "@/features/cotizador/CotizadorPage";
 import { CotizadorV2NextPage, RedireccionV2Next } from "@/features/cotizadorV2Next/CotizadorV2NextPage";
+import { V2NextQuickCreatePage } from "@/features/cotizadorV2Next/V2NextQuickCreatePage";
 import { DetalleQuemaPage } from "@/features/firings/DetalleQuemaPage";
 import { EditarQuemaPage } from "@/features/firings/EditarQuemaPage";
 import { FiringsPage } from "@/features/firings/FiringsPage";
@@ -131,6 +132,7 @@ export function AppRoutes() {
               Desde 010O.13 es la interfaz rediseñada; los pasos conservan sus
               nombres, así que los enlaces de antes siguen abriendo lo mismo. */}
           <Route path="cotizador-v2" element={<CotizadorV2NextPage />} />
+          <Route path="cotizador-v2/altas-rapidas" element={<V2NextQuickCreatePage />} />
           <Route path="cotizador-v2/:id" element={<CotizadorV2NextPage />} />
           <Route path="cotizador-v2/:id/:step" element={<CotizadorV2NextPage />} />
           {/* La ruta de pruebas del rediseño (010O.3–010O.12) lleva a la definitiva. */}

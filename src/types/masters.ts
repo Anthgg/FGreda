@@ -198,6 +198,8 @@ export interface StockMovement {
   import_batch_id: number | null;
   created_by_name: string | null;
   created_at: string;
+  production_order_id: number | null;
+  v2_quotation_id: number | null;
 }
 
 export interface StockAdjustmentInput {

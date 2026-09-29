@@ -37,6 +37,8 @@ const hooks = vi.hoisted(() => ({
   addLabor: vi.fn(),
   setPlanning: vi.fn(),
   setIllustration: vi.fn(),
+  createWorker: vi.fn(),
+  createTechnique: vi.fn(),
 }));
 
 function mutacion(mutate: ReturnType<typeof vi.fn>) {
@@ -56,6 +58,8 @@ vi.mock("@/features/cotizadorV2/useQuoterV2Labor", () => ({
   useUpdateV2Labor: vi.fn(() => mutacion(hooks.updateLabor)),
   useDeleteV2Labor: vi.fn(() => mutacion(hooks.deleteLabor)),
   useAddV2Labor: vi.fn(() => mutacion(hooks.addLabor)),
+  useCreateV2Worker: vi.fn(() => mutacion(hooks.createWorker)),
+  useCreateV2Technique: vi.fn(() => mutacion(hooks.createTechnique)),
   useSetV2Planning: vi.fn(() => mutacion(hooks.setPlanning)),
   useV2Illustration: vi.fn(() => hooks.illustrationQuery),
   useSetV2Illustration: vi.fn(() => mutacion(hooks.setIllustration)),
@@ -272,7 +276,7 @@ describe("V2NextLaborStep", () => {
       },
       expect.any(Object),
     );
-    expect(screen.queryByLabelText(/nombre/i)).not.toBeInTheDocument();
+    expect(seccion.queryByLabelText(/nombre/i)).not.toBeInTheDocument();
   });
 
   it("guarda días al salir del campo y la sugerencia solo cuando se pulsa", async () => {

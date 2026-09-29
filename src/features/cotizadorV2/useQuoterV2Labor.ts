@@ -52,10 +52,11 @@ export const useV2Workers = (activeOnly = false) =>
     queryFn: () => fetchV2Workers(activeOnly),
   });
 
-export const useV2Techniques = (activeOnly = false) =>
+export const useV2Techniques = (activeOnly = false, enabled = true) =>
   useQuery({
     queryKey: [...V2_TECHNIQUES_KEY, activeOnly],
     queryFn: () => fetchV2Techniques(activeOnly),
+    enabled,
   });
 
 /**

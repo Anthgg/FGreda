@@ -36,6 +36,13 @@ import {
 import { esPositivo } from "@/features/production/decimales";
 import type { MovementType, StockBalance } from "@/types/masters";
 
+interface DeliveryOriginOption {
+  value: string;
+  label: string;
+  production_order_id: number;
+  v2_quotation_id: number | null;
+}
+
 const MOVEMENT_LABELS: Record<MovementType, string> = {
   INITIAL_IMPORT: "Carga inicial",
   ADJUSTMENT: "Ajuste",
@@ -51,20 +58,27 @@ const MOVEMENT_LABELS: Record<MovementType, string> = {
 
 function DeliveryForm({
   balance,
+  origins,
+  originsLoading,
+  originsError,
   saving,
   error,
   onSubmit,
   onCancel,
 }: {
   balance: StockBalance;
+  origins: DeliveryOriginOption[];
+  originsLoading: boolean;
+  originsError: unknown;
   saving: boolean;
   error: unknown;
-  onSubmit: (quantity: string, reason: string) => void;
+  onSubmit: (quantity: string, reason: string, origin: DeliveryOriginOption | null) => void;
   onCancel: () => void;
 }) {
   const product = useProductMaster(balance.product_id);
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
+  const [originValue, setOriginValue] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -81,11 +95,22 @@ function DeliveryForm({
       ) : (
         <>
           <p className="mt-1 text-xs text-zinc-700">{balance.product_name} · {balance.location_name} · disponible: <strong className="tabular-nums">{balance.quantity} {balance.uom_code ?? ""}</strong></p>
-          <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (esPositivo(quantity)) onSubmit(quantity.trim(), reason.trim()); }}>
+          {originsLoading ? <Spinner label="Buscando órdenes completadas para asociar…" /> : null}
+          {originsError ? <p role="alert" className="mt-2 text-xs text-red-700">No se pudieron cargar las órdenes de origen: {describeError(originsError)}</p> : null}
+          <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (esPositivo(quantity) && !originsLoading && !originsError) onSubmit(quantity.trim(), reason.trim(), origins.find((origin) => origin.value === originValue) ?? null); }}>
             <TextField label="Cantidad a entregar" requirement="required" value={quantity} onChange={setQuantity} inputMode="decimal" hint={`Debe ser mayor que cero. Disponible: ${balance.quantity} ${balance.uom_code ?? ""}.`} />
             <TextField label="Motivo" requirement="optional" value={reason} onChange={setReason} maxLength={240} />
+            <SelectField
+              label="Origen de producción (opcional)"
+              value={originValue}
+              options={[
+                { value: "", label: "Sin asociar" },
+                ...origins.map(({ value, label }) => ({ value, label })),
+              ]}
+              onChange={setOriginValue}
+            />
             <div className="flex flex-wrap gap-2 sm:col-span-2">
-              <PrimaryButton type="submit" disabled={saving || !esPositivo(quantity)}>{saving ? "Registrando…" : "Registrar entrega"}</PrimaryButton>
+              <PrimaryButton type="submit" disabled={saving || originsLoading || Boolean(originsError) || !esPositivo(quantity)}>{saving ? "Registrando…" : "Registrar entrega"}</PrimaryButton>
               <SecondaryButton type="button" onClick={onCancel} disabled={saving}>Cancelar</SecondaryButton>
             </div>
           </form>
@@ -185,6 +210,31 @@ export function InventoryPage() {
     historyFor ? { product_id: historyFor.product_id, limit: 50 } : {},
     historyFor !== null,
   );
+  const deliveryMovements = useMovements(
+    deliveryFor ? { product_id: deliveryFor.product_id, limit: 100 } : {},
+    deliveryFor !== null,
+  );
+  const deliveryOriginsById = new Map<string, DeliveryOriginOption>();
+  if (deliveryFor !== null) {
+    for (const movement of deliveryMovements.data?.items ?? []) {
+      if (
+        movement.movement_type !== "PRODUCTION_IN" ||
+        movement.location_id !== deliveryFor.location_id ||
+        movement.production_order_id === null
+      ) {
+        continue;
+      }
+      const value = `${movement.production_order_id}:${movement.v2_quotation_id ?? ""}`;
+      if (deliveryOriginsById.has(value)) continue;
+      deliveryOriginsById.set(value, {
+        value,
+        production_order_id: movement.production_order_id,
+        v2_quotation_id: movement.v2_quotation_id,
+        label: `Orden #${movement.production_order_id}${movement.v2_quotation_id === null ? "" : ` · Cotización V2 #${movement.v2_quotation_id}`} · ${movement.created_at.slice(0, 10)}`,
+      });
+    }
+  }
+  const deliveryOrigins = [...deliveryOriginsById.values()];
   const adjustment = useCreateAdjustment();
   const delivery = useCreateDelivery();
 
@@ -305,13 +355,20 @@ export function InventoryPage() {
           <DeliveryForm
             key={`${deliveryFor.product_id}-${deliveryFor.location_id}`}
             balance={deliveryFor}
+            origins={deliveryOrigins}
+            originsLoading={deliveryMovements.isPending}
+            originsError={deliveryMovements.error}
             saving={delivery.isPending}
             error={delivery.error}
             onCancel={() => setDeliveryFor(null)}
-            onSubmit={(quantity, reason) => delivery.mutate({
+            onSubmit={(quantity, reason, origin) => delivery.mutate({
               product_id: deliveryFor.product_id,
               location_id: deliveryFor.location_id,
               quantity,
+              ...(origin ? {
+                production_order_id: origin.production_order_id,
+                ...(origin.v2_quotation_id === null ? {} : { v2_quotation_id: origin.v2_quotation_id }),
+              } : {}),
               ...(reason ? { reason } : {}),
             }, {
               onSuccess: () => {
@@ -338,6 +395,7 @@ export function InventoryPage() {
                     <Th>Fecha</Th>
                     <Th>Tipo</Th>
                     <Th>Ubicación</Th>
+                    <Th>Origen</Th>
                     <Th align="right">Cantidad</Th>
                     <Th align="right">Saldo</Th>
                     <Th>Motivo</Th>
@@ -356,6 +414,10 @@ export function InventoryPage() {
                         </Badge>
                       </Td>
                       <Td muted>{movement.location_name}</Td>
+                      <Td muted>
+                        {movement.production_order_id === null ? "—" : `Orden #${movement.production_order_id}`}
+                        {movement.v2_quotation_id === null ? "" : ` · Cotización V2 #${movement.v2_quotation_id}`}
+                      </Td>
                       <Td align="right" mono>
                         {movement.quantity}
                       </Td>

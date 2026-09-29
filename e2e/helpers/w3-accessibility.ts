@@ -1,6 +1,57 @@
 import { expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 export const W3_VIEWPORT_WIDTHS = [375, 768, 1024, 1280, 1440] as const;
+
+// Known W3 findings inside the unchanged ProductionOrderDetailPage. Keep
+// these visible in the report and deferred to 010Q; every other serious or
+// critical finding remains a W4 test failure.
+const BASELINE_W3_AXE_TARGETS: Record<string, Record<string, string[]>> = {
+  "diálogo y selector de lote explícito": {
+    // This W3 consumption dialog is covered by the existing order detail
+    // surface. These selectors are retained as known findings; any other
+    // failing node in the same axe rule must still fail the W4 check.
+    "color-contrast": [".text-orange-600.font-semibold", ".text-zinc-400", ".font-normal"],
+  },
+  "diálogo de resultados de prototipo": {
+    "color-contrast": [".text-zinc-400"],
+  },
+  "diálogo de resultados Solo Quema": {
+    "color-contrast": [".text-zinc-400"],
+    "link-name": [".hover\\:text-black"],
+  },
+};
+
+/** Axe scan for the serious and critical WCAG A/AA findings on a live surface. */
+export async function assertNoSeriousAxeViolations(page: Page, surface: string): Promise<void> {
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  const blockers = violations
+    .filter((violation) => violation.impact === "critical" || violation.impact === "serious")
+    .map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      description: violation.description,
+      nodes: violation.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+    }));
+  const baselineTargets = BASELINE_W3_AXE_TARGETS[surface] ?? {};
+  const baseline: typeof blockers = [];
+  const introduced: typeof blockers = [];
+  for (const violation of blockers) {
+    const allowedTargets = baselineTargets[violation.id] ?? [];
+    const knownNodes = violation.nodes.filter((node) =>
+      node.target.some((target) => allowedTargets.some((allowed) => target.includes(allowed))),
+    );
+    const newNodes = violation.nodes.filter((node) => !knownNodes.includes(node));
+    if (knownNodes.length > 0) baseline.push({ ...violation, nodes: knownNodes });
+    if (newNodes.length > 0) introduced.push({ ...violation, nodes: newNodes });
+  }
+  if (baseline.length > 0) {
+    console.warn(`[a11y-baseline] ${surface}: ${JSON.stringify(baseline)}`);
+  }
+  expect(introduced, `${surface}: violaciones axe serious/critical nuevas`).toEqual([]);
+}
 
 /** Structural Playwright checks for names, labels, dialogs, and visible focus. */
 export async function assertW3AccessibleControls(page: Page, surface: string): Promise<void> {
@@ -73,6 +124,8 @@ export async function assertW3AccessibleControls(page: Page, surface: string): P
     await page.keyboard.press("Shift+Tab");
     await expect(last, `${surface}: Shift+Tab envuelve al último control`).toBeFocused();
   }
+
+  await assertNoSeriousAxeViolations(page, surface);
 }
 
 export async function assertW3Responsive(page: Page, surface: string): Promise<void> {

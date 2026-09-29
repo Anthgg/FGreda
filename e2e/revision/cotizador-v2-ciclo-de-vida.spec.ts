@@ -547,7 +547,9 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await page.getByRole("button", { name: "Quitar Vidriado por inmersion de esta cotización" }).click();
     await expect.poll(async () => (await leerProcesos()).length).toBe(2);
     expect((await leerProcesos()).map((fila) => fila.technique_name)).not.toContain("Vidriado por inmersion");
-    await expect(paso).not.toContainText("Vidriado por inmersion");
+    await expect(
+      page.locator('[data-testid^="labor-process-"]').filter({ hasText: "Vidriado por inmersion" }),
+    ).toHaveCount(0);
     const piezas = (await (await api.get(apiPath("/api/v1/products?product_type=FINISHED_PRODUCT"))).json())
       .items as { id: number; name: string }[];
     const taza = piezas.find((pieza) => pieza.name === "E2E-Catalogo Taza 250 ml");
