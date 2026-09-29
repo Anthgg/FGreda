@@ -30,6 +30,11 @@ function scaled(value: string): bigint {
   return BigInt(whole) * 10n ** 12n + BigInt((fractional + "0".repeat(12)).slice(0, 12) || "0");
 }
 
+function scaled18(value: string): bigint {
+  const [whole = "0", fractional = ""] = value.trim().split(".");
+  return BigInt(whole) * 10n ** 18n + BigInt((fractional + "0".repeat(18)).slice(0, 18) || "0");
+}
+
 async function createQuote(page: Page, name: string) {
   const customers = await get<{ items: { id: number }[] }>(page, "/partners?limit=5");
   expect(customers.items.length).toBeGreaterThan(0);
@@ -136,19 +141,72 @@ test("W3: dos líneas activas de 5 h y 6 h suman 6 h en paralelo, no 11 h", asyn
   await login(page);
   const watch = captureUiErrors(page);
   const quotation = await createQuote(page, "W3 parallel 5h 6h");
-  await addTimedProduct(page, quotation.id, "W3 parallel A 5h", 300);
-  await addTimedProduct(page, quotation.id, "W3 parallel B 6h", 360);
+  const lineA = await addTimedProduct(page, quotation.id, "W3 parallel A 5h", 300);
+  const lineB = await addTimedProduct(page, quotation.id, "W3 parallel B 6h", 360);
+  const techniques = await get<{ items: { id: number; code: string }[] }>(
+    page,
+    "/quoter-v2/techniques?limit=100",
+  );
+  const technique = techniques.items.find((item) => item.code === "E2E-A-MANO");
+  expect(technique, "fixture local con técnica de taller").toBeDefined();
+  if (!technique) throw new Error("No se encontró E2E-A-MANO en el catálogo local");
+  const workerA = await post<{ id: number }>(page, "/quoter-v2/workers", {
+    name: testName("W4 paralelo externo A"),
+    worker_type: "EXTERNAL",
+    daily_rate: "120",
+    workday_hours: "8",
+    active: true,
+    technique_ids: [technique.id],
+  });
+  const workerB = await post<{ id: number }>(page, "/quoter-v2/workers", {
+    name: testName("W4 paralelo externo B"),
+    worker_type: "EXTERNAL",
+    daily_rate: "120",
+    workday_hours: "8",
+    active: true,
+    technique_ids: [technique.id],
+  });
+  for (const [line, worker] of [[lineA, workerA], [lineB, workerB]] as const) {
+    const process = await post<{ id: number }>(page, `/quotations-v2/${quotation.id}/processes`, {
+      v2_quotation_product_id: line.id,
+      technique_id: technique.id,
+    });
+    await post(page, `/quotations-v2/${quotation.id}/processes/${process.id}/assign`, {
+      worker_id: worker.id,
+    });
+  }
 
   const pricing = await get<{
     active_production_minutes: string;
     active_production_hours: string;
-    lines: { product_name: string; line_active_minutes: string | null }[];
+    commercial_external_labor_cost: string;
+    real_external_labor_cost: string;
+    space_cost: string;
+    lines: {
+      product_name: string;
+      line_active_minutes: string | null;
+      external_commercial_cost: string;
+      external_real_cost: string;
+      space_cost: string;
+    }[];
   }>(page, `/quotations-v2/${quotation.id}/pricing`);
   expect(scaled(pricing.active_production_minutes)).toBe(scaled("360"));
   expect(scaled(pricing.active_production_hours)).toBe(scaled("6"));
   expect(pricing.lines.map((line) => scaled(line.line_active_minutes ?? "0")).sort()).toEqual(
     [scaled("300"), scaled("360")].sort(),
   );
+  expect(pricing.lines.every((line) => scaled(line.external_commercial_cost) > 0n)).toBe(true);
+  expect(pricing.lines.every((line) => scaled(line.external_real_cost) > 0n)).toBe(true);
+  expect(pricing.lines.every((line) => scaled(line.space_cost) > 0n)).toBe(true);
+  const lineSpaceTotal = pricing.lines.reduce((total, line) => total + scaled18(line.space_cost), 0n);
+  expect(
+    lineSpaceTotal,
+    `line space=${JSON.stringify(pricing.lines.map((line) => line.space_cost))}; order space=${pricing.space_cost}`,
+  ).toBe(scaled18(pricing.space_cost));
+  expect(pricing.lines.reduce((total, line) => total + scaled18(line.external_commercial_cost), 0n))
+    .toBe(scaled18(pricing.commercial_external_labor_cost));
+  expect(pricing.lines.reduce((total, line) => total + scaled18(line.external_real_cost), 0n))
+    .toBe(scaled18(pricing.real_external_labor_cost));
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/cotizador-v2/${quotation.id}/precio`);

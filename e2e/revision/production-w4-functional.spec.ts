@@ -31,6 +31,9 @@ interface Pricing {
   real_external_labor_cost: string;
   labor_cost_gap: string;
   space_cost: string;
+  space_cost_per_hour_snapshot: string;
+  space_cost_per_hour_override: string | null;
+  effective_space_cost_per_hour: string;
   administration_cost: string;
   production_cost: string;
   real_cost: string;
@@ -78,8 +81,17 @@ function scaled(value: string): bigint {
   return BigInt(whole) * 10n ** 12n + BigInt((fractional + "0".repeat(12)).slice(0, 12) || "0");
 }
 
+function scaled18(value: string): bigint {
+  const [whole = "0", fractional = ""] = value.trim().split(".");
+  return BigInt(whole) * 10n ** 18n + BigInt((fractional + "0".repeat(18)).slice(0, 18) || "0");
+}
+
 function sum(values: string[]): bigint {
   return values.reduce((total, value) => total + scaled(value), 0n);
+}
+
+function sum18(values: string[]): bigint {
+  return values.reduce((total, value) => total + scaled18(value), 0n);
 }
 
 async function createQuote(page: Page, label: string): Promise<{ id: number }> {
@@ -202,11 +214,29 @@ test("W4: dos externos únicos cuestan 300 comercial/480 real; 10 h pasivas solo
   expect(scaled(before.labor_cost_gap)).toBe(scaled("180"));
   expect(sum(before.lines.map((line) => line.external_commercial_cost))).toBe(scaled("300"));
   expect(sum(before.lines.map((line) => line.external_real_cost))).toBe(scaled("480"));
+  expect(
+    sum18(before.lines.map((line) => line.space_cost)),
+    `line space=${JSON.stringify(before.lines.map((line) => line.space_cost))}; order space=${before.space_cost}`,
+  ).toBe(scaled18(before.space_cost));
   expect(before.lines.every((line) => scaled(line.line_active_minutes ?? "0") === scaled("600"))).toBe(true);
 
   await page.goto(`/cotizador-v2/${quotation.id}/precio`);
   await expect(page.getByTestId("v2next-tiempo-activo")).toContainText("10 h");
   await expect(page.getByText(/No está incluida automáticamente en el total/i)).toBeVisible();
+  const espacioPorHora = page.getByLabel("Costo de espacio por hora");
+  const overrideEsperado = (Number(before.space_cost_per_hour_snapshot) + 7).toFixed(2);
+  await espacioPorHora.fill(overrideEsperado);
+  await espacioPorHora.press("Tab");
+  await expect.poll(async () => {
+    const pricing = await get<Pricing>(page, `/quotations-v2/${quotation.id}/pricing`);
+    return scaled(pricing.space_cost_per_hour_override ?? "0");
+  }).toBe(scaled(overrideEsperado));
+  const afterOverride = await get<Pricing>(page, `/quotations-v2/${quotation.id}/pricing`);
+  expect(scaled(afterOverride.effective_space_cost_per_hour)).toBe(scaled(overrideEsperado));
+  expect(scaled(afterOverride.space_cost)).not.toBe(scaled(before.space_cost));
+  expect(sum18(afterOverride.lines.map((line) => line.space_cost))).toBe(
+    scaled18(afterOverride.space_cost),
+  );
   const passive = page.getByLabel("Tiempo pasivo");
   await passive.fill("2");
   await passive.press("Tab");
@@ -215,11 +245,11 @@ test("W4: dos externos únicos cuestan 300 comercial/480 real; 10 h pasivas solo
   const after = await get<Pricing>(page, `/quotations-v2/${quotation.id}/pricing`);
   expect(scaled(after.passive_space_suggestion)).toBeGreaterThan(0n);
   expect(scaled(after.active_production_hours)).toBe(scaled("10"));
-  expect(scaled(after.space_cost)).toBe(scaled(before.space_cost));
-  expect(scaled(after.production_cost)).toBe(scaled(before.production_cost));
-  expect(scaled(after.real_cost)).toBe(scaled(before.real_cost));
-  expect(scaled(after.subtotal)).toBe(scaled(before.subtotal));
-  expect(scaled(after.total)).toBe(scaled(before.total));
+  expect(scaled(after.space_cost)).toBe(scaled(afterOverride.space_cost));
+  expect(scaled(after.production_cost)).toBe(scaled(afterOverride.production_cost));
+  expect(scaled(after.real_cost)).toBe(scaled(afterOverride.real_cost));
+  expect(scaled(after.subtotal)).toBe(scaled(afterOverride.subtotal));
+  expect(scaled(after.total)).toBe(scaled(afterOverride.total));
   await assertW3AccessibleControls(page, "precio con dos externos y horas pasivas");
   await assertW3Responsive(page, "precio con dos externos y horas pasivas");
   expect(consoleErrors, `respuestas HTTP fallidas: ${failedResponses.join("\n")}`).toEqual([]);

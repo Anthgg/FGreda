@@ -72,9 +72,6 @@ function writeInventoryAuditArtifacts(containerName, databaseName, env, python) 
     "delivery_out_invalid_rows",
   ];
   const invariantFailures = invariantKeys.filter((key) => Number(invariants[key]) !== 0);
-  if (invariantFailures.length > 0) {
-    throw new Error(`Inventory invariants failed: ${invariantFailures.map((key) => `${key}=${invariants[key]}`).join(", ")}`);
-  }
   writeFileSync(join(artifactsPath, "inventory_invariants.json"), `${JSON.stringify(invariants, null, 2)}\n`);
 
   const lotOutput = runSync(python, ["scripts/lot_reconciliation_report.py"], {
@@ -95,8 +92,11 @@ function writeInventoryAuditArtifacts(containerName, databaseName, env, python) 
     lot_balance_count: reconciliation.lot_balances.length,
     reconciliation,
   };
-  if (unreconciledRows !== 0) throw new Error(`Lot reconciliation found ${unreconciledRows} UNRECONCILED rows`);
   writeFileSync(join(artifactsPath, "lot_reconciliation.json"), `${JSON.stringify(lotArtifact, null, 2)}\n`);
+  if (invariantFailures.length > 0) {
+    throw new Error(`Inventory invariants failed: ${invariantFailures.map((key) => `${key}=${invariants[key]}`).join(", ")}`);
+  }
+  if (unreconciledRows !== 0) throw new Error(`Lot reconciliation found ${unreconciledRows} UNRECONCILED rows`);
   console.log(`[w4-e2e-runner] Inventory audit passed: ${invariants.movement_rows} movements, ${invariants.lot_balance_rows} lot rows; lot reconciliation ${unreconciledRows} UNRECONCILED`);
 }
 

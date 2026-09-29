@@ -19,6 +19,7 @@ import type {
   PosCategory,
   Product,
   ProductCategory,
+  ProductDetail,
   ProductFilters,
   ProductInput,
   RowResolution,
@@ -79,8 +80,8 @@ export function fetchProducts(filters: ProductFilters): Promise<Page<Product>> {
   return apiClient.get<Page<Product>>(`${PRODUCTS}${toQuery({ ...filters })}`);
 }
 
-export function fetchProduct(id: number): Promise<Product> {
-  return apiClient.get<Product>(`${PRODUCTS}/${id}`);
+export function fetchProduct(id: number): Promise<ProductDetail> {
+  return apiClient.get<ProductDetail>(`${PRODUCTS}/${id}`);
 }
 
 export function createProduct(payload: ProductInput): Promise<Product> {

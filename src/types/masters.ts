@@ -70,6 +70,10 @@ export interface Product {
   notes: string | null;
 }
 
+export interface ProductDetail extends Product {
+  source_v2_quotation_product_id: number | null;
+}
+
 export type ProductInput = Omit<
   Product,
   "id" | "internal_reference" | "product_category_path" | "pos_category_name"

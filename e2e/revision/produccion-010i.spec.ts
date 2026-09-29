@@ -2,7 +2,11 @@ import { expect, test, type APIResponse, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import { E2E_OPERATOR_EMAIL, E2E_OPERATOR_PASSWORD, testName } from "../helpers/fixtures";
-import { assertW3AccessibleControls, assertW3Responsive } from "../helpers/w3-accessibility";
+import {
+  assertNoSeriousAxeViolations,
+  assertW3AccessibleControls,
+  assertW3Responsive,
+} from "../helpers/w3-accessibility";
 
 /**
  * Fase 010I — producción real de una cotización V2, contra LA REVISIÓN.
@@ -160,6 +164,22 @@ async function movimientos(page: Page): Promise<number> {
   return (await get<{ total: number }>(page, "/inventory/movements?limit=1")).total;
 }
 
+interface WipLine {
+  production_order_id: number;
+  production_order_code: string;
+  line_ref: string;
+  product_name: string;
+  stage: "EN_PRODUCCION" | "PROGRAMADA_HORNO" | "EN_HORNO" | "QUEMADA";
+  started_quantity: string;
+}
+
+async function wipItem(page: Page, orderId: number, lineRef: string): Promise<WipLine> {
+  const items = await get<WipLine[]>(page, "/production/wip");
+  const item = items.find((row) => row.production_order_id === orderId && row.line_ref === lineRef);
+  expect(item, `WIP debe mostrar ${lineRef} de la orden ${orderId}`).toBeDefined();
+  return item!;
+}
+
 /** Envía a producción por la pantalla y crea la orden eligiendo el almacén. */
 async function crearOrdenDesdeLaCotizacion(
   page: Page,
@@ -260,6 +280,7 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     // -- ficha: origen, cliente, piezas, material planificado ----------------
     await page.goto(`/produccion/${ordenId}`);
     await expect(page.getByText("Cotización V2", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await assertNoSeriousAxeViolations(page, "detalle de producción W4");
     await expect(page.getByTestId("orden-cliente")).not.toHaveText(/sin nombre/i);
     const piezas = page.getByTestId("orden-piezas");
     await expect(piezas.getByRole("row")).toHaveCount(3);
@@ -294,6 +315,88 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     await expect(page.getByText("EN PROCESO", { exact: true }).first()).toBeVisible({
       timeout: 15_000,
     });
+    const orderForWip = await get<{
+      result_lines: { line_ref: string; started_quantity: string }[];
+    }>(page, `/production-orders/${ordenId}`);
+    const tazaLine = orderForWip.result_lines.find(
+      (row) => escalado(row.started_quantity) === escalado("30"),
+    );
+    expect(tazaLine).toBeDefined();
+    const lineId = Number(/^V2P:(\d+)$/.exec(tazaLine!.line_ref)?.[1]);
+    expect(lineId).toBeGreaterThan(0);
+    const wipInicial = await wipItem(page, ordenId, tazaLine!.line_ref);
+    expect(wipInicial.stage).toBe("EN_PRODUCCION");
+    expect(escalado(wipInicial.started_quantity)).toBe(escalado("30"));
+
+    // La pantalla WIP presenta la etapa autoritativa del backend y conserva
+    // el scroll de la tabla en móvil sin desbordar el documento.
+    await page.goto("/produccion");
+    const tablaWip = page.getByTestId("production-wip");
+    const filasDeLaOrden = tablaWip
+      .getByRole("row")
+      .filter({ hasText: wipInicial.production_order_code });
+    await expect(filasDeLaOrden).toHaveCount(2);
+    const filaWip = tablaWip
+      .getByRole("row")
+      .filter({ hasText: wipInicial.product_name });
+    await expect(filaWip).toContainText("EN_PRODUCCION");
+    await assertNoSeriousAxeViolations(page, "tabla WIP de producción");
+    await assertW3Responsive(page, "tabla WIP de producción");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/produccion/${ordenId}`);
+
+    const planHornada = await get<{
+      lines: {
+        line_id: number;
+        required_low: number | null;
+        required_high: number | null;
+      }[];
+    }>(page, `/kiln-batches/production-orders/${ordenId}/firing-plan`);
+    const piezaHornada = planHornada.lines.find((item) => item.line_id === lineId);
+    expect(piezaHornada, "el plan de quema debe conservar la línea V2 de 30 piezas").toBeDefined();
+    const firingType = (piezaHornada!.required_low ?? 0) > 0 ? "LOW" : "HIGH";
+    const quantityToFire =
+      (firingType === "LOW" ? piezaHornada!.required_low : piezaHornada!.required_high) ?? 0;
+    expect(quantityToFire, "el plan debe exigir al menos una quema para la línea").toBeGreaterThan(0);
+    const settings = (await get<{
+      settings: { retail_kiln_id: number | null };
+    }>(page, "/quoter-v2/settings")).settings;
+    expect(settings.retail_kiln_id).not.toBeNull();
+    const key = `w4-wip-${Date.now()}`;
+    const kilnWip = await post<{ id: number }>(page, "/kilns", {
+      name: testName("W4 Horno WIP"),
+      capacity_volume_cm3: "250000",
+      firing_days_per_batch: 4,
+    });
+    const batch = await post<{ id: number; status: string }>(page, "/kiln-batches", {
+      kiln_id: kilnWip.id,
+      firing_type: firingType,
+      scheduled_date: new Date().toISOString().slice(0, 10),
+      notes: "Transición WIP E2E W4",
+      idempotency_key: `${key}-create`,
+    });
+    expect(batch.status).toBe("PLANNED");
+    await post(page, `/kiln-batches/${batch.id}/assignments`, {
+      production_order_id: ordenId,
+      items: [{ line_id: lineId, quantity: quantityToFire }],
+      idempotency_key: `${key}-assign`,
+    });
+    expect((await wipItem(page, ordenId, tazaLine!.line_ref)).stage).toBe("PROGRAMADA_HORNO");
+    const movementsBeforeFiring = await movimientos(page);
+    await post(page, `/kiln-batches/${batch.id}/start`, {});
+    expect((await wipItem(page, ordenId, tazaLine!.line_ref)).stage).toBe("EN_HORNO");
+    await post(page, `/kiln-batches/${batch.id}/complete`, {});
+    const wipQuemada = await wipItem(page, ordenId, tazaLine!.line_ref);
+    expect(wipQuemada.stage).toBe("QUEMADA");
+    expect(await movimientos(page)).toBe(movementsBeforeFiring);
+    await page.goto("/produccion");
+    const filaQuemada = page
+      .getByTestId("production-wip")
+      .getByRole("row")
+      .filter({ hasText: wipQuemada.product_name });
+    await expect(filaQuemada).toContainText("QUEMADA");
+    await page.goto(`/produccion/${ordenId}`);
+
     // Iniciar una orden V2 no descuenta nada.
     expect(escalado(await saldo(page, ids.pasta, almacen))).toBe(escalado(despues));
 
@@ -375,11 +478,20 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     expect(tazaResultado!.scrap_reason).toBe("Fisura durante el secado");
     expect(tazaResultado!.product_id).not.toBeNull();
     const productoPersonalizado = await get<{
+      name: string;
       product_type: string;
       product_category_path: string | null;
+      source_v2_quotation_product_id: number | null;
     }>(page, `/products/${tazaResultado!.product_id}`);
     expect(productoPersonalizado.product_type).toBe("FINISHED_PRODUCT");
     expect(productoPersonalizado.product_category_path).toBe("Piezas personalizadas");
+    expect(productoPersonalizado.source_v2_quotation_product_id).toBe(lineId);
+    const productoCustomAntesDelReintento = await get<{ items: { id: number }[]; total: number }>(
+      page,
+      `/products?search=${encodeURIComponent(productoPersonalizado.name)}&limit=10`,
+    );
+    expect(productoCustomAntesDelReintento.total).toBe(1);
+    expect(productoCustomAntesDelReintento.items[0]?.id).toBe(tazaResultado!.product_id);
     const platoResultado = completion.results.find(
       (result) => escalado(result.started_quantity) === escalado("5"),
     );
@@ -423,6 +535,12 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
       result.scrap_quantity,
     ]));
     expect(await movimientos(page)).toBe(movimientosAntesDelReintento);
+    const productoCustomDespuesDelReintento = await get<{ items: { id: number }[]; total: number }>(
+      page,
+      `/products?search=${encodeURIComponent(productoPersonalizado.name)}&limit=10`,
+    );
+    expect(productoCustomDespuesDelReintento.total).toBe(1);
+    expect(productoCustomDespuesDelReintento.items[0]?.id).toBe(tazaResultado!.product_id);
     expect(entradasFinales.map((movement) => escalado(movement.quantity)).sort()).toEqual(
       [escalado("5"), escalado("27")].sort(),
     );
@@ -438,12 +556,18 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     expect(productoTaza).not.toBeNull();
     await page.goto("/inventario");
     await expect(page.getByRole("heading", { level: 1, name: "Inventario." })).toBeVisible();
+    await assertNoSeriousAxeViolations(page, "inventario W4");
+    await assertW3Responsive(page, "inventario W4");
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByLabel("Buscar existencia").fill("Taza");
     const filaTaza = page.getByRole("row").filter({ hasText: "Taza" }).filter({ hasText: nombre });
     await expect(filaTaza).toContainText("27");
     await filaTaza.getByRole("button", { name: "Entrega…" }).click();
     const entrega = page.getByRole("region", { name: "Registrar entrega" });
     await expect(entrega.getByText("Entrega de producto terminado")).toBeVisible();
+    await assertNoSeriousAxeViolations(page, "formulario de entrega W4");
+    await assertW3Responsive(page, "formulario de entrega W4");
+    await page.setViewportSize({ width: 1440, height: 900 });
     const origenProduccion = entrega.getByLabel("Origen de producción (opcional)");
     await expect(origenProduccion).toBeVisible();
     await origenProduccion.click();

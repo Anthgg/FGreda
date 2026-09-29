@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { login } from "../helpers/auth";
 import { testName } from "../helpers/fixtures";
+import { assertW3AccessibleControls, assertW3Responsive } from "../helpers/w3-accessibility";
 import { configurarTiempoYMoldes, decidirDias } from "./support/cotizadorV2Ui";
 
 /**
@@ -45,10 +46,14 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
     await page.goto(RUTA);
     // Con datos reales cada fila trae su fecha de creación (un instante).
     await expect(page.getByRole("row").nth(1).getByRole("cell").nth(2)).toHaveText(/^\d{2}\/\d{2}\/\d{4}$/);
+    await assertW3AccessibleControls(page, "cotizador lista W4");
+    await assertW3Responsive(page, "cotizador lista W4");
 
     // Alta con cliente: lleva directo a Piezas.
     await page.getByRole("button", { name: "Nueva cotización" }).click();
     const alta = page.getByRole("dialog", { name: "Nueva cotización" });
+    await assertW3AccessibleControls(page, "cotizador alta de cliente W4");
+    await assertW3Responsive(page, "cotizador alta de cliente W4");
     await alta.getByRole("combobox", { name: /¿Para quién es\?/ }).click();
     await page.getByRole("option", { name: "Cliente E2E", exact: true }).click();
     await alta.getByLabel(/Ponle un nombre/).fill(testName("rediseno"));
@@ -78,12 +83,16 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
     }
     await esperarGuardado(page);
     await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" });
+    await assertW3AccessibleControls(page, "cotizador paso Piezas W4");
+    await assertW3Responsive(page, "cotizador paso Piezas W4");
 
     // Arcilla: la primera pasta valorizada y su peso.
     await siguiente(page, "Arcilla y esmalte");
     await page.getByRole("combobox", { name: "Arcilla", exact: true }).first().click();
     await page.getByRole("option").nth(1).click();
     await esperarGuardado(page);
+    await assertW3AccessibleControls(page, "cotizador paso Arcilla y esmalte W4");
+    await assertW3Responsive(page, "cotizador paso Arcilla y esmalte W4");
     const peso = page.getByLabel("Arcilla por pieza").first();
     await peso.fill("400");
     await peso.blur();
@@ -102,9 +111,13 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
     );
     await esperarGuardado(page);
     await decidirDias(page, "2");
+    await assertW3AccessibleControls(page, "cotizador paso Trabajo W4");
+    await assertW3Responsive(page, "cotizador paso Trabajo W4");
 
     // Horno, precio y revisión: lo que falte lo dicen los pendientes.
     await siguiente(page, "Horno");
+    await assertW3AccessibleControls(page, "cotizador paso Horno W4");
+    await assertW3Responsive(page, "cotizador paso Horno W4");
     await siguiente(page, "Precio");
     await expect(page.getByTestId("v2next-subtotal")).not.toHaveText("—");
     // El factor: un paso con el teclado, se guarda y el backend lo devuelve.
@@ -119,13 +132,18 @@ test.describe("Cotizador V2 rediseñado contra el backend real (010O)", () => {
     const despues = await factor.textContent();
     await page.reload();
     await expect(factor).toHaveText(despues ?? "");
+    await assertW3AccessibleControls(page, "cotizador paso Precio W4");
+    await assertW3Responsive(page, "cotizador paso Precio W4");
     await siguiente(page, "Revisar y emitir");
     await expect(page.getByTestId("v2next-documento")).toContainText(pieza);
+    await assertW3AccessibleControls(page, "cotizador paso Revisar y emitir W4");
+    await assertW3Responsive(page, "cotizador paso Revisar y emitir W4");
 
     const emitir = page.getByRole("button", { name: "Emitir cotización" });
     await expect(emitir).toBeEnabled({ timeout: 20_000 });
     await emitir.click();
     const confirmar = page.getByRole("dialog", { name: "¿Emitir la cotización?" });
+    await assertW3AccessibleControls(page, "diálogo de confirmación de emisión W4");
     await confirmar.getByRole("button", { name: "Confirmar y emitir" }).click();
 
     // Emitida: solo lectura, documento congelado y PDF.

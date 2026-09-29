@@ -20,6 +20,17 @@ const BASELINE_W3_AXE_TARGETS: Record<string, Record<string, string[]>> = {
     "color-contrast": [".text-zinc-400"],
     "link-name": [".hover\\:text-black"],
   },
+  "cotizador alta de cliente W4": {
+    // The existing client selector and result labels use the same zinc-400
+    // contrast debt already tracked for follow-up in 010Q. Axe reduces these
+    // two dialog nodes to positional `.mt-1` selectors, so keep their complete
+    // paths here instead of filtering every `.mt-1` finding on the page.
+    "color-contrast": [
+      ".text-zinc-400",
+      ".space-y-6.custom-scrollbar.p-6 > div:nth-child(1) > div:nth-child(1) > .mt-1",
+      ".space-y-6.custom-scrollbar.p-6 > div:nth-child(2) > .mt-1",
+    ],
+  },
 };
 
 /** Axe scan for the serious and critical WCAG A/AA findings on a live surface. */
