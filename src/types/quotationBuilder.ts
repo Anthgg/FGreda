@@ -214,12 +214,10 @@ export interface QuotationBuilderDraftIn {
   name?: string;
   customer_id?: number;
   kiln_id?: number;
-  /**
-   * Fase 009K.3. La INTENCION de aplicar el factor de produccion, no su
-   * valor: cuando esta encendido, cuanto vale lo decide Configuracion y lo
-   * resuelve el backend. El navegador no elige el factor de la casa.
-   */
+  /** Fase 009K.3. La INTENCION de aplicar el factor de produccion. */
   production_factor_enabled?: boolean;
+  /** Fase 009K.4.2. Valor editable por cotizacion; si falta, usa Configuracion. */
+  production_factor?: string;
   /** Fase 009K.3. Modo de carga del horno de esta cotizacion. */
   kiln_mode?: KilnMode;
   items: QuotationBuilderItemIn[];
