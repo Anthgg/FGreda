@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { expect, type APIResponse, type Page } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { login } from "../helpers/auth";
 import { assertW3AccessibleControls, assertW3Responsive } from "../helpers/w3-accessibility";

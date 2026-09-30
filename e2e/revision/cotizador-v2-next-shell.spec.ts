@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { interceptarApi, vigilarConsola } from "./support/cotizadorV2NextMocks";
 

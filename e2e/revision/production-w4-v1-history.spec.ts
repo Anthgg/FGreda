@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { expect, type APIResponse, type Page } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { login } from "../helpers/auth";
 import { testName } from "../helpers/fixtures";

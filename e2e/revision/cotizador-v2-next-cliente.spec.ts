@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./w4-test";
 import { interceptarApi, vigilarConsola, COTIZACION } from "./support/cotizadorV2NextMocks";
 
 test.describe("Cotizador V2 Next - Cliente", () => {

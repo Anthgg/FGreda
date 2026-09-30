@@ -1,4 +1,5 @@
-import { expect, test, type APIResponse, type Locator, type Page } from "@playwright/test";
+import { expect, type APIResponse, type Locator, type Page } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { login, logout } from "../helpers/auth";
 import {

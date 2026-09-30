@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { COTIZACION, LINEA, interceptarApi, vigilarConsola } from "./support/cotizadorV2NextMocks";
 
