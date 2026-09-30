@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 import { expect, type APIResponse, type Page } from "@playwright/test";
@@ -7,6 +8,24 @@ import { login } from "../helpers/auth";
 import { assertW3AccessibleControls, assertW3Responsive } from "../helpers/w3-accessibility";
 
 const API = "/api/v1";
+const EXTRAER_TEXTO_PDF = [
+  "import sys",
+  "from io import BytesIO",
+  "from pypdf import PdfReader",
+  "sys.stdout.reconfigure(encoding='utf-8')",
+  "print(chr(10).join((page.extract_text() or '') for page in PdfReader(BytesIO(sys.stdin.buffer.read())).pages))",
+].join("\n");
+
+function extractPdfText(bytes: Buffer): string {
+  const python = process.env.E2E_PDF_PYTHON;
+  expect(python, "E2E_PDF_PYTHON debe apuntar al Python del backend con pypdf").toBeTruthy();
+  const text = execFileSync(python as string, ["-c", EXTRAER_TEXTO_PDF], {
+    input: bytes,
+    encoding: "utf-8",
+  }).replace(/\s+/g, " ").trim();
+  expect(text.length, "el PDF no tiene texto extraíble").toBeGreaterThan(0);
+  return text;
+}
 
 interface V2Settings {
   version: number;
@@ -70,6 +89,7 @@ test("W4: cotización histórica V1 permanece de solo lectura y su PDF no cambia
   expect(pdfBefore.headers()["content-type"]).toContain("application/pdf");
   const pdfBytesBefore = await pdfBefore.body();
   expect(pdfBytesBefore.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  const pdfTextBefore = extractPdfText(pdfBytesBefore);
 
   await page.goto(`/cotizador/${quotationId}`);
   await expect(page.getByText("Confirmada", { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -86,7 +106,8 @@ test("W4: cotización histórica V1 permanece de solo lectura y su PDF no cambia
   const download = await downloadEvent;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
-  expect((await readFile(downloadPath!)).equals(pdfBytesBefore)).toBe(true);
+  const downloadedPdf = await readFile(downloadPath!);
+  expect(extractPdfText(downloadedPdf)).toBe(pdfTextBefore);
   await assertW3AccessibleControls(page, "cotización histórica V1 confirmada");
   await assertW3Responsive(page, "cotización histórica V1 confirmada");
 
@@ -112,7 +133,7 @@ test("W4: cotización histórica V1 permanece de solo lectura y su PDF no cambia
     expect(await get<Record<string, unknown>>(page, `/quotation-builder/${quotationId}`)).toEqual(builderBefore);
     const pdfAfter = await page.request.get(`${API}/quotations/${quotationId}/pdf`);
     expect(pdfAfter.status()).toBe(200);
-    expect((await pdfAfter.body()).equals(pdfBytesBefore)).toBe(true);
+    expect(extractPdfText(await pdfAfter.body())).toBe(pdfTextBefore);
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   } finally {

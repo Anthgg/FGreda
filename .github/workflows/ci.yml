@@ -406,6 +406,11 @@ jobs:
           echo "E2E_PASSWORD=$CLAVE" >> "$GITHUB_ENV"
           echo "E2E_OPERATOR_EMAIL=$OP_EMAIL" >> "$GITHUB_ENV"
           echo "E2E_OPERATOR_PASSWORD=$OP_CLAVE" >> "$GITHUB_ENV"
+          QUICK_EMAIL="e2e-quick-create-operator-$(openssl rand -hex 4)@example.com"
+          QUICK_CLAVE="$(openssl rand -hex 24)"
+          echo "::add-mask::$QUICK_CLAVE"
+          echo "E2E_QUICK_CREATE_OPERATOR_EMAIL=$QUICK_EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_QUICK_CREATE_OPERATOR_PASSWORD=$QUICK_CLAVE" >> "$GITHUB_ENV"
 
       - name: Levantar el backend de la revision
         working-directory: backend
