@@ -1,8 +1,10 @@
 # GREDA 010P W4 - inventario de cambios frente a producción
 
-- Backend: 99c35b61f805dd8db6b3d1faac820f13fb4d0e07 -> 08b95e2495ab65b0c9c6e743614bf59f8f2987ad; rama feat/010p-w4-integration.
-- Frontend: 25da2189a25b4dd62c7bf56a7513880a1ebb312b -> db73e301a5addf96989ff92eadc7c17e12cb9ecb; rama feat/010p-w4-integration.
-- Conteos por ruta destino; las renombradas incluyen ruta anterior y nueva.
+- Baseline productivo: backend `99c35b61f805dd8db6b3d1faac820f13fb4d0e07`; frontend `25da2189a25b4dd62c7bf56a7513880a1ebb312b`.
+- Base W3 verificada: backend `08b95e2495ab65b0c9c6e743614bf59f8f2987ad`; frontend `db73e301a5addf96989ff92eadc7c17e12cb9ecb`.
+- Código candidato W4 probado: backend `00a0d65df4ff328133d80ec0fe91cf54b6dc90ce`; frontend `0330bb90cdf2145973afcadef482f2578ffc9e0c`. Ambos en `feat/010p-w4-integration`.
+- El HEAD backend `84511b82cc920f3a7db84486d50a013c01171cac` agrega solo el log completo de Vitest; no cambia código probado.
+- Las listas de categorías clasifican el inventario productivo completo desde baseline productivo a W3. El delta incremental W3→W4 se detalla al final; conteos por ruta destino y las renombradas incluyen ruta anterior y nueva.
 
 ## Backend
 
@@ -343,6 +345,6 @@
 
 - La comparación se hace contra los SHA productivos fijados en la autorización y los HEAD finales W3 verificados, no por nombres de rama.
 - El único cambio de nombre backend detectado es el smoke del Excel 010J, ahora preservado como referencia histórica pre-010P en tests/db/test_legacy_reference_pre_010p.py; los importes históricos, incluido S/ 11,864.90, siguen intactos en el fixture tests/fixtures/LEGACY_REFERENCE_PRE_010P.json.
-- Delta frontend W4 desde 523245c2473299b3aed4667745132b9dc72614f9 hasta el commit de código a7d95914c642e58a68ec7a5c98aee28d0152021e: alta rápida de trabajadores y técnicas, capability y rutas, preservación del tiempo tecleado, foco al abrir Entrega, ajustes de fixtures y cobertura E2E. El runner usa un PostgreSQL desechable local. No se añadieron reglas comerciales ni rediseño.
-- Delta backend W4 desde 47cf50b7218c220f74716545ca93cbfe8fed501c hasta el commit de código 5bec5abccc7f1ff897d0bf5c4c142cdf47946284: OPERATOR con MASTERS_QUICK_CREATE puede consultar técnicas; trabajadores y jornales siguen restringidos. El servidor de pruebas añade una cuenta determinista opcional para validar esa capability. Se guardaron logs y reportes locales de auditoría; no se añadió migración W4.
-- El estado detallado de las pruebas, limitaciones y gaps está en CODEX_010P_W4_REPORT.md. UX observados y pendientes están en 010Q_UX_GAPS.md. No se implementa funcionalidad 010Q en W4.
+- Delta frontend W4 exacto desde W3 `db73e301a5addf96989ff92eadc7c17e12cb9ecb` hasta el código probado `0330bb90cdf2145973afcadef482f2578ffc9e0c`: 47 rutas, 2,636 líneas añadidas y 171 eliminadas. Incluye alta rápida de trabajadores y técnicas, capability y rutas, preservación del tiempo tecleado, foco al abrir Entrega, ajustes de fixtures y cobertura E2E; el runner usa PostgreSQL desechable local. No se añadieron reglas comerciales ni rediseño.
+- Delta backend W4 desde W3 `08b95e2495ab65b0c9c6e743614bf59f8f2987ad` hasta `00a0d65df4ff328133d80ec0fe91cf54b6dc90ce`: 28 rutas; 3 de código de producto, 4 de prueba/soporte y 21 de evidencia. OPERATOR con `MASTERS_QUICK_CREATE` puede consultar técnicas; trabajadores y jornales siguen restringidos. El servidor de pruebas añade una cuenta determinista opcional para validar esa capability. No se añadió migración W4.
+- El informe final vinculado es [CODEX_010P_W4_REPORT.md](CODEX_010P_W4_REPORT.md), con estado de pruebas, límites y evidencia. UX observados y pendientes están en [010Q_UX_GAPS.md](010Q_UX_GAPS.md). No se implementa funcionalidad 010Q en W4.

@@ -2,11 +2,12 @@
 
 STATUS: PASS
 
-BACKEND_RC_SHA: 00a0d65df4ff328133d80ec0fe91cf54b6dc90ce
-FRONTEND_RC_SHA: 0330bb90cdf2145973afcadef482f2578ffc9e0c
+BACKEND_RC_CODE_SHA: 00a0d65df4ff328133d80ec0fe91cf54b6dc90ce
+BACKEND_EVIDENCE_HEAD_SHA: 84511b82cc920f3a7db84486d50a013c01171cac
+FRONTEND_RC_CODE_SHA: 0330bb90cdf2145973afcadef482f2578ffc9e0c
 BACKEND_BRANCH: feat/010p-w4-integration
 FRONTEND_BRANCH: feat/010p-w4-integration
-WORKTREES_CLEAN: YES after the report and UX-gap documentation commits
+WORKTREES_CLEAN: YES after final local documentation and evidence commits
 
 ## Resumen
 
@@ -43,13 +44,15 @@ La regresión de precio/quema/preview/edición ejecutó 25 rondas concurrentes; 
 
 | Gate | Resultado | Conteo y evidencia |
 |---|---|---|
-| Vitest | PASS | 103/103 archivos; 1,220/1,220 pruebas; 127.82 s. |
+| Vitest | PASS | 103/103 archivos; 1,220/1,220 pruebas; 103.22 s. Log completo: `artifacts/010P_W4/frontend_vitest_full.log`. |
 | Lint | PASS | npm run lint. |
 | TypeScript | PASS | npm run typecheck. |
 | Build | PASS | npm run build. Bundle JS: 1,220.84 kB min / 316.69 kB gzip; aviso de chunk grande existente. |
 | React Doctor | PASS con warnings | v0.9.14; 161 archivos del alcance modificado, 40 warnings y 0 errores. Complejidad de control en InventoryPage queda registrada para 010Q. |
 
 El bundle W4 crece frente a W3 en 3.85 kB min y 1.16 kB gzip. La variación se registra como seguimiento; no bloquea el RC.
+
+La salida Vitest incluye un diagnóstico de jsdom `Not implemented: navigation`; terminó con código 0 y las 1,220 pruebas pasaron.
 
 ## Playwright local y flujos funcionales
 
