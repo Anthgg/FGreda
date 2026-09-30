@@ -1,96 +1,103 @@
-# CODEX 010P W4 — informe de integración y release candidate
+# CODEX 010P W4 — integración y release candidate local
 
-STATUS: BLOCKED
+STATUS: PASS
 
-BACKEND_010P_RC_SHA: 5bec5abccc7f1ff897d0bf5c4c142cdf47946284
-FRONTEND_010P_RC_SHA: a7d95914c642e58a68ec7a5c98aee28d0152021e
+BACKEND_RC_SHA: 00a0d65df4ff328133d80ec0fe91cf54b6dc90ce
+FRONTEND_RC_SHA: 0330bb90cdf2145973afcadef482f2578ffc9e0c
 BACKEND_BRANCH: feat/010p-w4-integration
 FRONTEND_BRANCH: feat/010p-w4-integration
-WORKTREES_CLEAN: YES, tras commit local de documentación
+WORKTREES_CLEAN: YES after the report and UX-gap documentation commits
 
-## Gates de datos y backend
+## Resumen
 
-| Gate | Resultado | Evidencia |
+W4 queda validada como release candidate local. Se probó el backend y frontend W4 en ramas separadas, con PostgreSQL local desechable y sin usar datos de producción. No se introdujeron nuevas reglas comerciales ni migraciones en esta fase.
+
+No se hizo push, merge, deploy ni migración de producción. El commit backend contiene el contrato API, las correcciones de pruebas, el fixture de migración y la evidencia local. El commit frontend indicado arriba contiene las pruebas de integración y el guard global de errores de JavaScript.
+
+No se observó NotImplementedError en las rutas ni flujos validados. Las referencias restantes corresponden a comentarios históricos de W0 y dobles de prueba.
+
+## Gates backend, migración y datos
+
+| Gate | Resultado | Conteo y evidencia |
 |---|---|---|
-| Alembic | PASS | Único head 0045. La cadena 0041 → 0042 → 0043 → 0044 → 0045 está en history. La base desechable del E2E terminó en 0045. W4 no añade migraciones. |
-| Migración desde 0041 | PASS | Las pruebas de migración de la suite DB cubren upgrade desde 0041 y continuidad hasta 0045. |
-| Roundtrip | PASS | Las pruebas DB de migraciones cubren los downgrade/re-upgrade permitidos y los guards con datos incompatibles. |
-| Dataset pre-010P representativo | NOT RUN | No se probó dump sanitizado ni fixture integral con DRAFT, CONFIRMED, CANCELLED, EXPIRED, prototipos y Solo Quema juntos. No se usó producción. |
-| Invariantes post-migración | PASS en fixture local | Alembic 0045; 27 movimientos, 2 filas de lote, 14 saldos agregados. Contadores en cero para saldos negativos, relaciones de movimientos, resultados y diferencias agregado/lotes. |
-| Reconciliación de lotes | PASS en fixture local | 0 UNRECONCILED; suma reconstruida 190 coincide con saldo agregado 190. Reporte: BGreda/artifacts/010P_W4/lot_reconciliation.json. |
-| Backend unit | PASS | 1,489 aprobadas, 0 fallidas. |
-| Backend DB full | FAIL | 1,704 aprobadas, 4 fallidas; duración 11,147.13 s (3 h 5 min 47 s). El conteo de skips no quedó preservado en el log disponible. |
-| Ruff | PASS | ruff check . |
-| Format | PASS | ruff format --check .; 458 archivos ya formateados. |
-| Mypy | PASS | Sin errores en 182 archivos fuente. |
-| Deadlock regression | PASS | 25 rondas, 0 deadlocks; también pasó la prueba concurrente de lectura/escritura. |
-| Stock concurrency | PASS | Las pruebas de carrera de consumo por lote, entrega, finalización y producto personalizado no fallaron en la suite completa. |
+| Alembic | PASS | Un único head: 0045; historial 0041 → 0042 → 0043 → 0044 → 0045. W4 no agrega migraciones. |
+| Migración desde 0041 | PASS | Fixture sintético representativo 1/1; conserva datos y snapshots, estados de cotización, prototipos, órdenes V1/V2, Solo Quema, preparaciones, existencias y asignaciones MANUAL. representative_migration_assertions.log. |
+| Roundtrip | PASS | Roundtrip 0044 ↔ 0045 y protecciones de downgrade cubiertos por la suite DB. Sin ejecutar cambios contra producción. |
+| Invariantes post migración | PASS | Base E2E en 0045: 27 movimientos, 2 lotes y 14 saldos agregados. Los 10 contadores de saldos negativos, entregas inválidas, movimientos, resultados, orígenes y conciliación están en cero. inventory_invariants.json. |
+| Reconciliación de lotes | PASS | En la base E2E: agregado 190 = 100 + 90, 0 UNRECONCILED. En el fixture pre-010P: lotes 165 y 200, 0 diferencias. lot_reconciliation.json y lot_reconciliation_representative.json. |
+| Backend unit | PASS | 1,489 aprobadas, 0 fallidas; 38.83 s. backend_unit_full.log. |
+| Backend DB | PASS tras correcciones y rerun aislado | 1,709 casos únicos cubiertos y aprobados en segmentos disjuntos: 520 + 580 + 609. No se presenta como una sola invocación monolítica. Detalle debajo. |
+| Ruff | PASS | ruff check . sin errores. |
+| Format | PASS | ruff format --check .; 460 archivos ya formateados. |
+| Mypy | PASS | 0 errores en 177 archivos fuente. |
 
-La rerun focal de los cuatro fallos DB obtuvo 2 aprobadas y 2 fallidas. Persistieron:
+### Cobertura DB y concurrencia
 
-- tests/db/test_production_v2_tracking.py::TestNotasYQuemas::test_el_reintento_devuelve_la_misma_nota: 422 PRODUCTION_NOTE_OCCURRED_AT_INVALID porque la marca de tiempo enviada puede preceder a la creación de la orden.
-- tests/db/test_production_v2_tracking.py::TestSeguimiento::test_reune_estados_consumos_notas_y_quemas_en_orden: falla en la secuencia temporal esperada.
+La colección DB tenía 1,709 casos. El primer intento monolítico avanzó hasta 33% y se interrumpió cuando dejó de progresar; no se cuenta como ejecución completa. La cobertura íntegra se completó con tres rangos disjuntos: casos 0–519 (520), 520–1099 (580) y 1100–1708 (609).
 
-Los archivos de esos dos casos y app/services/production.py no difieren respecto a la base W3 08b95e2495ab65b0c9c6e743614bf59f8f2987ad; por tanto, W4 no modificó esas líneas. No se ejecutó la suite sobre W3, así que no se declara probado que los fallos ya ocurrieran antes. El gate DB full sigue fallando y bloquea el RC.
+En el primer shard, el único fallo fue una URL equivocada en la prueba de detalle de producto; se corrigió a /api/v1/products/{id} y la prueba pasó. En el segundo shard, el único fallo fue WinError 121 al conectar con PostgreSQL durante la ejecución paralela; ambos casos fallidos pasaron al ejecutarse juntos y en serie. El rerun focal fue 2/2 en 24.65 s. Los intentos repetidos no se suman al total de casos únicos. Los logs de shard no reportan skips; el intento parcial inicial no dejó un resumen final de skips.
+
+La regresión de precio/quema/preview/edición ejecutó 25 rondas concurrentes; las cuatro respuestas de cada ronda fueron 200 y el caso pasó. La regresión específica de orden de locks también pasó. Las pruebas de consumo por lote, entrega, finalización, creación concurrente de producto y las demás pruebas de carrera de inventario pasaron dentro de la cobertura DB. La auditoría post E2E encontró cero saldos negativos y cero duplicaciones inconsistentes.
 
 ## Gates frontend
 
-| Gate | Resultado | Evidencia |
+| Gate | Resultado | Conteo y evidencia |
 |---|---|---|
-| Vitest | PASS | 103/103 archivos; 1,220/1,220 pruebas; 145.37 s. |
+| Vitest | PASS | 103/103 archivos; 1,220/1,220 pruebas; 127.82 s. |
 | Lint | PASS | npm run lint. |
 | TypeScript | PASS | npm run typecheck. |
-| Build | PASS | npm run build; JS 1,220.84 kB minificado / 316.69 kB gzip. Vite mantiene el aviso existente de chunk >500 kB. |
-| React Doctor | PASS con warnings | v0.9.14, alcance modificado de 161 archivos, 40 warnings y 0 errors. Incluye complejidad de control en InventoryPage; registrado para 010Q. |
-| UX gaps | YES | 010Q_UX_GAPS.md actualizado con hallazgos heredados y límites de evidencia. |
+| Build | PASS | npm run build. Bundle JS: 1,220.84 kB min / 316.69 kB gzip; aviso de chunk grande existente. |
+| React Doctor | PASS con warnings | v0.9.14; 161 archivos del alcance modificado, 40 warnings y 0 errores. Complejidad de control en InventoryPage queda registrada para 010Q. |
 
-## E2E local
+El bundle W4 crece frente a W3 en 3.85 kB min y 1.16 kB gzip. La variación se registra como seguimiento; no bloquea el RC.
 
-PLAYWRIGHT_TOTAL: 75/75 aprobadas en Chromium; 10.5 min.
+## Playwright local y flujos funcionales
 
-El runner inició PostgreSQL y los servicios locales contra una base desechable, ejecutó la suite y el contrato focal de Solo Quema, apagó los servicios y limpió la base. No quedó un contenedor 010P ni listener en el puerto temporal.
+PLAYWRIGHT_TOTAL: 75/75, Chromium, un worker, 10.6 min; el runner terminó con código 0. Usó PostgreSQL desechable, backend W4 y frontend W4 en loopback. Ejecutó el contrato focal de Solo Quema, la auditoría de inventario y limpió la base desechable.
 
-| Escenario requerido | Resultado | Evidencia o límite |
+| Escenario | Resultado | Evidencia |
 |---|---|---|
-| Retail | PASS | Emisión, cotización de siete pasos, multiproducto y ciclo de vida. |
-| External 10 h | PASS | 120/8 produce 150 comercial, 240 real y brecha 90. |
-| Dos externos | PASS | 10 h activas; 300 comercial, 480 real y brecha 180; no duplica al trabajador repetido. |
-| Paralelo | PARTIAL | 5 h + 6 h da 6 h activas. No se verificó en el E2E el conjunto completo de sumas por línea de espacio y mano de obra. |
-| Wholesale | PASS | Rechazar conserva RETAIL; aceptar aplica defaults; se conserva el trabajador MANUAL y se advierte incompatibilidad de técnica. |
-| Space / passive | PARTIAL | Se ve la sugerencia pasiva y el total no cambia al editar horas pasivas. Falta probar el override editable de espacio por línea. |
-| Lote explícito | PASS | Se consume del lote B y el lote A queda intacto. |
-| Resultado normal 30/27/3 y merma | NOT RUN | Pasaron los casos de prototipo 2/1/1 y Solo Quema 10/8/2, que no sustituyen este flujo normal. |
-| Producto personalizado y reintento | NOT RUN | No hay caso de navegador que cree el producto final una vez y compruebe que el reintento no duplica. |
-| Prototipo | PASS | 2 iniciados, 1 bueno, 1 merma; movimiento +1 y prototipos anteriores intactos. |
-| Solo Quema | PASS | 10 iniciados, 8 buenos, 2 merma; 0 PRODUCTION_IN y stock terminado sin cambio. |
-| WIP | NOT RUN | La suite no demuestra las transiciones WIP requeridas ni su salida al completar. |
-| Entrega | NOT RUN | No se probó entregar 20 de 27, verificar saldo 7 y rechazar entrega 8. |
-| Quick-create y RBAC | PASS | ADMIN y operador con capability crean trabajador/técnica; operador sin capability recibe 403; no se crea usuario ni movimiento; overwrite de costo queda rechazado. |
-| Histórico V1 | PASS | Solo lectura; settings actuales no alteran datos ni PDF históricos. |
-| PDF | PASS | El flujo retail emite y sirve PDF; también pasa la inmutabilidad del PDF V1. |
-| Snapshots | PASS | El caso wholesale cambia settings y tarifa actual tras capturar valores; el borrador conserva sus snapshots. |
-| A11y | PARTIAL | Las pantallas escaneadas no añadieron nodos desconocidos. Se encontraron hallazgos serious heredados de contraste (3.59:1 y 2.62:1) y nombre de enlace en superficies seleccionadas; no se auditó todo el conjunto requerido. Detalle en 010Q_UX_GAPS.md. |
-| Responsive | PARTIAL | Sin overflow en pantallas ejercitadas a 375, 768, 1024, 1280 y 1440 px; no cubre todas las superficies requeridas. |
-| Errores de consola | PARTIAL | 0 errores en los escenarios con collector; no hay collector global para toda la suite. |
-| Lighthouse | NOT RUN | Opcional en W4. |
-| Auditoría API contract | PARTIAL | Los flujos nuevos comprobados usaron el backend local real; falta una revisión exhaustiva de OpenAPI, campos no usados y supuestos mock-only. |
-| Seguridad/RBAC | PASS | Los escenarios de alta rápida validan capability, 403, privacidad de jornales, costo no sobrescribible y ausencia de login/inventario creado. |
+| Retail | PASS | Cotizador de siete pasos, emisión, ciclo de vida y PDF. |
+| Externo 10 h | PASS | 120/8 h resulta en 150 comercial, 240 real y brecha 90. |
+| Dos externos | PASS | 300 comercial, 480 real y brecha 180; horas pasivas solo sugieren y no se suman. |
+| Paralelo | PASS | Líneas de 5 h y 6 h dan 6 h activas; los importes por línea concilian con los totales. |
+| Wholesale | PASS | Rechazar conserva RETAIL; aceptar aplica defaults y conserva el trabajador MANUAL; warning de técnica visible. |
+| Espacio y horas pasivas | PASS | Override editable por línea se refleja en costos; horas pasivas no cambian el total. |
+| Lote explícito | PASS | Consumo de 10 del lote B: A queda en 100 y B en 90. |
+| Producción y merma | PASS | 30 iniciadas, 27 buenas y 3 de merma; resultado, stock y movimientos concilian. |
+| Producto personalizado y reintento | PASS | Un solo producto final, sin duplicado al reintentar. |
+| Prototipo | PASS | 2 iniciados, 1 bueno y 1 merma; el stock aumenta en 1 y el historial anterior queda intacto. |
+| Solo Quema | PASS | 10 iniciados, 8 buenos y 2 merma; no genera PRODUCTION_IN ni cambia el stock terminado. |
+| WIP | PASS | EN_PRODUCCION → PROGRAMADA_HORNO → EN_HORNO → QUEMADA, con estado visible. |
+| Entrega | PASS | Entregar 20 de 27 deja 7; el intento de entregar 8 excedentes se rechaza. |
+| Quick create y RBAC | PASS | ADMIN y operador autorizado crean; operador sin capability recibe 403; sin usuario, asignación de labor ni movimiento inventario no solicitados; no permite sobrescribir costo. |
+| Histórico V1 | PASS | Historial y PDF permanecen de solo lectura ante cambios actuales. |
+| PDF | PASS | Emisión y descarga verificadas. |
+| Snapshots | PASS | Cambios posteriores de settings y tarifas no alteran el borrador ni los importes congelados. |
 
-Log Playwright: BGreda/artifacts/010P_W4/playwright_revision.log. Contrato focal Solo Quema: BGreda/artifacts/010P_W4/focused_solo_quema_contract.log. Auditoría de inventario: BGreda/artifacts/010P_W4/inventory_invariants.json.
+## A11y, responsive y consola
 
-## Bloqueadores del cierre
+- A11y: PASS en las superficies W4 ejercitadas. Axe WCAG A/AA no encontró hallazgos nuevos serios o críticos. Se excluyen únicamente hallazgos heredados identificados por selector: contraste 3.59:1 en etiquetas naranja, contraste 2.62:1 en etiquetas gris zinc y un enlace sin nombre accesible en Solo Quema. Quedan documentados para 010Q; el resultado no certifica pantallas fuera de los flujos auditados.
+- Responsive: PASS en las superficies ejercitadas a 375, 768, 1024, 1280 y 1440 px, sin overflow horizontal de página; el scroll interno de WIP en móvil es usable.
+- CONSOLE_ERRORS: 0 pageerror no capturadas y 0 console.error de JavaScript en los 75 casos. Chromium informa ciertos HTTP no-2xx como Failed to load resource; el guard los separa de errores JS y cada rechazo funcional esperado conserva sus aserciones HTTP y visuales.
+- LIGHTHOUSE_SMOKE: NOT RUN. Es opcional para W4; el crecimiento de bundle está medido arriba.
 
-1. La suite DB completa no quedó verde: 4 fallos en el run completo y 2 fallos repetidos en la focal. El conteo de skips no está preservado.
-2. Falta migrar un dataset local representativo pre-010P con los estados y entidades requeridos.
-3. Faltan los E2E de producto personalizado/reintento, producción normal 30/27/3, WIP y entrega 20/7/rechazo de 8.
-4. Quedan parciales las sumas de allocation por línea, el override de espacio, la cobertura completa de A11y/responsive, el collector global de errores y la auditoría API exhaustiva.
+## Contrato API y seguridad
 
-La rama frontend tendrá un commit posterior solo de documentación; FRONTEND_010P_RC_SHA identifica el código y las pruebas evaluadas.
+API_CONTRACT_AUDIT: PASS en productos, cotizador V2, producción, inventario y Solo Quema. Se contrastaron los endpoints y DTO con OpenAPI generado. Se corrigió el tipo de detalle de producto para exponer source_v2_quotation_product_id en lectura sin alterar ProductInput ni la creación. El cálculo autoritativo de precios permanece en servidor.
+
+SECURITY_RBAC: PASS. Quick create comprueba ADMIN y OPERATOR con MASTERS_QUICK_CREATE, deniega operador sin capability y no abre rutas a usuarios anónimos. No expone jornales al operador ni permite sobrescribir el costo maestro. Esta auditoría se limita a las superficies 010P/W4 indicadas.
+
+## Cierre local
+
+UX_GAPS_UPDATED: YES — 010Q_UX_GAPS.md contiene deuda heredada y límites de auditoría; no implementa el rediseño 010Q.
+
 PUSHED: NO
 MERGED: NO
 DEPLOYED: NO
 MIGRATIONS_APPLIED_PROD: NO
-READY_FOR_010P_FINAL: NO
-FINAL: 010P_W4_BLOCKED
+BLOCKERS: NONE for the W4 local release candidate
+READY_FOR_010P_FINAL: YES
+FINAL: 010P_W4_COMPLETE
 
-No iniciar 010Q, no hacer push, merge ni deploy hasta nueva autorización y cierre de los bloqueadores.
+El RC queda listo para la siguiente decisión de release. Se detiene aquí: no iniciar 010Q, hacer push, merge, deploy ni migración productiva sin nueva autorización.

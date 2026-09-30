@@ -1,30 +1,29 @@
 # 010Q UX gaps recorded during 010P W4
 
-W4 kept the existing 010O visual direction. The latest full local Playwright revision run passed 75/75 tests after correcting test timing, selectors, decimal precision, and kiln fixture capacity. This list records inherited accessibility debt and follow-up review items. W4 remains pending the full backend DB gate documented in CODEX_010P_W4_REPORT.md.
+This document records inherited accessibility debt and follow-up items observed in the full local W4 run. The 010P W4 release candidate passed its 75/75 Playwright suite against local frontend/backend services and disposable PostgreSQL. No 010Q redesign was implemented.
 
 ## HIGH — inherited accessibility findings
 
-- The explicit-lot, prototype-result, and Solo Quema scans reported serious color-contrast findings: required labels at 3.59:1 and muted gray labels at 2.62:1 against white, below 4.5:1.
-- The Cotizador V2 new-customer dialog also reports the inherited muted-gray `text-zinc-400` labels at 2.62:1; the dialog already used this shared style before W4.
-- The Solo Quema scan also reported a link without an accessible name.
-- These exact findings were present in the pre-010P baseline; the relevant styles and Solo Quema page were not introduced by W4. The E2E helper filters only those known baseline nodes, and still fails on unrecognized nodes. Review and correct the inherited findings in 010Q.
+- Axe WCAG A/AA reported inherited contrast ratios of 3.59:1 for small orange labels and 2.62:1 for muted zinc labels against white.
+- The Solo Quema surface also contains an inherited link without an accessible name.
+- W4 scoped Axe assertions filter only these known baseline findings and still fail on unrecognized findings. No new serious or critical finding appeared in the exercised W4 surfaces. Correct the inherited findings in 010Q.
 
-## MEDIUM — review in 010Q
+## MEDIUM — usability review
 
 - Inventory delivery is reachable from the stock table. W4 moves keyboard focus to the delivery heading when the form opens; review whether the action is discoverable before a product is selected.
 - The WIP table uses internal horizontal scrolling at narrow widths. The tested page avoids document-level overflow; review a compact mobile presentation if workshop use makes the table difficult to scan.
-- React Doctor 0.9.14 scanned 161 changed-scope files and reported 40 warnings with 0 errors. The inventory page has a control-flow-complexity warning; review during cleanup.
+- React Doctor 0.9.14 reported 40 warnings across 161 changed-scope files, with 0 errors. InventoryPage has a control-flow-complexity warning.
 
-## LOW — bundle
+## LOW — bundle size
 
-- The final JavaScript bundle is 1,220.84 kB minified / 316.69 kB gzip, compared with the W3 baseline of 1,216.99 / 315.53 kB (+3.85 / +1.16 kB). Review code splitting in 010Q; the existing large-chunk warning remains.
+- W4 JavaScript is 1,220.84 kB minified / 316.69 kB gzip, versus W3 at 1,216.99 / 315.53 kB: +3.85 kB minified and +1.16 kB gzip. The existing Vite large-chunk warning remains; review splitting during 010Q.
 
 ## Evidence boundaries
 
-- Responsive checks ran at 375, 768, 1024, 1280, and 1440 px on selected exercised screens. They do not constitute a visual review of every production, inventory, WIP, delivery, prototype, and quick-create surface.
-- Axe checks ran only on exercised flows. Known inherited findings are reported above; a complete WCAG audit across every named surface remains open.
-- Console and page-error assertions are scenario-specific. There is no global collector covering all browser flows.
-- Lighthouse was not run; it is optional for W4.
-- The latest local E2E run exercised custom-piece retry without duplication, normal production 30 = 27 good + 3 scrap, WIP transitions through firing completion, and delivery of 20 followed by rejection of 8. These flows passed against local PostgreSQL, backend, and frontend services.
+- Responsive checks ran on the named exercised surfaces at 375, 768, 1024, 1280, and 1440 px. WIP uses an internal table scroller on mobile.
+- Axe checks ran in the requested exercised flows, with exact known baseline findings filtered. This is not an audit of unrelated app pages.
+- The full revision run passed 75/75. The global guard saw 0 uncaught page errors and 0 JavaScript console.error; browser-generated network diagnostics for non-2xx responses were treated separately, and expected negative flows checked their visual state.
+- Lighthouse was not run; it was optional for W4.
+- API contract review covered products, quotation V2, production, inventory, and Solo Quema, not unrelated API modules.
 
-No CRITICAL usability blocker was observed in the flows that completed. Do not begin 010Q until separately authorized.
+No critical usability blocker was found in the flows exercised by W4. Keep inherited accessibility and mobile usability work in 010Q, which requires separate authorization.
