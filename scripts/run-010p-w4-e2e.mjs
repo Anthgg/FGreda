@@ -11,7 +11,7 @@ const DEFAULT_BACKEND_ROOT = resolve(FRONTEND_ROOT, "../../../../BGreda-010p-w2"
 const BACKEND_ROOT = resolve(process.env.GREDA_BACKEND_W4_ROOT ?? DEFAULT_BACKEND_ROOT);
 const EXPECTED_BACKEND_BASE = "47cf50b7218c220f74716545ca93cbfe8fed501c";
 const EXPECTED_FRONTEND_BASE = "523245c2473299b3aed4667745132b9dc72614f9";
-const EXPECTED_BRANCH = "feat/010p-w4-integration";
+const EXPECTED_BRANCH = process.env.GREDA_EXPECTED_BRANCH ?? "feat/010p-w4-integration";
 const EXPECTED_ALEMBIC_REVISION = "0045";
 const POSTGRES_IMAGE = "postgres:16-alpine";
 
@@ -325,7 +325,6 @@ async function main() {
       ...process.env,
       APP_ENV: "local",
       APP_NAME: "Cotizador Greda API (Solo Quema W3 E2E)",
-      LEGACY_CREATION_ENABLED: "true",
       LOG_LEVEL: "WARNING",
       DATABASE_URL: databaseUrl,
       TEST_DATABASE_URL: databaseUrl,

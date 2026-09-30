@@ -308,15 +308,7 @@ jobs:
     # esconde justo la intermitencia que tendria que ensenar.
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
-      # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      # `main`: el backend de 010I (Anthgg/BGreda#62, fusionado en 62c1ee9)
-      # trae el origen V2, el consumo real, el seguimiento, las comunicaciones
-      # y las piezas operacionales que esta rama usa. La E2E se probo contra
-      # ese main antes de abrir el PR del frontend.
-      BACKEND_REF: main
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16-alpine
@@ -327,31 +319,62 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U greda"
+          --health-cmd "pg_isready -U greda -d greda_e2e"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     steps:
       - name: Checkout del frontend (esta revision)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Checkout del backend (BACKEND_REF)
+      - name: Resolver SHA exacto del backend compatible
+        id: backend-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+        run: |
+          if { [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ "$PR_NUMBER" = "89" ]; } || \
+             { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/feat/010p-w4-integration" ]; }; then
+            backend_ref="refs/pull/69/head"
+            backend_sha="$(gh api repos/Anthgg/BGreda/pulls/69 --jq '.head.sha')"
+          else
+            backend_ref="refs/heads/main"
+            backend_sha="$(git ls-remote https://github.com/Anthgg/BGreda.git "$backend_ref" | awk 'NR == 1 {print $1}')"
+          fi
+          [ -n "$backend_sha" ] || { echo "No se pudo resolver el SHA del backend"; exit 1; }
+          echo "ref=$backend_ref" >> "$GITHUB_OUTPUT"
+          echo "sha=$backend_sha" >> "$GITHUB_OUTPUT"
+          echo "BACKEND_SHA_EXPECTED=$backend_sha" >> "$GITHUB_ENV"
+          echo "BACKEND_REF=$backend_ref" >> "$GITHUB_ENV"
+          echo "BACKEND_REF=$backend_ref"
+          echo "BACKEND_SHA=$backend_sha"
+
+      - name: Checkout del backend (SHA resuelto desde BACKEND_REF)
         uses: actions/checkout@v4
         with:
           repository: Anthgg/BGreda
-          ref: ${{ env.BACKEND_REF }}
+          ref: ${{ steps.backend-ref.outputs.sha }}
           path: backend
+          fetch-depth: 0
 
       - name: Revisiones que se prueban
         run: |
           FRONT="$(git rev-parse HEAD)"
           BACK="$(git -C backend rev-parse HEAD)"
+          if [ "$BACK" != "$BACKEND_SHA_EXPECTED" ]; then
+            echo "Backend checkout no coincide con el SHA resuelto: esperado $BACKEND_SHA_EXPECTED, actual $BACK"
+            exit 1
+          fi
           echo "Frontend: $FRONT"
-          echo "Backend:  $BACK ($BACKEND_REF)"
+          echo "BACKEND_REF=$BACKEND_REF"
+          echo "BACKEND_SHA=$BACK"
           {
             echo "### E2E de la revision"
             echo "- Frontend: $FRONT"
-            echo "- Backend: $BACK ($BACKEND_REF)"
+            echo "- BACKEND_REF: $BACKEND_REF"
+            echo "- BACKEND_SHA: $BACK"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Instalar uv
@@ -452,7 +475,18 @@ jobs:
           # Fase 010H: el texto del PDF se extrae con el pypdf del backend de la
           # revision, ya instalado en su entorno.
           E2E_PDF_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
-        run: npx playwright test -c playwright.revision.config.ts
+        run: npx playwright test -c playwright.revision.config.ts --grep-invert 'W3 Solo Quema:'
+
+      - name: E2E de Solo Quema con su runner PostgreSQL aislado
+        env:
+          GREDA_BACKEND_W4_ROOT: ${{ github.workspace }}/backend
+          SOLO_QUEMA_E2E_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
+          GREDA_EXPECTED_BRANCH: ci-010p-w4-e2e
+        run: |
+          docker pull postgres:16-alpine
+          git switch --force-create ci-010p-w4-e2e "$GITHUB_SHA"
+          git -C backend switch --force-create ci-010p-w4-e2e "$BACKEND_SHA_EXPECTED"
+          node scripts/run-010p-w4-e2e.mjs --files e2e/revision/solo-quema-real-e2e.spec.ts
 
       - name: Apagar backend y app
         # Siempre, pase lo que pase arriba: un proceso que sobrevive al ultimo
