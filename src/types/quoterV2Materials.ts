@@ -69,6 +69,12 @@ export interface V2QuotationProduct {
   product_id: number | null;
   product_name: string | null;
   quantity: number;
+  /** Tiempo de UNA pieza, en minutos; se captura, pero no se calcula en React. */
+  production_time_per_unit_minutes: string | null;
+  mold_count: number;
+  /** Derivados oficiales del backend. */
+  cycles: number;
+  line_active_minutes: string | null;
 
   /**
    * Medidas de UNA pieza, en centímetros. De aquí sale el volumen que ocupa
@@ -128,6 +134,8 @@ export interface V2QuotationProductInput {
   /** Para la pieza de encargo, que no existe en el catálogo. */
   product_name?: string | null;
   quantity?: number;
+  production_time_per_unit_minutes?: string | null;
+  mold_count?: number;
   length_cm?: string | null;
   width_cm?: string | null;
   height_cm?: string | null;

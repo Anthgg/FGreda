@@ -110,3 +110,8 @@ export function capabilitiesFor(role: Role | undefined): Capabilities {
     gestionComercial: esAdmin(role),
   };
 }
+
+/** El permiso de alta rápida viene de la capacidad explícita que declara el servidor. */
+export function hasQuickCreateCapability(user: SessionUser | null | undefined): boolean {
+  return user?.role === "ADMIN" || user?.capabilities?.includes("MASTERS_QUICK_CREATE") === true;
+}

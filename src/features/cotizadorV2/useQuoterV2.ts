@@ -13,6 +13,7 @@ import {
   QUOTER_V2_KEY,
   RECORDAR_GUARDADO,
   V2_STALE_TIME,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 import type { V2QuotationCreateInput, V2QuotationUpdateInput } from "@/types/quoterV2";
 
@@ -53,7 +54,8 @@ export const useUpdateV2Quotation = (id: number) => {
     mutationKey: claveDeGuardado(id, "cabecera"),
     scope: alcanceDeGuardado(id),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2QuotationUpdateInput) => updateV2Quotation(id, payload),
+    mutationFn: (payload: V2QuotationUpdateInput) =>
+      enTurno(id, () => updateV2Quotation(id, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, id);
     },

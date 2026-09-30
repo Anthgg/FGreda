@@ -3,13 +3,31 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { login } from "../helpers/auth";
-import { TEST_DATA_PREFIX, testName } from "../helpers/fixtures";
+import { testName } from "../helpers/fixtures";
+import {
+  apiPath,
+  agregarProceso,
+  anadirPieza,
+  anadirPiezaDelCatalogo,
+  cabecera,
+  campo,
+  configurarTiempoYMoldes,
+  decidirDias,
+  elegir,
+  elegirArcilla,
+  esperarGuardado,
+  irAPaso,
+  nuevoBorrador,
+  RUTA_V2,
+} from "./support/cotizadorV2Ui";
 
 /**
  * Fase 010H — emitir, vencer, duplicar, PDF y paso a producción, contra LA REVISIÓN.
+ * Reescrita en el corte 010O.13 para la interfaz rediseñada.
  *
  * Igual que el flujo de 010G, esto no corre contra producción: la base es un
  * PostgreSQL efímero que el job crea y destruye. Por eso aquí SÍ se emite y se
@@ -18,42 +36,15 @@ import { TEST_DATA_PREFIX, testName } from "../helpers/fixtures";
  * La cotización vencida no se espera veinte días: el backend de revisión siembra
  * una en dólares emitida hace cuarenta, por la API y con su huella, y después
  * sube el tipo de cambio de la casa de 3,70 a 3,82
- * (`tests/e2e/servidor_revision.py::sembrar_cotizacion_vencida`).
+ * (`tests/e2e/servidor_revision.py::sembrar_cotizacion_vencida`). La siembra es
+ * de un solo uso: la suite corre sobre una base recién creada.
  *
- * El texto del PDF descargado se extrae DE VERDAD: WeasyPrint comprime los
- * flujos y codifica los glifos, así que buscar palabras en los bytes daría un
- * verde vacío (revisión de Codex). Se usa el `pypdf` del entorno del backend de
- * revisión, que el job ya instaló: `E2E_PDF_PYTHON` apunta a ese intérprete, y
- * sin él la prueba falla en vez de saltarse.
+ * El texto del PDF descargado se extrae DE VERDAD con el `pypdf` del backend
+ * (`E2E_PDF_PYTHON`); sin él la prueba falla en vez de saltarse.
  */
 
 const NOMBRE_VENCIDA = "E2E-SEMILLA-VENCIDA-USD";
 const PROHIBIDOS = /costo real|costo de producci[oó]n|gas real|ganancia|margen|tarifa por hora|diferencia de quema/i;
-
-function paso(page: Page, numero: number, titulo: string) {
-  return page.getByRole("button", { name: new RegExp(`${numero}\\.\\s*${titulo}`, "i") });
-}
-
-async function esperarGuardado(page: Page): Promise<void> {
-  await expect(page.getByTestId("estado-guardado")).toHaveText(/todos los cambios guardados/i, {
-    timeout: 30_000,
-  });
-}
-
-async function asignarProceso(
-  page: Page,
-  tecnica: string | RegExp,
-  trabajador: string | RegExp,
-): Promise<void> {
-  const fila = page.locator("li").filter({ hasText: tecnica }).first();
-  await expect(fila).toBeVisible({ timeout: 15_000 });
-  await fila.getByRole("combobox", { name: "Trabajador" }).click();
-  const search = page.getByPlaceholder(/buscar opci[oó]n/i);
-  if (await search.isVisible().catch(() => false)) {
-    await search.fill("");
-  }
-  await page.getByRole("option", { name: trabajador }).click();
-}
 
 async function csrf(page: Page): Promise<string> {
   const galleta = (await page.context().cookies()).find((c) => c.name === "greda_csrf");
@@ -68,93 +59,36 @@ function idDeLaUrl(page: Page): number {
   return Number(coincidencia?.[1]);
 }
 
-/** Un borrador completo, listo para emitir, con una o varias piezas. */
+/**
+ * Un borrador completo, listo para emitir, con una o varias piezas. Una pieza de
+ * encargo no trae procesos: se le define «A mano» con quien la sabe hacer. Sin
+ * eso la mano de obra queda en cero y no se puede emitir (A2H-001).
+ */
 async function borradorCompleto(page: Page, etiqueta: string, piezas: string[]): Promise<number> {
   await login(page);
-  await page.goto("/cotizador-v2");
-  await page.getByLabel(/referencia/i).fill(testName(etiqueta));
-  await page.getByRole("button", { name: /crear cotizaci[oó]n v2/i }).click();
-  await expect(page.getByTestId("pasos-cotizacion")).toBeVisible({ timeout: 15_000 });
-  const id = idDeLaUrl(page);
-
-  await paso(page, 1, "Cliente").click();
-  await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
-  await page.getByRole("option").nth(1).click();
-
-  await paso(page, 2, "Productos").click();
-  for (const pieza of piezas) {
-    const nombre = testName(pieza);
-    await page.getByLabel(/nueva l[ií]nea/i).fill(nombre);
-    await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
-    await expect(page.locator(`text=${nombre}`).first()).toBeVisible({ timeout: 15_000 });
-    const cantidad = page.getByLabel(/^cantidad/i).last();
-    await cantidad.fill("10");
-    await cantidad.blur();
-    for (const [indice, etiquetaMedida] of [/largo \(cm\)/i, /ancho \(cm\)/i, /alto \(cm\)/i].entries()) {
-      const campo = page.getByLabel(etiquetaMedida).last();
-      await campo.fill(["18", "12", "4"][indice] as string);
-      await campo.blur();
-    }
-    await esperarGuardado(page);
+  const { id } = await nuevoBorrador(page, etiqueta);
+  for (const [indice, pieza] of piezas.entries()) {
+    await anadirPieza(page, testName(pieza), "10", ["18", "12", "4"]);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" }, indice);
   }
-
-  await paso(page, 3, "Materiales").click();
   for (let indice = 0; indice < piezas.length; indice += 1) {
-    await page.getByRole("combobox", { name: "Pasta", exact: true }).nth(indice).click();
-    await page.getByRole("option").nth(1).click();
-    await esperarGuardado(page);
-    const peso = page.getByLabel(/pasta por pieza/i).nth(indice);
-    await peso.fill("400");
-    await peso.blur();
-    await esperarGuardado(page);
+    await elegirArcilla(page, indice, "400");
   }
-
-  await paso(page, 4, "Mano de obra").click();
-  // Una pieza de encargo no trae procesos de ninguna ficha: se le definen aqui,
-  // para ESTA cotizacion, y se le pone quien la hace. Sin eso la cotizacion
-  // queda con mano de obra 0 y ya no se puede emitir, que es justo la barrera
-  // que cierra A2H-001.
-  for (const pieza of piezas) {
-    const tarjeta = page
-      .getByTestId("procesos")
-      .locator("div")
-      .filter({ has: page.getByRole("heading", { name: new RegExp(`^${TEST_DATA_PREFIX}${pieza}-`) }) })
-      .first();
-    // Tecnica y persona POR NOMBRE, no por posicion: «A mano» la sabe hacer
-    // «E2E-Trabajador taller» en la semilla, y elegir por indice ataria la
-    // prueba al orden en que el catalogo devuelva sus filas.
-    await tarjeta.getByRole("combobox", { name: "Agregar proceso" }).click();
-    const buscador = page.getByPlaceholder(/buscar opci[oó]n/i);
-    if (await buscador.isVisible().catch(() => false)) await buscador.fill("A mano");
-    await page.getByRole("option", { name: "A mano", exact: true }).click();
-    await tarjeta.getByRole("button", { name: "Agregar" }).click();
-    // Acotado A ESTA tarjeta: con dos piezas hay dos filas «A mano», y buscar
-    // en toda la pagina reasignaria la de la primera.
-    const fila = tarjeta.locator("li").filter({ hasText: "A mano" }).first();
-    await expect(fila).toBeVisible({ timeout: 15_000 });
-    await fila.getByRole("combobox", { name: "Trabajador" }).click();
-    const personas = page.getByPlaceholder(/buscar opci[oó]n/i);
-    if (await personas.isVisible().catch(() => false)) await personas.fill("Trabajador taller");
-    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
-    await esperarGuardado(page);
+  for (let indice = 0; indice < piezas.length; indice += 1) {
+    await agregarProceso(page, "A mano", { indice, trabajador: /E2E-Trabajador taller/ });
   }
-
-  const dias = page.getByLabel(/d[ií]as efectivos/i);
-  await dias.fill("2");
-  await dias.blur();
-  await esperarGuardado(page);
-
-  await paso(page, 7, "Resumen").click();
-  await expect(page.getByTestId("paso-resumen")).toBeVisible();
+  await decidirDias(page, "2");
+  await irAPaso(page, "Revisar y emitir");
   await esperarGuardado(page);
   return id;
 }
 
+/** Abre el diálogo de emisión desde «Revisar y emitir». */
 async function abrirDialogoDeEmision(page: Page) {
-  await page.getByTestId("emitir-cotizacion").getByRole("button", { name: "Confirmar y emitir" }).click();
-  const dialogo = page.getByRole("dialog", { name: /confirmar y emitir/i });
-  await expect(dialogo.getByTestId("emision-total")).toBeVisible({ timeout: 15_000 });
-  return dialogo;
+  const boton = page.getByRole("button", { name: "Emitir cotización" });
+  await expect(boton).toBeEnabled({ timeout: 20_000 });
+  await boton.click();
+  return page.getByRole("dialog", { name: "¿Emitir la cotización?" });
 }
 
 const EXTRAER_TEXTO = [
@@ -166,7 +100,7 @@ const EXTRAER_TEXTO = [
 
 /** El PDF de la sesión, validado como PDF, y su texto extraído. */
 async function textoDelPdf(api: APIRequestContext, id: number): Promise<string> {
-  const respuesta = await api.get(`/api/v1/quotations-v2/${id}/pdf`);
+  const respuesta = await api.get(apiPath(`/api/v1/quotations-v2/${id}/pdf`));
   expect(respuesta.status()).toBe(200);
   expect(respuesta.headers()["content-type"]).toContain("application/pdf");
   const cuerpo = await respuesta.body();
@@ -220,32 +154,33 @@ async function historial(page: Page): Promise<string[]> {
   return lista.locator("li").allInnerTexts();
 }
 
-test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción (Fase 010H)", () => {
+test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción (Fase 010H, interfaz 010O)", () => {
   test("CASO 1 + CASO 4 + CASO 6: borrador → confirmar (doble clic) → PDF, una sola emisión y nada interno", async ({
     page,
   }) => {
     const id = await borradorCompleto(page, "V2-Emitir", ["Plato"]);
 
+    // Lo que se va a emitir, antes de emitir: el documento del cliente.
+    await expect(page.getByTestId("v2next-documento")).not.toContainText(PROHIBIDOS);
     const dialogo = await abrirDialogoDeEmision(page);
-    await expect(dialogo.getByTestId("emision-aviso-congelado")).toHaveText(
-      "Al confirmar, los valores comerciales quedarán congelados.",
-    );
+    await expect(dialogo).toContainText("los valores comerciales quedan congelados");
     await expect(dialogo).not.toContainText(PROHIBIDOS);
 
     // Doble clic: la pantalla apaga el botón y el backend es idempotente.
     await dialogo.getByRole("button", { name: "Confirmar y emitir" }).dblclick();
     await expect(dialogo).toBeHidden({ timeout: 20_000 });
 
-    const ciclo = page.getByTestId("v2-ciclo-de-vida");
-    await expect(ciclo.getByTestId("v2-estado-efectivo")).toHaveText(/Emitida/, { timeout: 15_000 });
-    await expect(ciclo.getByTestId("v2-valida-hasta")).toContainText(/Válida hasta: \d{2}\/\d{2}\/\d{4}/);
+    await expect(cabecera(page).getByTestId("v2-estado-efectivo")).toHaveText(/Emitida/, { timeout: 15_000 });
+    await expect(cabecera(page).getByTestId("v2-valida-hasta")).toContainText(
+      /Válida hasta: \d{2}\/\d{2}\/\d{4}/,
+    );
 
     // Otra ronda de confirmaciones simultáneas por la API: misma emisión.
-    const resumen = await (await page.request.get(`/api/v1/quotations-v2/${id}/confirmation-preview`)).json();
+    const resumen = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${id}/confirmation-preview`))).json();
     const token = await csrf(page);
     const respuestas = await Promise.all(
       [1, 2, 3].map(() =>
-        page.request.post(`/api/v1/quotations-v2/${id}/confirm`, {
+        page.request.post(apiPath(`/api/v1/quotations-v2/${id}/confirm`), {
           data: { expected_fingerprint: resumen.fingerprint },
           headers: { "X-CSRF-Token": token },
         }),
@@ -267,11 +202,11 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect(documento).not.toContainText(PROHIBIDOS);
 
     const descarga = page.waitForEvent("download");
-    await ciclo.getByRole("button", { name: "Descargar PDF" }).click();
+    await cabecera(page).getByRole("button", { name: "Descargar PDF" }).click();
     expect((await descarga).suggestedFilename()).toMatch(/\.pdf$/);
     const pdf = await comprobarPdf(page.request, id);
-    const cabecera = await (await page.request.get(`/api/v1/quotations-v2/${id}`)).json();
-    for (const permitido of [cabecera.code, "clientee2e", "plato", "igv", "total", "válidahasta"]) {
+    const datos = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${id}`))).json();
+    for (const permitido of [datos.code, "clientee2e", "plato", "igv", "total", "válidahasta"]) {
       expect(pdf, `el PDF no contiene «${permitido}»`).toContain(compacto(String(permitido)));
     }
   });
@@ -282,19 +217,18 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await dialogo.getByRole("button", { name: "Confirmar y emitir" }).click();
     await expect(dialogo).toBeHidden({ timeout: 20_000 });
 
-    const ciclo = page.getByTestId("v2-ciclo-de-vida");
-    await ciclo.getByRole("button", { name: "Enviar a producción" }).click();
+    await cabecera(page).getByRole("button", { name: "Enviar a producción" }).click();
     const envio = page.getByRole("dialog", { name: "Enviar a producción" });
     await expect(envio).toContainText(/no se descuenta pasta ni esmalte/i);
     await envio.getByRole("button", { name: "Enviar a producción" }).dblclick();
-    await expect(ciclo.getByTestId("v2-estado-efectivo")).toHaveText(/Lista para producción/, {
+    await expect(cabecera(page).getByTestId("v2-estado-efectivo")).toHaveText(/Lista para producción/, {
       timeout: 20_000,
     });
 
     const token = await csrf(page);
     const respuestas = await Promise.all(
       [1, 2, 3].map(() =>
-        page.request.post(`/api/v1/quotations-v2/${id}/send-to-production`, {
+        page.request.post(apiPath(`/api/v1/quotations-v2/${id}/send-to-production`), {
           headers: { "X-CSRF-Token": token },
         }),
       ),
@@ -311,35 +245,38 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await page.reload();
     const eventos = await historial(page);
     expect(eventos.filter((texto) => texto.startsWith("Enviada a producción")).length).toBe(1);
-    await expect(ciclo.getByRole("button", { name: "Enviar a producción" })).toHaveCount(0);
+    await expect(cabecera(page).getByRole("button", { name: "Enviar a producción" })).toHaveCount(0);
   });
 
   test("CASO 2 + CASO 3 + CASO 7: vencida en USD → duplicar con el TC de hoy; la antigua conserva el suyo y su PDF", async ({
     page,
   }) => {
     await login(page);
-    const listado = await (await page.request.get("/api/v1/quotations-v2?limit=200")).json();
-    const semilla = listado.items.find((item: { name: string | null }) => item.name === NOMBRE_VENCIDA);
+    const listado = await (await page.request.get(apiPath("/api/v1/quotations-v2?limit=200"))).json();
+    // La semilla es la EMITIDA con ese nombre: su duplicado se llama igual.
+    const semilla = listado.items.find(
+      (item: { name: string | null; status: string }) =>
+        item.name === NOMBRE_VENCIDA && item.status === "CONFIRMED",
+    );
     expect(semilla, "el backend de revisión tiene que haber sembrado la cotización vencida").toBeDefined();
     const antiguaId = Number(semilla.id);
 
-    await page.goto(`/cotizador-v2/${antiguaId}`);
-    const ciclo = page.getByTestId("v2-ciclo-de-vida");
+    await page.goto(`${RUTA_V2}/${antiguaId}`);
     await expect(page.getByTestId("v2-banda-vencida")).toContainText("COTIZACIÓN VENCIDA", {
       timeout: 15_000,
     });
-    await expect(ciclo.getByTestId("v2-estado-efectivo")).toHaveText(/Vencida/);
-    await expect(ciclo.getByRole("button", { name: "Enviar a producción" })).toHaveCount(0);
+    await expect(cabecera(page).getByTestId("v2-estado-efectivo")).toHaveText(/Vencida/);
+    await expect(cabecera(page).getByRole("button", { name: "Enviar a producción" })).toHaveCount(0);
     const documento = page.getByTestId("v2-documento-emitido");
     await expect(documento).toContainText("TC 3.700");
     const totalAntiguo = await documento.getByText(/^Total:/).innerText();
     const pdfAntes = await comprobarPdf(page.request, antiguaId);
     expect(pdfAntes).toContain("3.70");
     const previaAntigua = await (
-      await page.request.get(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`))
     ).json();
 
-    await ciclo.getByRole("button", { name: "Duplicar y actualizar precios" }).dblclick();
+    await cabecera(page).getByRole("button", { name: "Duplicar y actualizar precios" }).dblclick();
     await expect(page.getByTestId("v2-avisos-duplicacion")).toContainText(
       /se recalcularon con la configuración de hoy/i,
       { timeout: 20_000 },
@@ -347,46 +284,45 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const nuevaId = idDeLaUrl(page);
     expect(nuevaId).not.toBe(antiguaId);
 
-    const nueva = await (await page.request.get(`/api/v1/quotations-v2/${nuevaId}`)).json();
+    const nueva = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${nuevaId}`))).json();
     expect(nueva.status).toBe("DRAFT");
     expect(nueva.duplicated_from_id).toBe(antiguaId);
     expect(nueva.currency_code).toBe("USD");
     expect(Number(nueva.exchange_rate)).toBeCloseTo(3.82, 6);
     expect(nueva.code).not.toBe(semilla.code);
-    // Precios de hoy: con el mismo costo en soles y un dólar más caro, los
-    // unitarios en USD se recalculan y ya no son los de la vencida.
     const previaNueva = await (
-      await page.request.get(`/api/v1/quotations-v2/${nuevaId}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${nuevaId}/confirmation-preview`))
     ).json();
     expect(previaNueva.lines).toHaveLength(previaAntigua.lines.length);
     expect(Number(previaNueva.exchange_rate)).toBeCloseTo(3.82, 6);
     expect(previaNueva.total_amount).not.toBe(previaAntigua.total_amount);
 
     // Un solo borrador abierto aunque se pulse otra vez.
-    const otra = await page.request.post(`/api/v1/quotations-v2/${antiguaId}/duplicate`, {
+    const otra = await page.request.post(apiPath(`/api/v1/quotations-v2/${antiguaId}/duplicate`), {
       headers: { "X-CSRF-Token": await csrf(page) },
     });
     expect(otra.status()).toBe(200);
     expect((await otra.json()).quotation.id).toBe(nuevaId);
 
     // La antigua: vencida, con 3,70, el mismo total y su PDF.
-    await page.goto(`/cotizador-v2/${antiguaId}`);
+    await page.goto(`${RUTA_V2}/${antiguaId}`);
     await expect(page.getByTestId("v2-banda-vencida")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("v2-documento-emitido")).toContainText("TC 3.700");
     expect(await page.getByTestId("v2-documento-emitido").getByText(/^Total:/).innerText()).toBe(
       totalAntiguo,
     );
-    await expect(
-      page.getByRole("link", { name: "Abrir la cotización duplicada" }),
-    ).toHaveAttribute("href", `/cotizador-v2/${nuevaId}`);
-    const antigua = await (await page.request.get(`/api/v1/quotations-v2/${antiguaId}`)).json();
+    await expect(page.getByRole("link", { name: "Abrir la cotización duplicada" })).toHaveAttribute(
+      "href",
+      `${RUTA_V2}/${nuevaId}`,
+    );
+    const antigua = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${antiguaId}`))).json();
     expect(antigua.status).toBe("CONFIRMED");
     expect(Number(antigua.exchange_rate)).toBeCloseTo(3.7, 6);
     const pdfDespues = await comprobarPdf(page.request, antiguaId);
     expect(pdfDespues).toBe(pdfAntes);
     expect(pdfDespues).not.toContain("3.82");
     const previaDespues = await (
-      await page.request.get(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${antiguaId}/confirmation-preview`))
     ).json();
     expect(previaDespues.total_amount).toBe(previaAntigua.total_amount);
   });
@@ -395,55 +331,44 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     page,
   }) => {
     await login(page);
-    await page.goto("/cotizador-v2");
-    await page.getByLabel(/referencia/i).fill(testName("V2-Catalogo"));
-    await page.getByRole("button", { name: /crear cotizaci[oó]n v2/i }).click();
-    await expect(page.getByTestId("pasos-cotizacion")).toBeVisible({ timeout: 15_000 });
-    const id = idDeLaUrl(page);
+    const { id } = await nuevoBorrador(page, "V2-Catalogo");
 
-    await paso(page, 1, "Cliente").click();
-    await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
-    await page.getByRole("option").nth(1).click();
-
-    // Una pieza del CATÁLOGO, no de encargo.
-    await paso(page, 2, "Productos").click();
-    await page.getByRole("combobox", { name: /pieza del cat[aá]logo/i }).click();
-    await page.getByRole("option", { name: "E2E-Catalogo Plato hondo 22" }).click();
-    await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
-    await expect(page.getByRole("heading", { name: "E2E-Catalogo Plato hondo 22" })).toBeVisible({
-      timeout: 15_000,
-    });
-    // El nombre lo fija el catálogo y las medidas vienen del maestro.
-    await expect(page.getByLabel(/largo \(cm\)/i).last()).toHaveValue(/^22/);
-    await expect(page.getByLabel(/alto \(cm\)/i).last()).toHaveValue(/^5/);
-    const cantidad = page.getByLabel(/^cantidad/i).last();
+    // Una pieza del CATÁLOGO: el nombre lo fija el catálogo y las medidas
+    // vienen del maestro.
+    await anadirPiezaDelCatalogo(page, "E2E-Catalogo Plato hondo 22");
+    await expect(campo(page, "Largo").last()).toHaveValue(/^22/);
+    await expect(campo(page, "Alto").last()).toHaveValue(/^5/);
+    const cantidad = page.getByRole("textbox", { name: "Cantidad" }).last();
     await cantidad.fill("12");
     await cantidad.blur();
     await esperarGuardado(page);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" });
 
-    // La pasta se elige; el peso por pieza ya viene del gramaje del maestro.
-    await paso(page, 3, "Materiales").click();
-    await page.getByRole("combobox", { name: "Pasta", exact: true }).first().click();
-    await page.getByRole("option").nth(1).click();
-    await esperarGuardado(page);
-    await expect(page.getByLabel(/pasta por pieza/i).first()).toHaveValue(/^450/);
+    // La arcilla se elige; el peso por pieza ya viene del gramaje del maestro.
+    await elegirArcilla(page);
+    await expect(campo(page, "Arcilla por pieza").first()).toHaveValue(/^450/);
 
-    await paso(page, 4, "Mano de obra").click();
-    await asignarProceso(page, /Torno facil/i, /E2E-Tornero/);
-    await asignarProceso(page, /Vidriado por inmersion/i, /E2E-Trabajador taller/);
-    const dias = page.getByLabel(/d[ií]as efectivos/i);
-    await dias.fill("1");
-    await dias.blur();
-    await esperarGuardado(page);
-    await paso(page, 7, "Resumen").click();
+    // Los procesos vienen de la ficha: solo falta quién los hace.
+    await irAPaso(page, "Trabajo");
+    for (const [tecnica, persona] of [
+      [/Torno facil/i, /E2E-Tornero/],
+      [/Vidriado por inmersion/i, /E2E-Trabajador taller/],
+    ] as const) {
+      const fila = page.locator('[data-testid^="labor-process-"]').filter({ hasText: tecnica }).first();
+      await expect(fila).toBeVisible({ timeout: 15_000 });
+      await elegir(page, fila.getByRole("combobox", { name: "Lo hace" }), persona);
+      await esperarGuardado(page);
+    }
+    await decidirDias(page, "1");
+    await irAPaso(page, "Revisar y emitir");
     await esperarGuardado(page);
 
+    await expect(page.getByTestId("v2next-documento")).toContainText("E2E-Catalogo Plato hondo 22");
     const dialogo = await abrirDialogoDeEmision(page);
-    await expect(dialogo.getByTestId("emision-lineas")).toContainText("E2E-Catalogo Plato hondo 22");
     await dialogo.getByRole("button", { name: "Confirmar y emitir" }).click();
     await expect(dialogo).toBeHidden({ timeout: 20_000 });
 
-    const lineas = await (await page.request.get(`/api/v1/quotations-v2/${id}/products`)).json();
+    const lineas = await (await page.request.get(apiPath(`/api/v1/quotations-v2/${id}/products`))).json();
     expect(lineas.items).toHaveLength(1);
     expect(lineas.items[0].product_id).not.toBeNull();
     expect(Number(lineas.items[0].body_unit_weight)).toBeCloseTo(450, 6);
@@ -455,8 +380,8 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
 
   test("CASO 8: multiproducto emitido lleva todas sus líneas al documento", async ({ page }) => {
     const id = await borradorCompleto(page, "V2-Multi-Emitir", ["Taza", "Fuente"]);
+    await expect(page.getByTestId("v2next-documento").locator("tbody tr")).toHaveCount(2);
     const dialogo = await abrirDialogoDeEmision(page);
-    await expect(dialogo.getByTestId("emision-lineas").locator("tbody tr")).toHaveCount(2);
     await dialogo.getByRole("button", { name: "Confirmar y emitir" }).click();
     await expect(dialogo).toBeHidden({ timeout: 20_000 });
 
@@ -465,7 +390,7 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     await expect(documento).not.toContainText(PROHIBIDOS);
 
     const previa = await (
-      await page.request.get(`/api/v1/quotations-v2/${id}/confirmation-preview`)
+      await page.request.get(apiPath(`/api/v1/quotations-v2/${id}/confirmation-preview`))
     ).json();
     const suma = previa.lines.reduce(
       (total: number, linea: { line_subtotal: string }) => total + Number(linea.line_subtotal),
@@ -482,44 +407,42 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
   }) => {
     const id = await borradorCompleto(page, "V2-Tecnicas", ["Taza"]);
     const api = page.request;
-    const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
+    const trabajadores = (await (await api.get(apiPath("/api/v1/quoter-v2/workers"))).json()).items as {
       id: number;
       name: string;
       technique_ids: number[];
     }[];
     const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
     const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
-    // La ficha del trabajador es la que dice qué sabe hacer. Fase 010J: el del
-    // taller hace el caso canónico del Excel final entero, torno incluido; el
-    // tornero solo tornea.
+    // La ficha del trabajador dice qué sabe hacer. Fase 010J: el del taller hace
+    // el caso canónico del Excel final entero, torno incluido; el tornero solo tornea.
     expect(taller?.technique_ids).toHaveLength(7);
     expect(tornero?.technique_ids).toHaveLength(2);
-    const tecnicas = (await (await api.get("/api/v1/quoter-v2/techniques")).json()).items as {
+    const tecnicas = (await (await api.get(apiPath("/api/v1/quoter-v2/techniques"))).json()).items as {
       id: number;
       name: string;
     }[];
     const aMano = tecnicas.find((una) => una.name === "A mano");
 
-    await paso(page, 4, "Mano de obra").click();
-    const seccion = page.getByTestId("personal-adicional");
-    await expect(seccion).toContainText(/suma costo y no reduce el plazo/i, { timeout: 15_000 });
+    await irAPaso(page, "Trabajo");
+    const seccion = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Personal adicional y apoyo" }) })
+      .last();
+    await expect(seccion).toBeVisible({ timeout: 15_000 });
 
     // El tornero no sabe hacer piezas a mano: no se le ofrece.
-    await seccion.getByRole("combobox", { name: "Trabajador" }).click();
-    await page.getByRole("option", { name: /E2E-Tornero/ }).click();
-    await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
+    await elegir(page, seccion.getByRole("combobox", { name: /Trabajador de apoyo/ }), /E2E-Tornero/);
+    await seccion.getByRole("combobox", { name: /Técnica que sabe/ }).click();
     await expect(page.getByRole("option", { name: "A mano", exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
 
-    await seccion.getByRole("combobox", { name: "Trabajador" }).click();
-    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
-    await seccion.getByRole("combobox", { name: /Técnica que viene a hacer/ }).click();
-    await page.getByRole("option", { name: "A mano", exact: true }).click();
+    await elegir(page, seccion.getByRole("combobox", { name: /Trabajador de apoyo/ }), /E2E-Trabajador taller/);
+    await elegir(page, seccion.getByRole("combobox", { name: /Técnica que sabe/ }), "A mano");
     await seccion.getByRole("button", { name: "Añadir personal" }).click();
-    // Se espera al DATO, no al indicador: el alta empieza con el clic y el pie
-    // todavia dice «guardado» durante el instante anterior a que arranque.
+    // Se espera al DATO, no al indicador.
     const leerTareas = async () =>
-      (await (await api.get(`/api/v1/quotations-v2/${id}/labor`)).json()).items as {
+      (await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/labor`))).json()).items as {
         worker_id: number;
         technique_name: string;
         is_additional_personnel: boolean;
@@ -531,12 +454,12 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     const tareas = await leerTareas();
     const apoyo = tareas.find((tarea) => tarea.is_additional_personnel);
     expect(apoyo?.worker_id).toBe(taller?.id);
-    // «Personal adicional» ya no es una técnica: la tarea lleva la técnica real.
+    // «Personal adicional» no es una técnica: la tarea lleva la técnica real.
     expect(apoyo?.technique_name).toBe("A mano");
 
     // Y la barrera del backend sigue en pie para una petición a mano.
     const token = await csrf(page);
-    const prohibido = await api.post(`/api/v1/quotations-v2/${id}/labor`, {
+    const prohibido = await api.post(apiPath(`/api/v1/quotations-v2/${id}/labor`), {
       data: { worker_id: tornero?.id, technique_id: aMano?.id, quantity: "10" },
       headers: { "X-CSRF-Token": token },
     });
@@ -548,44 +471,27 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     page,
   }) => {
     await login(page);
-    await page.goto("/cotizador-v2");
-    await page.getByLabel(/referencia/i).fill(testName("V2-Procesos"));
-    await page.getByRole("button", { name: /crear cotizaci[oó]n v2/i }).click();
-    await expect(page.getByTestId("pasos-cotizacion")).toBeVisible({ timeout: 15_000 });
-    const id = idDeLaUrl(page);
-
-    await paso(page, 1, "Cliente").click();
-    await page.getByRole("combobox", { name: "Cliente", exact: true }).click();
-    await page.getByRole("option").nth(1).click();
+    const { id } = await nuevoBorrador(page, "V2-Procesos");
 
     // La taza del catálogo declara tres procesos en su ficha.
-    await paso(page, 2, "Productos").click();
-    await page.getByRole("combobox", { name: /pieza del cat[aá]logo/i }).click();
-    await page.getByRole("option", { name: "E2E-Catalogo Taza 250 ml" }).click();
-    await page.getByRole("button", { name: /a[ñn]adir l[ií]nea/i }).click();
-    await expect(page.getByRole("heading", { name: "E2E-Catalogo Taza 250 ml" })).toBeVisible({
-      timeout: 15_000,
-    });
-    const cantidad = page.getByLabel(/^cantidad/i).last();
+    await anadirPiezaDelCatalogo(page, "E2E-Catalogo Taza 250 ml");
+    const cantidad = page.getByRole("textbox", { name: "Cantidad" }).last();
     await cantidad.fill("20");
     await cantidad.blur();
     await esperarGuardado(page);
+    await configurarTiempoYMoldes(page, { horas: "0", minutos: "45", moldes: "3" });
+    await elegirArcilla(page);
 
-    await paso(page, 3, "Materiales").click();
-    await page.getByRole("combobox", { name: "Pasta", exact: true }).first().click();
-    await page.getByRole("option").nth(1).click();
-    await esperarGuardado(page);
-
-    // Aquí está el punto de la corrección: nadie tuvo que acordarse del asa.
-    await paso(page, 4, "Mano de obra").click();
-    const procesos = page.getByTestId("procesos");
-    await expect(procesos).toContainText("Torno facil", { timeout: 15_000 });
-    await expect(procesos).toContainText("Armado de asa");
-    await expect(procesos).toContainText("Vidriado por inmersion");
+    // Nadie tuvo que acordarse del asa.
+    await irAPaso(page, "Trabajo");
+    const paso = page.getByTestId("v2next-paso-trabajo");
+    await expect(paso).toContainText("Torno facil", { timeout: 15_000 });
+    await expect(paso).toContainText("Armado de asa");
+    await expect(paso).toContainText("Vidriado por inmersion");
 
     const api = page.request;
     const leerProcesos = async () =>
-      (await (await api.get(`/api/v1/quotations-v2/${id}/processes`)).json()).items as {
+      (await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/processes`))).json()).items as {
         id: number;
         technique_name: string;
         quantity: string;
@@ -596,7 +502,6 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
       }[];
     let filas = await leerProcesos();
     expect(filas).toHaveLength(3);
-    // Piezas precargadas con la cantidad del producto y horas ya calculadas.
     for (const fila of filas) {
       expect(Number(fila.quantity)).toBe(20);
       expect(fila.worker_id).toBeNull();
@@ -607,15 +512,14 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(Number(asa?.calculated_hours)).toBeCloseTo(3.2, 6);
 
     // Asignar a alguien es lo que crea el costo, y se hace DESDE LA PANTALLA.
-    const trabajadores = (await (await api.get("/api/v1/quoter-v2/workers")).json()).items as {
+    const trabajadores = (await (await api.get(apiPath("/api/v1/quoter-v2/workers"))).json()).items as {
       id: number;
       name: string;
     }[];
     const taller = trabajadores.find((worker) => worker.name === "E2E-Trabajador taller");
     const token = await csrf(page);
-    const filaDelAsa = procesos.locator("li").filter({ hasText: "Armado de asa" });
-    await filaDelAsa.getByRole("combobox", { name: "Trabajador" }).click();
-    await page.getByRole("option", { name: /E2E-Trabajador taller/ }).click();
+    const filaDelAsa = page.locator('[data-testid^="labor-process-"]').filter({ hasText: "Armado de asa" });
+    await elegir(page, filaDelAsa.getByRole("combobox", { name: "Lo hace" }), /E2E-Trabajador taller/);
     await expect
       .poll(async () =>
         (await leerProcesos()).find((fila) => fila.technique_name === "Armado de asa")?.worker_id,
@@ -627,39 +531,30 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     expect(Number(asaAsignada?.final_hours)).toBeGreaterThan(0);
     expect(Number(asaAsignada?.labor_cost)).toBe(0);
     // Y el costo se ve en la fila, sin recargar.
-    await expect(filaDelAsa).toContainText("Costo");
+    await expect(filaDelAsa).toContainText("Costo de mano de obra");
+    await expect(filaDelAsa).toContainText("S/ 0.00");
 
     // Un trabajador que no sabe la técnica sigue rechazado, también por aquí.
     const tornero = trabajadores.find((worker) => worker.name === "E2E-Tornero");
     if (tornero !== undefined) {
-      const prohibido = await api.post(
-        `/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`,
-        { data: { worker_id: tornero.id }, headers: { "X-CSRF-Token": token } },
-      );
+      const prohibido = await api.post(apiPath(`/api/v1/quotations-v2/${id}/processes/${asa?.id}/assign`), {
+        data: { worker_id: tornero.id },
+        headers: { "X-CSRF-Token": token },
+      });
       expect(prohibido.status()).toBe(422);
     }
 
     // Quitar un proceso es de ESTA cotización: el maestro de la pieza no cambia.
-    // También desde la pantalla, que es donde vive la decisión.
-    await page
-      .getByTestId("procesos")
-      .locator("li")
-      .filter({ hasText: "Vidriado por inmersion" })
-      .getByRole("button", { name: "Quitar de esta cotización" })
-      .click();
-    await expect
-      .poll(async () => (await leerProcesos()).length)
-      .toBe(2);
-    expect((await leerProcesos()).map((fila) => fila.technique_name)).not.toContain(
-      "Vidriado por inmersion",
-    );
-    await expect(page.getByTestId("procesos")).not.toContainText("Vidriado por inmersion");
-    const piezas = (await (await api.get("/api/v1/products?product_type=FINISHED_PRODUCT")).json())
+    await page.getByRole("button", { name: "Quitar Vidriado por inmersion de esta cotización" }).click();
+    await expect.poll(async () => (await leerProcesos()).length).toBe(2);
+    expect((await leerProcesos()).map((fila) => fila.technique_name)).not.toContain("Vidriado por inmersion");
+    await expect(
+      page.locator('[data-testid^="labor-process-"]').filter({ hasText: "Vidriado por inmersion" }),
+    ).toHaveCount(0);
+    const piezas = (await (await api.get(apiPath("/api/v1/products?product_type=FINISHED_PRODUCT"))).json())
       .items as { id: number; name: string }[];
     const taza = piezas.find((pieza) => pieza.name === "E2E-Catalogo Taza 250 ml");
-    const maestro = await (
-      await api.get(`/api/v1/quoter-v2/products/${taza?.id}/techniques`)
-    ).json();
+    const maestro = await (await api.get(apiPath(`/api/v1/quoter-v2/products/${taza?.id}/techniques`))).json();
     expect(
       (maestro.items as { technique_name: string; active: boolean }[])
         .filter((fila) => fila.active)
@@ -667,33 +562,29 @@ test.describe("Cotizador V2: vigencia, emisión, duplicación, PDF y producción
     ).toContain("Vidriado por inmersion");
 
     // El adicional suma al costo de producción y al costo real, como el Excel.
-    const antes = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
-    const conceptos = (await (await api.get("/api/v1/quoter-v2/extras")).json()).items as {
+    const antes = await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/pricing`))).json();
+    const conceptos = (await (await api.get(apiPath("/api/v1/quoter-v2/extras"))).json()).items as {
       id: number;
       name: string;
     }[];
     const empaque = conceptos.find((uno) => uno.name === "E2E-Empaque especial");
-    // Desde la pantalla de precio, que es donde el Excel los pone.
-    await paso(page, 6, "Margen y precio").click();
+    await irAPaso(page, "Precio");
     const adicionales = page.getByTestId("adicionales");
     await expect(adicionales).toBeVisible({ timeout: 15_000 });
-    await adicionales.getByRole("combobox", { name: "Añadir adicional" }).click();
-    await page.getByRole("option", { name: /E2E-Empaque especial/ }).click();
-    await adicionales.getByRole("button", { name: "Añadir" }).click();
+    await elegir(page, adicionales.getByRole("combobox", { name: "Añadir adicional" }), /E2E-Empaque especial/);
+    await adicionales.getByRole("button", { name: "Añadir", exact: true }).click();
     await expect(adicionales).toContainText("E2E-Empaque especial");
 
-    const cantidadAdicional = adicionales.getByLabel(/^cantidad/i).first();
+    const cantidadAdicional = campo(adicionales, "Cantidad").first();
     await cantidadAdicional.fill("2");
     await cantidadAdicional.blur();
     await expect
       .poll(async () =>
-        Number(
-          (await (await api.get(`/api/v1/quotations-v2/${id}/extras`)).json()).extras_cost_total,
-        ),
+        Number((await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/extras`))).json()).extras_cost_total),
       )
       .toBeCloseTo(50, 6);
 
-    const despues = await (await api.get(`/api/v1/quotations-v2/${id}/pricing`)).json();
+    const despues = await (await api.get(apiPath(`/api/v1/quotations-v2/${id}/pricing`))).json();
     expect(Number(despues.extras_cost)).toBeCloseTo(50, 6);
     expect(Number(despues.production_cost) - Number(antes.production_cost)).toBeCloseTo(50, 6);
     expect(Number(despues.real_cost) - Number(antes.real_cost)).toBeCloseTo(50, 6);

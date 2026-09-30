@@ -17,6 +17,8 @@ export const E2E_EMAIL = process.env.E2E_EMAIL ?? "";
 export const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "";
 export const E2E_OPERATOR_EMAIL = process.env.E2E_OPERATOR_EMAIL ?? "";
 export const E2E_OPERATOR_PASSWORD = process.env.E2E_OPERATOR_PASSWORD ?? "";
+export const E2E_QUICK_CREATE_OPERATOR_EMAIL = process.env.E2E_QUICK_CREATE_OPERATOR_EMAIL ?? "";
+export const E2E_QUICK_CREATE_OPERATOR_PASSWORD = process.env.E2E_QUICK_CREATE_OPERATOR_PASSWORD ?? "";
 
 /** true si hay credenciales de prueba configuradas para correr flujos autenticados. */
 export const hasE2ECredentials = Boolean(E2E_EMAIL && E2E_PASSWORD);

@@ -1,7 +1,13 @@
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { expect, type APIResponse, type Page } from "@playwright/test";
+import { test } from "./w4-test";
 
 import { login } from "../helpers/auth";
 import { E2E_OPERATOR_EMAIL, E2E_OPERATOR_PASSWORD, testName } from "../helpers/fixtures";
+import {
+  assertNoSeriousAxeViolations,
+  assertW3AccessibleControls,
+  assertW3Responsive,
+} from "../helpers/w3-accessibility";
 
 /**
  * Fase 010I — producción real de una cotización V2, contra LA REVISIÓN.
@@ -76,7 +82,12 @@ async function maestros(page: Page): Promise<Ids> {
 }
 
 /** Una CTZ V2 de dos piezas, EMITIDA. Devuelve su id. */
-async function cotizacionEmitida(page: Page, etiqueta: string, pasta?: number): Promise<number> {
+async function cotizacionEmitida(
+  page: Page,
+  etiqueta: string,
+  pasta?: number,
+  cantidadTaza = 20,
+): Promise<number> {
   const ids = await maestros(page);
   const material = pasta ?? ids.pasta;
   const ctz = await post<{ id: number }>(page, "/quotations-v2", {
@@ -84,7 +95,7 @@ async function cotizacionEmitida(page: Page, etiqueta: string, pasta?: number): 
     customer_id: ids.cliente,
   });
   for (const [nombre, cantidad, peso] of [
-    ["Taza", 20, "300"],
+    ["Taza", cantidadTaza, "300"],
     ["Plato", 5, "450"],
   ] as const) {
     const linea = await post<{ id: number }>(page, `/quotations-v2/${ctz.id}/products`, {
@@ -95,6 +106,7 @@ async function cotizacionEmitida(page: Page, etiqueta: string, pasta?: number): 
       height_cm: "5",
       body_material_id: material,
       body_unit_weight: peso,
+      production_time_per_unit_minutes: "6",
     });
     const proceso = await post<{ id: number }>(page, `/quotations-v2/${ctz.id}/processes`, {
       v2_quotation_product_id: linea.id,
@@ -151,6 +163,22 @@ async function saldo(page: Page, producto: number, almacen: number): Promise<str
 
 async function movimientos(page: Page): Promise<number> {
   return (await get<{ total: number }>(page, "/inventory/movements?limit=1")).total;
+}
+
+interface WipLine {
+  production_order_id: number;
+  production_order_code: string;
+  line_ref: string;
+  product_name: string;
+  stage: "EN_PRODUCCION" | "PROGRAMADA_HORNO" | "EN_HORNO" | "QUEMADA";
+  started_quantity: string;
+}
+
+async function wipItem(page: Page, orderId: number, lineRef: string): Promise<WipLine> {
+  const items = await get<WipLine[]>(page, "/production/wip");
+  const item = items.find((row) => row.production_order_id === orderId && row.line_ref === lineRef);
+  expect(item, `WIP debe mostrar ${lineRef} de la orden ${orderId}`).toBeDefined();
+  return item!;
 }
 
 /** Envía a producción por la pantalla y crea la orden eligiendo el almacén. */
@@ -240,7 +268,7 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
 
     await login(page);
     const ids = await maestros(page);
-    const ctzId = await cotizacionEmitida(page, "010I-Flujo");
+    const ctzId = await cotizacionEmitida(page, "010I-Flujo", undefined, 30);
     const almacen = await almacenConExistencia(page, "Taller 010I", ids.pasta, "10000");
     const almacenes = await get<{ id: number; name: string }[]>(page, "/inventory/locations");
     const nombre = almacenes.find((a) => a.id === almacen)!.name;
@@ -253,11 +281,12 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     // -- ficha: origen, cliente, piezas, material planificado ----------------
     await page.goto(`/produccion/${ordenId}`);
     await expect(page.getByText("Cotización V2", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await assertNoSeriousAxeViolations(page, "detalle de producción W4");
     await expect(page.getByTestId("orden-cliente")).not.toHaveText(/sin nombre/i);
     const piezas = page.getByTestId("orden-piezas");
     await expect(piezas.getByRole("row")).toHaveCount(3);
     await expect(piezas).toContainText("20 × 20 × 5 cm");
-    await expect(piezas).toContainText("300 g por pieza · 6000 g en total");
+    await expect(piezas).toContainText("300 g por pieza · 9000 g en total");
     await expect(piezas).toContainText("450 g por pieza · 2250 g en total");
     await expect(page.getByTestId("orden-faltantes")).toContainText(
       "Falta registrar consumo real de: pasta",
@@ -287,6 +316,88 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     await expect(page.getByText("EN PROCESO", { exact: true }).first()).toBeVisible({
       timeout: 15_000,
     });
+    const orderForWip = await get<{
+      result_lines: { line_ref: string; started_quantity: string }[];
+    }>(page, `/production-orders/${ordenId}`);
+    const tazaLine = orderForWip.result_lines.find(
+      (row) => escalado(row.started_quantity) === escalado("30"),
+    );
+    expect(tazaLine).toBeDefined();
+    const lineId = Number(/^V2P:(\d+)$/.exec(tazaLine!.line_ref)?.[1]);
+    expect(lineId).toBeGreaterThan(0);
+    const wipInicial = await wipItem(page, ordenId, tazaLine!.line_ref);
+    expect(wipInicial.stage).toBe("EN_PRODUCCION");
+    expect(escalado(wipInicial.started_quantity)).toBe(escalado("30"));
+
+    // La pantalla WIP presenta la etapa autoritativa del backend y conserva
+    // el scroll de la tabla en móvil sin desbordar el documento.
+    await page.goto("/produccion");
+    const tablaWip = page.getByTestId("production-wip");
+    const filasDeLaOrden = tablaWip
+      .getByRole("row")
+      .filter({ hasText: wipInicial.production_order_code });
+    await expect(filasDeLaOrden).toHaveCount(2);
+    const filaWip = tablaWip
+      .getByRole("row")
+      .filter({ hasText: wipInicial.product_name });
+    await expect(filaWip).toContainText("EN_PRODUCCION");
+    await assertNoSeriousAxeViolations(page, "tabla WIP de producción");
+    await assertW3Responsive(page, "tabla WIP de producción");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/produccion/${ordenId}`);
+
+    const planHornada = await get<{
+      lines: {
+        line_id: number;
+        required_low: number | null;
+        required_high: number | null;
+      }[];
+    }>(page, `/kiln-batches/production-orders/${ordenId}/firing-plan`);
+    const piezaHornada = planHornada.lines.find((item) => item.line_id === lineId);
+    expect(piezaHornada, "el plan de quema debe conservar la línea V2 de 30 piezas").toBeDefined();
+    const firingType = (piezaHornada!.required_low ?? 0) > 0 ? "LOW" : "HIGH";
+    const quantityToFire =
+      (firingType === "LOW" ? piezaHornada!.required_low : piezaHornada!.required_high) ?? 0;
+    expect(quantityToFire, "el plan debe exigir al menos una quema para la línea").toBeGreaterThan(0);
+    const settings = (await get<{
+      settings: { retail_kiln_id: number | null };
+    }>(page, "/quoter-v2/settings")).settings;
+    expect(settings.retail_kiln_id).not.toBeNull();
+    const key = `w4-wip-${Date.now()}`;
+    const kilnWip = await post<{ id: number }>(page, "/kilns", {
+      name: testName("W4 Horno WIP"),
+      capacity_volume_cm3: "250000",
+      firing_days_per_batch: 4,
+    });
+    const batch = await post<{ id: number; status: string }>(page, "/kiln-batches", {
+      kiln_id: kilnWip.id,
+      firing_type: firingType,
+      scheduled_date: new Date().toISOString().slice(0, 10),
+      notes: "Transición WIP E2E W4",
+      idempotency_key: `${key}-create`,
+    });
+    expect(batch.status).toBe("PLANNED");
+    await post(page, `/kiln-batches/${batch.id}/assignments`, {
+      production_order_id: ordenId,
+      items: [{ line_id: lineId, quantity: quantityToFire }],
+      idempotency_key: `${key}-assign`,
+    });
+    expect((await wipItem(page, ordenId, tazaLine!.line_ref)).stage).toBe("PROGRAMADA_HORNO");
+    const movementsBeforeFiring = await movimientos(page);
+    await post(page, `/kiln-batches/${batch.id}/start`, {});
+    expect((await wipItem(page, ordenId, tazaLine!.line_ref)).stage).toBe("EN_HORNO");
+    await post(page, `/kiln-batches/${batch.id}/complete`, {});
+    const wipQuemada = await wipItem(page, ordenId, tazaLine!.line_ref);
+    expect(wipQuemada.stage).toBe("QUEMADA");
+    expect(await movimientos(page)).toBe(movementsBeforeFiring);
+    await page.goto("/produccion");
+    const filaQuemada = page
+      .getByTestId("production-wip")
+      .getByRole("row")
+      .filter({ hasText: wipQuemada.product_name });
+    await expect(filaQuemada).toContainText("QUEMADA");
+    await page.goto(`/produccion/${ordenId}`);
+
     // Iniciar una orden V2 no descuenta nada.
     expect(escalado(await saldo(page, ids.pasta, almacen))).toBe(escalado(despues));
 
@@ -328,14 +439,174 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     );
     expect(escalado(await saldo(page, ids.pasta, almacen))).toBe(escalado(saldoAntesAviso));
 
-    // -- finalizar ---------------------------------------------------------------
+    // -- registrar resultado físico 30 = 27 buenas + 3 de merma ----------------
     await page.getByRole("button", { name: "Finalizar producción" }).click();
+    const resultados = page.getByRole("dialog", { name: "Registrar resultados de producción" });
+    const taza = resultados.getByRole("group", { name: /Taza/ });
+    await expect(taza).toContainText("Cantidad iniciada: 30");
+    await taza.getByLabel("Buenas").fill("27");
+    await taza.getByLabel("Merma").fill("3");
+    await taza.getByLabel("Motivo de merma").fill("Fisura durante el secado");
+    await assertW3AccessibleControls(page, "diálogo de resultados de orden de producción");
+    await assertW3Responsive(page, "diálogo de resultados de orden de producción");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const plato = resultados.getByRole("group", { name: /Plato/ });
+    await plato.getByLabel("Buenas").fill("5");
+    await plato.getByLabel("Merma").fill("0");
+    const respuestaCompletar = page.waitForResponse((respuesta) =>
+      respuesta.url().endsWith(`/api/v1/production-orders/${ordenId}/complete`) &&
+      respuesta.request().method() === "POST",
+    );
+    await resultados.getByRole("button", { name: "Completar producción" }).click();
+    const respuestaResultados = await respuestaCompletar;
+    expect(respuestaResultados.ok(), `completar producción: ${respuestaResultados.status()}`).toBe(true);
+    const completion = (await respuestaResultados.json()) as {
+      results: {
+        line_ref: string;
+        product_id: number | null;
+        started_quantity: string;
+        good_quantity: string;
+        scrap_quantity: string;
+        scrap_reason: string | null;
+      }[];
+    };
+    const tazaResultado = completion.results.find(
+      (result) => escalado(result.started_quantity) === escalado("30"),
+    );
+    expect(tazaResultado).toBeDefined();
+    expect(escalado(tazaResultado!.good_quantity)).toBe(escalado("27"));
+    expect(escalado(tazaResultado!.scrap_quantity)).toBe(escalado("3"));
+    expect(tazaResultado!.scrap_reason).toBe("Fisura durante el secado");
+    expect(tazaResultado!.product_id).not.toBeNull();
+    const productoPersonalizado = await get<{
+      name: string;
+      product_type: string;
+      product_category_path: string | null;
+      source_v2_quotation_product_id: number | null;
+    }>(page, `/products/${tazaResultado!.product_id}`);
+    expect(productoPersonalizado.product_type).toBe("FINISHED_PRODUCT");
+    expect(productoPersonalizado.product_category_path).toBe("Piezas personalizadas");
+    expect(productoPersonalizado.source_v2_quotation_product_id).toBe(lineId);
+    const productoCustomAntesDelReintento = await get<{ items: { id: number }[]; total: number }>(
+      page,
+      `/products?search=${encodeURIComponent(productoPersonalizado.name)}&limit=10`,
+    );
+    expect(productoCustomAntesDelReintento.total).toBe(1);
+    expect(productoCustomAntesDelReintento.items[0]?.id).toBe(tazaResultado!.product_id);
+    const platoResultado = completion.results.find(
+      (result) => escalado(result.started_quantity) === escalado("5"),
+    );
+    expect(platoResultado).toBeDefined();
+    expect(escalado(platoResultado!.good_quantity)).toBe(escalado("5"));
+    expect(escalado(platoResultado!.scrap_quantity)).toBe(escalado("0"));
     await expect(page.getByText("FINALIZADO", { exact: true }).first()).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByRole("button", { name: "Registrar consumo" })).toHaveCount(0);
+    const movimientosFinales = await get<{
+      items: { production_order_id: number | null; product_id: number; movement_type: string; quantity: string }[];
+    }>(page, "/inventory/movements?limit=100");
+    const entradasFinales = movimientosFinales.items.filter(
+      (movement) => movement.production_order_id === ordenId && movement.movement_type === "PRODUCTION_IN",
+    );
+    expect(entradasFinales).toHaveLength(2);
+    const movimientosAntesDelReintento = await movimientos(page);
+    const reintentoDeCierre = await page.request.post(`${API}/production-orders/${ordenId}/complete`, {
+      data: {
+        results: completion.results.map((result) => ({
+          line_ref: result.line_ref,
+          good_quantity: result.good_quantity,
+          scrap_quantity: result.scrap_quantity,
+          scrap_reason: result.scrap_reason,
+        })),
+      },
+      headers: await csrf(page),
+    });
+    expect(reintentoDeCierre.status()).toBe(200);
+    const completionReintentada = (await reintentoDeCierre.json()) as typeof completion;
+    expect(completionReintentada.results.map((result) => [
+      result.line_ref,
+      result.product_id,
+      result.good_quantity,
+      result.scrap_quantity,
+    ])).toEqual(completion.results.map((result) => [
+      result.line_ref,
+      result.product_id,
+      result.good_quantity,
+      result.scrap_quantity,
+    ]));
+    expect(await movimientos(page)).toBe(movimientosAntesDelReintento);
+    const productoCustomDespuesDelReintento = await get<{ items: { id: number }[]; total: number }>(
+      page,
+      `/products?search=${encodeURIComponent(productoPersonalizado.name)}&limit=10`,
+    );
+    expect(productoCustomDespuesDelReintento.total).toBe(1);
+    expect(productoCustomDespuesDelReintento.items[0]?.id).toBe(tazaResultado!.product_id);
+    expect(entradasFinales.map((movement) => escalado(movement.quantity)).sort()).toEqual(
+      [escalado("5"), escalado("27")].sort(),
+    );
+    expect(entradasFinales.some((movement) => escalado(movement.quantity) === escalado("30"))).toBe(false);
+    const movimientoTaza = entradasFinales.find((movement) => escalado(movement.quantity) === escalado("27"));
+    expect(movimientoTaza).toBeDefined();
+    expect(escalado(await saldo(page, movimientoTaza!.product_id, almacen))).toBe(escalado("27"));
+    const wip = await get<{ production_order_id: number }[]>(page, "/production/wip");
+    expect(wip.some((line) => line.production_order_id === ordenId)).toBe(false);
+
+    // -- entrega parcial: 27 buenas, entregar 20 y rechazar 8 con saldo 7 ----
+    const productoTaza = tazaResultado!.product_id;
+    expect(productoTaza).not.toBeNull();
+    await page.goto("/inventario");
+    await expect(page.getByRole("heading", { level: 1, name: "Inventario." })).toBeVisible();
+    await assertNoSeriousAxeViolations(page, "inventario W4");
+    await assertW3Responsive(page, "inventario W4");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByLabel("Buscar existencia").fill("Taza");
+    const filaTaza = page.getByRole("row").filter({ hasText: "Taza" }).filter({ hasText: nombre });
+    await expect(filaTaza).toContainText("27");
+    await filaTaza.getByRole("button", { name: "Entrega…" }).click();
+    const entrega = page.getByRole("region", { name: "Registrar entrega" });
+    await expect(entrega.getByText("Entrega de producto terminado")).toBeVisible();
+    await assertNoSeriousAxeViolations(page, "formulario de entrega W4");
+    await assertW3Responsive(page, "formulario de entrega W4");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const origenProduccion = entrega.getByLabel("Origen de producción (opcional)");
+    await expect(origenProduccion).toBeVisible();
+    await origenProduccion.click();
+    await entrega.getByRole("option", { name: new RegExp(`Orden #${ordenId}.*Cotización V2 #${ctzId}`) }).click();
+    await entrega.getByLabel("Cantidad a entregar").fill("20");
+    await entrega.getByLabel("Motivo").fill("E2E W4 entrega parcial de 20 unidades");
+    await entrega.getByRole("button", { name: "Registrar entrega" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Entrega registrada: 20" }))
+      .toBeVisible({ timeout: 15_000 });
+    expect(escalado(await saldo(page, productoTaza!, almacen))).toBe(escalado("7"));
+
+    await page.goto("/inventario");
+    await page.getByLabel("Buscar existencia").fill("Taza");
+    const filaSaldoSiete = page.getByRole("row").filter({ hasText: "Taza" }).filter({ hasText: nombre });
+    await expect(filaSaldoSiete).toContainText("7");
+    await filaSaldoSiete.getByRole("button", { name: "Entrega…" }).click();
+    const intentoSobreSaldo = page.getByRole("region", { name: "Registrar entrega" });
+    await intentoSobreSaldo.getByLabel("Cantidad a entregar").fill("8");
+    await intentoSobreSaldo.getByLabel("Motivo").fill("E2E W4 entrega mayor al saldo disponible");
+    const respuestaEntregaRechazada = page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/inventory/deliveries") && response.request().method() === "POST",
+    );
+    await intentoSobreSaldo.getByRole("button", { name: "Registrar entrega" }).click();
+    const entregaRechazada = await respuestaEntregaRechazada;
+    expect(entregaRechazada.ok(), "no se pueden entregar 8 unidades cuando hay 7").toBe(false);
+    await expect(intentoSobreSaldo.getByRole("alert")).toBeVisible({ timeout: 15_000 });
+    expect(escalado(await saldo(page, productoTaza!, almacen))).toBe(escalado("7"));
+    const movimientosEntrega = await get<{
+      items: { production_order_id: number | null; v2_quotation_id: number | null; movement_type: string; quantity: string }[];
+    }>(page, `/inventory/movements?product_id=${productoTaza}&limit=20`);
+    const salidas = movimientosEntrega.items.filter((movement) => movement.movement_type === "DELIVERY_OUT");
+    expect(salidas).toHaveLength(1);
+    expect(salidas[0]!.production_order_id).toBe(ordenId);
+    expect(salidas[0]!.v2_quotation_id).toBe(ctzId);
+    expect(escalado(salidas[0]!.quantity)).toBe(escalado("-20"));
 
     // -- seguimiento completo y en orden -----------------------------------------
+    await page.goto(`/produccion/${ordenId}`);
     const eventos = (await linea(page, ordenId)).items;
     expect(eventos.map((e) => [e.type, e.status])).toEqual([
       ["STATUS", "CREATED"],
@@ -499,7 +770,18 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     await expect(page.getByTestId("orden-faltantes")).toContainText(
       "Falta registrar consumo real de: pasta",
     );
+    const ordenAActual = await get<{
+      result_lines: { line_ref: string; started_quantity: string }[];
+    }>(page, `/production-orders/${ordenA}`);
     const completar = await page.request.post(`${API}/production-orders/${ordenA}/complete`, {
+      data: {
+        results: ordenAActual.result_lines.map((line) => ({
+          line_ref: line.line_ref,
+          good_quantity: line.started_quantity,
+          scrap_quantity: "0",
+          scrap_reason: null,
+        })),
+      },
       headers: await csrf(page),
     });
     expect(completar.status()).toBe(409);
@@ -534,6 +816,9 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     );
     const ctzB = await cotizacionEmitida(page, "010I-D3-B", servicio.id);
     const ordenB = await crearOrdenDesdeLaCotizacion(page, ctzB, nombre);
+    const ordenBActual = await get<{
+      result_lines: { line_ref: string; product_name: string; started_quantity: string }[];
+    }>(page, `/production-orders/${ordenB}`);
     await ok(
       await page.request.put(`${API}/products/${servicio.id}`, {
         data: {
@@ -554,6 +839,13 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
     await expect(finalizar).toBeEnabled({ timeout: 15_000 });
     await expect(page.getByTestId("orden-faltantes")).toHaveCount(0);
     await finalizar.click();
+    const resultados = page.getByRole("dialog", { name: "Registrar resultados de producción" });
+    for (const line of ordenBActual.result_lines) {
+      const grupo = resultados.getByRole("group", { name: line.product_name });
+      await grupo.getByLabel("Buenas").fill(line.started_quantity);
+      await grupo.getByLabel("Merma").fill("0");
+    }
+    await resultados.getByRole("button", { name: "Completar producción" }).click();
     await expect(page.getByText("FINALIZADO", { exact: true }).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -578,8 +870,12 @@ test.describe("Producción real de una cotización V2 (Fase 010I)", () => {
       almacenes.find((a) => a.id === almacen)!.name,
     );
 
-    const contexto = await browser.newContext();
+    const contexto = await browser.newContext({ baseURL: new URL(page.url()).origin });
     const operario = await contexto.newPage();
+    // El servidor de revisión expone una identidad OPERATOR aislada en FakeSupabaseAuth.
+    // Su repositorio de perfiles es intencionalmente estático; no crear otro perfil por API.
+    expect(E2E_OPERATOR_EMAIL, "E2E_OPERATOR_EMAIL debe coincidir con el servidor de revisión").toBeTruthy();
+    expect(E2E_OPERATOR_PASSWORD, "E2E_OPERATOR_PASSWORD debe coincidir con el servidor de revisión").toBeTruthy();
     await login(operario, E2E_OPERATOR_EMAIL, E2E_OPERATOR_PASSWORD);
 
     // La cotización V2 no es suya: 403, y por tanto tampoco el puente.

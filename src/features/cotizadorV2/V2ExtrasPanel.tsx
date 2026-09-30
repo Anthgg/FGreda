@@ -4,6 +4,8 @@ import { DecimalField } from "@/components/DecimalField";
 import { PrimaryButton, SelectField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
 import { describeError } from "@/features/settings/messages";
+import { formatCosto, MONEDA_BASE } from "@/features/cotizadorV2/moneda";
+import { currencySymbol } from "@/features/quotations/money";
 import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
 import { useV2QuotationProducts } from "@/features/cotizadorV2/useQuoterV2Materials";
 import {
@@ -69,94 +71,99 @@ export function V2ExtrasPanel({
     id === null ? "Todo el pedido" : (lineas.find((fila) => fila.id === id)?.product_name ?? `Línea ${id}`);
 
   return (
-    <section data-testid="adicionales" className="mt-4 rounded-2xl border border-black/[0.06] p-4">
+    <section
+      data-testid="adicionales"
+      className="mt-4 rounded-2xl border border-black/[0.06] bg-white/60 p-4"
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-xs font-semibold text-zinc-700">Adicionales</h3>
-        <span className="text-xs text-zinc-500">
-          Suman <strong>{pagina.extras_cost_total}</strong> al costo
+        <h3 className="text-sm font-semibold text-zinc-900">
+          Adicionales{" "}
+          <span className="font-normal text-zinc-500">(empaque, moldes, sellos)</span>
+        </h3>
+        <span className="text-xs text-zinc-600">
+          Suman <strong className="tabular-nums">{formatCosto(pagina.extras_cost_total)}</strong> al
+          costo
         </span>
       </div>
       <p className="mt-1 text-xs text-zinc-500">
-        Empaque especial, moldes, sellos. No son material ni técnica: son un costo que se decide, y
-        entran tanto en el costo de producción como en el costo real.
+        No son material ni técnica: son un costo que se decide, y entran tanto en el costo de
+        producción como en el costo real. Salen del catálogo; el costo se puede pactar aquí.
       </p>
 
       {pagina.items.length === 0 ? (
         <p className="mt-3 text-xs text-zinc-500">Esta cotización no lleva adicionales.</p>
       ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="text-zinc-500">
-              <tr>
-                <th className="py-2 pr-3 font-semibold">Concepto</th>
-                <th className="py-2 pr-3 font-semibold">Se aplica a</th>
-                <th className="py-2 pr-3 font-semibold">Cantidad</th>
-                <th className="py-2 pr-3 font-semibold">Costo unitario</th>
-                <th className="py-2 pr-3 font-semibold">Total</th>
-                {canEdit ? <th className="py-2 font-semibold" /> : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/5">
-              {pagina.items.map((fila) => (
-                <tr key={fila.id}>
-                  <td className="py-2 pr-3 text-zinc-800">
-                    {fila.name_snapshot}
-                    <span className="block text-[11px] text-zinc-500">{fila.unit_snapshot}</span>
-                  </td>
-                  <td className="py-2 pr-3 text-zinc-600">
-                    {nombreDeLinea(fila.v2_quotation_product_id)}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <DecimalField
-                      label="Cantidad"
-
-                      value={fila.quantity}
-                      onCommit={(valor) =>
-                        valor !== null
-                          ? esperarGuardado(actualizar, "adicional-editar", {
-                              extraId: fila.id,
-                              payload: { quantity: valor },
-                            })
-                          : undefined
-                      }
-                      disabled={!canEdit}
-                    />
-                  </td>
-                  <td className="py-2 pr-3">
-                    <DecimalField
-                      label="Costo unitario"
-
-                      value={fila.unit_cost_snapshot}
-                      onCommit={(valor) =>
-                        valor !== null
-                          ? esperarGuardado(actualizar, "adicional-editar", {
-                              extraId: fila.id,
-                              payload: { unit_cost: valor },
-                            })
-                          : undefined
-                      }
-                      disabled={!canEdit}
-                      hint={fila.unit_cost_is_override ? "Pactado aquí" : "Del maestro"}
-                    />
-                  </td>
-                  <td className="py-2 pr-3 text-zinc-800">{fila.total_cost}</td>
-                  {canEdit ? (
-                    <td className="py-2">
-                      <button
-                        type="button"
-                        onClick={() => borrar.mutate(fila.id)}
-                        disabled={borrar.isPending}
-                        className="text-xs font-semibold text-red-700 underline underline-offset-2 cursor-pointer disabled:opacity-40"
-                      >
-                        Quitar
-                      </button>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="mt-3 space-y-2">
+          {pagina.items.map((fila) => (
+            <li
+              key={fila.id}
+              className="grid grid-cols-1 items-start gap-3 rounded-xl border border-black/[0.06] bg-white/70 p-3 sm:grid-cols-[minmax(0,1fr)_8rem_9rem_auto]"
+            >
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-zinc-900">{fila.name_snapshot}</p>
+                <p className="text-[11.5px] text-zinc-500">
+                  {nombreDeLinea(fila.v2_quotation_product_id)} · por {fila.unit_snapshot}
+                </p>
+                <p className="mt-1 text-[13px] tabular-nums text-zinc-900">
+                  Total: <strong>{formatCosto(fila.total_cost)}</strong>
+                </p>
+              </div>
+              {canEdit ? (
+                <>
+                  <DecimalField
+                    label="Cantidad"
+                    value={fila.quantity}
+                    sufijo={fila.unit_snapshot}
+                    onCommit={(valor) =>
+                      valor !== null
+                        ? esperarGuardado(actualizar, "adicional-editar", {
+                            extraId: fila.id,
+                            payload: { quantity: valor },
+                          })
+                        : undefined
+                    }
+                  />
+                  <DecimalField
+                    label="Costo unitario"
+                    value={fila.unit_cost_snapshot}
+                    sufijo={currencySymbol(MONEDA_BASE)}
+                    onCommit={(valor) =>
+                      valor !== null
+                        ? esperarGuardado(actualizar, "adicional-editar", {
+                            extraId: fila.id,
+                            payload: { unit_cost: valor },
+                          })
+                        : undefined
+                    }
+                    hint={fila.unit_cost_is_override ? "Pactado aquí" : "Del catálogo"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => borrar.mutate(fila.id)}
+                    disabled={borrar.isPending}
+                    aria-label={`Quitar ${fila.name_snapshot}`}
+                    className="self-center justify-self-start rounded-lg px-2 py-1 text-xs font-semibold text-red-700 underline underline-offset-2 hover:bg-red-50 cursor-pointer disabled:opacity-40 sm:justify-self-end"
+                  >
+                    Quitar
+                  </button>
+                </>
+              ) : (
+                <dl className="grid grid-cols-2 gap-3 text-[13px] sm:col-span-3">
+                  <div>
+                    <dt className="text-xs text-zinc-500">Cantidad</dt>
+                    <dd className="tabular-nums">
+                      {fila.quantity} {fila.unit_snapshot}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-zinc-500">Costo unitario</dt>
+                    <dd className="tabular-nums">{formatCosto(fila.unit_cost_snapshot)}</dd>
+                  </div>
+                </dl>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
       {canEdit ? (
@@ -179,11 +186,11 @@ export function V2ExtrasPanel({
                 { value: SIN_SELECCION, label: "Seleccionar..." },
                 ...conceptos.map((uno) => ({
                   value: String(uno.id),
-                  label: `${uno.name} · ${uno.unit_cost} / ${uno.unit}`,
+                  label: `${uno.name} · ${formatCosto(uno.unit_cost)} / ${uno.unit}`,
                 })),
               ]}
               onChange={setConcepto}
-              className="max-w-xs"
+              className="min-w-0 flex-1 sm:max-w-xs"
             />
             <SelectField
               label="Se aplica a"
@@ -197,7 +204,7 @@ export function V2ExtrasPanel({
                 })),
               ]}
               onChange={setLinea}
-              className="max-w-xs"
+              className="min-w-0 flex-1 sm:max-w-xs"
             />
             <PrimaryButton
               type="button"

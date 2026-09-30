@@ -37,13 +37,13 @@ import type { V2Pricing } from "@/types/quoterV2Pricing";
 import type { V2Quotation } from "@/types/quoterV2";
 
 export const PASOS = [
-  { id: "cliente", titulo: "Cliente", detalle: "A quién se cotiza y en qué moneda." },
-  { id: "productos", titulo: "Productos", detalle: "Qué piezas, cuántas y de qué medida." },
-  { id: "materiales", titulo: "Materiales", detalle: "Pasta y esmalte de cada pieza." },
-  { id: "mano-de-obra", titulo: "Mano de obra", detalle: "Técnicas, horas, ilustración y días." },
-  { id: "quema", titulo: "Quema", detalle: "Horno, hornadas y gas." },
-  { id: "precio", titulo: "Margen y precio", detalle: "Costo, factor y totales." },
-  { id: "resumen", titulo: "Resumen", detalle: "Todo junto, antes de emitir." },
+  { id: "cliente", titulo: "Cliente", detalle: "Para quién es" },
+  { id: "productos", titulo: "Piezas", detalle: "Qué y cuántas" },
+  { id: "materiales", titulo: "Arcilla y esmalte", detalle: "Con qué se hacen" },
+  { id: "mano-de-obra", titulo: "Trabajo", detalle: "Quién y cuánto tiempo" },
+  { id: "quema", titulo: "Horno", detalle: "Dónde se queman" },
+  { id: "precio", titulo: "Precio", detalle: "Cuánto cobrar" },
+  { id: "resumen", titulo: "Revisar y emitir", detalle: "Último vistazo" },
 ] as const;
 
 export type PasoId = (typeof PASOS)[number]["id"];
@@ -148,6 +148,12 @@ function pasoProductos(datos: DatosDelFlujo): EstadoPaso {
   if (lineas.some((linea) => linea.quantity <= 0)) {
     senales.push(error("Alguna línea no tiene piezas."));
   }
+  if (
+    datos.cotizacion?.pricing_rules_version === 2 &&
+    lineas.some((linea) => !linea.production_time_per_unit_minutes || Number(linea.production_time_per_unit_minutes) <= 0)
+  ) {
+    senales.push(error("Falta indicar el tiempo de producción por pieza en una o más líneas."));
+  }
   if (lineas.some((linea) => Number(linea.total_volume_cm3) <= 0)) {
     // Sin medidas la pieza no ocupa horno, y entonces la quema no se le
     // reparte. Se avisa y no se bloquea: medir después es legítimo.
@@ -201,11 +207,12 @@ function pasoManoDeObra(datos: DatosDelFlujo): EstadoPaso {
       aviso("A alguien se le asignaron más horas de las que caben en su jornada. Usted decide."),
     );
   }
-  if (pagina.effective_work_days === null) {
+  const usaReglas010P = datos.cotizacion?.pricing_rules_version === 2;
+  if (!usaReglas010P && pagina.effective_work_days === null) {
     // Sin días efectivos no entra el espacio, y el precio sale corto. Es una
     // decisión humana: el sistema sugiere el mínimo y no elige.
     senales.push(error("Falta decidir los días efectivos de taller."));
-  } else if (pagina.effective_work_days === 0) {
+  } else if (!usaReglas010P && pagina.effective_work_days === 0) {
     // Cero es una decisión válida —un encargo que no ocupa taller— pero deja el
     // costo de espacio en cero, y eso se dice en vez de pasar callando.
     senales.push(aviso("Con cero días efectivos no se cobra nada por el espacio."));

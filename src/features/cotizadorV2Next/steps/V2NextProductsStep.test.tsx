@@ -1,218 +1,403 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, type ReactElement } from "react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { V2NextWizard } from "../V2NextWizard";
 
-// ── Mocks ──────────────────────────────────────────────────────────────────────
+import { V2NextProductsStep } from "./V2NextProductsStep";
+import { COTIZACION } from "@/test/v2next/shellFixtures";
+import { CUSTOM_PIECE, CATALOG_PIECE } from "@/test/v2next/productsFixtures";
+import { vaciarRegistroDeBorradores } from "@/components/borradores";
+import { jsonResponse } from "@/test/utils";
+import type { PasoDelAsistenteProps } from "@/features/cotizadorV2Next/shell/pasosDelAsistente";
+import type { Product } from "@/types/masters";
+import type {
+  V2QuotationProduct,
+  V2QuotationProductsPage,
+} from "@/types/quoterV2Materials";
 
-vi.mock("@/features/cotizadorV2/useQuoterV2Materials", () => ({
-  useV2QuotationProducts: vi.fn(),
-  useAddV2QuotationProduct: vi.fn(),
-  useUpdateV2QuotationProduct: vi.fn(),
-  useDeleteV2QuotationProduct: vi.fn(),
-}));
+type ProductsQueryMock = {
+  data?: V2QuotationProductsPage;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+};
 
-vi.mock("@/features/cotizadorV2/useQuoterV2", () => ({
-  useV2Quotation: vi.fn(),
-  useUpdateV2Quotation: vi.fn(() => ({ mutate: vi.fn() })),
-}));
-
-vi.mock("@/features/cotizadorV2/useEstadoDeGuardado", () => ({
-  useEstadoDeGuardado: vi.fn(),
-}));
-
-vi.mock("@/api/masters", () => ({
-  fetchProduct: vi.fn(),
-  fetchProducts: vi.fn(),
-}));
-
-// Import mocked modules - use type imports for type-only use
-import {
-  useV2QuotationProducts,
-  useAddV2QuotationProduct,
-  useUpdateV2QuotationProduct,
-  useDeleteV2QuotationProduct,
-} from "@/features/cotizadorV2/useQuoterV2Materials";
-import { useV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
-import { useEstadoDeGuardado } from "@/features/cotizadorV2/useEstadoDeGuardado";
-import { fetchProduct, fetchProducts } from "@/api/masters";
-
-// We use vi.mocked to get typed mock references. The actual return values are
-// cast via `as unknown as` to avoid the partial-mock double-comparison TS error
-// that occurs when you try to satisfy the full TanStack Query union types.
-const mockProducts = vi.mocked(useV2QuotationProducts);
-const mockAdd = vi.mocked(useAddV2QuotationProduct);
-const mockUpdate = vi.mocked(useUpdateV2QuotationProduct);
-const mockDelete = vi.mocked(useDeleteV2QuotationProduct);
-const mockQuotation = vi.mocked(useV2Quotation);
-const mockGuardado = vi.mocked(useEstadoDeGuardado);
-const mockFetchProducts = vi.mocked(fetchProducts);
-const mockFetchProduct = vi.mocked(fetchProduct);
-
-// ── Fixtures ───────────────────────────────────────────────────────────────────
-
-const DRAFT_Q = {
-  id: 1,
-  name: "Test Quotation",
-  code: "COT-001",
-  status: "DRAFT" as const,
-  effective_status: "DRAFT",
-  production_type: "RETAIL" as const,
-  currency_code: "PEN",
-  currency_symbol: "S/",
-  customer_id: null,
-  customer_name: null,
+const PRODUCTO_CATALOGO: Product = {
+  id: 101,
+  internal_reference: "PZA-101",
+  name: "Plato Nuevo",
+  product_type: "FINISHED_PRODUCT",
+  product_category_id: 1,
+  product_category_path: "Piezas",
+  pos_category_id: null,
+  pos_category_name: null,
+  base_uom_code: "und",
+  purchase_uom_code: null,
+  cost: null,
+  sale_price: null,
+  sale_tax_rate: null,
+  purchase_tax_rate: null,
+  material: null,
+  grammage: null,
+  width: null,
+  height: null,
+  length: null,
+  depth: null,
+  sellable: true,
+  purchasable: false,
+  available_in_pos: true,
+  active: true,
   notes: null,
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const q = (data: unknown) => ({ isPending: false, isError: false, data } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const m = (mutate: unknown = vi.fn()) => ({ mutate } as any);
+const paginaConPiezas = (items: V2QuotationProduct[]): V2QuotationProductsPage => ({
+  items,
+  materials_cost: "0",
+});
 
-function renderStep(step = 2) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/cotizador-v2-next/1/${step}`]}>
-        <Routes>
-          <Route
-            path="/cotizador-v2-next/:quotationId/:step"
-            element={<V2NextWizard quotationId={1} />}
-          />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>
-  );
+const hooks = {
+  productsQuery: {
+    data: paginaConPiezas([CATALOG_PIECE, CUSTOM_PIECE]),
+    isPending: false,
+    isError: false,
+    error: null,
+  } as ProductsQueryMock,
+  actualizar: { mutate: vi.fn() },
+  borrar: { mutate: vi.fn() },
+  anadir: {
+    mutate: vi.fn((_vars: unknown, options?: { onSuccess?: () => void }) => {
+      options?.onSuccess?.();
+    }),
+    isPending: false,
+    isError: false,
+    error: null,
+  },
+  esperar: vi.fn((_mut, _key, vars: unknown) => {
+    hooks.actualizar.mutate(vars);
+    return Promise.resolve({ ok: true, firma: "linea", fresco: true });
+  }),
+};
+
+vi.mock("@/features/cotizadorV2/useQuoterV2Materials", () => ({
+  useV2QuotationProducts: vi.fn(() => hooks.productsQuery),
+  useUpdateV2QuotationProduct: vi.fn(() => hooks.actualizar),
+  useDeleteV2QuotationProduct: vi.fn(() => hooks.borrar),
+  useAddV2QuotationProduct: vi.fn(() => hooks.anadir),
+}));
+vi.mock("@/features/cotizadorV2/claves", () => ({
+  useEsperarGuardado: vi.fn(() => hooks.esperar),
+}));
+
+const PROPS = {
+  quotationId: 7,
+  canEdit: true,
+  datos: {
+    cotizacion: COTIZACION,
+    productos: paginaConPiezas([CATALOG_PIECE, CUSTOM_PIECE]),
+    manoDeObra: undefined,
+    quema: undefined,
+    precio: undefined,
+  },
+  estados: [],
+  irAPaso: vi.fn(),
+} satisfies PasoDelAsistenteProps;
+
+function renderConProvider(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-// ── Setup ──────────────────────────────────────────────────────────────────────
+function mockCatalogo(productos: Product[] = [PRODUCTO_CATALOGO]) {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.includes("/products")) {
+      return jsonResponse(200, {
+        items: productos,
+        total: productos.length,
+        limit: 30,
+        offset: 0,
+      });
+    }
+    return jsonResponse(200, { items: [], total: 0, limit: 30, offset: 0 });
+  });
+}
 
 describe("V2NextProductsStep", () => {
+  let globalFetchSpy: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
-
-    mockQuotation.mockReturnValue(q(DRAFT_Q));
-    mockGuardado.mockReturnValue(q({ hayRiesgo: false, enVuelo: 0, fallidos: [], borradores: 0, descartar: vi.fn() }).data);
-    mockFetchProducts.mockResolvedValue({ items: [{ id: 101, name: "Taza mock", internal_reference: "TAZ101", product_type: "RETAIL" }], total: 1, limit: 20, offset: 0 } as unknown as Awaited<ReturnType<typeof fetchProducts>>);
-    mockFetchProduct.mockResolvedValue({ id: 101, name: "Taza mock", internal_reference: "TAZ101", length: "12.0", width: "12.0", height: "18.0" } as Awaited<ReturnType<typeof fetchProduct>>);
+    vaciarRegistroDeBorradores();
+    hooks.productsQuery.data = paginaConPiezas([CATALOG_PIECE, CUSTOM_PIECE]);
+    hooks.productsQuery.isPending = false;
+    hooks.productsQuery.isError = false;
+    hooks.productsQuery.error = null;
+    hooks.anadir.isPending = false;
+    hooks.anadir.isError = false;
+    hooks.anadir.error = null;
+    globalFetchSpy = mockCatalogo();
+    vi.stubGlobal("fetch", globalFetchSpy);
   });
 
-  it("muestra empty state cuando no hay productos", async () => {
-    mockProducts.mockReturnValue(q({ items: [], total: 0 }));
-    mockAdd.mockReturnValue(m());
+  it("muestra carga y error del listado de piezas", () => {
+    hooks.productsQuery.isPending = true;
+    const { rerender } = renderConProvider(<V2NextProductsStep {...PROPS} />);
 
-    renderStep(2);
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando piezas...");
 
-    expect(await screen.findByText(/Todavía no hay productos/i)).toBeInTheDocument();
-    // Multiple buttons may exist (header + empty state) — just check at least one is there
-    expect((await screen.findAllByRole("button", { name: /\+ Agregar producto/i })).length).toBeGreaterThan(0);
+    hooks.productsQuery.isPending = false;
+    hooks.productsQuery.isError = true;
+    hooks.productsQuery.error = new Error("fallo de prueba");
+    rerender(<V2NextProductsStep {...PROPS} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/error inesperado/i);
   });
 
-  it("abre modal de selección y permite agregar producto", async () => {
-    mockProducts.mockReturnValue(q({ items: [], total: 0 }));
-    const addMutate = vi.fn();
-    mockAdd.mockReturnValue(m(addMutate));
+  it("renderiza piezas editables sin costos y con avisos en palabras", () => {
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
 
-    renderStep(2);
+    expect(screen.getByText("Plato hondo")).toBeInTheDocument();
+    expect(screen.getByText("Taza personalizada")).toBeInTheDocument();
+    expect(screen.getByText("Hay un aviso pendiente de revisar en esta pieza.")).toBeInTheDocument();
+    expect(screen.queryByText("NO_BODY")).not.toBeInTheDocument();
+    expect(screen.queryByText(/S\//)).not.toBeInTheDocument();
+    expect(screen.queryByText(/costo/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("textbox", { name: /^Largo/ })).toHaveLength(2);
+  });
 
+  it("sin canEdit muestra valores como dl, sin inputs ni botones de edición", () => {
+    renderConProvider(<V2NextProductsStep {...PROPS} canEdit={false} />);
+
+    expect(screen.queryByLabelText("Cantidad")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByText(/20.0 L/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Quitar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Agregar pieza" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Tiempo por pieza")).not.toBeInTheDocument();
+  });
+
+  it("serializa horas y minutos a minutos exactos y guarda mold_count entero", async () => {
     const user = userEvent.setup();
-    const btns = await screen.findAllByRole("button", { name: /\+ Agregar producto/i });
-    await user.click(btns[0] as HTMLElement);
+    const props010P = {
+      ...PROPS,
+      datos: { ...PROPS.datos, cotizacion: { ...COTIZACION, pricing_rules_version: 2 } },
+    };
+    renderConProvider(<V2NextProductsStep {...props010P} />);
 
-    const selectTrigger = await screen.findByText(/Ej: Jarra, Taza/i);
-    await user.click(selectTrigger);
+    const horas = screen.getAllByLabelText("Horas")[0]!;
+    const minutos = screen.getAllByLabelText("Minutos")[0]!;
+    await user.type(horas, "1");
+    await user.type(minutos, "30");
+    await user.tab();
+    await user.tab();
 
-    const searchInput = await screen.findByPlaceholderText(/Buscar por código o nombre/i);
-    await user.type(searchInput, "Taza");
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { production_time_per_unit_minutes: "90" },
+    });
 
-    const option = await screen.findByText(/Taza mock/i);
-    await user.click(option);
+    const moldes = screen.getAllByLabelText("Moldes")[0]!;
+    await user.clear(moldes);
+    await user.type(moldes, "3");
+    await user.tab();
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { mold_count: 3 },
+    });
+  });
 
-    expect(addMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ product_id: 101, quantity: 1 }),
-      expect.any(Object)
+  it("muestra tiempo, moldes y cálculos del backend en una pieza 010P de sólo lectura", () => {
+    const pieza010P = {
+      ...CUSTOM_PIECE,
+      quantity: 30,
+      production_time_per_unit_minutes: "45.000000",
+      mold_count: 3,
+      cycles: 10,
+      line_active_minutes: "450.000000",
+    };
+    hooks.productsQuery.data = paginaConPiezas([pieza010P]);
+    renderConProvider(
+      <V2NextProductsStep
+        {...PROPS}
+        canEdit={false}
+        datos={{ ...PROPS.datos, cotizacion: { ...COTIZACION, pricing_rules_version: 2 } }}
+      />,
+    );
+
+    expect(screen.getByText(/45(?:\.00)? min/)).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText(/7 h 30(?:\.00)? min/)).toBeInTheDocument();
+  });
+
+  it("agrega una pieza de catálogo con product_id y búsqueda FINISHED_PRODUCT", async () => {
+    hooks.productsQuery.data = paginaConPiezas([]);
+    const user = userEvent.setup();
+
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
+    await user.click(screen.getByRole("button", { name: "Agregar pieza" }));
+    await user.click(screen.getByRole("combobox", { name: "Buscar en catálogo o escribir nombre" }));
+    await user.type(screen.getByPlaceholderText("Busca o escribe el nombre..."), "Plato");
+    await user.click(await screen.findByText("Plato Nuevo"));
+
+    expect(hooks.anadir.mutate).toHaveBeenCalledWith(
+      { product_id: 101, quantity: 1 },
+      expect.any(Object),
+    );
+
+    const llamadasAProductos = globalFetchSpy.mock.calls
+      .map(([input]) => new URL(String(input), "http://localhost"))
+      .filter((url) => url.pathname === "/api/v1/products");
+    expect(llamadasAProductos.length).toBeGreaterThan(0);
+    expect(
+      llamadasAProductos.some((url) => url.searchParams.get("product_type") === "FINISHED_PRODUCT"),
+    ).toBe(true);
+  });
+
+  it("agrega una pieza a medida con product_name", async () => {
+    hooks.productsQuery.data = paginaConPiezas([]);
+    globalFetchSpy = mockCatalogo([]);
+    vi.stubGlobal("fetch", globalFetchSpy);
+    const user = userEvent.setup();
+
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
+    await user.click(screen.getByRole("button", { name: "Agregar pieza" }));
+    await user.click(screen.getByRole("combobox", { name: "Buscar en catálogo o escribir nombre" }));
+    await user.type(screen.getByPlaceholderText("Busca o escribe el nombre..."), "Nueva cosa");
+    // La opción de crear aparece tras el debounce del buscador: con la suite
+    // entera en paralelo eso pasa del segundo por defecto.
+    await user.click(await screen.findByText("Pieza a medida «Nueva cosa»", {}, { timeout: 5000 }));
+
+    expect(hooks.anadir.mutate).toHaveBeenCalledWith(
+      { product_name: "Nueva cosa", quantity: 1 },
+      expect.any(Object),
     );
   });
 
-  it("muestra productos con read-only dimensiones si el maestro las tiene", async () => {
-    mockProducts.mockReturnValue(q({
-      items: [{
-        id: 10, product_id: 101, product_name: "Taza mock", quantity: 5,
-        length_cm: "12.0", width_cm: "12.0", height_cm: "18.0",
-        unit_volume_cm3: "100", total_volume_cm3: "500", client_observation: "",
-      }],
-      total: 1,
-    }));
-    mockAdd.mockReturnValue(m());
-    mockUpdate.mockReturnValue(m());
-    mockDelete.mockReturnValue(m());
+  it("cantidad por stepper hace un solo PUT tras la pausa", async () => {
+    vi.useFakeTimers();
+    try {
+      renderConProvider(<V2NextProductsStep {...PROPS} />);
 
-    renderStep(2);
+      const masCatalogo = screen.getAllByRole("button", { name: "Más" })[0]!;
+      fireEvent.click(masCatalogo);
+      fireEvent.click(masCatalogo);
+      fireEvent.click(masCatalogo);
+      fireEvent.click(masCatalogo);
+      fireEvent.click(masCatalogo);
 
-    expect(await screen.findByLabelText(/Cantidad \*/i)).toHaveValue("5");
-    expect(screen.queryByLabelText(/Largo \(cm\)/i)).not.toBeInTheDocument();
-    expect(await screen.findByText(/12\.0.*12\.0.*18\.0 cm/i)).toBeInTheDocument();
+      expect(hooks.esperar).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+
+      expect(hooks.esperar).toHaveBeenCalledTimes(1);
+      expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+        lineId: 2,
+        payload: { quantity: 6 },
+      });
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
-  it("habilita campos de dimensiones si el maestro no las tiene", async () => {
-    mockFetchProduct.mockResolvedValue({ id: 101, name: "Taza mock", internal_reference: "TAZ101", length: null, width: null, height: null } as Awaited<ReturnType<typeof fetchProduct>>);
-    mockProducts.mockReturnValue(q({
-      items: [{
-        id: 10, product_id: 101, product_name: "Taza mock", quantity: 5,
-        length_cm: "0", width_cm: "0", height_cm: "0",
-        unit_volume_cm3: "0", total_volume_cm3: "0", client_observation: "",
-      }],
-      total: 1,
-    }));
-    mockAdd.mockReturnValue(m());
-    mockUpdate.mockReturnValue(m());
-    mockDelete.mockReturnValue(m());
-
-    renderStep(2);
-
-    expect(await screen.findByLabelText(/Largo \(cm\)/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Ancho \(cm\)/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Alto \(cm\)/i)).toBeInTheDocument();
-  });
-
-  it("read-only si la cotización no es DRAFT", async () => {
-    mockQuotation.mockReturnValue(q({ ...DRAFT_Q, status: "CONFIRMED", effective_status: "CONFIRMED" }));
-    mockFetchProduct.mockResolvedValue({ id: 101, name: "Taza mock", internal_reference: "TAZ101", length: null, width: null, height: null } as Awaited<ReturnType<typeof fetchProduct>>);
-    mockProducts.mockReturnValue(q({
-      items: [{
-        id: 10, product_id: 101, product_name: "Taza mock", quantity: 5,
-        length_cm: "0", width_cm: "0", height_cm: "0",
-        unit_volume_cm3: "0", total_volume_cm3: "0", client_observation: "",
-      }],
-      total: 1,
-    }));
-    mockAdd.mockReturnValue(m());
-    mockUpdate.mockReturnValue(m());
-    mockDelete.mockReturnValue(m());
-
-    renderStep(2);
-
-    expect(screen.queryByRole("button", { name: /\+ Agregar producto/i })).not.toBeInTheDocument();
-    expect(await screen.findByLabelText(/Cantidad \*/i)).toBeDisabled();
-    // Dimension inputs appear once fetchProduct resolves (async useQuery)
-    expect(await screen.findByLabelText(/Largo \(cm\)/i)).toBeDisabled();
-  });
-
-  it("espera guardado antes de continuar", async () => {
-    mockProducts.mockReturnValue(q({ items: [], total: 0 }));
-    mockAdd.mockReturnValue(m());
-    mockGuardado.mockReturnValue({ hayRiesgo: true, enVuelo: 1, fallidos: [], borradores: 0, descartar: vi.fn() } as ReturnType<typeof useEstadoDeGuardado>);
-
-    renderStep(1);
-
+  it("cantidad tecleada guarda una sola vez al salir del grupo", async () => {
     const user = userEvent.setup();
-    const continuarBtn = await screen.findByRole("button", { name: /Continuar/i });
-    await user.click(continuarBtn);
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
 
-    expect(screen.getByRole("button", { name: /Guardando/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Guardando/i })).toBeDisabled();
+    const tarjetaCatalogo = screen.getByRole("heading", { name: "Plato hondo" }).closest(".group");
+    expect(tarjetaCatalogo).not.toBeNull();
+    const cantidadCatalogo = within(tarjetaCatalogo as HTMLElement).getByRole("textbox", {
+      name: "Cantidad",
+    });
+    await user.click(cantidadCatalogo);
+    await user.keyboard("{Control>}a{/Control}10");
+    await user.tab();
+    await user.tab();
+
+    expect(hooks.esperar).toHaveBeenCalledTimes(1);
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { quantity: 10 },
+    });
+  });
+
+  it("medidas editables en pieza de catálogo mandan decimal y null si se vacía", async () => {
+    const user = userEvent.setup();
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
+
+    const largoCatalogo = screen.getAllByRole("textbox", { name: /^Largo/ })[0]!;
+    await user.clear(largoCatalogo);
+    await user.type(largoCatalogo, "21,5");
+    await user.tab();
+
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { length_cm: "21.5" },
+    });
+
+    await user.clear(largoCatalogo);
+    await user.tab();
+
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 2,
+      payload: { length_cm: null },
+    });
+  });
+
+  it("guarda observación para el cliente", async () => {
+    const user = userEvent.setup();
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
+
+    const notaCustom = screen.getAllByRole("textbox", { name: /^Nota para el cliente/ })[1]!;
+    await user.clear(notaCustom);
+    await user.type(notaCustom, "Nueva nota");
+    await user.tab();
+
+    expect(hooks.actualizar.mutate).toHaveBeenCalledWith({
+      lineId: 1,
+      payload: { client_observation: "Nueva nota" },
+    });
+  });
+
+  it("quita con diálogo por portal y Escape devuelve el foco sin borrar", async () => {
+    const user = userEvent.setup();
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
+
+    const botonQuitar = screen.getByRole("button", { name: "Quitar Plato hondo" });
+    await user.click(botonQuitar);
+
+    const dialog = screen.getByRole("dialog", { name: "¿Quitar pieza?" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "¿Quitar pieza?" })).not.toBeInTheDocument();
+    expect(hooks.borrar.mutate).not.toHaveBeenCalled();
+    expect(botonQuitar).toHaveFocus();
+
+    await user.click(botonQuitar);
+    await user.click(
+      within(screen.getByRole("dialog", { name: "¿Quitar pieza?" })).getByRole("button", {
+        name: "Quitar pieza",
+      }),
+    );
+
+    expect(hooks.borrar.mutate).toHaveBeenCalledWith(2);
+  });
+
+  it("no hace GET de producto por cada línea", () => {
+    renderConProvider(<V2NextProductsStep {...PROPS} />);
+
+    const rutas = globalFetchSpy.mock.calls.map(([input]) => String(input));
+    expect(rutas.some((url) => /\/products\/\d+/.test(url))).toBe(false);
   });
 });

@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   cancelV2Quotation,
+  applyV2WholesaleDefaults,
   confirmV2Quotation,
+  declineV2WholesaleSuggestion,
   duplicateV2Quotation,
   fetchV2ConfirmationPreview,
   fetchV2QuotationHistory,
@@ -12,7 +14,12 @@ import {
   alcanceDeGuardado,
   invalidarCotizacion,
   QUOTER_V2_KEY,
+  V2_PREVIEW_KEY,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
+
+// Desde 010O.3 la clave vive en `claves.ts`, que la invalida tras cada guardado.
+export { V2_PREVIEW_KEY } from "@/features/cotizadorV2/claves";
 
 /**
  * Emitir, anular, duplicar y pasar a producción. Fase 010H.
@@ -32,13 +39,12 @@ import {
  * que el diálogo convierte en «revise los valores actualizados».
  */
 
-export const V2_PREVIEW_KEY = ["quoter-v2", "confirmation-preview"] as const;
 export const V2_HISTORY_KEY = ["quoter-v2", "history"] as const;
 
 export const useV2ConfirmationPreview = (id: number, enabled: boolean) =>
   useQuery({
     queryKey: [...V2_PREVIEW_KEY, id],
-    queryFn: () => fetchV2ConfirmationPreview(id),
+    queryFn: () => enTurno(id, () => fetchV2ConfirmationPreview(id)),
     enabled,
     // El resumen es lo que se va a congelar: se pide fresco cada vez que se
     // abre el diálogo, nunca de una caché de hace un minuto.
@@ -65,7 +71,8 @@ export const useConfirmV2Quotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     scope: alcanceDeGuardado(id),
-    mutationFn: (fingerprint: string) => confirmV2Quotation(id, fingerprint),
+    mutationFn: (fingerprint: string) =>
+      enTurno(id, () => confirmV2Quotation(id, fingerprint)),
     onSuccess: (data) => {
       client.setQueryData([...QUOTER_V2_KEY, id], data);
       refrescarTodo(client, id);
@@ -77,7 +84,8 @@ export const useCancelV2Quotation = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     scope: alcanceDeGuardado(id),
-    mutationFn: (reason: string | null) => cancelV2Quotation(id, reason),
+    mutationFn: (reason: string | null) =>
+      enTurno(id, () => cancelV2Quotation(id, reason)),
     onSuccess: (data) => {
       client.setQueryData([...QUOTER_V2_KEY, id], data);
       refrescarTodo(client, id);
@@ -100,6 +108,24 @@ export const useSendV2ToProduction = (id: number) => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => sendV2QuotationToProduction(id),
+    onSuccess: () => refrescarTodo(client, id),
+  });
+};
+
+export const useApplyV2WholesaleDefaults = (id: number) => {
+  const client = useQueryClient();
+  return useMutation({
+    scope: alcanceDeGuardado(id),
+    mutationFn: () => enTurno(id, () => applyV2WholesaleDefaults(id)),
+    onSuccess: () => refrescarTodo(client, id),
+  });
+};
+
+export const useDeclineV2WholesaleSuggestion = (id: number) => {
+  const client = useQueryClient();
+  return useMutation({
+    scope: alcanceDeGuardado(id),
+    mutationFn: () => enTurno(id, () => declineV2WholesaleSuggestion(id)),
     onSuccess: () => refrescarTodo(client, id),
   });
 };

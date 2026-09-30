@@ -5,12 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  schedule:
-    # Matriz completa (todos los navegadores + emulacion mobile) contra
-    # produccion, una vez por semana. El job de Chromium en cada PR ya cubre
-    # el camino critico en cada cambio; esto es solo para detectar drift
-    # especifico de motor/viewport sin correrlo en cada push.
-    - cron: "0 9 * * 1"
+    inputs:
+      run_production_e2e:
+        description: "Ejecutar Playwright contra producción; puede crear datos E2E-* persistentes. Déjalo desmarcado salvo aprobación explícita."
+        required: true
+        type: boolean
+        default: false
 
 # Ningun paso lleva continue-on-error: un fallo real debe romper el pipeline.
 permissions:
@@ -251,6 +251,14 @@ jobs:
                       "La URL debe inyectarse en runtime, no en build-time."
                   )
 
+              for forbidden in ("main-latest", "p007", "update-traffic"):
+                  if forbidden in raw:
+                      errors.append(f"{filename}: contiene referencia prohibida '{forbidden}'")
+              if "--no-traffic" not in raw or "sha256:" not in raw:
+                  errors.append(f"{filename}: el candidato debe desplegar por digest con --no-traffic")
+              if "_RUNTIME_SERVICE_ACCOUNT" not in raw:
+                  errors.append(f"{filename}: falta la cuenta de servicio runtime dedicada")
+
               print(f"  {filename}: OK ({len(steps)} steps)")
 
           if errors:
@@ -279,64 +287,6 @@ jobs:
           fi
           sh -n "$script" && echo "  $script: sintaxis OK"
 
-  playwright-e2e:
-    name: Smoke de produccion (Chromium)
-    # SMOKE DE PRODUCCION, no validacion de la PR. Corre contra el ambiente
-    # desplegado (por defecto, produccion) y por eso NO puede validar una rama:
-    # prueba lo que ya esta desplegado, no lo que trae el cambio. Las pruebas
-    # funcionales de una rama viven en e2e/revision/, que esta configuracion
-    # ignora, y las valida el job «E2E de la revision» de abajo.
-    #
-    # Hasta la Fase 010G se llamaba «Playwright E2E (Chromium)» y parecia un
-    # gate de la PR. Sin secrets de produccion se omite entero y sale en verde
-    # sin ejecutar nada, que es justo como se leyo mal.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Verificar credenciales de prueba
-        # Sin E2E_EMAIL/E2E_PASSWORD como secrets del repo, la corrida se
-        # omite (no bloquea el PR) en vez de fallar en falso. Ninguna
-        # credencial se inventa ni se imprime.
-        id: creds
-        run: |
-          if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
-            # Aviso visible y no solo un eco: un job omitido que sale en verde
-            # se lee como «pasaron las E2E», y aqui no se ejecuto ninguna.
-            echo "::warning title=Smoke de produccion omitido::Sin E2E_EMAIL/E2E_PASSWORD no se ejecuto ninguna prueba contra produccion. Este verde no valida nada."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Instalar Chromium (Playwright)
-        if: steps.creds.outputs.ready == 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Playwright (chromium)
-        if: steps.creds.outputs.ready == 'true'
-        env:
-          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
-          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
-        run: npx playwright test --project=chromium
-
-      - name: Subir reporte HTML
-        if: always() && steps.creds.outputs.ready == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
   e2e-revision:
     name: E2E de la revision (Chromium)
     # Fase 010G. Las pruebas funcionales de una rama se ejecutan contra la
@@ -358,15 +308,7 @@ jobs:
     # esconde justo la intermitencia que tendria que ensenar.
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      # Revision del backend contra la que se prueba. Tiene que CONTENER lo que
-      # la rama del frontend necesita; el job imprime el SHA exacto que uso.
-      # `main`: el backend de 010I (Anthgg/BGreda#62, fusionado en 62c1ee9)
-      # trae el origen V2, el consumo real, el seguimiento, las comunicaciones
-      # y las piezas operacionales que esta rama usa. La E2E se probo contra
-      # ese main antes de abrir el PR del frontend.
-      BACKEND_REF: main
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16-alpine
@@ -377,31 +319,62 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U greda"
+          --health-cmd "pg_isready -U greda -d greda_e2e"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     steps:
       - name: Checkout del frontend (esta revision)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Checkout del backend (BACKEND_REF)
+      - name: Resolver SHA exacto del backend compatible
+        id: backend-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+        run: |
+          if { [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ "$PR_NUMBER" = "89" ]; } || \
+             { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/feat/010p-w4-integration" ]; }; then
+            backend_ref="refs/pull/69/head"
+            backend_sha="$(gh api repos/Anthgg/BGreda/pulls/69 --jq '.head.sha')"
+          else
+            backend_ref="refs/heads/main"
+            backend_sha="$(git ls-remote https://github.com/Anthgg/BGreda.git "$backend_ref" | awk 'NR == 1 {print $1}')"
+          fi
+          [ -n "$backend_sha" ] || { echo "No se pudo resolver el SHA del backend"; exit 1; }
+          echo "ref=$backend_ref" >> "$GITHUB_OUTPUT"
+          echo "sha=$backend_sha" >> "$GITHUB_OUTPUT"
+          echo "BACKEND_SHA_EXPECTED=$backend_sha" >> "$GITHUB_ENV"
+          echo "BACKEND_REF=$backend_ref" >> "$GITHUB_ENV"
+          echo "BACKEND_REF=$backend_ref"
+          echo "BACKEND_SHA=$backend_sha"
+
+      - name: Checkout del backend (SHA resuelto desde BACKEND_REF)
         uses: actions/checkout@v4
         with:
           repository: Anthgg/BGreda
-          ref: ${{ env.BACKEND_REF }}
+          ref: ${{ steps.backend-ref.outputs.sha }}
           path: backend
+          fetch-depth: 0
 
       - name: Revisiones que se prueban
         run: |
           FRONT="$(git rev-parse HEAD)"
           BACK="$(git -C backend rev-parse HEAD)"
+          if [ "$BACK" != "$BACKEND_SHA_EXPECTED" ]; then
+            echo "Backend checkout no coincide con el SHA resuelto: esperado $BACKEND_SHA_EXPECTED, actual $BACK"
+            exit 1
+          fi
           echo "Frontend: $FRONT"
-          echo "Backend:  $BACK ($BACKEND_REF)"
+          echo "BACKEND_REF=$BACKEND_REF"
+          echo "BACKEND_SHA=$BACK"
           {
             echo "### E2E de la revision"
             echo "- Frontend: $FRONT"
-            echo "- Backend: $BACK ($BACKEND_REF)"
+            echo "- BACKEND_REF: $BACKEND_REF"
+            echo "- BACKEND_SHA: $BACK"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Instalar uv
@@ -433,6 +406,11 @@ jobs:
           echo "E2E_PASSWORD=$CLAVE" >> "$GITHUB_ENV"
           echo "E2E_OPERATOR_EMAIL=$OP_EMAIL" >> "$GITHUB_ENV"
           echo "E2E_OPERATOR_PASSWORD=$OP_CLAVE" >> "$GITHUB_ENV"
+          QUICK_EMAIL="e2e-quick-create-operator-$(openssl rand -hex 4)@example.com"
+          QUICK_CLAVE="$(openssl rand -hex 24)"
+          echo "::add-mask::$QUICK_CLAVE"
+          echo "E2E_QUICK_CREATE_OPERATOR_EMAIL=$QUICK_EMAIL" >> "$GITHUB_ENV"
+          echo "E2E_QUICK_CREATE_OPERATOR_PASSWORD=$QUICK_CLAVE" >> "$GITHUB_ENV"
 
       - name: Levantar el backend de la revision
         working-directory: backend
@@ -502,7 +480,18 @@ jobs:
           # Fase 010H: el texto del PDF se extrae con el pypdf del backend de la
           # revision, ya instalado en su entorno.
           E2E_PDF_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
-        run: npx playwright test -c playwright.revision.config.ts
+        run: npx playwright test -c playwright.revision.config.ts --grep-invert 'W3 Solo Quema:'
+
+      - name: E2E de Solo Quema con su runner PostgreSQL aislado
+        env:
+          GREDA_BACKEND_W4_ROOT: ${{ github.workspace }}/backend
+          SOLO_QUEMA_E2E_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
+          GREDA_EXPECTED_BRANCH: ci-010p-w4-e2e
+        run: |
+          docker pull postgres:16-alpine
+          git switch --force-create ci-010p-w4-e2e "$GITHUB_SHA"
+          git -C backend switch --force-create ci-010p-w4-e2e "$BACKEND_SHA_EXPECTED"
+          node scripts/run-010p-w4-e2e.mjs --files e2e/revision/solo-quema-real-e2e.spec.ts
 
       - name: Apagar backend y app
         # Siempre, pase lo que pase arriba: un proceso que sobrevive al ultimo
@@ -551,10 +540,9 @@ jobs:
 
   playwright-e2e-full-matrix:
     name: Playwright E2E (matriz completa)
-    # Manual (workflow_dispatch) o programado semanalmente; nunca en cada PR
-    # porque cubre WebKit y emulacion mobile-ios/mobile-android ademas de
-    # Chromium/Firefox, y es mucho mas lento que el job de arriba.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    # Solo manual y con confirmación explícita: E2E_BASE_URL apunta a producción
+    # por defecto y las pruebas pueden dejar registros E2E-* persistentes.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_production_e2e == true
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -575,8 +563,8 @@ jobs:
         id: creds
         run: |
           if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
-            echo "E2E_EMAIL/E2E_PASSWORD no configurados: se omite esta corrida."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "ERROR: se solicitó Playwright contra producción, pero faltan E2E_EMAIL/E2E_PASSWORD. No se ejecutó ninguna prueba."
+            exit 1
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi

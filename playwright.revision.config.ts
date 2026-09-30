@@ -60,9 +60,12 @@ obligatoria("E2E_EMAIL");
 obligatoria("E2E_PASSWORD");
 obligatoria("E2E_OPERATOR_EMAIL");
 obligatoria("E2E_OPERATOR_PASSWORD");
+const htmlOutputFolder = process.env.PLAYWRIGHT_HTML_OUTPUT_DIR ?? "playwright-report-revision";
+const testOutputFolder = process.env.PLAYWRIGHT_OUTPUT_DIR ?? "test-results";
 
 export default defineConfig({
   testDir: "./e2e/revision",
+  outputDir: testOutputFolder,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -70,8 +73,8 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: process.env.CI
-    ? [["github"], ["list"], ["html", { open: "never", outputFolder: "playwright-report-revision" }]]
-    : [["list"], ["html", { open: "never", outputFolder: "playwright-report-revision" }]],
+    ? [["github"], ["list"], ["html", { open: "never", outputFolder: htmlOutputFolder }]]
+    : [["list"], ["html", { open: "never", outputFolder: htmlOutputFolder }]],
   use: {
     baseURL,
     trace: "retain-on-failure",

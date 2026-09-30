@@ -23,6 +23,7 @@ const COTIZACION_COMPLETA = {
   id: 7,
   code: "CTZ-V2-2026-000001",
   pricing_engine_version: "V2" as const,
+  pricing_rules_version: 1,
   status: "DRAFT" as const,
   effective_status: "DRAFT" as const,
   client_notes: null,
@@ -49,6 +50,9 @@ const COTIZACION_COMPLETA = {
   validity_days: 20,
   workday_hours: "8.000000",
   space_service_cost_per_day: "140.000000",
+  space_cost_per_hour: "0.000000",
+  wholesale_threshold: null,
+  wholesale_suggestion_declined_at: null,
   administrative_cost: "200.000000",
   commercial_factor: "3.000000",
   commercial_factor_min: "2.000000",
@@ -66,6 +70,10 @@ const LINEA_COMPLETA = {
   product_id: null,
   product_name: "Plato",
   quantity: 20,
+  production_time_per_unit_minutes: null,
+  mold_count: 1,
+  cycles: 20,
+  line_active_minutes: null,
   length_cm: "18.000000",
   width_cm: "12.000000",
   height_cm: "3.000000",
@@ -180,12 +188,35 @@ describe("errores: impiden avanzar", () => {
     expect(paso.completo).toBe(false);
   });
 
+  it("010P bloquea una pieza sin tiempo, y sólo muestra el bloqueo en reglas 2", () => {
+    const paso010P = estado(
+      "productos",
+      datos({ cotizacion: { ...COTIZACION_COMPLETA, pricing_rules_version: 2 } }),
+    );
+    expect(paso010P.completo).toBe(false);
+    expect(paso010P.senales.some((senal) => senal.mensaje.includes("tiempo de producción por pieza"))).toBe(true);
+
+    const historica = estado("productos", datos());
+    expect(historica.completo).toBe(true);
+  });
+
   it("falta decidir los días efectivos", () => {
     const paso = estado(
       "mano-de-obra",
       datos({ manoDeObra: { ...V2_LABOR_PAGE, effective_work_days: null } }),
     );
     expect(paso.completo).toBe(false);
+  });
+
+  it("010P no exige días efectivos para el paso de trabajo", () => {
+    const paso = estado(
+      "mano-de-obra",
+      datos({
+        cotizacion: { ...COTIZACION_COMPLETA, pricing_rules_version: 2 },
+        manoDeObra: { ...V2_LABOR_PAGE, effective_work_days: null },
+      }),
+    );
+    expect(paso.completo).toBe(true);
   });
 
   it("una cotización sin horno no está lista", () => {

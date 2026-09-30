@@ -1,126 +1,255 @@
+import { Link } from "react-router-dom";
+import { CustomerSelectField } from "@/components/CustomerSelectField";
+import { SegmentedControl } from "@/components/SegmentedControl";
+import { DecimalField } from "@/components/DecimalField";
+import { DeferredTextField } from "@/components/DeferredTextField";
+import { describeError } from "@/features/settings/messages";
+import { esMonedaExtranjera } from "@/features/cotizadorV2/pasos";
+import { formatDecimalString } from "@/features/firings/labels";
 import { useUpdateV2Quotation } from "@/features/cotizadorV2/useQuoterV2";
-import type { V2Quotation, V2ProductionType } from "@/types/quoterV2";
-import { V2_PRODUCTION_TYPE_LABEL } from "@/types/quoterV2";
-import { SelectField } from "@/components/SelectField";
+import { useEsperarGuardado } from "@/features/cotizadorV2/claves";
+import { Panel } from "@/features/masters/MasterTable";
+import type { PasoDelAsistenteProps } from "@/features/cotizadorV2Next/shell/pasosDelAsistente";
 
-// Opciones canónicas de tipo de producción. El valor que va al backend es el
-// enum (RETAIL / WHOLESALE), la etiqueta es solo visual.
-const TIPOS_PRODUCCION: readonly { value: V2ProductionType; label: string }[] = [
-  { value: "RETAIL", label: V2_PRODUCTION_TYPE_LABEL.RETAIL },
-  { value: "WHOLESALE", label: V2_PRODUCTION_TYPE_LABEL.WHOLESALE },
-];
+export function V2NextClientStep({ quotationId, datos, canEdit }: PasoDelAsistenteProps) {
+  const cotizacion = datos.cotizacion;
+  const guardar = useUpdateV2Quotation(quotationId);
+  const esperarGuardado = useEsperarGuardado(quotationId);
 
-// Monedas soportadas por V2. Añadir aquí si el backend amplía el catálogo.
-const MONEDAS = [
-  { value: "PEN", label: "Soles (PEN)" },
-  { value: "USD", label: "Dólares (USD)" },
-] as const;
+  if (!cotizacion) return null;
 
-export function V2NextClientStep({ quotation }: { quotation: V2Quotation }) {
-  const update = useUpdateV2Quotation(quotation.id);
+  const esExtranjera = esMonedaExtranjera(cotizacion.currency_code);
 
-  const handleUpdate = (payload: Record<string, unknown>) => {
-    update.mutate(payload);
-  };
+  const condicionesFijas = (
+    <details className="rounded-2xl border border-black/[0.06] bg-white/60 p-4">
+      <summary className="cursor-pointer text-sm font-medium text-zinc-900 focus:outline-hidden">
+        Condiciones fijas de esta cotización
+      </summary>
+      <div className="mt-4">
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-zinc-500">Vigencia</dt>
+            <dd className="text-sm font-medium text-zinc-800">
+              {cotizacion.validity_days !== null ? `${cotizacion.validity_days} días` : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500">IGV</dt>
+            <dd className="text-sm font-medium text-zinc-800">
+              {cotizacion.tax_percent !== null ? `${formatDecimalString(cotizacion.tax_percent, 2).replace(/\.?0+$/, "")} %` : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500">Jornada</dt>
+            <dd className="text-sm font-medium text-zinc-800">
+              {cotizacion.workday_hours !== null ? `${formatDecimalString(cotizacion.workday_hours, 2).replace(/\.?0+$/, "")} h` : "—"}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs text-zinc-500">
+          Se tomaron de Configuración al crearla. Si cambias Configuración, esta cotización no se altera.
+        </p>
+      </div>
+    </details>
+  );
 
-  const canEdit = quotation.effective_status === "DRAFT";
+  if (!canEdit) {
+    return (
+      <Panel>
+        <div className="space-y-6">
+          <header>
+            <p className="text-sm text-zinc-500">
+              Elige el cliente y cómo se le cobra. Estos datos solo afectan a esta cotización.
+            </p>
+          </header>
+
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+            <div>
+              <dt className="text-sm font-medium text-zinc-500">Cliente</dt>
+              <dd className="mt-1 text-sm text-zinc-900">
+                {cotizacion.customer_name ?? "Sin cliente"}
+                <div className="mt-1 text-[11px]">
+                  <Link to="/terceros" className="text-emerald-600 hover:text-emerald-700 hover:underline">
+                    Ver en Terceros
+                  </Link>
+                </div>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-zinc-500">Tipo de cliente</dt>
+              <dd className="mt-1 text-sm text-zinc-900">
+                {cotizacion.customer_kind === "STUDENT" ? "Alumno" : "Cliente externo"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-zinc-500">Moneda</dt>
+              <dd className="mt-1 text-sm text-zinc-900">
+                {cotizacion.currency_code === "USD" ? "Dólares" : "Soles"}
+              </dd>
+            </div>
+            {esExtranjera && (
+              <div>
+                <dt className="text-sm font-medium text-zinc-500">Tipo de cambio</dt>
+                <dd className="mt-1 text-sm text-zinc-900">{cotizacion.exchange_rate !== null ? formatDecimalString(cotizacion.exchange_rate, 3).replace(/\.?0+$/, "") : "—"}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-sm font-medium text-zinc-500">Tipo de pedido</dt>
+              <dd className="mt-1 text-sm text-zinc-900">
+                {cotizacion.production_type === "WHOLESALE" ? "Por mayor" : "Por menor"}
+              </dd>
+            </div>
+            {cotizacion.name && (
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-zinc-500">Nombre de la cotización</dt>
+                <dd className="mt-1 text-sm text-zinc-900">{cotizacion.name}</dd>
+              </div>
+            )}
+            {cotizacion.client_notes && (
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-zinc-500">Mensaje para el cliente</dt>
+                <dd className="mt-1 text-sm text-zinc-900 whitespace-pre-wrap">{cotizacion.client_notes}</dd>
+              </div>
+            )}
+            {cotizacion.notes && (
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-zinc-500">Notas internas</dt>
+                <dd className="mt-1 text-sm text-zinc-900 whitespace-pre-wrap">{cotizacion.notes}</dd>
+              </div>
+            )}
+          </dl>
+
+          {condicionesFijas}
+        </div>
+      </Panel>
+    );
+  }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h3 className="text-[10px] uppercase tracking-wider font-extrabold text-zinc-500 mb-3 m-0">Datos de cotización</h3>
-        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_1fr] gap-3">
-          <label className="flex flex-col gap-1.5 text-[10px] font-extrabold text-zinc-600">
-            Nombre de cotización *
-            <input
-              type="text"
-              defaultValue={quotation.name || ""}
-              onBlur={(e) => handleUpdate({ name: e.target.value })}
-              placeholder="Ej. Vajilla Restaurante Aromas"
-              disabled={!canEdit}
-              className="h-10 px-3 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-sm text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 placeholder:text-zinc-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-          </label>
+    <Panel>
+      <div className="space-y-6">
+        <header>
+          <p className="text-sm text-zinc-500">
+            Elige el cliente y cómo se le cobra. Estos datos solo afectan a esta cotización.
+          </p>
+        </header>
 
-          {/* Tipo de producción — selector custom, sin elemento nativo */}
-          <div className="relative">
-            <SelectField
-              label="Tipo de producción"
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="space-y-1">
+            <CustomerSelectField
+              label="Cliente"
               requirement="required"
-              value={quotation.production_type}
-              options={TIPOS_PRODUCCION}
-              onChange={(valor) => handleUpdate({ production_type: valor })}
-              disabled={!canEdit}
-              searchable={false}
+              value={cotizacion.customer_id}
+              {...(cotizacion.customer_name ? { selectedLabel: cotizacion.customer_name } : {})}
+              onChange={(id) => guardar.mutate({ customer_id: id })}
+              hint="¿No está en la lista? Regístralo en Terceros."
             />
-          </div>
-
-          {/* Moneda — selector custom, sin elemento nativo */}
-          <div className="relative">
-            <SelectField
-              label="Moneda"
-              requirement="required"
-              value={quotation.currency_code ?? "PEN"}
-              options={MONEDAS}
-              onChange={(valor) => handleUpdate({ currency_code: valor })}
-              disabled={!canEdit}
-              searchable={false}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-5 mt-5 border-t border-black/5 mb-6">
-        <h3 className="text-[10px] uppercase tracking-wider font-extrabold text-zinc-500 mb-3 m-0">Cliente</h3>
-        
-        {!quotation.customer_id ? (
-          <div className="flex flex-col sm:flex-row items-end gap-2.5">
-            <label className="flex flex-col gap-1.5 text-[10px] font-extrabold text-zinc-600 flex-1 w-full">
-              Buscar cliente *
-              <input
-                type="text"
-                placeholder="Nombre, RUC o documento."
-                disabled={!canEdit}
-                className="h-10 px-3 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-sm text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 w-full placeholder:text-zinc-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </label>
-            {canEdit && (
-              <button className="h-[38px] px-3.5 rounded-[10px] border border-zinc-200 bg-white/85 text-zinc-800 text-[11px] font-extrabold cursor-pointer w-full sm:w-auto">
-                + Nuevo cliente
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between p-3.5 rounded-[13px] border border-black/5 bg-white/70">
-            <div>
-              <strong className="block text-xs font-bold text-zinc-900">{quotation.customer_name}</strong>
-              <small className="block text-[10px] text-zinc-500 mt-1">Cliente seleccionado</small>
+            <div className="text-[11px]">
+              <Link to="/terceros" className="text-emerald-600 hover:text-emerald-700 hover:underline">
+                Registrar cliente nuevo en Terceros
+              </Link>
             </div>
-            {canEdit && (
-              <button 
-                onClick={() => handleUpdate({ customer_id: null })}
-                className="border-0 bg-transparent text-zinc-600 underline underline-offset-2 text-[10px] font-extrabold cursor-pointer"
-              >
-                Cambiar
-              </button>
-            )}
           </div>
+
+          <SegmentedControl
+            label="Tipo de cliente"
+            value={cotizacion.customer_kind ?? "EXTERNAL"}
+            options={[
+              { value: "EXTERNAL", label: "Cliente externo" },
+              { value: "STUDENT", label: "Alumno" },
+            ]}
+            onChange={(valor) => guardar.mutate({ customer_kind: valor })}
+            hint="Cambia la tarifa de horno que se cobra. El gas que se consume es el mismo."
+            fullWidth
+          />
+
+          <SegmentedControl
+            label="Moneda"
+            value={cotizacion.currency_code ?? "PEN"}
+            options={[
+              { value: "PEN", label: "Soles" },
+              { value: "USD", label: "Dólares" },
+            ]}
+            onChange={(valor) => guardar.mutate({ currency_code: valor })}
+            fullWidth
+          />
+
+          {esExtranjera && (
+            <DecimalField
+              label="Tipo de cambio"
+              requirement="required"
+              value={cotizacion.exchange_rate}
+              onCommit={(valor) => 
+                valor !== null
+                  ? esperarGuardado(guardar, "cabecera", { exchange_rate: valor })
+                  : undefined
+              }
+              hint="Se congela en esta cotización: el precio pactado no cambia porque mañana cambie el dólar."
+            />
+          )}
+
+          <SegmentedControl
+            label="Tipo de pedido"
+            value={cotizacion.production_type}
+            options={[
+              { value: "RETAIL", label: "Por menor" },
+              { value: "WHOLESALE", label: "Por mayor" },
+            ]}
+            onChange={(valor) => guardar.mutate({ production_type: valor })}
+            hint="Sugiere un horno: chico para por menor, grande para por mayor. Se puede cambiar en el paso Horno."
+            fullWidth
+          />
+
+          <DeferredTextField
+            label="Nombre de la cotización"
+            requirement="optional"
+            value={cotizacion.name ?? ""}
+            onCommit={(name) =>
+              esperarGuardado(guardar, "cabecera", {
+                name: name === null || name.trim() === "" ? null : name.trim(),
+              })
+            }
+            maxLength={200}
+            hint="Solo para tu lista. No sale en el PDF."
+          />
+        </div>
+
+        <div className="space-y-6">
+          <DeferredTextField
+            multiline
+            label="Mensaje para el cliente"
+            requirement="optional"
+            value={cotizacion.client_notes ?? ""}
+            onCommit={(client_notes) =>
+              esperarGuardado(guardar, "cabecera", {
+                client_notes: client_notes === null || client_notes.trim() === "" ? null : client_notes.trim(),
+              })
+            }
+            hint="Sale en el PDF junto a las condiciones."
+          />
+
+          <DeferredTextField
+            multiline
+            label="Notas internas"
+            requirement="optional"
+            value={cotizacion.notes ?? ""}
+            onCommit={(notes) =>
+              esperarGuardado(guardar, "cabecera", {
+                notes: notes === null || notes.trim() === "" ? null : notes.trim(),
+              })
+            }
+            hint="Solo las ve el taller."
+          />
+        </div>
+
+        {condicionesFijas}
+
+        {guardar.isError && (
+          <p role="alert" className="text-xs font-medium text-red-600">
+            {describeError(guardar.error)}
+          </p>
         )}
       </div>
-
-      <div className="pt-5 mt-5 border-t border-black/5">
-        <h3 className="text-[10px] uppercase tracking-wider font-extrabold text-zinc-500 mb-3 m-0">
-          Notas internas <span className="text-zinc-400 font-bold normal-case">(opcional)</span>
-        </h3>
-        <input
-          type="text"
-          defaultValue={quotation.notes || ""}
-          onBlur={(e) => handleUpdate({ notes: e.target.value })}
-          placeholder="Agregar una nota interna."
-          disabled={!canEdit}
-          className="w-full h-10 px-3 rounded-xl border border-black/[0.08] bg-white/55 backdrop-blur-sm text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 placeholder:text-zinc-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        />
-      </div>
-    </div>
+    </Panel>
   );
 }

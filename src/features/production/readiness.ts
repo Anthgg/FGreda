@@ -170,9 +170,14 @@ export function canStart(
   origin: ProductionOrderOrigin = "QUOTATION",
 ): boolean {
   if (status !== "CREATED" || !ready) return false;
-  // Fase 010I. Una orden V2 tampoco pasa por el cobro Legacy: nace del envío
-  // a producción de una cotización V2 confirmada, y el backend no le pide pago.
-  return origin === "PROTOTYPE" || origin === "V2_QUOTATION" || estaCobrada(payment);
+  // 010P. Solo Quema nace del envío a producción de una cotización confirmada;
+  // como las órdenes V2 y de prototipo, no pasa por el cobro Legacy.
+  return (
+    origin === "PROTOTYPE" ||
+    origin === "V2_QUOTATION" ||
+    origin === "SOLO_QUEMA" ||
+    estaCobrada(payment)
+  );
 }
 
 export function canComplete(status: ProductionOrderStatus): boolean {

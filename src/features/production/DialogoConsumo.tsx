@@ -4,7 +4,7 @@ import { interpretarDecimal } from "@/components/decimal";
 import { PrimaryButton, SecondaryButton, TextAreaField, TextField } from "@/components/form";
 import { SelectField } from "@/components/SelectField";
 import { useDialogoAccesible } from "@/features/cotizadorV2/useDialogoAccesible";
-import { useLocations, useStock } from "@/features/masters/useMasters";
+import { useConsumableProducts, useLocations, useLots, useStock } from "@/features/masters/useMasters";
 import { esNegativo, esPositivo, normalizar, restar } from "@/features/production/decimales";
 import {
   describeConsumptionKind,
@@ -78,6 +78,7 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
   const registrar = useRegisterConsumption(order.id);
   const { key, renovar } = useIdempotencyKey();
   const locations = useLocations();
+  const catalogoMateriales = useConsumableProducts();
 
   const [paso, setPaso] = useState<"editar" | "confirmar">("editar");
   const [kind, setKind] = useState<ProductionConsumptionKind>(
@@ -86,12 +87,21 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
   const [pieceId, setPieceId] = useState<string>(ORDEN_ENTERA);
   const [locationId, setLocationId] = useState<string>(String(order.stock_location_id));
   const [productId, setProductId] = useState<string>("");
+  const [preparationId, setPreparationId] = useState<string>("");
   const [elegidoAMano, setElegidoAMano] = useState(false);
   const [cantidad, setCantidad] = useState("");
   const [nota, setNota] = useState("");
 
   const stock = useStock({ location_id: Number(locationId), limit: 200 }, locationId !== "");
   const saldos = useMemo(() => stock.data?.items ?? [], [stock.data?.items]);
+  const productoElegido = catalogoMateriales.items.find((product) => String(product.id) === productId);
+  const requiereLote = productoElegido?.product_type === "PREPARED_MATERIAL";
+  const lotesQuery = useLots(
+    { product_id: Number(productId), location_id: Number(locationId) },
+    requiereLote && productId !== "" && locationId !== "",
+  );
+  const lotes = lotesQuery.data ?? [];
+  const loteElegido = lotes.find((lot) => String(lot.preparation_id) === preparationId) ?? null;
 
   // Mientras la persona no haya elegido material a mano, se propone el
   // planificado para la clase y la pieza. En cuanto elige uno, se respeta.
@@ -99,6 +109,7 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
     if (elegidoAMano) return;
     const planificado = materialPlanificado(piezas, kind, pieceId);
     setProductId(planificado !== null ? String(planificado) : "");
+    setPreparationId("");
   }, [piezas, kind, pieceId, elegidoAMano]);
 
   const contenedor = useDialogoAccesible<HTMLDivElement>(true);
@@ -135,7 +146,7 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
   ];
 
   const saldo = saldos.find((fila) => String(fila.product_id) === productId) ?? null;
-  const saldoActual = saldo?.quantity ?? "0";
+  const saldoActual = requiereLote ? loteElegido?.quantity ?? "0" : saldo?.quantity ?? "0";
   const unidad =
     saldo?.uom_code ??
     piezas.find((pieza) => String(pieza.body_material_id) === productId)?.body_uom ??
@@ -161,9 +172,12 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
 
   const listoParaConfirmar =
     productId !== "" &&
+    !catalogoMateriales.isPending &&
+    productoElegido !== undefined &&
     locationId !== "" &&
     cantidadCanonica !== null &&
-    esPositivo(cantidadCanonica);
+    esPositivo(cantidadCanonica) &&
+    (!requiereLote || preparationId !== "");
 
   const volverAEditar = () => {
     registrar.reset();
@@ -181,6 +195,7 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
         stock_location_id: Number(locationId),
         quantity: cantidadCanonica,
         kind,
+        ...(requiereLote && preparationId !== "" ? { preparation_id: Number(preparationId) } : {}),
         ...(pieceId !== ORDEN_ENTERA ? { v2_quotation_product_id: Number(pieceId) } : {}),
         ...(nota.trim() ? { note: nota.trim() } : {}),
         idempotency_key: key,
@@ -247,6 +262,7 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
               onChange={(valor) => {
                 setLocationId(valor);
                 setElegidoAMano(false);
+                setPreparationId("");
               }}
             />
             <SelectField
@@ -258,6 +274,7 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
               onChange={(valor) => {
                 setProductId(valor);
                 setElegidoAMano(true);
+                setPreparationId("");
               }}
               hint={
                 materialPlanificado(piezas, kind, pieceId) !== null && !elegidoAMano
@@ -265,6 +282,29 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
                   : undefined
               }
             />
+            {catalogoMateriales.isError ? (
+              <p role="alert" className="text-xs text-red-700">No se pudo comprobar el tipo de material. Vuelva a intentarlo.</p>
+            ) : null}
+            {requiereLote ? (
+              <SelectField
+                label="Lote de preparado"
+                requirement="required"
+                value={preparationId}
+                options={lotes.map((lot) => ({
+                  value: String(lot.preparation_id),
+                  label: `${lot.preparation_code} · saldo ${normalizar(lot.quantity)} ${lot.uom_code}`,
+                }))}
+                placeholder={lotesQuery.isPending ? "Cargando lotes…" : "Elija el lote que usará"}
+                onChange={setPreparationId}
+                disabled={lotesQuery.isPending || lotes.length === 0}
+                hint="Seleccione explícitamente el lote. No se elige uno por antigüedad."
+              />
+            ) : null}
+            {requiereLote && !lotesQuery.isPending && lotes.length === 0 ? (
+              <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                No hay lotes disponibles de este preparado en el almacén elegido.
+              </p>
+            ) : null}
             <TextField
               label={`Cantidad${unidad ? ` (${unidad})` : ""}`}
               requirement="required"
@@ -305,6 +345,12 @@ export function DialogoConsumo({ order, onClose, onRegistered }: Props) {
               </dd>
               <dt className="text-zinc-500">Almacén</dt>
               <dd className="text-zinc-900">{nombreAlmacen}</dd>
+              {requiereLote ? (
+                <>
+                  <dt className="text-zinc-500">Lote</dt>
+                  <dd className="font-mono text-zinc-900">{loteElegido?.preparation_code ?? "Sin elegir"}</dd>
+                </>
+              ) : null}
               <dt className="text-zinc-500">Cantidad</dt>
               <dd className="font-semibold tabular-nums text-zinc-900" data-testid="consumo-cantidad">
                 {normalizar(cantidadCanonica)} {unidad}

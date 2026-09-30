@@ -6,7 +6,7 @@
  * respalda.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PrimaryButton, SecondaryButton, SelectField, TextField } from "@/components/form";
 import { Spinner } from "@/components/Spinner";
@@ -27,11 +27,21 @@ import {
 } from "@/features/masters/MasterTable";
 import {
   useCreateAdjustment,
+  useCreateDelivery,
   useLocations,
   useMovements,
+  useProductMaster,
   useStock,
 } from "@/features/masters/useMasters";
+import { esPositivo } from "@/features/production/decimales";
 import type { MovementType, StockBalance } from "@/types/masters";
+
+interface DeliveryOriginOption {
+  value: string;
+  label: string;
+  production_order_id: number;
+  v2_quotation_id: number | null;
+}
 
 const MOVEMENT_LABELS: Record<MovementType, string> = {
   INITIAL_IMPORT: "Carga inicial",
@@ -41,7 +51,77 @@ const MOVEMENT_LABELS: Record<MovementType, string> = {
   PREPARATION_OUT: "Consumo por preparación",
   PREPARATION_IN: "Alta de preparado",
   PROTOTYPE_OUT: "Consumo por prototipo",
+  PRODUCTION_OUT: "Consumo por producción",
+  PRODUCTION_IN: "Producción terminada",
+  DELIVERY_OUT: "Entrega al cliente",
 };
+
+function DeliveryForm({
+  balance,
+  origins,
+  originsLoading,
+  originsError,
+  saving,
+  error,
+  onSubmit,
+  onCancel,
+}: {
+  balance: StockBalance;
+  origins: DeliveryOriginOption[];
+  originsLoading: boolean;
+  originsError: unknown;
+  saving: boolean;
+  error: unknown;
+  onSubmit: (quantity: string, reason: string, origin: DeliveryOriginOption | null) => void;
+  onCancel: () => void;
+}) {
+  const product = useProductMaster(balance.product_id);
+  const [quantity, setQuantity] = useState("");
+  const [reason, setReason] = useState("");
+  const [originValue, setOriginValue] = useState("");
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+
+  return (
+    <section aria-label="Registrar entrega" className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+      <h2 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-zinc-900">Entrega de producto terminado</h2>
+      {product.isPending ? <Spinner label="Verificando tipo de producto…" /> : product.isError ? (
+        <p role="alert" className="mt-2 text-xs text-red-700">No se pudo comprobar el tipo de producto: {describeError(product.error)}</p>
+      ) : product.data.product_type !== "FINISHED_PRODUCT" ? (
+        <p role="status" className="mt-2 text-xs text-amber-900">Este producto es {product.data.product_type}; la entrega al cliente sólo aplica a producto terminado.</p>
+      ) : (
+        <>
+          <p className="mt-1 text-xs text-zinc-700">{balance.product_name} · {balance.location_name} · disponible: <strong className="tabular-nums">{balance.quantity} {balance.uom_code ?? ""}</strong></p>
+          {originsLoading ? <Spinner label="Buscando órdenes completadas para asociar…" /> : null}
+          {originsError ? <p role="alert" className="mt-2 text-xs text-red-700">No se pudieron cargar las órdenes de origen: {describeError(originsError)}</p> : null}
+          <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (esPositivo(quantity) && !originsLoading && !originsError) onSubmit(quantity.trim(), reason.trim(), origins.find((origin) => origin.value === originValue) ?? null); }}>
+            <TextField label="Cantidad a entregar" requirement="required" value={quantity} onChange={setQuantity} inputMode="decimal" hint={`Debe ser mayor que cero. Disponible: ${balance.quantity} ${balance.uom_code ?? ""}.`} />
+            <TextField label="Motivo" requirement="optional" value={reason} onChange={setReason} maxLength={240} />
+            <SelectField
+              label="Origen de producción (opcional)"
+              value={originValue}
+              options={[
+                { value: "", label: "Sin asociar" },
+                ...origins.map(({ value, label }) => ({ value, label })),
+              ]}
+              onChange={setOriginValue}
+            />
+            <div className="flex flex-wrap gap-2 sm:col-span-2">
+              <PrimaryButton type="submit" disabled={saving || originsLoading || Boolean(originsError) || !esPositivo(quantity)}>{saving ? "Registrando…" : "Registrar entrega"}</PrimaryButton>
+              <SecondaryButton type="button" onClick={onCancel} disabled={saving}>Cancelar</SecondaryButton>
+            </div>
+          </form>
+          {error ? <p role="alert" className="mt-3 text-xs text-red-700">{describeError(error)}</p> : null}
+        </>
+      )}
+      <p className="mt-2 text-[11px] text-zinc-600">La producción terminada permanece en stock hasta que se registre esta salida.</p>
+      {product.isError || (product.data && product.data.product_type !== "FINISHED_PRODUCT") ? <SecondaryButton type="button" className="mt-3" onClick={onCancel}>Cerrar</SecondaryButton> : null}
+    </section>
+  );
+}
 
 function AdjustmentForm({
   balance,
@@ -117,6 +197,8 @@ export function InventoryPage() {
   const [locationId, setLocationId] = useState("");
   const [adjusting, setAdjusting] = useState<StockBalance | null>(null);
   const [historyFor, setHistoryFor] = useState<StockBalance | null>(null);
+  const [deliveryFor, setDeliveryFor] = useState<StockBalance | null>(null);
+  const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
 
   const locations = useLocations();
   const stock = useStock({
@@ -128,7 +210,33 @@ export function InventoryPage() {
     historyFor ? { product_id: historyFor.product_id, limit: 50 } : {},
     historyFor !== null,
   );
+  const deliveryMovements = useMovements(
+    deliveryFor ? { product_id: deliveryFor.product_id, limit: 100 } : {},
+    deliveryFor !== null,
+  );
+  const deliveryOriginsById = new Map<string, DeliveryOriginOption>();
+  if (deliveryFor !== null) {
+    for (const movement of deliveryMovements.data?.items ?? []) {
+      if (
+        movement.movement_type !== "PRODUCTION_IN" ||
+        movement.location_id !== deliveryFor.location_id ||
+        movement.production_order_id === null
+      ) {
+        continue;
+      }
+      const value = `${movement.production_order_id}:${movement.v2_quotation_id ?? ""}`;
+      if (deliveryOriginsById.has(value)) continue;
+      deliveryOriginsById.set(value, {
+        value,
+        production_order_id: movement.production_order_id,
+        v2_quotation_id: movement.v2_quotation_id,
+        label: `Orden #${movement.production_order_id}${movement.v2_quotation_id === null ? "" : ` · Cotización V2 #${movement.v2_quotation_id}`} · ${movement.created_at.slice(0, 10)}`,
+      });
+    }
+  }
+  const deliveryOrigins = [...deliveryOriginsById.values()];
   const adjustment = useCreateAdjustment();
+  const delivery = useCreateDelivery();
 
   return (
     <div className="w-full space-y-5">
@@ -211,6 +319,9 @@ export function InventoryPage() {
                           Ajustar
                         </SecondaryButton>
                       ) : null}
+                      <SecondaryButton onClick={() => { setDeliveryNotice(null); setDeliveryFor((current) => current?.product_id === balance.product_id && current.location_id === balance.location_id ? null : balance); }}>
+                        {deliveryFor?.product_id === balance.product_id && deliveryFor.location_id === balance.location_id ? "Cerrar entrega" : "Entrega…"}
+                      </SecondaryButton>
                     </div>
                   </Td>
                 </tr>
@@ -239,6 +350,35 @@ export function InventoryPage() {
           />
         ) : null}
 
+        {deliveryNotice ? <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">{deliveryNotice}</p> : null}
+        {deliveryFor !== null ? (
+          <DeliveryForm
+            key={`${deliveryFor.product_id}-${deliveryFor.location_id}`}
+            balance={deliveryFor}
+            origins={deliveryOrigins}
+            originsLoading={deliveryMovements.isPending}
+            originsError={deliveryMovements.error}
+            saving={delivery.isPending}
+            error={delivery.error}
+            onCancel={() => setDeliveryFor(null)}
+            onSubmit={(quantity, reason, origin) => delivery.mutate({
+              product_id: deliveryFor.product_id,
+              location_id: deliveryFor.location_id,
+              quantity,
+              ...(origin ? {
+                production_order_id: origin.production_order_id,
+                ...(origin.v2_quotation_id === null ? {} : { v2_quotation_id: origin.v2_quotation_id }),
+              } : {}),
+              ...(reason ? { reason } : {}),
+            }, {
+              onSuccess: () => {
+                setDeliveryNotice(`Entrega registrada: ${quantity} ${deliveryFor.uom_code ?? ""} de ${deliveryFor.product_name}. Producción completada y entrega son movimientos separados.`);
+                setDeliveryFor(null);
+              },
+            })}
+          />
+        ) : null}
+
         {historyFor !== null ? (
           <section className="mt-6 border-t border-zinc-200 pt-4">
             <h2 className="mb-3 text-sm font-semibold text-zinc-800">
@@ -255,6 +395,7 @@ export function InventoryPage() {
                     <Th>Fecha</Th>
                     <Th>Tipo</Th>
                     <Th>Ubicación</Th>
+                    <Th>Origen</Th>
                     <Th align="right">Cantidad</Th>
                     <Th align="right">Saldo</Th>
                     <Th>Motivo</Th>
@@ -273,6 +414,10 @@ export function InventoryPage() {
                         </Badge>
                       </Td>
                       <Td muted>{movement.location_name}</Td>
+                      <Td muted>
+                        {movement.production_order_id === null ? "—" : `Orden #${movement.production_order_id}`}
+                        {movement.v2_quotation_id === null ? "" : ` · Cotización V2 #${movement.v2_quotation_id}`}
+                      </Td>
                       <Td align="right" mono>
                         {movement.quantity}
                       </Td>

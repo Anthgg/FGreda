@@ -11,15 +11,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   commitImport,
   createAdjustment,
+  createDelivery,
   createPartner,
   createProduct,
   fetchImport,
   fetchImportPreview,
   fetchImports,
   fetchLocations,
+  fetchLots,
   fetchMovements,
   fetchPartners,
   fetchPosCategories,
+  fetchProduct,
   fetchProductCategories,
   fetchProducts,
   fetchStock,
@@ -38,6 +41,7 @@ import type {
   ProductInput,
   RowResolution,
   StockAdjustmentInput,
+  StockDeliveryInput,
 } from "@/types/masters";
 
 export const CATEGORIES_KEY = ["masters", "categories"] as const;
@@ -46,6 +50,7 @@ export const UNITS_KEY = ["masters", "units"] as const;
 export const PRODUCTS_KEY = ["masters", "products"] as const;
 export const PARTNERS_KEY = ["masters", "partners"] as const;
 export const STOCK_KEY = ["inventory", "stock"] as const;
+export const STOCK_LOTS_KEY = ["inventory", "lots"] as const;
 export const LOCATIONS_KEY = ["inventory", "locations"] as const;
 export const MOVEMENTS_KEY = ["inventory", "movements"] as const;
 export const IMPORTS_KEY = ["imports"] as const;
@@ -72,6 +77,17 @@ export function useProducts(filters: ProductFilters) {
   return useQuery({
     queryKey: [...PRODUCTS_KEY, filters],
     queryFn: () => fetchProducts(filters),
+  });
+}
+
+export const productDetailKey = (id: number) => [...PRODUCTS_KEY, "detail", id] as const;
+
+export function useProductMaster(id: number | null) {
+  return useQuery({
+    queryKey: productDetailKey(id!),
+    queryFn: () => fetchProduct(id!),
+    enabled: id !== null,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -172,6 +188,14 @@ export function useLocations() {
   return useQuery({ queryKey: LOCATIONS_KEY, queryFn: fetchLocations });
 }
 
+export function useLots(filters: { product_id?: number; location_id?: number }, enabled = true) {
+  return useQuery({
+    queryKey: [...STOCK_LOTS_KEY, filters],
+    queryFn: () => fetchLots(filters),
+    enabled,
+  });
+}
+
 export function useMovements(filters: { product_id?: number; limit?: number }, enabled = true) {
   return useQuery({
     queryKey: [...MOVEMENTS_KEY, filters],
@@ -186,6 +210,18 @@ export function useCreateAdjustment() {
     mutationFn: (payload: StockAdjustmentInput) => createAdjustment(payload),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: STOCK_KEY });
+      await client.invalidateQueries({ queryKey: MOVEMENTS_KEY });
+    },
+  });
+}
+
+export function useCreateDelivery() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: StockDeliveryInput) => createDelivery(payload),
+    onSettled: async () => {
+      await client.invalidateQueries({ queryKey: STOCK_KEY });
+      await client.invalidateQueries({ queryKey: STOCK_LOTS_KEY });
       await client.invalidateQueries({ queryKey: MOVEMENTS_KEY });
     },
   });

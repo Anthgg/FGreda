@@ -70,6 +70,10 @@ export interface Product {
   notes: string | null;
 }
 
+export interface ProductDetail extends Product {
+  source_v2_quotation_product_id: number | null;
+}
+
 export type ProductInput = Omit<
   Product,
   "id" | "internal_reference" | "product_category_path" | "pos_category_name"
@@ -144,6 +148,27 @@ export interface StockBalance {
   quantity: string;
 }
 
+/** Saldo por lote de material preparado. El operador siempre elige el lote. */
+export interface StockLot {
+  preparation_id: number;
+  preparation_code: string;
+  product_id: number;
+  location_id: number;
+  quantity: string;
+  uom_code: string;
+  prepared_at: string;
+  solids_g_per_ml: string;
+}
+
+export interface StockDeliveryInput {
+  product_id: number;
+  location_id: number;
+  quantity: string;
+  v2_quotation_id?: number;
+  production_order_id?: number;
+  reason?: string | null;
+}
+
 /**
  * Los dos ultimos son de Fase 009D: preparar una receta saca materia prima
  * (`PREPARATION_OUT`) y mete el material preparado (`PREPARATION_IN`). Son
@@ -157,6 +182,9 @@ export type MovementType =
   | "OUT"
   | "PREPARATION_OUT"
   | "PREPARATION_IN"
+  | "PRODUCTION_OUT"
+  | "PRODUCTION_IN"
+  | "DELIVERY_OUT"
   | "PROTOTYPE_OUT";
 
 export interface StockMovement {
@@ -174,6 +202,8 @@ export interface StockMovement {
   import_batch_id: number | null;
   created_by_name: string | null;
   created_at: string;
+  production_order_id: number | null;
+  v2_quotation_id: number | null;
 }
 
 export interface StockAdjustmentInput {

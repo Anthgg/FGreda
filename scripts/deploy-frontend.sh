@@ -1,141 +1,54 @@
 #!/usr/bin/env bash
-# deploy-frontend.sh — Release reproducible de FGreda a Cloud Run.
-#
-# USAR SIEMPRE DESDE LA RAÍZ DEL REPOSITORIO.
-# Solo despliega desde main. Nunca desde un working tree sucio o feature branch.
-#
-# Uso:
-#   ./scripts/deploy-frontend.sh
-#
-# El script:
-#   1. Verifica que el working tree está limpio
-#   2. Verifica que el HEAD local coincide con origin/main
-#   3. Ejecuta Cloud Build (imagen sin VITE_API_BASE_URL en build-time)
-#   4. Informa la revisión y URL del Cloud Run resultante
-
+# Submit a controlled 010P frontend candidate. This script never shifts traffic.
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# Configuración
-# ---------------------------------------------------------------------------
 PROJECT="cotizador-greda"
 REGION="southamerica-west1"
 SERVICE="fgreda-web"
-CLOUDBUILD_CONFIG="cloudbuild.yaml"
+IMAGE="southamerica-west1-docker.pkg.dev/cotizador-greda/cloud-run-source-deploy/fgreda-web"
+CONFIG="cloudbuild.yaml"
+EXPECTED="${EXPECTED_010P_MERGE_SHA:-}"
 
-# ---------------------------------------------------------------------------
-# Colores
-# ---------------------------------------------------------------------------
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-log()  { echo -e "${BLUE}[DEPLOY]${NC} $*"; }
-ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
-err()  { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+[[ "$EXPECTED" =~ ^[0-9a-f]{40}$ ]] || die 'Set EXPECTED_010P_MERGE_SHA to the full frontend squash-merge SHA.'
+[[ "${CI_RELEASE_GATES_VERIFIED:-}" == YES ]] || die 'Set CI_RELEASE_GATES_VERIFIED=YES only after manually confirming all required frontend checks below.'
+command -v gcloud >/dev/null || die 'gcloud is required.'
+command -v jq >/dev/null || die 'jq is required.'
+[[ -f "$CONFIG" ]] || die "Run from the repository root; $CONFIG is missing."
 
-# ---------------------------------------------------------------------------
-# 1. Verificar working tree limpio
-# ---------------------------------------------------------------------------
-log "Verificando que el working tree está limpio..."
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  err "El working tree tiene cambios no confirmados."
-  err "STATUS: DEPLOY_ABORTED_DIRTY_WORKING_TREE"
-  git status --short
-  exit 1
-fi
-ok "Working tree limpio."
-
-# ---------------------------------------------------------------------------
-# 2. Verificar que estamos en main
-# ---------------------------------------------------------------------------
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-  err "No estás en la rama main (rama actual: $CURRENT_BRANCH)."
-  err "Los deploys de producción solo se ejecutan desde main."
-  err "STATUS: DEPLOY_ABORTED_NOT_ON_MAIN"
-  exit 1
-fi
-
-# ---------------------------------------------------------------------------
-# 3. Verificar que el HEAD local coincide con origin/main
-# ---------------------------------------------------------------------------
-log "Sincronizando con origin..."
+printf '%s\n' 'Required frontend checks: CI / Lint, tipos, tests y build; CI / Imagen de contenedor; CI / Validar configuracion Cloud Build y scripts de deploy; CI / E2E de la revision (Chromium).'
+[[ -z "$(git status --porcelain)" ]] || { git status --short; die 'Working tree must be clean, including untracked files.'; }
+[[ "$(git branch --show-current)" == main ]] || die 'Candidate release builds must run from main after squash merge.'
 git fetch origin main --quiet
+LOCAL_SHA="$(git rev-parse HEAD)"
+REMOTE_SHA="$(git rev-parse origin/main)"
+[[ "$LOCAL_SHA" == "$EXPECTED" && "$REMOTE_SHA" == "$EXPECTED" ]] || die "HEAD, origin/main, and EXPECTED_010P_MERGE_SHA must match exactly (head=$LOCAL_SHA origin=$REMOTE_SHA)."
 
-LOCAL_HEAD=$(git rev-parse HEAD)
-ORIGIN_HEAD=$(git rev-parse origin/main)
+TAG="p010p-$EXPECTED"
+printf '\nFrontend 010P candidate\nProject: %s\nRegion: %s\nService: %s\nMerge SHA: %s\nImage tag: %s\nRuntime SA: fgreda-web-runtime@cotizador-greda.iam.gserviceaccount.com\n' "$PROJECT" "$REGION" "$SERVICE" "$EXPECTED" "$TAG"
+read -r -p 'Build and deploy this candidate with zero traffic? [y/N] ' CONFIRM
+[[ "$CONFIRM" == y || "$CONFIRM" == Y ]] || { echo 'Cancelled.'; exit 0; }
 
-if [ "$LOCAL_HEAD" != "$ORIGIN_HEAD" ]; then
-  err "El HEAD local ($LOCAL_HEAD) no coincide con origin/main ($ORIGIN_HEAD)."
-  err "Ejecuta 'git pull origin main' antes de desplegar."
-  err "STATUS: DEPLOY_ABORTED_SOURCE_SHA_MISMATCH"
-  exit 1
-fi
-
-SHORT_SHA="${LOCAL_HEAD:0:7}"
-ok "HEAD verificado: $LOCAL_HEAD (${SHORT_SHA})"
-
-# ---------------------------------------------------------------------------
-# 4. Confirmar antes de continuar
-# ---------------------------------------------------------------------------
-echo ""
-echo "=================================================="
-echo "  DEPLOY FRONTEND — FGreda"
-echo "=================================================="
-echo "  Proyecto:  $PROJECT"
-echo "  Región:    $REGION"
-echo "  Servicio:  $SERVICE"
-echo "  SHA:       $LOCAL_HEAD"
-echo "  Short SHA: $SHORT_SHA"
-echo "  NOTA: Bundle se construye sin URL incrustada."
-echo "        La URL del backend se inyecta en runtime."
-echo "=================================================="
-echo ""
-read -r -p "¿Continuar con el deploy? [y/N] " CONFIRM
-if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
-  warn "Deploy cancelado por el usuario."
-  exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# 5. Ejecutar Cloud Build
-# ---------------------------------------------------------------------------
-log "Iniciando Cloud Build..."
-BUILD_ID=$(gcloud builds submit \
-  --config="$CLOUDBUILD_CONFIG" \
+BUILD_ID="$(gcloud builds submit \
+  --config="$CONFIG" \
   --project="$PROJECT" \
-  --substitutions="COMMIT_SHA=$LOCAL_HEAD,SHORT_SHA=$SHORT_SHA,REPO_NAME=FGreda" \
-  --format="value(id)" \
-  .)
+  --substitutions="_RELEASE_SHA=$EXPECTED,_RELEASE_TAG=$TAG" \
+  --format='value(id)' \
+  .)"
+[[ -n "$BUILD_ID" ]] || die 'Cloud Build did not return a build id.'
 
-ok "Cloud Build completado. BUILD_ID: $BUILD_ID"
+DIGEST="$(gcloud artifacts docker images describe "$IMAGE:$TAG" --project="$PROJECT" --format='value(image_summary.digest)')"
+[[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || die 'Artifact Registry did not return a valid immutable digest.'
+SERVICE_JSON="$(gcloud run services describe "$SERVICE" --region="$REGION" --project="$PROJECT" --format=json)"
+REVISION="$(jq -r --arg tag "$TAG" '.status.traffic[]? | select(.tag == $tag) | .revisionName' <<< "$SERVICE_JSON" | head -n 1)"
+TAG_URL="$(jq -r --arg tag "$TAG" '.status.traffic[]? | select(.tag == $tag) | .url' <<< "$SERVICE_JSON" | head -n 1)"
+[[ -n "$REVISION" && "$REVISION" != null && -n "$TAG_URL" && "$TAG_URL" != null ]] || die 'Candidate revision or tag URL is missing.'
+REVISION_JSON="$(gcloud run revisions describe "$REVISION" --region="$REGION" --project="$PROJECT" --format=json)"
+[[ "$(jq -r '[.status.conditions[]? | select(.type == "Ready") | .status][0] // ""' <<< "$REVISION_JSON")" == True ]] || die 'Candidate revision is not Ready.'
+[[ "$(jq -r '.spec.containers[0].image' <<< "$REVISION_JSON")" == "$IMAGE@$DIGEST" ]] || die 'Candidate revision does not use the resolved digest.'
+[[ "$(jq -r '.spec.serviceAccountName' <<< "$REVISION_JSON")" == fgreda-web-runtime@cotizador-greda.iam.gserviceaccount.com ]] || die 'Candidate does not use the dedicated frontend runtime service account.'
+jq -e --arg rev "$REVISION" '([.status.traffic[]? | select(.revisionName == $rev) | (.percent // 0)] | add // 0) == 0' <<< "$SERVICE_JSON" >/dev/null || die 'Candidate revision has nonzero traffic.'
+jq -e '([.status.traffic[]? | select(.revisionName != null) | (.percent // 0)] | add // 0) == 100' <<< "$SERVICE_JSON" >/dev/null || die 'Service traffic allocation does not total 100%.'
 
-# ---------------------------------------------------------------------------
-# 6. Verificar estado final del servicio
-# ---------------------------------------------------------------------------
-log "Verificando estado del servicio..."
-sleep 5
-LATEST_READY=$(gcloud run services describe "$SERVICE" \
-  --region="$REGION" \
-  --project="$PROJECT" \
-  --format="value(status.latestReadyRevisionName)")
-
-TRAFFIC_REV=$(gcloud run services describe "$SERVICE" \
-  --region="$REGION" \
-  --project="$PROJECT" \
-  --format="value(status.traffic[0].revisionName)")
-
-echo ""
-echo "=================================================="
-echo "  DEPLOY FRONTEND: COMPLETO"
-echo "=================================================="
-echo "  BUILD_ID:         $BUILD_ID"
-echo "  GIT_SHA:          $LOCAL_HEAD"
-echo "  LATEST_READY:     $LATEST_READY"
-echo "  TRAFFIC_100pct:   $TRAFFIC_REV"
-echo "=================================================="
-ok "STATUS: FRONTEND_DEPLOY_COMPLETE"
+printf '\nFRONTEND_CANDIDATE=READY\nBUILD_ID=%s\nIMAGE_TAG=%s\nIMAGE_DIGEST=%s\nREVISION=%s\nTAG_URL=%s\nCANDIDATE_TRAFFIC=0\nSERVICE_TRAFFIC_TOTAL=100\n' "$BUILD_ID" "$TAG" "$DIGEST" "$REVISION" "$TAG_URL"

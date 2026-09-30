@@ -41,6 +41,14 @@ export const V2_PROCESSES_KEY = ["quoter-v2", "processes"] as const;
 export const V2_QUOTATION_EXTRAS_KEY = ["quoter-v2", "quotation-extras"] as const;
 export const V2_EXTRAS_KEY = ["quoter-v2", "extras"] as const;
 export const V2_PRODUCT_TECHNIQUES_KEY = ["quoter-v2", "product-techniques"] as const;
+/**
+ * El resumen de emisión: bloqueos, huella y documento (010H).
+ *
+ * Vive aquí desde 010O.3 porque `invalidarCotizacion` lo necesita, y este
+ * fichero no puede importar de los hooks del ciclo de vida sin cerrar un
+ * círculo: son ellos los que importan de aquí.
+ */
+export const V2_PREVIEW_KEY = ["quoter-v2", "confirmation-preview"] as const;
 
 /**
  * Cuánto vale una respuesta antes de volver a pedirla.
@@ -114,6 +122,14 @@ export function invalidarCotizacion(client: QueryClient, quotationId: number): P
   // derivados todavía viejos en pantalla. Se cuenta aquí, síncrono dentro del
   // `onSuccess`, antes de que la mutación deje de estar pendiente: no hay hueco.
   cambiarComprobaciones(quotationId, +1);
+
+  // Fase 010O.3. El resumen de emisión también cambia con cada guardado: de él
+  // salen los pendientes que el asistente enseña a la vista. Se marca para
+  // volver a pedirse, pero FUERA de `refrescos` y fuera de `esDeLaCotizacion`:
+  // ni el «Guardando…» del pie ni `asegurarFrescura` lo esperan. El campo que se
+  // acaba de guardar no pinta nada de ese resumen, y hacerle esperar un GET
+  // más alargaría el «guardando» sin proteger nada.
+  void client.invalidateQueries({ queryKey: [...V2_PREVIEW_KEY, quotationId] });
   return Promise.all(refrescos)
     .then(() => undefined)
     .finally(() => cambiarComprobaciones(quotationId, -1));
@@ -167,6 +183,48 @@ export const claveDeGuardado = (quotationId: number, tipo: TipoDeGuardado) =>
  * la escritura cuenta como pendiente: «Guardando cambios…» y salida protegida.
  */
 export const alcanceDeGuardado = (quotationId: number) => ({ id: `cotizacion-v2:${quotationId}` });
+
+const turnos = new Map<number, Promise<unknown>>();
+
+/**
+ * El turno de UNA cotización en el backend: escrituras y lecturas que
+ * recalculan, de una en una y en el orden en que se pidieron.
+ *
+ * Lo encontró la E2E de la revisión tras el corte 010O.13, como un 500
+ * intermitente: `GET /pricing`, `GET /firing`, `GET /reductions` y
+ * `GET /confirmation-preview` recalculan y escriben las líneas dentro de su
+ * transacción (luego la descartan), y dos de ellas —o una y un `PUT`— sobre la
+ * misma cotización se bloqueaban en orden cruzado: `deadlock detected`. El
+ * rediseño pide precio, horno y pendientes juntos tras cada guardado, mientras
+ * la siguiente escritura de la fila ya sale; la pantalla anterior lo hacía menos.
+ *
+ * Se arregla sin tocar el backend: desde esta pestaña nunca van dos a la vez.
+ * El `scope` de TanStack sigue ordenando las escrituras entre sí; el turno
+ * además las separa de esas lecturas. Una lectura que no recalcula (la
+ * cabecera, las líneas, el historial) no necesita turno.
+ */
+export function enTurno<T>(quotationId: number, trabajo: () => Promise<T>): Promise<T> {
+  const anterior = turnos.get(quotationId) ?? Promise.resolve();
+  const actual = anterior.then(trabajo, trabajo);
+  const cola: Promise<unknown> = actual.then(
+    () => undefined,
+    () => undefined,
+  );
+  turnos.set(quotationId, cola);
+  void cola.then(() => {
+    if (turnos.get(quotationId) === cola) turnos.delete(quotationId);
+  });
+  return actual;
+}
+
+/**
+ * Solo para pruebas: cada caso empieza con los turnos libres. Una prueba que
+ * deja a propósito una petición colgada (un guardado «en vuelo») retendría si
+ * no las lecturas de la misma cotización en las pruebas siguientes.
+ */
+export function vaciarTurnos(): void {
+  turnos.clear();
+}
 
 /**
  * Cuánto tiempo se recuerda una escritura terminada.
@@ -257,6 +315,8 @@ export const DESTINO_DE_GUARDADO: Record<
 function esDeLaCotizacion(queryKey: readonly unknown[], quotationId: number): boolean {
   if (queryKey[0] === QUOTER_V2_KEY[0]) return queryKey[1] === quotationId;
   if (queryKey[0] !== "quoter-v2") return false;
+  // `V2_PREVIEW_KEY` NO está a propósito: se invalida tras cada guardado, pero
+  // ningún campo espera a que llegue (ver `invalidarCotizacion`).
   const alcances = [
     V2_LINES_KEY,
     V2_LABOR_KEY,

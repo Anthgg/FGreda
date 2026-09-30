@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 
 import { fetchV2QuotationPdf } from "@/api/quoterV2";
@@ -39,6 +40,17 @@ import {
  * El botón dice «Duplicar y actualizar precios» porque eso es lo que pasa: nace
  * OTRA cotización, con otro código y con los precios, el tipo de cambio, el IGV
  * y la vigencia de hoy. La original no se toca.
+ *
+ * ## Dos casas (010O.12)
+ *
+ * La usan la ficha de `/cotizador-v2` y la cabecera del rediseño. Por eso la
+ * ruta a la que lleva una duplicación es `rutaBase`, y el distintivo de estado
+ * se puede omitir (`conEstado={false}`) cuando la cabecera ya lo pinta: el
+ * mismo estado dos veces en la misma pantalla es ruido.
+ *
+ * Los diálogos van por un portal al <body>. Un `fixed` dentro de un
+ * `.glass-panel` queda encerrado en él —su `backdrop-filter` lo convierte en el
+ * bloque contenedor— y el velo cubría solo el panel.
  */
 
 const TONO: Record<V2EffectiveStatus, string> = {
@@ -91,7 +103,7 @@ function Dialogo({
   onCerrar: () => void;
 }) {
   const contenedor = useDialogoAccesible<HTMLDivElement>(true);
-  return (
+  return createPortal(
     <div
       ref={contenedor}
       role="dialog"
@@ -106,7 +118,8 @@ function Dialogo({
         <h2 className="text-base font-bold text-zinc-900">{titulo}</h2>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -141,8 +154,14 @@ export function V2CicloDeVida({
   cotizacion,
   avisosDeDuplicacion,
   duplicacionCreada = true,
+  rutaBase = "/cotizador-v2",
+  conEstado = true,
 }: {
   cotizacion: V2Quotation;
+  /** Dónde vive la ficha: una duplicación lleva a `${rutaBase}/{id}`. */
+  rutaBase?: string;
+  /** Falso cuando quien la monta ya enseña el estado (la cabecera del rediseño). */
+  conEstado?: boolean;
   /** Lo que la duplicación no pudo traer, cuando se acaba de llegar desde ella. */
   avisosDeDuplicacion?: readonly V2DuplicateWarning[] | undefined;
   /** Falso cuando el backend devolvió el borrador que YA estaba abierto. */
@@ -170,7 +189,7 @@ export function V2CicloDeVida({
   const alDuplicar = () =>
     duplicar.mutate(undefined, {
       onSuccess: (resultado) =>
-        navigate(`/cotizador-v2/${resultado.quotation.id}`, {
+        navigate(`${rutaBase}/${resultado.quotation.id}`, {
           state: {
             avisosDeDuplicacion: resultado.warnings,
             duplicacionCreada: resultado.created,
@@ -184,7 +203,7 @@ export function V2CicloDeVida({
   return (
     <section data-testid="v2-ciclo-de-vida" className="mt-4 space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <EstadoV2 estado={estado} />
+        {conEstado ? <EstadoV2 estado={estado} /> : null}
         {cotizacion.valid_until ? (
           <span data-testid="v2-valida-hasta" className="text-sm text-zinc-700">
             Válida hasta: <strong>{formatDisplayDate(cotizacion.valid_until)}</strong>
@@ -284,7 +303,7 @@ export function V2CicloDeVida({
         {puedeDuplicar ? (
           cotizacion.open_duplicate_id ? (
             <Link
-              to={`/cotizador-v2/${cotizacion.open_duplicate_id}`}
+              to={`${rutaBase}/${cotizacion.open_duplicate_id}`}
               className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2 text-xs font-semibold text-white sm:text-sm"
             >
               Abrir la cotización duplicada

@@ -112,6 +112,8 @@ export interface V2LaborLine {
   worker_id: number;
   worker_name: string;
   worker_type: V2WorkerType;
+  /** DEFAULT = asignación predeterminada del servidor; MANUAL = decisión humana. */
+  assignment_origin: "DEFAULT" | "MANUAL" | string;
   daily_rate: string;
   workday_hours: string;
   hourly_rate: string;

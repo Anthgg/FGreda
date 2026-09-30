@@ -56,6 +56,8 @@ export interface V2Quotation {
   id: number;
   code: string;
   pricing_engine_version: PricingEngineVersion;
+  /** 1 = reglas históricas congeladas; 2 = costeo 010P. */
+  pricing_rules_version: number;
   status: V2QuotationStatus;
   production_type: V2ProductionType;
   customer_id: number | null;
@@ -79,6 +81,9 @@ export interface V2Quotation {
   validity_days: number | null;
   workday_hours: string | null;
   space_service_cost_per_day: string | null;
+  space_cost_per_hour: string | null;
+  wholesale_threshold: number | null;
+  wholesale_suggestion_declined_at: string | null;
   administrative_cost: string | null;
   commercial_factor: string | null;
   commercial_factor_min: string | null;

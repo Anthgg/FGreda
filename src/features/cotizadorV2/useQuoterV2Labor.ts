@@ -35,6 +35,7 @@ import {
   V2_STALE_TIME,
   V2_TECHNIQUES_KEY,
   V2_WORKERS_KEY,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 
 export {
@@ -51,10 +52,11 @@ export const useV2Workers = (activeOnly = false) =>
     queryFn: () => fetchV2Workers(activeOnly),
   });
 
-export const useV2Techniques = (activeOnly = false) =>
+export const useV2Techniques = (activeOnly = false, enabled = true) =>
   useQuery({
     queryKey: [...V2_TECHNIQUES_KEY, activeOnly],
     queryFn: () => fetchV2Techniques(activeOnly),
+    enabled,
   });
 
 /**
@@ -110,7 +112,8 @@ export const useAddV2Labor = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "tarea-anadir"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2LaborInput) => addV2Labor(quotationId, payload),
+    mutationFn: (payload: V2LaborInput) =>
+      enTurno(quotationId, () => addV2Labor(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -128,7 +131,8 @@ export const useLoadV2WorkerTechniques = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "tarea-anadir"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2LoadWorkerInput) => loadV2WorkerTechniques(quotationId, payload),
+    mutationFn: (payload: V2LoadWorkerInput) =>
+      enTurno(quotationId, () => loadV2WorkerTechniques(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -142,7 +146,7 @@ export const useUpdateV2Labor = (quotationId: number) => {
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: (vars: { laborId: number; payload: V2LaborInput }) =>
-      updateV2Labor(quotationId, vars.laborId, vars.payload),
+      enTurno(quotationId, () => updateV2Labor(quotationId, vars.laborId, vars.payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -155,7 +159,8 @@ export const useDeleteV2Labor = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "tarea-borrar"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (laborId: number) => deleteV2Labor(quotationId, laborId),
+    mutationFn: (laborId: number) =>
+      enTurno(quotationId, () => deleteV2Labor(quotationId, laborId)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -168,7 +173,8 @@ export const useSetV2Planning = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "planificacion"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (effectiveWorkDays: number | null) => setV2Planning(quotationId, effectiveWorkDays),
+    mutationFn: (effectiveWorkDays: number | null) =>
+      enTurno(quotationId, () => setV2Planning(quotationId, effectiveWorkDays)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -187,7 +193,8 @@ export const useSetV2Illustration = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "ilustracion"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2IllustrationInput) => setV2Illustration(quotationId, payload),
+    mutationFn: (payload: V2IllustrationInput) =>
+      enTurno(quotationId, () => setV2Illustration(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },

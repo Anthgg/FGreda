@@ -9,10 +9,13 @@ import type {
   ProductionNote,
   ProductionNoteCreateIn,
   ProductionOrder,
+  ProductionOrderCompleteIn,
+  ProductionOrderCompletion,
   ProductionOrderCreateIn,
   ProductionOrderFilters,
   ProductionOrderPage,
   ProductionTimeline,
+  ProductionWipItem,
 } from "@/types/production";
 
 const ORDERS = "/production-orders";
@@ -49,8 +52,11 @@ export const createProductionOrder = (
 export const startProductionOrder = (id: number): Promise<ProductionOrder> =>
   apiClient.post<ProductionOrder>(`${ORDERS}/${id}/start`, {});
 
-export const completeProductionOrder = (id: number): Promise<ProductionOrder> =>
-  apiClient.post<ProductionOrder>(`${ORDERS}/${id}/complete`, {});
+export const completeProductionOrder = (
+  id: number,
+  payload: ProductionOrderCompleteIn,
+): Promise<ProductionOrderCompletion> =>
+  apiClient.post<ProductionOrderCompletion>(`${ORDERS}/${id}/complete`, payload);
 
 export const cancelProductionOrder = (id: number): Promise<ProductionOrder> =>
   apiClient.post<ProductionOrder>(`${ORDERS}/${id}/cancel`, {});
@@ -99,3 +105,7 @@ export const registerProductionCommunication = (
 /** Todo lo que le pasó a la orden, en el orden que manda el backend. */
 export const fetchProductionTimeline = (id: number): Promise<ProductionTimeline> =>
   apiClient.get<ProductionTimeline>(`${ORDERS}/${id}/timeline`);
+
+/** Trabajo que todavía está en curso o espera/está dentro de una hornada. */
+export const fetchProductionWip = (): Promise<ProductionWipItem[]> =>
+  apiClient.get<ProductionWipItem[]>("/production/wip");

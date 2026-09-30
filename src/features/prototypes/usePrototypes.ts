@@ -17,6 +17,7 @@ import {
 import { MOVEMENTS_KEY, STOCK_KEY } from "@/features/masters/useMasters";
 import type {
   PrototypeCreateInput,
+  PrototypeCompleteInput,
   PrototypeFilters,
   PrototypeMaterialInput,
   PrototypeUpdateInput,
@@ -73,7 +74,15 @@ export const useStartPrototype = (id: number) => {
 
 export const useCompletePrototype = (id: number) => {
   const invalidate = useInvalidatePrototype();
-  return useMutation({ mutationFn: () => completePrototype(id), onSuccess: () => invalidate(id) });
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PrototypeCompleteInput) => completePrototype(id, payload),
+    onSuccess: async () => {
+      invalidate(id);
+      await client.invalidateQueries({ queryKey: STOCK_KEY });
+      await client.invalidateQueries({ queryKey: MOVEMENTS_KEY });
+    },
+  });
 };
 
 /**

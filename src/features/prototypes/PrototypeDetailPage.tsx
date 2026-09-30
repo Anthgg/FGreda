@@ -109,6 +109,18 @@ function Summary({ prototype }: { prototype: Prototype }) {
         <Info label="Almacén" value={prototype.stock_location_id ? "Almacén seleccionado" : "Sin almacén"} />
         <Info label="Materiales" value={String(prototype.material_count)} />
       </div>
+      {prototype.production_result ? (
+        <section aria-labelledby="prototype-result-title" data-testid="prototype-result" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <h2 id="prototype-result-title" className="text-sm font-semibold text-emerald-950">Resultados de producción</h2>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Info label="Iniciadas" value={prototype.production_result.started_quantity} />
+            <Info label="Buenas" value={prototype.production_result.good_quantity} />
+            <Info label="Merma" value={prototype.production_result.scrap_quantity} />
+          </dl>
+          {prototype.production_result.scrap_reason ? <p className="mt-3 text-xs text-emerald-950">Motivo de merma: {prototype.production_result.scrap_reason}</p> : null}
+          <p className="mt-2 text-[11px] text-emerald-900">Registro de sólo lectura. El stock corresponde a las unidades buenas.</p>
+        </section>
+      ) : null}
       {/* La ficha se PINTA desde los datos, no desde un bloque de texto. Es la
           misma estructura que lee el puente al crear la cotización final: si lo
           que se ve aquí y lo que se precarga allí salieran de sitios distintos,

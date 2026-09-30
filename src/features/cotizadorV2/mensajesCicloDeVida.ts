@@ -32,6 +32,10 @@ export const BLOQUEOS_DE_EMISION: Record<string, Pendiente> = {
     mensaje: "Un producto no tiene cantidad.",
     paso: "productos",
   },
+  V2_CONFIRM_LINE_TIME_REQUIRED: {
+    mensaje: "Falta indicar el tiempo de producción por pieza.",
+    paso: "productos",
+  },
   V2_CONFIRM_LINE_BODY_MATERIAL_REQUIRED: {
     mensaje: "Un producto no tiene pasta elegida.",
     paso: "materiales",

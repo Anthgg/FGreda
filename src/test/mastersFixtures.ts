@@ -154,6 +154,8 @@ export const MOVEMENTS_PAGE: Page<StockMovement> = {
       import_batch_id: 1,
       created_by_name: "Administrador",
       created_at: "2026-08-22T10:00:00Z",
+      production_order_id: null,
+      v2_quotation_id: null,
     },
   ],
   total: 1,

@@ -8,6 +8,7 @@ import {
   RECORDAR_GUARDADO,
   V2_FIRING_KEY,
   V2_STALE_TIME,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 
 export { V2_FIRING_KEY } from "@/features/cotizadorV2/claves";
@@ -17,7 +18,7 @@ import type { V2FiringInput } from "@/types/quoterV2Firing";
 export const useV2Firing = (quotationId: number) =>
   useQuery({
     queryKey: [...V2_FIRING_KEY, quotationId],
-    queryFn: () => fetchV2Firing(quotationId),
+    queryFn: () => enTurno(quotationId, () => fetchV2Firing(quotationId)),
     staleTime: V2_STALE_TIME,
   });
 
@@ -35,7 +36,8 @@ export const useSetV2Firing = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "quema"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2FiringInput) => setV2Firing(quotationId, payload),
+    mutationFn: (payload: V2FiringInput) =>
+      enTurno(quotationId, () => setV2Firing(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },

@@ -43,6 +43,7 @@ import {
   V2_PROCESSES_KEY,
   V2_QUOTATION_EXTRAS_KEY,
   V2_STALE_TIME,
+  enTurno,
 } from "@/features/cotizadorV2/claves";
 
 export {
@@ -86,7 +87,8 @@ export const useAddV2Process = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "proceso-anadir"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2ProcessInput) => addV2Process(quotationId, payload),
+    mutationFn: (payload: V2ProcessInput) =>
+      enTurno(quotationId, () => addV2Process(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -100,7 +102,7 @@ export const useSetV2ProcessQuantity = (quotationId: number) => {
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: ({ processId, quantity }: { processId: number; quantity: string }) =>
-      setV2ProcessQuantity(quotationId, processId, quantity),
+      enTurno(quotationId, () => setV2ProcessQuantity(quotationId, processId, quantity)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -115,9 +117,9 @@ export const useAssignV2Process = (quotationId: number) => {
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
     mutationFn: ({ processId, workerId }: { processId: number; workerId: number | null }) =>
-      workerId === null
+      enTurno(quotationId, () => workerId === null
         ? unassignV2Process(quotationId, processId)
-        : assignV2Process(quotationId, processId, workerId),
+        : assignV2Process(quotationId, processId, workerId)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -130,7 +132,8 @@ export const useRemoveV2Process = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "proceso-borrar"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (processId: number) => removeV2Process(quotationId, processId),
+    mutationFn: (processId: number) =>
+      enTurno(quotationId, () => removeV2Process(quotationId, processId)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -143,7 +146,8 @@ export const useAddV2QuotationExtra = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "adicional-anadir"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (payload: V2QuotationExtraInput) => addV2QuotationExtra(quotationId, payload),
+    mutationFn: (payload: V2QuotationExtraInput) =>
+      enTurno(quotationId, () => addV2QuotationExtra(quotationId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -162,7 +166,8 @@ export const useUpdateV2QuotationExtra = (quotationId: number) => {
     }: {
       extraId: number;
       payload: V2QuotationExtraUpdateInput;
-    }) => updateV2QuotationExtra(quotationId, extraId, payload),
+    }) =>
+      enTurno(quotationId, () => updateV2QuotationExtra(quotationId, extraId, payload)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },
@@ -175,7 +180,8 @@ export const useDeleteV2QuotationExtra = (quotationId: number) => {
     mutationKey: claveDeGuardado(quotationId, "adicional-borrar"),
     scope: alcanceDeGuardado(quotationId),
     gcTime: RECORDAR_GUARDADO,
-    mutationFn: (extraId: number) => deleteV2QuotationExtra(quotationId, extraId),
+    mutationFn: (extraId: number) =>
+      enTurno(quotationId, () => deleteV2QuotationExtra(quotationId, extraId)),
     onSuccess: () => {
       void invalidarCotizacion(client, quotationId);
     },

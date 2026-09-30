@@ -10,12 +10,13 @@ import {
   fetchProductionOrder,
   fetchProductionOrderByToken,
   fetchProductionOrders,
+  fetchProductionWip,
   fetchProductionTimeline,
   registerProductionCommunication,
   registerProductionConsumption,
   startProductionOrder,
 } from "@/api/production";
-import { MOVEMENTS_KEY, STOCK_KEY } from "@/features/masters/useMasters";
+import { MOVEMENTS_KEY, STOCK_KEY, STOCK_LOTS_KEY } from "@/features/masters/useMasters";
 import { PROTOTYPES_KEY } from "@/features/prototypes/usePrototypes";
 import { QUOTATIONS_KEY } from "@/features/quotations/useQuotations";
 import type {
@@ -23,10 +24,12 @@ import type {
   ProductionConsumptionCreateIn,
   ProductionNoteCreateIn,
   ProductionOrderCreateIn,
+  ProductionOrderCompleteIn,
   ProductionOrderFilters,
 } from "@/types/production";
 
 export const PRODUCTION_KEY = ["production-orders"] as const;
+export const PRODUCTION_WIP_KEY = ["production-wip"] as const;
 export const productionOrderKey = (id: number) => [...PRODUCTION_KEY, id] as const;
 /**
  * Fase 010I. Cuelgan de la clave de la orden a propósito: invalidar la orden
@@ -42,6 +45,9 @@ export const useProductionOrders = (filters: ProductionOrderFilters) =>
     queryKey: [...PRODUCTION_KEY, filters],
     queryFn: () => fetchProductionOrders(filters),
   });
+
+export const useProductionWip = () =>
+  useQuery({ queryKey: PRODUCTION_WIP_KEY, queryFn: fetchProductionWip });
 
 export const useProductionOrder = (id: number | null) =>
   useQuery({
@@ -92,6 +98,7 @@ function useInvalidateAfterTransition() {
     void qc.invalidateQueries({ queryKey: STOCK_KEY });
     void qc.invalidateQueries({ queryKey: MOVEMENTS_KEY });
     void qc.invalidateQueries({ queryKey: PROTOTYPES_KEY });
+    void qc.invalidateQueries({ queryKey: PRODUCTION_WIP_KEY });
   };
 }
 
@@ -124,7 +131,8 @@ export const useStartProductionOrder = () => {
 export const useCompleteProductionOrder = () => {
   const invalidate = useInvalidateAfterTransition();
   return useMutation({
-    mutationFn: (id: number) => completeProductionOrder(id),
+    mutationFn: (vars: { id: number; payload: ProductionOrderCompleteIn }) =>
+      completeProductionOrder(vars.id, vars.payload),
     onSuccess: invalidate,
   });
 };
@@ -197,11 +205,13 @@ export const useRegisterConsumption = (orderId: number) => {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: productionOrderKey(orderId) });
       void qc.invalidateQueries({ queryKey: MOVEMENTS_KEY });
+      void qc.invalidateQueries({ queryKey: STOCK_LOTS_KEY });
     },
     // También si falla: con «no hay existencia» el saldo que se enseñaba ya no
     // es el que acaba de mirar el backend, y hay que volver a leerlo.
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: STOCK_KEY });
+      void qc.invalidateQueries({ queryKey: STOCK_LOTS_KEY });
     },
   });
 };

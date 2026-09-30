@@ -169,13 +169,16 @@ function mockV2(detalle: object, extra: Ruta = () => undefined) {
   });
 }
 
+const cabecera = () => screen.getByTestId("v2next-cabecera");
+
 describe("estado de la cotización V2 (Fase 010H)", () => {
   it("una emitida dice su estado y su vigencia con palabras", async () => {
     mockV2(EMITIDA);
     renderApp(["/cotizador-v2/7/resumen"]);
 
     const ciclo = await screen.findByTestId("v2-ciclo-de-vida");
-    expect(within(ciclo).getByTestId("v2-estado-efectivo")).toHaveTextContent("Emitida");
+    // Desde el rediseño el estado se pinta una sola vez, en la cabecera.
+    expect(within(cabecera()).getByTestId("v2-estado-efectivo")).toHaveTextContent("Emitida");
     expect(within(ciclo).getByTestId("v2-valida-hasta")).toHaveTextContent(
       "Válida hasta: 30/09/2026",
     );
@@ -193,7 +196,7 @@ describe("estado de la cotización V2 (Fase 010H)", () => {
     const banda = await screen.findByTestId("v2-banda-vencida");
     expect(banda).toHaveTextContent("COTIZACIÓN VENCIDA");
     const ciclo = screen.getByTestId("v2-ciclo-de-vida");
-    expect(within(ciclo).getByTestId("v2-estado-efectivo")).toHaveTextContent("Vencida");
+    expect(within(cabecera()).getByTestId("v2-estado-efectivo")).toHaveTextContent("Vencida");
     expect(
       within(ciclo).getByRole("button", { name: "Duplicar y actualizar precios" }),
     ).toBeInTheDocument();
@@ -450,114 +453,17 @@ describe("anular, PDF e historial (Fase 010H)", () => {
     renderApp(["/cotizador-v2/7/resumen"]);
 
     const ciclo = await screen.findByTestId("v2-ciclo-de-vida");
-    expect(within(ciclo).getByTestId("v2-estado-efectivo")).toHaveTextContent("Emitida");
+    expect(within(cabecera()).getByTestId("v2-estado-efectivo")).toHaveTextContent("Emitida");
     for (const accion of [/duplicar/i, /enviar a producción/i, /anular/i, /descargar pdf/i]) {
       expect(within(ciclo).queryByRole("button", { name: accion })).not.toBeInTheDocument();
     }
   });
 });
 
-describe("emitir una cotización V2 (Fase 010H)", () => {
-  it("el diálogo enseña el resumen del backend y avisa que se congela", async () => {
-    const user = userEvent.setup();
-    mockV2(BASE);
-    renderApp(["/cotizador-v2/7/resumen"]);
-
-    await user.click(await screen.findByRole("button", { name: "Confirmar y emitir" }));
-    const dialogo = await screen.findByRole("dialog", { name: /confirmar y emitir/i });
-
-    expect(await within(dialogo).findByTestId("emision-total")).toHaveTextContent("S/ 1121.00");
-    expect(within(dialogo).getByTestId("emision-vigencia")).toHaveTextContent("03/10/2026");
-    expect(within(dialogo).getByText("Plato hondo")).toBeInTheDocument();
-    // Lo que el PDF dirá del cliente y las condiciones también se revisa aquí.
-    expect(within(dialogo).getByTestId("emision-datos-cliente")).toHaveTextContent(
-      "RUC: 20600000001 · Jr. Barro 456, Lima",
-    );
-    expect(within(dialogo).getByTestId("emision-condiciones")).toHaveTextContent(
-      "Transferencia bancaria.",
-    );
-    expect(within(dialogo).getByTestId("emision-aviso-congelado")).toHaveTextContent(
-      "Al confirmar, los valores comerciales quedarán congelados.",
-    );
-    // Nada interno en lo que se va a enviar al cliente.
-    expect(dialogo).not.toHaveTextContent(/costo real|ganancia|margen|gas real/i);
-  });
-
-  it("confirmar manda la huella del resumen revisado", async () => {
-    const user = userEvent.setup();
-    const cuerpos: string[] = [];
-    mockV2(BASE, (url, init) => {
-      if (url.endsWith("/confirm") && init.method === "POST") {
-        cuerpos.push(String(init.body));
-        return jsonResponse(200, EMITIDA);
-      }
-      return undefined;
-    });
-    renderApp(["/cotizador-v2/7/resumen"]);
-
-    await user.click(await screen.findByRole("button", { name: "Confirmar y emitir" }));
-    const dialogo = await screen.findByRole("dialog", { name: /confirmar y emitir/i });
-    await within(dialogo).findByTestId("emision-total");
-    await user.click(within(dialogo).getByRole("button", { name: "Confirmar y emitir" }));
-
-    await waitFor(() => expect(cuerpos).toHaveLength(1));
-    expect(JSON.parse(cuerpos[0] ?? "{}")).toEqual({ expected_fingerprint: "a".repeat(64) });
-  });
-
-  it("con bloqueos no deja confirmar y los explica en palabras", async () => {
-    const user = userEvent.setup();
-    mockV2(BASE, (url) => {
-      if (url.includes("/confirmation-preview")) {
-        return jsonResponse(200, {
-          ...PREVIEW,
-          can_confirm: false,
-          blockers: [{ code: "V2_CONFIRM_KILN_REQUIRED", line_id: null }],
-        });
-      }
-      return undefined;
-    });
-    renderApp(["/cotizador-v2/7/resumen"]);
-
-    await user.click(await screen.findByRole("button", { name: "Confirmar y emitir" }));
-    const dialogo = await screen.findByRole("dialog", { name: /confirmar y emitir/i });
-    const bloqueos = await within(dialogo).findByTestId("emision-bloqueos");
-    expect(bloqueos).toHaveTextContent("Falta elegir el horno.");
-    expect(bloqueos).not.toHaveTextContent("V2_");
-    expect(within(dialogo).getByRole("button", { name: "Confirmar y emitir" })).toBeDisabled();
-  });
-
-  it("si otra persona cambió la cotización, recarga el resumen y lo dice", async () => {
-    const user = userEvent.setup();
-    let previews = 0;
-    mockV2(BASE, (url, init) => {
-      if (url.includes("/confirmation-preview")) {
-        previews += 1;
-        return jsonResponse(200, {
-          ...PREVIEW,
-          fingerprint: (previews === 1 ? "a" : "b").repeat(64),
-          total_amount: previews === 1 ? "1121.000000" : "1345.200000",
-        });
-      }
-      if (url.endsWith("/confirm") && init.method === "POST") {
-        return errorResponse(409, "V2_QUOTATION_CHANGED");
-      }
-      return undefined;
-    });
-    renderApp(["/cotizador-v2/7/resumen"]);
-
-    await user.click(await screen.findByRole("button", { name: "Confirmar y emitir" }));
-    const dialogo = await screen.findByRole("dialog", { name: /confirmar y emitir/i });
-    await within(dialogo).findByTestId("emision-total");
-    await user.click(within(dialogo).getByRole("button", { name: "Confirmar y emitir" }));
-
-    expect(await within(dialogo).findByTestId("emision-cambio")).toHaveTextContent(
-      /cambió mientras usted revisaba/i,
-    );
-    await waitFor(() =>
-      expect(within(dialogo).getByTestId("emision-total")).toHaveTextContent("S/ 1345.20"),
-    );
-  });
-});
+// «Emitir» vivía en un diálogo propio (V2EmitirCotizacion), retirado en el
+// corte 010O.13. Sus garantías —la huella, el 409, los bloqueos en palabras,
+// los datos del cliente y ningún costo interno— se prueban en
+// cotizadorV2Next/steps/V2NextReviewStep.test.tsx.
 
 describe("mensajes del ciclo de vida (Fase 010H)", () => {
   // La lista EXACTA de códigos que emite el backend (app/services/quoter_v2_lifecycle.py

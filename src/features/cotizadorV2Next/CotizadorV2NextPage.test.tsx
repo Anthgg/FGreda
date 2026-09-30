@@ -1,99 +1,90 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CotizadorV2NextPage } from "./CotizadorV2NextPage";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
 
-// Mock API responses
-vi.mock("@/api/client", () => ({
-  apiClient: {
-    get: vi.fn((url) => {
-      if (url.includes("/quotations-v2/123")) {
-        return Promise.resolve({
-          id: 123,
-          code: "CTZ-V2-000123",
-          name: "Test Quotation",
-          customer_name: "Test Customer",
-          status: "DRAFT",
-          effective_status: "DRAFT",
-          production_type: "RETAIL",
-          created_at: "2026-09-16T12:00:00Z"
-        });
-      }
-      return Promise.resolve({
-        items: [
-          {
-            id: 123,
-            code: "CTZ-V2-000123",
-            name: "Test Quotation",
-            customer_name: "Test Customer",
-            status: "DRAFT",
-            effective_status: "DRAFT",
-            created_at: "2026-09-16T12:00:00Z"
-          }
-        ],
-        total: 1
-      });
-    }),
-    post: vi.fn(() => Promise.resolve({ id: 124 })),
-    put: vi.fn(() => Promise.resolve({ id: 123 }))
-  },
-  describeError: vi.fn(() => "Error mock")
+import { CotizadorV2NextPage, RedireccionV2Next } from "@/features/cotizadorV2Next/CotizadorV2NextPage";
+
+/**
+ * La entrada del Cotizador V2 rediseñado (010O.3): qué pantalla y qué paso
+ * corresponden a cada dirección. El listado y el shell se sustituyen por
+ * marcadores: se prueban en sus propios archivos, y así el listado puede
+ * rehacerse sin tocar esta prueba.
+ */
+
+vi.mock("@/features/cotizadorV2Next/list/V2NextQuotationList", () => ({
+  V2NextQuotationList: () => <p>listado</p>,
 }));
 
-function renderApp(initialEntries = ["/cotizador-v2-next"]) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+vi.mock("@/features/cotizadorV2Next/shell/V2NextWizard", () => ({
+  V2NextWizard: (props: { quotationId: number; paso: string | null; rutaBase: string }) => (
+    <p data-testid="asistente">
+      {`${props.quotationId}|${props.paso ?? "sin-paso"}|${props.rutaBase}`}
+    </p>
+  ),
+}));
 
+function renderPage(direccion: string) {
   return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={initialEntries}>
-        <Routes>
-          <Route path="/cotizador-v2-next" element={<CotizadorV2NextPage />} />
-          <Route path="/cotizador-v2-next/:id" element={<CotizadorV2NextPage />} />
-          <Route path="/cotizador-v2-next/:id/:step" element={<CotizadorV2NextPage />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={[direccion]}>
+      <Routes>
+        <Route path="/cotizador-v2" element={<CotizadorV2NextPage />} />
+        <Route path="/cotizador-v2/:id" element={<CotizadorV2NextPage />} />
+        <Route path="/cotizador-v2/:id/:step" element={<CotizadorV2NextPage />} />
+        <Route path="/cotizador-v2-next/*" element={<RedireccionV2Next />} />
+      </Routes>
+    </MemoryRouter>,
   );
 }
 
-describe("Cotizador V2 Next - Fase 001", () => {
-  it("muestra el listado de cotizaciones", async () => {
-    renderApp();
-    expect(await screen.findByText("Cotizaciones")).toBeInTheDocument();
-    expect(await screen.findByText("Test Quotation")).toBeInTheDocument();
+describe("entrada del Cotizador V2 (rediseño, 010O.13)", () => {
+  it("sin cotización enseña el listado", () => {
+    renderPage("/cotizador-v2");
+    expect(screen.getByText("listado")).toBeInTheDocument();
   });
 
-  it("permite filtrar por búsqueda", async () => {
-    renderApp();
-    const input = await screen.findByPlaceholderText(/Buscar por código/i);
-    fireEvent.change(input, { target: { value: "Aromas" } });
-    expect(input).toHaveValue("Aromas");
+  it.each([
+    ["/cotizador-v2-next", "listado"],
+    ["/cotizador-v2-next/7/precio", "7|precio|/cotizador-v2"],
+    ["/cotizador-v2-next/7/3", "7|materiales|/cotizador-v2"],
+  ])("la ruta de pruebas del rediseño %s lleva a la definitiva", (direccion, esperado) => {
+    renderPage(direccion);
+    expect(screen.getByText(esperado)).toBeInTheDocument();
   });
 
-  it("crea un borrador y navega al paso 1", async () => {
-    renderApp();
-    const btn = await screen.findByText("+ Nueva cotización");
-    fireEvent.click(btn);
-    // After creation it navigates to /cotizador-v2-next/124/1 which shows the Wizard Shell
-    expect(await screen.findByText("Paso 1 de 7")).toBeInTheDocument();
+  it.each([
+    ["cliente"],
+    ["productos"],
+    ["materiales"],
+    ["mano-de-obra"],
+    ["quema"],
+    ["precio"],
+    ["resumen"],
+  ])("el paso «%s» viaja por su nombre", (paso) => {
+    renderPage(`/cotizador-v2/7/${paso}`);
+    expect(screen.getByTestId("asistente")).toHaveTextContent(`7|${paso}|/cotizador-v2`);
   });
 
-  it("abre el wizard desde la lista", async () => {
-    renderApp();
-    const row = await screen.findByText("Test Quotation");
-    fireEvent.click(row);
-    expect(await screen.findByText("Paso 1 de 7")).toBeInTheDocument();
+  it.each([
+    ["1", "cliente"],
+    ["3", "materiales"],
+    ["7", "resumen"],
+  ])("un paso numérico de antes (%s) se convierte en «%s»", (numero, paso) => {
+    renderPage(`/cotizador-v2/7/${numero}`);
+    expect(screen.getByTestId("asistente")).toHaveTextContent(`7|${paso}|`);
   });
 
-  it("renderiza el paso de Cliente correctamente", async () => {
-    renderApp(["/cotizador-v2-next/123/1"]);
-    expect(await screen.findByText("Datos de cotización")).toBeInTheDocument();
-    
-    // Test the input
-    const nameInput = screen.getByDisplayValue("Test Quotation");
-    expect(nameInput).toBeInTheDocument();
+  it.each([
+    ["sin paso", "/cotizador-v2/7"],
+    ["número fuera de rango", "/cotizador-v2/7/8"],
+    ["nombre inexistente", "/cotizador-v2/7/horno"],
+  ])("%s: el shell decide a dónde ir", (_caso, direccion) => {
+    renderPage(direccion);
+    expect(screen.getByTestId("asistente")).toHaveTextContent("7|sin-paso|");
+  });
+
+  it.each([["abc"], ["0"], ["-3"], ["1.5"]])("un id que no es una cotización (%s) lo dice", (id) => {
+    renderPage(`/cotizador-v2/${id}`);
+    expect(screen.getByText("Esa cotización V2 no existe. Comprueba el enlace.")).toBeInTheDocument();
+    expect(screen.queryByTestId("asistente")).not.toBeInTheDocument();
   });
 });

@@ -1,13 +1,47 @@
-import { useParams } from "react-router-dom";
-import { V2NextQuotationList } from "./V2NextQuotationList";
-import { V2NextWizard } from "./V2NextWizard";
+import { Navigate, useLocation, useParams } from "react-router-dom";
 
+import { EmptyState } from "@/features/masters/MasterTable";
+import { PASOS, esPasoValido } from "@/features/cotizadorV2/pasos";
+import { V2NextQuotationList } from "@/features/cotizadorV2Next/list/V2NextQuotationList";
+import { RUTA_V2_NEXT, RUTA_V2_PRUEBAS } from "@/features/cotizadorV2Next/shell/rutas";
+import { V2NextWizard } from "@/features/cotizadorV2Next/shell/V2NextWizard";
+
+/** `/cotizador-v2/7/3` → el tercer paso por su nombre. Enlaces numéricos de antes. */
+const PASO_NUMERICO = /^[1-7]$/;
+
+/**
+ * Entrada del Cotizador V2 rediseñado: el listado, o una cotización en su paso.
+ * Fase 010O.3.
+ */
 export function CotizadorV2NextPage() {
-  const { id } = useParams();
+  const { id, step } = useParams();
 
-  if (id) {
-    return <V2NextWizard quotationId={Number(id)} />;
+  if (id === undefined) return <V2NextQuotationList />;
+
+  const quotationId = Number(id);
+  if (!Number.isInteger(quotationId) || quotationId <= 0) {
+    return <EmptyState message="Esa cotización V2 no existe. Comprueba el enlace." />;
   }
 
-  return <V2NextQuotationList />;
+  if (step !== undefined && PASO_NUMERICO.test(step)) {
+    const destino = PASOS[Number(step) - 1]?.id ?? "cliente";
+    return <Navigate to={`${RUTA_V2_NEXT}/${quotationId}/${destino}`} replace />;
+  }
+
+  // Un paso que no existe no merece una pantalla de error: el shell lleva al
+  // primero que falte, igual que una ficha abierta sin paso.
+  const paso = esPasoValido(step) ? step : null;
+  return (
+    <V2NextWizard key={quotationId} quotationId={quotationId} paso={paso} rutaBase={RUTA_V2_NEXT} />
+  );
+}
+
+/**
+ * `/cotizador-v2-next/…` → `/cotizador-v2/…`, con el mismo resto de la ruta y
+ * la misma consulta. La ruta de pruebas del rediseño deja de existir en 010O.13.
+ */
+export function RedireccionV2Next() {
+  const { pathname, search, hash } = useLocation();
+  const resto = pathname.slice(RUTA_V2_PRUEBAS.length);
+  return <Navigate to={`${RUTA_V2_NEXT}${resto}${search}${hash}`} replace />;
 }
