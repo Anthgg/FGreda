@@ -5,12 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  schedule:
-    # Matriz completa (todos los navegadores + emulacion mobile) contra
-    # produccion, una vez por semana. El job de Chromium en cada PR ya cubre
-    # el camino critico en cada cambio; esto es solo para detectar drift
-    # especifico de motor/viewport sin correrlo en cada push.
-    - cron: "0 9 * * 1"
+    inputs:
+      run_production_e2e:
+        description: "Ejecutar Playwright contra producción; puede crear datos E2E-* persistentes. Déjalo desmarcado salvo aprobación explícita."
+        required: true
+        type: boolean
+        default: false
 
 # Ningun paso lleva continue-on-error: un fallo real debe romper el pipeline.
 permissions:
@@ -251,6 +251,14 @@ jobs:
                       "La URL debe inyectarse en runtime, no en build-time."
                   )
 
+              for forbidden in ("main-latest", "p007", "update-traffic"):
+                  if forbidden in raw:
+                      errors.append(f"{filename}: contiene referencia prohibida '{forbidden}'")
+              if "--no-traffic" not in raw or "sha256:" not in raw:
+                  errors.append(f"{filename}: el candidato debe desplegar por digest con --no-traffic")
+              if "_RUNTIME_SERVICE_ACCOUNT" not in raw:
+                  errors.append(f"{filename}: falta la cuenta de servicio runtime dedicada")
+
               print(f"  {filename}: OK ({len(steps)} steps)")
 
           if errors:
@@ -278,64 +286,6 @@ jobs:
             exit 1
           fi
           sh -n "$script" && echo "  $script: sintaxis OK"
-
-  playwright-e2e:
-    name: Smoke de produccion (Chromium)
-    # SMOKE DE PRODUCCION, no validacion de la PR. Corre contra el ambiente
-    # desplegado (por defecto, produccion) y por eso NO puede validar una rama:
-    # prueba lo que ya esta desplegado, no lo que trae el cambio. Las pruebas
-    # funcionales de una rama viven en e2e/revision/, que esta configuracion
-    # ignora, y las valida el job «E2E de la revision» de abajo.
-    #
-    # Hasta la Fase 010G se llamaba «Playwright E2E (Chromium)» y parecia un
-    # gate de la PR. Sin secrets de produccion se omite entero y sale en verde
-    # sin ejecutar nada, que es justo como se leyo mal.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Verificar credenciales de prueba
-        # Sin E2E_EMAIL/E2E_PASSWORD como secrets del repo, la corrida se
-        # omite (no bloquea el PR) en vez de fallar en falso. Ninguna
-        # credencial se inventa ni se imprime.
-        id: creds
-        run: |
-          if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
-            # Aviso visible y no solo un eco: un job omitido que sale en verde
-            # se lee como «pasaron las E2E», y aqui no se ejecuto ninguna.
-            echo "::warning title=Smoke de produccion omitido::Sin E2E_EMAIL/E2E_PASSWORD no se ejecuto ninguna prueba contra produccion. Este verde no valida nada."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Instalar Chromium (Playwright)
-        if: steps.creds.outputs.ready == 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Playwright (chromium)
-        if: steps.creds.outputs.ready == 'true'
-        env:
-          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
-          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
-        run: npx playwright test --project=chromium
-
-      - name: Subir reporte HTML
-        if: always() && steps.creds.outputs.ready == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
 
   e2e-revision:
     name: E2E de la revision (Chromium)
@@ -551,10 +501,9 @@ jobs:
 
   playwright-e2e-full-matrix:
     name: Playwright E2E (matriz completa)
-    # Manual (workflow_dispatch) o programado semanalmente; nunca en cada PR
-    # porque cubre WebKit y emulacion mobile-ios/mobile-android ademas de
-    # Chromium/Firefox, y es mucho mas lento que el job de arriba.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    # Solo manual y con confirmación explícita: E2E_BASE_URL apunta a producción
+    # por defecto y las pruebas pueden dejar registros E2E-* persistentes.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_production_e2e == true
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -575,8 +524,8 @@ jobs:
         id: creds
         run: |
           if [ -z "${{ secrets.E2E_EMAIL }}" ] || [ -z "${{ secrets.E2E_PASSWORD }}" ]; then
-            echo "E2E_EMAIL/E2E_PASSWORD no configurados: se omite esta corrida."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "ERROR: se solicitó Playwright contra producción, pero faltan E2E_EMAIL/E2E_PASSWORD. No se ejecutó ninguna prueba."
+            exit 1
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
